@@ -9,12 +9,13 @@ import System.Environment (getArgs)
 
 import Text.Grampa
 
-import Prelude hiding (subtract)
+import Prelude hiding (negate, subtract)
 
 class Expression e where
    number :: Int -> e
    add :: e -> e -> e
    multiply :: e -> e -> e
+   negate :: e -> e
    subtract :: e -> e -> e
    divide :: e -> e -> e
 
@@ -22,6 +23,7 @@ instance Expression Int where
    number = id
    add = (+)
    multiply = (*)
+   negate = (0 -)
    subtract = (-)
    divide = div
 
@@ -29,6 +31,7 @@ instance Expression [Char] where
    number = show
    add = infixJoin "+"
    multiply = infixJoin "*"
+   negate = ("-" <>)
    subtract = infixJoin "-"
    divide = infixJoin "/"
 
@@ -76,6 +79,7 @@ arithmetic :: forall e. Expression e =>
 
 arithmetic Arithmetic{..} = Arithmetic{
    expr= term
+         <|> string "-" *> (negate <$> term)
          <|> add <$> expr <* string "+" <*> term
          <|> subtract <$> expr <* string "-" <*> term,
    term= factor
@@ -84,7 +88,8 @@ arithmetic Arithmetic{..} = Arithmetic{
    factor= ((number . read) <$> takeCharsWhile1 isDigit)
            <|> string "(" *> expr <* string ")"}
 arithmetic' Arithmetic{..} = Arithmetic{
-   expr= term
+   expr= (term
+          <|> string "-" *> (negate <$> term))
          `iterateMany` (\expr'-> add <$> expr' <* string "+" <*> term
                                  <|> subtract <$> expr' <* string "-" <*> term),
    term= factor
@@ -93,16 +98,17 @@ arithmetic' Arithmetic{..} = Arithmetic{
    factor= ((number . read) <$> takeCharsWhile1 isDigit)
            <|> string "(" *> expr <* string ")"}
 
-parse :: (Eq e, Expression e) => [String] -> [(e, String)]
-parse s = second inputWith <$> results (expr $ fmap1 feedEof
-                                       $ foldr (feedGrammar g) g
-                                       $ reverse s)
+parse :: (Eq e, Expression e) => [String] -> [e]
+parse s = fst <$> results ((<* eof) $ expr
+                          $ fmap1 feedEof
+                          $ foldr (feedGrammar g) g
+                          $ reverse s)
    where g = fixGrammar arithmetic
 
-parenthesize :: [String] -> [(String, String)]
+parenthesize :: [String] -> [String]
 parenthesize s = parse s
 
-evaluate :: [String] -> [(Int, String)]
+evaluate :: [String] -> [Int]
 evaluate s = parse s
 
 main = getArgs >>= print . evaluate

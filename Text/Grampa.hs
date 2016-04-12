@@ -158,6 +158,10 @@ instance (MonoidNull s, Functor1 t) => Monad (Parser t s) where
 iterateMany :: (MonoidNull s, Functor1 t) => Parser t s r -> (Parser t s r -> Parser t s r) -> Parser t s r
 iterateMany p f = p >>= (\r-> return r <|> iterateMany (f $ return r) f)
 
+-- | A parser that fails on any input and succeeds at its end.
+eof :: (MonoidNull s, Functor1 t) => Parser t s ()
+eof = Delay (pure ()) (\s-> if null s then eof else Failure "eof")
+
 string :: (Show s, LeftReductiveMonoid s, FactorialMonoid s, Functor1 t) => s -> Parser t s s
 string x | null x = pure x
 string x = Delay (Failure $ "string " ++ show x) $
