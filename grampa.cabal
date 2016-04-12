@@ -24,8 +24,9 @@ library
   -- hs-source-dirs:      
   default-language:    Haskell2010
 
-executable             example
-  main-is:             Example.hs
+executable             arithmetic
+  hs-source-dirs:      examples
+  main-is:             Arithmetic.hs
   default-language:    Haskell2010
   build-depends:       base >=4.7 && <5,
                        grampa == 0.1
