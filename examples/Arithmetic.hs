@@ -87,20 +87,10 @@ arithmetic Arithmetic{..} = Arithmetic{
          <|> divide <$> term <* string "/" <*> factor,
    factor= ((number . read) <$> takeCharsWhile1 isDigit)
            <|> string "(" *> expr <* string ")"}
-arithmetic' Arithmetic{..} = Arithmetic{
-   expr= (term
-          <|> string "-" *> (negate <$> term))
-         `iterateMany` (\expr'-> add <$> expr' <* string "+" <*> term
-                                 <|> subtract <$> expr' <* string "-" <*> term),
-   term= factor
-         `iterateMany` (\term'-> multiply <$> term' <* string "*" <*> factor
-                                 <|> divide <$> term' <* string "/" <*> factor),
-   factor= ((number . read) <$> takeCharsWhile1 isDigit)
-           <|> string "(" *> expr <* string ")"}
 
 parse :: (Eq e, Expression e) => [String] -> [e]
-parse s = fst <$> results ((<* eof) $ expr
-                          $ fmap1 feedEof
+parse s = fst <$> results ((<* endOfInput) $ expr
+                          $ fmap1 feedEnd
                           $ foldr (feedGrammar g) g
                           $ reverse s)
    where g = fixGrammar arithmetic

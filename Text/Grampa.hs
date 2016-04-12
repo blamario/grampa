@@ -92,11 +92,11 @@ feed s (Result t r) = Result (foldr refeed s t) r
          s'' = snd (head s)
 feed s (Recursive p) = feed s p
 
-feedEof :: (MonoidNull s, Functor1 t) => Parser t s r -> Parser t s r
-feedEof (Choice p q) = feedEof p <|> feedEof q
-feedEof (Delay e _) = feedEof e
-feedEof (Recursive p) = Recursive (feedEof p)
-feedEof p = p
+feedEnd :: (MonoidNull s, Functor1 t) => Parser t s r -> Parser t s r
+feedEnd (Choice p q) = feedEnd p <|> feedEnd q
+feedEnd (Delay e _) = feedEnd e
+feedEnd (Recursive p) = Recursive (feedEnd p)
+feedEnd p = p
 
 results :: (FactorialMonoid s, Functor1 t) => Parser t s r -> [(r, [(t (Parser t s), s)])]
 results Failure{} = []
@@ -141,8 +141,8 @@ instance (MonoidNull s, Functor1 t) => Alternative (Parser t s) where
    empty = Failure "empty"
    p <|> Failure{} = p
    Failure{} <|> p = p
---   Delay e f <|> p = Delay (e <|> feedEof p) (\i-> f i <|> feed i p)
---   p <|> Delay e f = Delay (feedEof p <|> e) (\i-> feed i p <|> f i)
+--   Delay e f <|> p = Delay (e <|> feedEnd p) (\i-> f i <|> feed i p)
+--   p <|> Delay e f = Delay (feedEnd p <|> e) (\i-> feed i p <|> f i)
    p <|> q = Choice p q
 
 instance (MonoidNull s, Functor1 t) => Monad (Parser t s) where
@@ -158,9 +158,9 @@ instance (MonoidNull s, Functor1 t) => Monad (Parser t s) where
 iterateMany :: (MonoidNull s, Functor1 t) => Parser t s r -> (Parser t s r -> Parser t s r) -> Parser t s r
 iterateMany p f = p >>= (\r-> return r <|> iterateMany (f $ return r) f)
 
--- | A parser that fails on any input and succeeds at its end.
-eof :: (MonoidNull s, Functor1 t) => Parser t s ()
-eof = Delay (pure ()) (\s-> if null s then eof else Failure "eof")
+-- | A parser that fails on any input and succeeds at its end
+endOfInput :: (MonoidNull s, Functor1 t) => Parser t s ()
+endOfInput = Delay (pure ()) (\s-> if null s then endOfInput else Failure "endOfInput")
 
 string :: (Show s, LeftReductiveMonoid s, FactorialMonoid s, Functor1 t) => s -> Parser t s s
 string x | null x = pure x
