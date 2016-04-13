@@ -160,7 +160,7 @@ iterateMany p f = p >>= (\r-> return r <|> iterateMany (f $ return r) f)
 
 -- | A parser that fails on any input and succeeds at its end
 endOfInput :: (MonoidNull s, Functor1 t) => Parser t s ()
-endOfInput = Delay (pure ()) (\s-> if null s then endOfInput else Failure "endOfInput")
+endOfInput = Delay (pure ()) (\s-> if null (inputWith s) then endOfInput else Failure "endOfInput")
 
 string :: (Show s, LeftReductiveMonoid s, FactorialMonoid s, Functor1 t) => s -> Parser t s s
 string x | null x = pure x

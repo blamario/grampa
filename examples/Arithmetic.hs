@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, RecordWildCards, ScopedTypeVariables #-}
-module Main where
+module Arithmetic where
 
 import Control.Applicative
 import Control.Arrow (second)
@@ -11,7 +11,7 @@ import Text.Grampa
 
 import Prelude hiding (negate, subtract)
 
-class Expression e where
+class ArithmeticDomain e where
    number :: Int -> e
    add :: e -> e -> e
    multiply :: e -> e -> e
@@ -19,7 +19,7 @@ class Expression e where
    subtract :: e -> e -> e
    divide :: e -> e -> e
 
-instance Expression Int where
+instance ArithmeticDomain Int where
    number = id
    add = (+)
    multiply = (*)
@@ -27,7 +27,7 @@ instance Expression Int where
    subtract = (-)
    divide = div
 
-instance Expression [Char] where
+instance ArithmeticDomain [Char] where
    number = show
    add = infixJoin "+"
    multiply = infixJoin "*"
@@ -74,9 +74,8 @@ instance Reassemblable (Arithmetic e) where
                                 term= f term (\t->a{term= t}) a,
                                 factor= f factor (\f->a{factor= f}) a}
 
-arithmetic :: forall e. Expression e =>
+arithmetic :: forall e. ArithmeticDomain e =>
               Arithmetic e (Parser (Arithmetic e) String) -> Arithmetic e (Parser (Arithmetic e) String)
-
 arithmetic Arithmetic{..} = Arithmetic{
    expr= term
          <|> string "-" *> (negate <$> term)
@@ -88,7 +87,7 @@ arithmetic Arithmetic{..} = Arithmetic{
    factor= ((number . read) <$> takeCharsWhile1 isDigit)
            <|> string "(" *> expr <* string ")"}
 
-parse :: (Eq e, Expression e) => [String] -> [e]
+parse :: (Eq e, ArithmeticDomain e) => [String] -> [e]
 parse s = fst <$> results ((<* endOfInput) $ expr
                           $ fmap1 feedEnd
                           $ foldr (feedGrammar g) g
