@@ -12,19 +12,19 @@ import Data.Monoid.Textual (TextualMonoid)
 import qualified Data.Monoid.Textual as Textual
 import Prelude hiding (length, null)
 
-class Functor1 f where
-   fmap1 :: (forall a. g a -> h a) -> f g -> f h
+class Functor1 g where
+   fmap1 :: (forall a. p a -> q a) -> g p -> g q
 
-class Functor1 f => Foldable1 f where
-   foldMap1 :: Monoid m => (forall a. g a -> m) -> f g -> m
+class Functor1 g => Foldable1 g where
+   foldMap1 :: Monoid m => (forall a. p a -> m) -> g p -> m
 
-class Foldable1 f => Traversable1 f where
-   traverse1 :: Applicative m => (forall a. g a -> m (h a)) -> f g -> m (f h)
+class Foldable1 g => Traversable1 g where
+   traverse1 :: Applicative m => (forall a. p a -> m (q a)) -> g p -> m (g q)
 
-class Functor1 f => Reassemblable f where
-   composePer :: (f g -> f g) -> (f g -> f g) -> (f g -> f g)
-   reassemble :: (forall a. (f g -> g a) -> f g -> h a) -> f g -> f h
-   reassemble' :: (forall a. (f g -> g a) -> (g a -> f g) -> f g -> h a) -> f g -> f h
+class Functor1 g => Reassemblable g where
+   composePer :: (g p -> g p) -> (g p -> g p) -> (g p -> g p)
+   reassemble :: (forall a. (g p -> p a) -> g p -> q a) -> g p -> g q
+   reassemble' :: (forall a. (g p -> p a) -> (p a -> g p) -> g p -> q a) -> g p -> g q
 
 data Parser g s r = Failure String
                   | Result [(Grammar g s, s)] r
