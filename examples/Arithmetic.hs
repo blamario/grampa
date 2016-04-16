@@ -74,8 +74,7 @@ instance Reassemblable (Arithmetic e) where
                                 term= f term (\t->a{term= t}) a,
                                 factor= f factor (\f->a{factor= f}) a}
 
-arithmetic :: forall e. ArithmeticDomain e =>
-              Arithmetic e (Parser (Arithmetic e) String) -> Arithmetic e (Parser (Arithmetic e) String)
+arithmetic :: ArithmeticDomain e => Grammar (Arithmetic e) String -> Grammar (Arithmetic e) String
 arithmetic Arithmetic{..} = Arithmetic{
    expr= term
          <|> string "-" *> (negate <$> term)

@@ -26,13 +26,13 @@ class Functor1 f => Reassemblable f where
    reassemble :: (forall a. (f g -> g a) -> f g -> h a) -> f g -> f h
    reassemble' :: (forall a. (f g -> g a) -> (g a -> f g) -> f g -> h a) -> f g -> f h
 
-data Parser t s r = Failure String
-                  | Result [(t (Parser t s), s)] r
-                  | Choice (Parser t s r) (Parser t s r)
-                  | Delay (Parser t s r) ([(t (Parser t s), s)] -> Parser t s r)
-                  | Recursive (Parser t s r)
+data Parser g s r = Failure String
+                  | Result [(Grammar g s, s)] r
+                  | Choice (Parser g s r) (Parser g s r)
+                  | Delay (Parser g s r) ([(Grammar g s, s)] -> Parser g s r)
+                  | Recursive (Parser g s r)
 
-instance (Show r, Show s, Show (t (Parser t s))) => Show (Parser t s r) where
+instance (Show r, Show s, Show (Grammar g s)) => Show (Parser g s r) where
    showsPrec _ (Failure s) rest = "(Failure " ++ shows s (")" ++ rest)
    showsPrec prec (Result s r) rest
       | prec > 0 = "(Result " ++ foldr (\(t, s)-> showsPrec (prec - 1) t . shows s) (" " ++ shows r (")" ++ rest)) s
@@ -43,21 +43,21 @@ instance (Show r, Show s, Show (t (Parser t s))) => Show (Parser t s r) where
       | otherwise = "Recursive" ++ rest
    showsPrec prec (Delay e f) rest = "(Delay " ++ showsPrec prec e (")" ++ rest)
 
-type Grammar t s = t (Parser t s) -> t (Parser t s)
+type Grammar g s = g (Parser g s)
 
-fixGrammar :: (MonoidNull s, Reassemblable t) => (t (Parser t s) -> t (Parser t s)) -> t (Parser t s)
+fixGrammar :: (MonoidNull s, Reassemblable g) => (Grammar g s -> Grammar g s) -> Grammar g s
 fixGrammar gf = tieRecursion $ fix (composePer gf (fmap1 $ Recursive) . reassemble (\f g-> nt f g))
 
-fixGrammar' :: Reassemblable t => (t (Parser t s) -> t (Parser t s)) -> t (Parser t s)
+fixGrammar' :: Reassemblable g => (Grammar g s -> Grammar g s) -> Grammar g s
 fixGrammar' = fix . (. reassemble nt)
 
-tieRecursion :: (MonoidNull s, Reassemblable t) => t (Parser t s) -> t (Parser t s)
+tieRecursion :: (MonoidNull s, Reassemblable g) => Grammar g s -> Grammar g s
 tieRecursion = reassemble' tie
 
 tie :: (MonoidNull s, Functor1 g) =>
-        (g (Parser g s) -> Parser g s r)
-     -> (Parser g s r -> g (Parser g s))
-     -> g (Parser g s)
+        (Grammar g s -> Parser g s r)
+     -> (Parser g s r -> Grammar g s)
+     -> Grammar g s
      -> Parser g s r
 tie get set g = case separate (get g)
                 of (p, Failure{}) -> p
@@ -69,18 +69,18 @@ tie get set g = case separate (get g)
          separate (Recursive p) = (empty, p)
          separate p = (p, empty)
 
-feedGrammar :: (FactorialMonoid s, Functor1 t) => t (Parser t s) -> s -> t (Parser t s) -> t (Parser t s)
+feedGrammar :: (FactorialMonoid s, Functor1 g) => Grammar g s -> s -> Grammar g s -> Grammar g s
 feedGrammar g s = fmap1 (feed $ fixGrammarInput g s)
 
-fixGrammarInput :: forall s t. (FactorialMonoid s, Functor1 t) => t (Parser t s) -> s -> [(t (Parser t s), s)]
+fixGrammarInput :: (FactorialMonoid s, Functor1 g) => Grammar g s -> s -> [(Grammar g s, s)]
 fixGrammarInput parsers s = foldr parseTail [] (tails s)
    where parseTail input parsedTail = parsedInput
             where parsedInput = (fmap1 (feed parsedInput) parsers, input):parsedTail
 
-nt :: (t (Parser t s) -> Parser t s r) -> t (Parser t s) -> Parser t s r
+nt :: (Grammar g s -> Parser g s r) -> Grammar g s -> Parser g s r
 nt f g = Delay (f g) (\((t, _):_)-> f t)
 
-feed :: (MonoidNull s, Functor1 t) => [(t (Parser t s), s)] -> Parser t s r -> Parser t s r
+feed :: (MonoidNull s, Functor1 g) => [(Grammar g s, s)] -> Parser g s r -> Parser g s r
 feed [] p = p
 feed s (Choice p q) = feed s p <|> feed s q
 feed s (Delay _ f) = f s
@@ -92,13 +92,13 @@ feed s (Result t r) = Result (foldr refeed s t) r
          s'' = snd (head s)
 feed s (Recursive p) = feed s p
 
-feedEnd :: (MonoidNull s, Functor1 t) => Parser t s r -> Parser t s r
+feedEnd :: (MonoidNull s, Functor1 g) => Parser g s r -> Parser g s r
 feedEnd (Choice p q) = feedEnd p <|> feedEnd q
 feedEnd (Delay e _) = feedEnd e
 feedEnd (Recursive p) = Recursive (feedEnd p)
 feedEnd p = p
 
-results :: (FactorialMonoid s, Functor1 t) => Parser t s r -> [(r, [(t (Parser t s), s)])]
+results :: (FactorialMonoid s, Functor1 g) => Parser g s r -> [(r, [(Grammar g s, s)])]
 results Failure{} = []
 results (Result s r) = [(r, s)]
 results (Choice p q) = results p <> results q
@@ -110,7 +110,7 @@ results (Recursive p) = findFixPoint Nothing 0 p
                                  then r
                                  else findFixPoint l' (succ d) p
 
-resultsToDepth :: (MonoidNull s, Functor1 t) => Int -> Parser t s r -> [(r, [(t (Parser t s), s)])]
+resultsToDepth :: (MonoidNull s, Functor1 g) => Int -> Parser g s r -> [(r, [(Grammar g s, s)])]
 resultsToDepth _ Failure{} = []
 resultsToDepth _ (Result s r) = [(r, s)]
 resultsToDepth d (Choice p q) = resultsToDepth d p <> resultsToDepth d q
@@ -119,17 +119,17 @@ resultsToDepth d (Recursive p)
    | otherwise = []
 resultsToDepth d (Delay e _) = resultsToDepth d e
 
-resultPart :: (r -> r) -> Parser t s r -> Parser t s r
+resultPart :: (r -> r) -> Parser g s r -> Parser g s r
 resultPart f p = f <$> p
 
-instance Functor (Parser t s) where
+instance Functor (Parser g s) where
    fmap f (Choice p q) = Choice (fmap f p) (fmap f q)
    fmap g (Delay e f) = Delay (fmap g e) (fmap g . f)
    fmap f (Failure msg) = Failure msg
    fmap f (Result s r) = Result s (f r)
    fmap f (Recursive p) = Recursive (fmap f p)
 
-instance (MonoidNull s, Functor1 t) => Applicative (Parser t s) where
+instance (MonoidNull s, Functor1 g) => Applicative (Parser g s) where
    pure = Result []
    Choice p q <*> r = p <*> r <|> q <*> r
    Delay e f <*> p = Delay (e <*> p) ((<*> p) . f)
@@ -137,7 +137,7 @@ instance (MonoidNull s, Functor1 t) => Applicative (Parser t s) where
    Result s r <*> p = r <$> feed s p
    Recursive p <*> q = Recursive (p <*> q)
 
-instance (MonoidNull s, Functor1 t) => Alternative (Parser t s) where
+instance (MonoidNull s, Functor1 g) => Alternative (Parser g s) where
    empty = Failure "empty"
    p <|> Failure{} = p
    Failure{} <|> p = p
@@ -145,7 +145,7 @@ instance (MonoidNull s, Functor1 t) => Alternative (Parser t s) where
 --   p <|> Delay e f = Delay (feedEnd p <|> e) (\i-> feed i p <|> f i)
    p <|> q = Choice p q
 
-instance (MonoidNull s, Functor1 t) => Monad (Parser t s) where
+instance (MonoidNull s, Functor1 g) => Monad (Parser g s) where
    return = pure
    Result s r >>= f = feed s (f r)
    Choice p q >>= f = (p >>= f) <|> (q >>= f)
@@ -155,14 +155,14 @@ instance (MonoidNull s, Functor1 t) => Monad (Parser t s) where
    (>>) = (*>)
    fail = Failure
 
-iterateMany :: (MonoidNull s, Functor1 t) => Parser t s r -> (Parser t s r -> Parser t s r) -> Parser t s r
+iterateMany :: (MonoidNull s, Functor1 g) => Parser g s r -> (Parser g s r -> Parser g s r) -> Parser g s r
 iterateMany p f = p >>= (\r-> return r <|> iterateMany (f $ return r) f)
 
 -- | A parser that fails on any input and succeeds at its end
-endOfInput :: (MonoidNull s, Functor1 t) => Parser t s ()
+endOfInput :: (MonoidNull s, Functor1 g) => Parser g s ()
 endOfInput = Delay (pure ()) (\s-> if null (inputWith s) then endOfInput else Failure "endOfInput")
 
-string :: (Show s, LeftReductiveMonoid s, FactorialMonoid s, Functor1 t) => s -> Parser t s s
+string :: (Show s, LeftReductiveMonoid s, FactorialMonoid s, Functor1 g) => s -> Parser g s s
 string x | null x = pure x
 string x = Delay (Failure $ "string " ++ show x) $
            \case i@((_, y):_)-> case (stripPrefix x y, stripPrefix y x)
@@ -171,7 +171,7 @@ string x = Delay (Failure $ "string " ++ show x) $
                                    (Nothing, Just x') -> string x' *> pure x
                  [] -> string x
 
-takeCharsWhile :: (TextualMonoid s, Functor1 t) => (Char -> Bool) -> Parser t s s
+takeCharsWhile :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s s
 takeCharsWhile pred = while
    where while = Delay (pure mempty) f
          f i@((_, s):_) = let (prefix, suffix) = Textual.span (const False) pred s
@@ -181,7 +181,7 @@ takeCharsWhile pred = while
                                      else resultPart (mappend prefix . mappend prefix') $
                                           f $ drop (length prefix + length prefix') i
 
-takeCharsWhile1 :: (TextualMonoid s, Functor1 t) => (Char -> Bool) -> Parser t s s
+takeCharsWhile1 :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s s
 takeCharsWhile1 pred = Delay (Failure "takeWhile1") f
    where f i@((_, s):_) | null s = takeCharsWhile1 pred
                         | otherwise = let (prefix, suffix) = Textual.span (const False) pred s
@@ -195,7 +195,7 @@ takeCharsWhile1 pred = Delay (Failure "takeWhile1") f
                                                    else resultPart (mappend prefix . mappend prefix')
                                                                    (feed rest $ takeCharsWhile pred)
 
-satisfyChar :: (TextualMonoid s, Functor1 t) => (Char -> Bool) -> Parser t s s
+satisfyChar :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s s
 satisfyChar predicate = p
    where p = Delay (Failure "satisfyChar") f
          f [] = p

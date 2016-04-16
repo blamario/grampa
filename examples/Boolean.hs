@@ -72,8 +72,7 @@ instance Reassemblable (Boolean e) where
                              term= f term (\t->a{term= t}) a,
                              factor= f factor (\f->a{factor= f}) a}
 
-boolean :: forall e. BooleanDomain e =>
-           Boolean e (Parser (Boolean e) String) -> Boolean e (Parser (Boolean e) String)
+boolean :: BooleanDomain e => Grammar (Boolean e) String -> Grammar (Boolean e) String
 boolean Boolean{..} = Boolean{
    expr= term
          <|> or <$> expr <* string "||" <*> term,
