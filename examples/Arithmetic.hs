@@ -95,9 +95,9 @@ parse s = fst <$> results ((<* endOfInput) $ expr
    where g = fixGrammar arithmetic
 
 parenthesize :: [String] -> [String]
-parenthesize s = parse s
+parenthesize = parse
 
 evaluate :: [String] -> [Int]
-evaluate s = parse s
+evaluate = parse
 
 main = getArgs >>= print . evaluate

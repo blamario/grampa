@@ -35,45 +35,58 @@ instance BooleanDomain [Char] where
 
 infixJoin op a b = "(" <> a <> op <> b <> ")"
 
-data Boolean e f =
+data Boolean g e f =
    Boolean{
       expr :: f e,
       term :: f e,
-      factor :: f e}
+      factor :: f e,
+      subgrammar :: g f}
 
-instance Show (f e) => Show (Boolean e f) where
+instance (Show (f e), Show (g f)) => Show (Boolean g e f) where
    showsPrec prec a rest = "Boolean{expr=" ++ showsPrec prec (expr a)
                            (", term=" ++ showsPrec prec (term a)
                             (", factor=" ++ showsPrec prec (factor a) ("}" ++ rest)))
 
-instance Functor1 (Boolean e) where
+instance Functor1 g => Functor1 (Boolean g e) where
    fmap1 f a = a{expr= f (expr a),
                  term= f (term a),
-                 factor= f (factor a)}
+                 factor= f (factor a),
+                 subgrammar= fmap1 f (subgrammar a)}
 
-instance Foldable1 (Boolean e) where
-   foldMap1 f a = f (expr a) <> f (term a) <> f (factor a)
+instance Foldable1 g => Foldable1 (Boolean g e) where
+   foldMap1 f a = f (expr a) <> f (term a) <> f (factor a) <> foldMap1 f (subgrammar a)
 
-instance Traversable1 (Boolean e) where
+instance Traversable1 g => Traversable1 (Boolean g e) where
    traverse1 f a = Boolean
                    <$> f (expr a)
                    <*> f (term a)
                    <*> f (factor a)
+                   <*> traverse1 f (subgrammar a)
 
-instance Reassemblable (Boolean e) where
+instance Reassemblable g => Reassemblable (Boolean g e) where
    composePer f g a = Boolean{expr= expr (f a{expr= expr a'}),
                               term= term (f a{term= term a'}),
-                              factor= factor (f a{factor= factor a'})}
+                              factor= factor (f a{factor= factor a'}),
+                              subgrammar= composePer f' g' (subgrammar a)}
       where a' = g a
+            f' c = subgrammar (f $ a{subgrammar= c})
+            g' c = subgrammar (g $ a{subgrammar= c})
    reassemble f a = Boolean{expr= f expr a,
                             term= f term a,
-                            factor= f factor a}
+                            factor= f factor a,
+                            subgrammar= reassemble f' (subgrammar a)}
+      where f' get c = f (get . subgrammar) a{subgrammar= c}
    reassemble' f a = Boolean{expr= f expr (\e->a{expr= e}) a,
                              term= f term (\t->a{term= t}) a,
-                             factor= f factor (\f->a{factor= f}) a}
+                             factor= f factor (\f->a{factor= f}) a,
+                             subgrammar= reassemble' f' (subgrammar a)}
+      where f' get set c = f (get . subgrammar) (\t->a{subgrammar= set t}) a{subgrammar= c}
 
-boolean :: BooleanDomain e => Grammar (Boolean e) String -> Grammar (Boolean e) String
-boolean Boolean{..} = Boolean{
+boolean :: (BooleanDomain e, Functor1 g) =>
+           (g (Parser (Boolean g e) String) -> Parser (Boolean g e) String e)
+        -> (g (Parser (Boolean g e) String) -> g (Parser (Boolean g e) String))
+        -> Grammar (Boolean g e) String -> Grammar (Boolean g e) String
+boolean start sub Boolean{..} = Boolean{
    expr= term
          <|> or <$> expr <* string "||" <*> term,
    term= factor
@@ -81,19 +94,30 @@ boolean Boolean{..} = Boolean{
    factor= string "True" *> pure true
            <|> string "False" *> pure false
            <|> string "not" *> takeCharsWhile isSpace *> (not <$> factor)
-           <|> string "(" *> expr <* string ")"}
+           <|> start subgrammar
+           <|> string "(" *> expr <* string ")",
+   subgrammar= sub subgrammar}
 
-parse :: (Eq e, BooleanDomain e) => [String] -> [e]
-parse s = fst <$> results ((<* endOfInput) $ expr
-                          $ fmap1 feedEnd
-                          $ foldr (feedGrammar g) g
-                          $ reverse s)
-   where g = fixGrammar boolean
+parse :: (Eq e, BooleanDomain e, Reassemblable g) =>
+         (g (Parser (Boolean g e) String) -> Parser (Boolean g e) String e)
+      -> (g (Parser (Boolean g e) String) -> g (Parser (Boolean g e) String))
+      -> [String] -> [e]
+parse start sub s = fst <$> results ((<* endOfInput) $ expr
+                                    $ fmap1 feedEnd
+                                    $ foldr (feedGrammar g) g
+                                    $ reverse s)
+   where g = fixGrammar (boolean start sub)
 
-parenthesize :: [String] -> [String]
-parenthesize s = parse s
+parenthesize :: Reassemblable g =>
+                (g (Parser (Boolean g String) String) -> Parser (Boolean g String) String String)
+             -> (g (Parser (Boolean g String) String) -> g (Parser (Boolean g String) String))
+             -> [String] -> [String]
+parenthesize = parse
 
-evaluate :: [String] -> [Bool]
-evaluate s = parse s
+evaluate :: Reassemblable g =>
+            (g (Parser (Boolean g Bool) String) -> Parser (Boolean g Bool) String Bool)
+         -> (g (Parser (Boolean g Bool) String) -> g (Parser (Boolean g Bool) String))
+         -> [String] -> [Bool]
+evaluate = parse
 
-main = getArgs >>= print . evaluate
+main start sub = getArgs >>= print . evaluate start sub
