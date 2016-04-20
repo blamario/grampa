@@ -32,6 +32,10 @@ data Parser g s r = Failure String
                   | Delay (Parser g s r) ([(Grammar g s, s)] -> Parser g s r)
                   | Recursive (Parser g s r)
 
+type Grammar g s = g (Parser g s)
+type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
+type Production g p r = g p -> p r
+
 instance (Show r, Show s, Show (Grammar g s)) => Show (Parser g s r) where
    showsPrec _ (Failure s) rest = "(Failure " ++ shows s (")" ++ rest)
    showsPrec prec (Result s r) rest
@@ -42,9 +46,7 @@ instance (Show r, Show s, Show (Grammar g s)) => Show (Parser g s r) where
       | prec > 0 = "(Recursive " ++ showsPrec (prec - 1) p (")" ++ rest)
       | otherwise = "Recursive" ++ rest
    showsPrec prec (Delay e f) rest = "(Delay " ++ showsPrec prec e (")" ++ rest)
-
-type Grammar g s = g (Parser g s)
-
+   
 fixGrammar :: (MonoidNull s, Reassemblable g) => (Grammar g s -> Grammar g s) -> Grammar g s
 fixGrammar gf = tieRecursion $ fix (composePer gf (fmap1 $ Recursive) . reassemble (\f g-> nt f g))
 

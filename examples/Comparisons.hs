@@ -69,10 +69,8 @@ instance Reassemblable g => Reassemblable (Comparisons g e) where
                                  comparable= reassemble' f' (comparable a)}
       where f' get set c = f (get . comparable) (\t->a{comparable= set t}) a{comparable= c}
 
-comparisons :: forall c g g' e. (ComparisonDomain c e, Functor1 g, Functor1 g') =>
-               (g (Parser g' String) -> Parser g' String c)
-            -> (g (Parser g' String) -> g (Parser g' String))
-            -> Comparisons g e (Parser g' String) -> Comparisons g e (Parser g' String)
+comparisons :: (ComparisonDomain c e, Functor1 g, Functor1 g') =>
+               Production g (Parser g' String) c -> GrammarBuilder g g' String -> GrammarBuilder (Comparisons g e) g' String
 comparisons start subgrammar Comparisons{..} =
    let comparable' = start comparable
    in Comparisons{

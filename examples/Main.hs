@@ -1,10 +1,13 @@
 module Main (main) where
 
-import Text.Grampa (Grammar, Parser)
-import qualified Arithmetic (Arithmetic, arithmetic, expr, main)
+import Text.Grampa (Grammar, Parser, Production)
+import Arithmetic (Arithmetic, arithmetic)
+import Comparisons (Comparisons, comparisons)
+import qualified Arithmetic (expr, main)
 import qualified Boolean (main)
-import qualified Comparisons (Comparisons, comparisons, expr, main)
+import qualified Comparisons (expr, main)
 
 main = Arithmetic.main
-       >> Comparisons.main (Arithmetic.expr :: Arithmetic.Arithmetic Int p -> p Int) Arithmetic.arithmetic
-       >> Boolean.main (Comparisons.expr :: Comparisons.Comparisons (Arithmetic.Arithmetic Int) Bool p -> p Bool) (Comparisons.comparisons (Arithmetic.expr :: Arithmetic.Arithmetic Int p -> p Int) Arithmetic.arithmetic)
+       >> Comparisons.main expr arithmetic
+       >> Boolean.main (Comparisons.expr :: Production (Comparisons (Arithmetic Int) Bool) p Bool) (comparisons expr arithmetic)
+   where expr = Arithmetic.expr :: Production (Arithmetic Int) p Int

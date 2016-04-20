@@ -83,9 +83,9 @@ instance Reassemblable g => Reassemblable (Boolean g e) where
       where f' get set c = f (get . subgrammar) (\t->a{subgrammar= set t}) a{subgrammar= c}
 
 boolean :: (BooleanDomain e, Functor1 g) =>
-           (g (Parser (Boolean g e) String) -> Parser (Boolean g e) String e)
-        -> (g (Parser (Boolean g e) String) -> g (Parser (Boolean g e) String))
-        -> Grammar (Boolean g e) String -> Grammar (Boolean g e) String
+           Production g (Parser (Boolean g e) String) e
+        -> GrammarBuilder g (Boolean g e) String
+        -> GrammarBuilder (Boolean g e) (Boolean g e) String
 boolean start sub Boolean{..} = Boolean{
    expr= term
          <|> or <$> expr <* string "||" <*> term,
