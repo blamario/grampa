@@ -100,6 +100,14 @@ feedEnd (Delay e _) = feedEnd e
 feedEnd (Recursive p) = Recursive (feedEnd p)
 feedEnd p = p
 
+parse :: (Reassemblable g, FactorialMonoid s) =>
+         GrammarBuilder g g s -> (Production g (Parser g s) r) -> [s] -> [r]
+parse g prod chunks = fst <$> results ((<* endOfInput) $ prod
+                                      $ fmap1 feedEnd
+                                      $ foldr (feedGrammar g') g'
+                                      $ reverse chunks)
+   where g' = fixGrammar g
+
 results :: (FactorialMonoid s, Functor1 g) => Parser g s r -> [(r, [(Grammar g s, s)])]
 results Failure{} = []
 results (Result s r) = [(r, s)]

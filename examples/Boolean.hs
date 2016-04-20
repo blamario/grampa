@@ -98,26 +98,16 @@ boolean start sub Boolean{..} = Boolean{
            <|> string "(" *> expr <* string ")",
    subgrammar= sub subgrammar}
 
-parse :: (Eq e, BooleanDomain e, Reassemblable g) =>
-         (g (Parser (Boolean g e) String) -> Parser (Boolean g e) String e)
-      -> (g (Parser (Boolean g e) String) -> g (Parser (Boolean g e) String))
-      -> [String] -> [e]
-parse start sub s = fst <$> results ((<* endOfInput) $ expr
-                                    $ fmap1 feedEnd
-                                    $ foldr (feedGrammar g) g
-                                    $ reverse s)
-   where g = fixGrammar (boolean start sub)
-
 parenthesize :: Reassemblable g =>
                 (g (Parser (Boolean g String) String) -> Parser (Boolean g String) String String)
              -> (g (Parser (Boolean g String) String) -> g (Parser (Boolean g String) String))
              -> [String] -> [String]
-parenthesize = parse
+parenthesize start sub = parse (boolean start sub) expr
 
 evaluate :: Reassemblable g =>
             (g (Parser (Boolean g Bool) String) -> Parser (Boolean g Bool) String Bool)
          -> (g (Parser (Boolean g Bool) String) -> g (Parser (Boolean g Bool) String))
          -> [String] -> [Bool]
-evaluate = parse
+evaluate start sub = parse (boolean start sub) expr
 
 main start sub = getArgs >>= print . evaluate start sub

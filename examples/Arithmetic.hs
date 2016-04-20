@@ -86,17 +86,10 @@ arithmetic Arithmetic{..} = Arithmetic{
    factor= ((number . read) <$> takeCharsWhile1 isDigit)
            <|> string "(" *> expr <* string ")"}
 
-parse :: (Eq e, ArithmeticDomain e) => [String] -> [e]
-parse s = fst <$> results ((<* endOfInput) $ expr
-                          $ fmap1 feedEnd
-                          $ foldr (feedGrammar g) g
-                          $ reverse s)
-   where g = fixGrammar arithmetic
-
 parenthesize :: [String] -> [String]
-parenthesize = parse
+parenthesize = parse arithmetic expr
 
 evaluate :: [String] -> [Int]
-evaluate = parse
+evaluate = parse arithmetic expr
 
 main = getArgs >>= print . evaluate

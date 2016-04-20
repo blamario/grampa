@@ -81,26 +81,16 @@ comparisons start subgrammar Comparisons{..} =
                   <|> greaterThan <$> comparable' <* string ">" <*> comparable',
             comparable= subgrammar comparable}
 
-parse :: (Eq e, ComparisonDomain c e, Reassemblable g) =>
-         (g (Parser (Comparisons g e) String) -> Parser (Comparisons g e) String c)
-      -> (g (Parser (Comparisons g e) String) -> g (Parser (Comparisons g e) String))
-      -> [String] -> [e]
-parse start subgrammar s = fst <$> results ((<* endOfInput) $ expr
-                                           $ fmap1 feedEnd
-                                           $ foldr (feedGrammar g) g
-                                           $ reverse s)
-   where g = fixGrammar (comparisons start subgrammar)
-
 parenthesize :: Reassemblable g =>
                 (g (Parser (Comparisons g String) String) -> Parser (Comparisons g String) String String)
              -> (g (Parser (Comparisons g String) String) -> g (Parser (Comparisons g String) String))
              -> [String] -> [String]
-parenthesize = parse
+parenthesize start subgrammar = parse (comparisons start subgrammar) expr
 
 evaluate :: (Ord c, Reassemblable g) =>
             (g (Parser (Comparisons g Bool) String) -> Parser (Comparisons g Bool) String c)
          -> (g (Parser (Comparisons g Bool) String) -> g (Parser (Comparisons g Bool) String))
          -> [String] -> [Bool]
-evaluate = parse
+evaluate start subgrammar = parse (comparisons start subgrammar) expr
 
 main start subgrammar = getArgs >>= print . evaluate start subgrammar
