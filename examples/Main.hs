@@ -1,13 +1,17 @@
 module Main (main) where
 
-import Text.Grampa (Grammar, Parser, Production)
+import System.Environment (getArgs)
+import Text.Grampa (Grammar, Parser, Production, parse)
 import Arithmetic (Arithmetic, arithmetic)
-import Comparisons (Comparisons, comparisons)
-import qualified Arithmetic (expr, main)
-import qualified Boolean (main)
-import qualified Comparisons (expr, main)
+import qualified Arithmetic
+import qualified Boolean
+import qualified Comparisons
 
-main = Arithmetic.main
-       >> Comparisons.main expr arithmetic
-       >> Boolean.main (Comparisons.expr :: Production (Comparisons (Arithmetic Int) Bool) p Bool) (comparisons expr arithmetic)
+main = do args <- getArgs
+          print (parse Arithmetic.arithmetic expr args :: [Int])
+          print (parse comparisons1 Comparisons.expr args :: [Bool])
+          print (parse boolean Boolean.expr args :: [Bool])
    where expr = Arithmetic.expr :: Production (Arithmetic Int) p Int
+         comparisons1 = Comparisons.comparisons arithmetic expr
+         comparisons2 = Comparisons.comparisons arithmetic expr
+         boolean = Boolean.boolean comparisons2 Comparisons.expr

@@ -2,11 +2,9 @@
 module Boolean where
 
 import Control.Applicative
-import Control.Arrow (second)
-import qualified Data.Bool 
+import qualified Data.Bool
 import Data.Char (isSpace)
-import Data.Monoid (Monoid, mappend, mempty, (<>))
-import System.Environment (getArgs)
+import Data.Monoid ((<>))
 
 import Text.Grampa
 
@@ -83,10 +81,10 @@ instance Reassemblable g => Reassemblable (Boolean g e) where
       where f' get set c = f (get . subgrammar) (\t->a{subgrammar= set t}) a{subgrammar= c}
 
 boolean :: (BooleanDomain e, Functor1 g) =>
-           Production g (Parser (Boolean g e) String) e
-        -> GrammarBuilder g (Boolean g e) String
+           GrammarBuilder g (Boolean g e) String
+        -> Production g (Parser (Boolean g e) String) e
         -> GrammarBuilder (Boolean g e) (Boolean g e) String
-boolean start sub Boolean{..} = Boolean{
+boolean sub start Boolean{..} = Boolean{
    expr= term
          <|> or <$> expr <* string "||" <*> term,
    term= factor
@@ -97,17 +95,3 @@ boolean start sub Boolean{..} = Boolean{
            <|> start subgrammar
            <|> string "(" *> expr <* string ")",
    subgrammar= sub subgrammar}
-
-parenthesize :: Reassemblable g =>
-                (g (Parser (Boolean g String) String) -> Parser (Boolean g String) String String)
-             -> (g (Parser (Boolean g String) String) -> g (Parser (Boolean g String) String))
-             -> [String] -> [String]
-parenthesize start sub = parse (boolean start sub) expr
-
-evaluate :: Reassemblable g =>
-            (g (Parser (Boolean g Bool) String) -> Parser (Boolean g Bool) String Bool)
-         -> (g (Parser (Boolean g Bool) String) -> g (Parser (Boolean g Bool) String))
-         -> [String] -> [Bool]
-evaluate start sub = parse (boolean start sub) expr
-
-main start sub = getArgs >>= print . evaluate start sub

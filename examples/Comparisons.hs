@@ -2,15 +2,9 @@
 module Comparisons where
 
 import Control.Applicative
-import Control.Arrow (second)
-import qualified Data.Bool 
-import Data.Char (isSpace)
-import Data.Monoid (Monoid, mappend, mempty, (<>))
-import System.Environment (getArgs)
+import Data.Monoid ((<>))
 
 import Text.Grampa
-
-import Prelude hiding (and, or, not)
 
 class ComparisonDomain c e where
    greaterThan :: c -> c -> e
@@ -70,8 +64,9 @@ instance Reassemblable g => Reassemblable (Comparisons g e) where
       where f' get set c = f (get . comparable) (\t->a{comparable= set t}) a{comparable= c}
 
 comparisons :: (ComparisonDomain c e, Functor1 g, Functor1 g') =>
-               Production g (Parser g' String) c -> GrammarBuilder g g' String -> GrammarBuilder (Comparisons g e) g' String
-comparisons start subgrammar Comparisons{..} =
+               GrammarBuilder g g' String -> Production g (Parser g' String) c
+            -> GrammarBuilder (Comparisons g e) g' String
+comparisons subgrammar start Comparisons{..} =
    let comparable' = start comparable
    in Comparisons{
             expr= lessThan <$> comparable' <* string "<" <*> comparable'
@@ -80,17 +75,3 @@ comparisons start subgrammar Comparisons{..} =
                   <|> greaterOrEqual <$> comparable' <* string ">=" <*> comparable'
                   <|> greaterThan <$> comparable' <* string ">" <*> comparable',
             comparable= subgrammar comparable}
-
-parenthesize :: Reassemblable g =>
-                (g (Parser (Comparisons g String) String) -> Parser (Comparisons g String) String String)
-             -> (g (Parser (Comparisons g String) String) -> g (Parser (Comparisons g String) String))
-             -> [String] -> [String]
-parenthesize start subgrammar = parse (comparisons start subgrammar) expr
-
-evaluate :: (Ord c, Reassemblable g) =>
-            (g (Parser (Comparisons g Bool) String) -> Parser (Comparisons g Bool) String c)
-         -> (g (Parser (Comparisons g Bool) String) -> g (Parser (Comparisons g Bool) String))
-         -> [String] -> [Bool]
-evaluate start subgrammar = parse (comparisons start subgrammar) expr
-
-main start subgrammar = getArgs >>= print . evaluate start subgrammar

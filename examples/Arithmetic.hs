@@ -2,10 +2,8 @@
 module Arithmetic where
 
 import Control.Applicative
-import Control.Arrow (second)
 import Data.Char (isDigit)
-import Data.Monoid (Monoid, mappend, mempty, (<>))
-import System.Environment (getArgs)
+import Data.Monoid ((<>))
 
 import Text.Grampa
 
@@ -85,11 +83,3 @@ arithmetic Arithmetic{..} = Arithmetic{
          <|> divide <$> term <* string "/" <*> factor,
    factor= ((number . read) <$> takeCharsWhile1 isDigit)
            <|> string "(" *> expr <* string ")"}
-
-parenthesize :: [String] -> [String]
-parenthesize = parse arithmetic expr
-
-evaluate :: [String] -> [Int]
-evaluate = parse arithmetic expr
-
-main = getArgs >>= print . evaluate
