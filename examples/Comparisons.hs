@@ -5,6 +5,7 @@ import Control.Applicative
 import Data.Monoid ((<>))
 
 import Text.Grampa
+import Utilities (symbol)
 
 class ComparisonDomain c e where
    greaterThan :: c -> c -> e
@@ -66,9 +67,9 @@ comparisons :: (ComparisonDomain c e, Functor1 g, Functor1 g') =>
 comparisons subgrammar start Comparisons{..} =
    let comparable' = start comparable
    in Comparisons{
-            expr= lessThan <$> comparable' <* string "<" <*> comparable'
-                  <|> lessOrEqual <$> comparable' <* string "<=" <*> comparable'
-                  <|> equal <$> comparable' <* string "==" <*> comparable'
-                  <|> greaterOrEqual <$> comparable' <* string ">=" <*> comparable'
-                  <|> greaterThan <$> comparable' <* string ">" <*> comparable',
+            expr= lessThan <$> comparable' <* symbol "<" <*> comparable'
+                  <|> lessOrEqual <$> comparable' <* symbol "<=" <*> comparable'
+                  <|> equal <$> comparable' <* symbol "==" <*> comparable'
+                  <|> greaterOrEqual <$> comparable' <* symbol ">=" <*> comparable'
+                  <|> greaterThan <$> comparable' <* symbol ">" <*> comparable',
             comparable= subgrammar comparable}

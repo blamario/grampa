@@ -5,6 +5,7 @@ import Control.Applicative
 import Data.Monoid ((<>))
 
 import Text.Grampa
+import Utilities (keyword)
 
 class ConditionalDomain c e where
    ifThenElse :: c -> e -> e -> e
@@ -64,6 +65,6 @@ conditionals testGrammar startTest termGrammar startTerm Conditionals{..} =
    let test' = startTest test
        term' = startTerm term
    in Conditionals{
-            expr= ifThenElse <$> (string "if" *> test') <*> (string "then" *> term') <*> (string "else" *> term'),
+            expr= ifThenElse <$> (keyword "if" *> test') <*> (keyword "then" *> term') <*> (keyword "else" *> term'),
             term= termGrammar term,
             test= testGrammar test}

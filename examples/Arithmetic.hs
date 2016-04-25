@@ -2,10 +2,11 @@
 module Arithmetic where
 
 import Control.Applicative
-import Data.Char (isDigit)
+import Data.Char (isDigit, isSpace)
 import Data.Monoid ((<>))
 
 import Text.Grampa
+import Utilities (symbol)
 
 import Prelude hiding (negate, subtract)
 
@@ -72,11 +73,11 @@ instance Reassemblable (Arithmetic e) where
 arithmetic :: (ArithmeticDomain e, Functor1 g) => GrammarBuilder (Arithmetic e) g String
 arithmetic Arithmetic{..} = Arithmetic{
    expr= term
-         <|> string "-" *> (negate <$> term)
-         <|> add <$> expr <* string "+" <*> term
-         <|> subtract <$> expr <* string "-" <*> term,
+         <|> symbol "-" *> (negate <$> term)
+         <|> add <$> expr <* symbol "+" <*> term
+         <|> subtract <$> expr <* symbol "-" <*> term,
    term= factor
-         <|> multiply <$> term <* string "*" <*> factor
-         <|> divide <$> term <* string "/" <*> factor,
-   factor= ((number . read) <$> takeCharsWhile1 isDigit)
-           <|> string "(" *> expr <* string ")"}
+         <|> multiply <$> term <* symbol "*" <*> factor
+         <|> divide <$> term <* symbol "/" <*> factor,
+   factor= skipCharsWhile isSpace *> ((number . read) <$> takeCharsWhile1 isDigit)
+           <|> symbol "(" *> expr <* symbol ")"}

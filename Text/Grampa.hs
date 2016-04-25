@@ -1,5 +1,11 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, LambdaCase, RankNTypes, ScopedTypeVariables, UndecidableInstances #-}
-module Text.Grampa where
+module Text.Grampa (Functor1(..), Foldable1(..), Traversable1(..), Reassemblable(..),
+                    MonoidNull, FactorialMonoid, TextualMonoid,
+                    Grammar, GrammarBuilder, Parser, Production,
+                    feed, feedEnd, feedGrammar, fixGrammar, parse,
+                    iterateMany, lookAhead, notFollowedBy, endOfInput, string,
+                    takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1, satisfy, satisfyChar, skipCharsWhile)
+where
 
 import Control.Applicative
 import Control.Arrow (second)
@@ -7,10 +13,10 @@ import Data.Function(fix)
 import Data.Monoid (Monoid, mappend, mempty, (<>))
 import Data.Monoid.Cancellative (LeftReductiveMonoid (stripPrefix))
 import Data.Monoid.Null (MonoidNull(null))
-import Data.Monoid.Factorial (FactorialMonoid(length, splitPrimePrefix, tails))
+import Data.Monoid.Factorial (FactorialMonoid(length, span, splitPrimePrefix, tails))
 import Data.Monoid.Textual (TextualMonoid)
 import qualified Data.Monoid.Textual as Textual
-import Prelude hiding (length, null)
+import Prelude hiding (length, null, span, takeWhile)
 
 class Functor1 g where
    fmap1 :: (forall a. p a -> q a) -> g p -> g q
@@ -167,10 +173,29 @@ instance (MonoidNull s, Functor1 g) => Monad (Parser g s) where
 iterateMany :: (MonoidNull s, Functor1 g) => Parser g s r -> (Parser g s r -> Parser g s r) -> Parser g s r
 iterateMany p f = p >>= (\r-> return r <|> iterateMany (f $ return r) f)
 
+-- | Behaves like the argument parser, but without consuming any input.
+lookAhead :: (MonoidNull s, Functor1 g) => Parser g s r -> Parser g s r
+lookAhead p = lookAheadInto [] p
+   where -- lookAheadInto :: [(g (Parser g s), s)] -> Parser g s r -> Parser g s r
+         lookAheadInto _ p@Failure{}        = p
+         lookAheadInto t (Result _ r)       = Result t r
+         lookAheadInto t (Choice p1 p2)     = lookAheadInto t p1 <|> lookAheadInto t p2
+         lookAheadInto t (Delay e f)        = Delay (lookAheadInto t e) (\s-> lookAheadInto (mappend t s) (f s))
+
+-- | Does not consume any input; succeeds (with 'mempty' result) iff the argument parser fails.
+notFollowedBy :: (MonoidNull s, Functor1 g) => Parser g s r -> Parser g s ()
+notFollowedBy = lookAheadNotInto []
+   where -- lookAheadNotInto :: (Monoid s, Monoid r) => [(g (Parser g s), s)] -> Parser g s r -> Parser g s ()
+         lookAheadNotInto t Failure{}   = Result t mempty
+         lookAheadNotInto t Result{}   = Failure "notFollowedBy"
+         lookAheadNotInto t (Delay e f) = Delay (lookAheadNotInto t e) (\s-> lookAheadNotInto (mappend t s) (f s))
+         lookAheadNotInto t p = Delay (lookAheadNotInto t $ feedEnd p) (\s-> lookAheadNotInto (mappend t s) (feed s p))
+
 -- | A parser that fails on any input and succeeds at its end
 endOfInput :: (MonoidNull s, Functor1 g) => Parser g s ()
 endOfInput = Delay (pure ()) (\s-> if null (inputWith s) then endOfInput else Failure "endOfInput")
 
+-- | A parser that consumes and returns the given prefix of the input.
 string :: (Show s, LeftReductiveMonoid s, FactorialMonoid s, Functor1 g) => s -> Parser g s s
 string x | null x = pure x
 string x = Delay (Failure $ "string " ++ show x) $
@@ -180,6 +205,27 @@ string x = Delay (Failure $ "string " ++ show x) $
                                    (Nothing, Just x') -> string x' *> pure x
                  [] -> string x
 
+-- | A parser accepting the longest sequence of input atoms that match the given predicate; an optimized version of
+-- 'concatMany . satisfy'.
+takeWhile :: (FactorialMonoid s, Functor1 g) => (s -> Bool) -> Parser g s s
+takeWhile pred = while
+   where while = Delay (pure mempty) f
+         f i@((_, s):_) = let (prefix, suffix) = span pred s
+                          in if null suffix then resultPart (mappend prefix) while
+                             else Result (drop (length prefix) i) prefix
+
+-- | A parser accepting the longest non-empty sequence of input atoms that match the given predicate; an optimized
+-- version of 'concatSome . satisfy'.
+takeWhile1 :: (FactorialMonoid s, Functor1 g) => (s -> Bool) -> Parser g s s
+takeWhile1 pred = Delay (Failure "takeWhile1") f
+   where f i@((_, s):_) | null s = takeWhile1 pred
+                        | otherwise = let (prefix, suffix) = span pred s
+                                      in if null prefix then Failure "takeWhile1"
+                                         else if null suffix then resultPart (mappend prefix) (takeWhile pred)
+                                              else Result (drop (length prefix) i) prefix
+
+-- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
+-- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
 takeCharsWhile :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s s
 takeCharsWhile pred = while
    where while = Delay (pure mempty) f
@@ -190,8 +236,10 @@ takeCharsWhile pred = while
                                      else resultPart (mappend prefix . mappend prefix') $
                                           f $ drop (length prefix + length prefix') i
 
+-- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
+-- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
 takeCharsWhile1 :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s s
-takeCharsWhile1 pred = Delay (Failure "takeWhile1") f
+takeCharsWhile1 pred = Delay (Failure "takeCharsWhile1") f
    where f i@((_, s):_) | null s = takeCharsWhile1 pred
                         | otherwise = let (prefix, suffix) = Textual.span (const False) pred s
                                           (prefix', suffix') = Textual.span (const True) (const False) suffix
@@ -204,6 +252,16 @@ takeCharsWhile1 pred = Delay (Failure "takeWhile1") f
                                                    else resultPart (mappend prefix . mappend prefix')
                                                                    (feed rest $ takeCharsWhile pred)
 
+-- | A parser that accepts an input atom only if it satisfies the given predicate.
+satisfy :: (FactorialMonoid s, Functor1 g) => (s -> Bool) -> Parser g s s
+satisfy predicate = p
+   where p = Delay (Failure "satisfy") f
+         f ((_, s):rest) = case splitPrimePrefix s
+                           of Just (first, _) -> if predicate first then Result rest first else Failure "satisfy"
+                              Nothing -> p
+
+-- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the given
+-- predicate.
 satisfyChar :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s s
 satisfyChar predicate = p
    where p = Delay (Failure "satisfyChar") f
@@ -214,6 +272,17 @@ satisfyChar predicate = p
                                  of Just c -> if predicate c then Result tl first else Failure "satisfyChar"
                                     Nothing -> if null rest then p else Failure "satisfyChar"
                               Nothing -> p
+
+-- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
+-- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
+skipCharsWhile :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s ()
+skipCharsWhile pred = while
+   where while = Delay (pure mempty) f
+         f i@((_, s):_) = let (prefix, suffix) = Textual.span (const False) pred s
+                          in if null suffix then while
+                             else let (prefix', suffix') = Textual.span (const True) (const False) suffix
+                                  in if null prefix' then Result (drop (length prefix) i) ()
+                                     else f $ drop (length prefix + length prefix') i
 
 inputWith [] = mempty
 inputWith ((_, s):_) = s

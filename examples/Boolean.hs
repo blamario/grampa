@@ -7,6 +7,7 @@ import Data.Char (isSpace)
 import Data.Monoid ((<>))
 
 import Text.Grampa
+import Utilities (keyword, symbol)
 
 import Prelude hiding (and, or, not)
 
@@ -80,12 +81,12 @@ boolean :: (BooleanDomain e, Functor1 g, Functor1 g') =>
         -> GrammarBuilder (Boolean g e) g' String
 boolean sub start Boolean{..} = Boolean{
    expr= term
-         <|> or <$> expr <* string "||" <*> term,
+         <|> or <$> expr <* symbol "||" <*> term,
    term= factor
-         <|> and <$> term <* string "&&" <*> factor,
-   factor= string "True" *> pure true
-           <|> string "False" *> pure false
-           <|> string "not" *> takeCharsWhile isSpace *> (not <$> factor)
+         <|> and <$> term <* symbol "&&" <*> factor,
+   factor= keyword "True" *> pure true
+           <|> keyword "False" *> pure false
+           <|> keyword "not" *> takeCharsWhile isSpace *> (not <$> factor)
            <|> start subgrammar
-           <|> string "(" *> expr <* string ")",
+           <|> symbol "(" *> expr <* symbol ")",
    subgrammar= sub subgrammar}
