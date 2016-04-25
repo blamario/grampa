@@ -50,14 +50,9 @@ instance (Reassemblable gTest, Reassemblable gTerm) => Reassemblable (Conditiona
             g1 t = test (g $ a{test= t})
             f2 t = term (f $ a{term= t})
             g2 t = term (g $ a{term= t})
-   reassemble f a = Conditionals{expr= f expr a,
+   reassemble f a = Conditionals{expr= f expr (\e->a{expr= e}) a,
                                  test= reassemble f1 (test a),
                                  term= reassemble f2 (term a)}
-      where f1 get t = f (get . test) a{test= t}
-            f2 get t = f (get . term) a{term= t}
-   reassemble' f a = Conditionals{expr= f expr (\e->a{expr= e}) a,
-                                 test= reassemble' f1 (test a),
-                                 term= reassemble' f2 (term a)}
       where f1 get set t = f (get . test) (\t->a{test= set t}) a{test= t}
             f2 get set t = f (get . term) (\t->a{term= set t}) a{term= t}
 

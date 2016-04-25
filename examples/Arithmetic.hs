@@ -65,12 +65,9 @@ instance Reassemblable (Arithmetic e) where
                                  term= term (f a{term= term a'}),
                                  factor= factor (f a{factor= factor a'})}
       where a' = g a
-   reassemble f a = Arithmetic{expr= f expr a,
-                               term= f term a,
-                               factor= f factor a}
-   reassemble' f a = Arithmetic{expr= f expr (\e->a{expr= e}) a,
-                                term= f term (\t->a{term= t}) a,
-                                factor= f factor (\f->a{factor= f}) a}
+   reassemble f a = Arithmetic{expr= f expr (\e->a{expr= e}) a,
+                               term= f term (\t->a{term= t}) a,
+                               factor= f factor (\f->a{factor= f}) a}
 
 arithmetic :: (ArithmeticDomain e, Functor1 g) => GrammarBuilder (Arithmetic e) g String
 arithmetic Arithmetic{..} = Arithmetic{

@@ -69,15 +69,10 @@ instance Reassemblable g => Reassemblable (Boolean g e) where
       where a' = g a
             f' c = subgrammar (f $ a{subgrammar= c})
             g' c = subgrammar (g $ a{subgrammar= c})
-   reassemble f a = Boolean{expr= f expr a,
-                            term= f term a,
-                            factor= f factor a,
+   reassemble f a = Boolean{expr= f expr (\e->a{expr= e}) a,
+                            term= f term (\t->a{term= t}) a,
+                            factor= f factor (\f->a{factor= f}) a,
                             subgrammar= reassemble f' (subgrammar a)}
-      where f' get c = f (get . subgrammar) a{subgrammar= c}
-   reassemble' f a = Boolean{expr= f expr (\e->a{expr= e}) a,
-                             term= f term (\t->a{term= t}) a,
-                             factor= f factor (\f->a{factor= f}) a,
-                             subgrammar= reassemble' f' (subgrammar a)}
       where f' get set c = f (get . subgrammar) (\t->a{subgrammar= set t}) a{subgrammar= c}
 
 boolean :: (BooleanDomain e, Functor1 g, Functor1 g') =>

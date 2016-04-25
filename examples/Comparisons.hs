@@ -56,11 +56,8 @@ instance Reassemblable g => Reassemblable (Comparisons g e) where
       where a' = g a
             f' c = comparable (f $ a{comparable= c})
             g' c = comparable (g $ a{comparable= c})
-   reassemble f a = Comparisons{expr= f expr a,
+   reassemble f a = Comparisons{expr= f expr (\e->a{expr= e}) a,
                                 comparable= reassemble f' (comparable a)}
-      where f' get c = f (get . comparable) a{comparable= c}
-   reassemble' f a = Comparisons{expr= f expr (\e->a{expr= e}) a,
-                                 comparable= reassemble' f' (comparable a)}
       where f' get set c = f (get . comparable) (\t->a{comparable= set t}) a{comparable= c}
 
 comparisons :: (ComparisonDomain c e, Functor1 g, Functor1 g') =>

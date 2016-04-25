@@ -23,8 +23,7 @@ class Foldable1 g => Traversable1 g where
 
 class Functor1 g => Reassemblable g where
    composePer :: (g p -> g p) -> (g p -> g p) -> (g p -> g p)
-   reassemble :: (forall a. (g p -> p a) -> g p -> q a) -> g p -> g q
-   reassemble' :: (forall a. (g p -> p a) -> (p a -> g p) -> g p -> q a) -> g p -> g q
+   reassemble :: (forall a. (g p -> p a) -> (p a -> g p) -> g p -> q a) -> g p -> g q
 
 data Parser g s r = Failure String
                   | Result [(Grammar g s, s)] r
@@ -48,13 +47,13 @@ instance (Show r, Show s, Show (Grammar g s)) => Show (Parser g s r) where
    showsPrec prec (Delay e f) rest = "(Delay " ++ showsPrec prec e (")" ++ rest)
    
 fixGrammar :: (MonoidNull s, Reassemblable g) => (Grammar g s -> Grammar g s) -> Grammar g s
-fixGrammar gf = tieRecursion $ fix (composePer gf (fmap1 $ Recursive) . reassemble (\f g-> nt f g))
+fixGrammar gf = tieRecursion $ fix (composePer gf (fmap1 $ Recursive) . reassemble nt)
 
 fixGrammar' :: Reassemblable g => (Grammar g s -> Grammar g s) -> Grammar g s
 fixGrammar' = fix . (. reassemble nt)
 
 tieRecursion :: (MonoidNull s, Reassemblable g) => Grammar g s -> Grammar g s
-tieRecursion = reassemble' tie
+tieRecursion = reassemble tie
 
 tie :: (MonoidNull s, Functor1 g) =>
         (Grammar g s -> Parser g s r)
@@ -79,8 +78,8 @@ fixGrammarInput parsers s = foldr parseTail [] (tails s)
    where parseTail input parsedTail = parsedInput
             where parsedInput = (fmap1 (feed parsedInput) parsers, input):parsedTail
 
-nt :: (Grammar g s -> Parser g s r) -> Grammar g s -> Parser g s r
-nt f g = Delay (f g) (\((t, _):_)-> f t)
+nt :: (Grammar g s -> Parser g s r) -> (Parser g s r -> Grammar g s) -> Grammar g s -> Parser g s r
+nt f _ g = Delay (f g) (\((t, _):_)-> f t)
 
 feed :: (MonoidNull s, Functor1 g) => [(Grammar g s, s)] -> Parser g s r -> Parser g s r
 feed [] p = p
