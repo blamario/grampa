@@ -229,28 +229,20 @@ takeWhile1 pred = Delay (Failure "takeWhile1") f
 takeCharsWhile :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s s
 takeCharsWhile pred = while
    where while = Delay (pure mempty) f
-         f i@((_, s):_) = let (prefix, suffix) = Textual.span (const False) pred s
+         f i@((_, s):_) = let (prefix, suffix) = Textual.span_ False pred s
                           in if null suffix then resultPart (mappend prefix) while
-                             else let (prefix', suffix') = Textual.span (const True) (const False) suffix
-                                  in if null prefix' then Result (drop (length prefix) i) prefix
-                                     else resultPart (mappend prefix . mappend prefix') $
-                                          f $ drop (length prefix + length prefix') i
+                             else Result (drop (length prefix) i) prefix
 
 -- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
 -- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
 takeCharsWhile1 :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s s
 takeCharsWhile1 pred = Delay (Failure "takeCharsWhile1") f
    where f i@((_, s):_) | null s = takeCharsWhile1 pred
-                        | otherwise = let (prefix, suffix) = Textual.span (const False) pred s
-                                          (prefix', suffix') = Textual.span (const True) (const False) suffix
-                                          rest = drop (length prefix + length prefix') i
+                        | otherwise = let (prefix, suffix) = Textual.span_ False pred s
                                       in if null prefix
-                                         then if null prefix' then Failure "takeCharsWhile1"
-                                              else mappend prefix' <$> f rest
+                                         then Failure "takeCharsWhile1"
                                          else if null suffix then resultPart (mappend prefix) (takeCharsWhile pred)
-                                              else if null prefix' then Result (drop (length prefix) i) prefix
-                                                   else resultPart (mappend prefix . mappend prefix')
-                                                                   (feed rest $ takeCharsWhile pred)
+                                              else Result (drop (length prefix) i) prefix
 
 -- | A parser that accepts an input atom only if it satisfies the given predicate.
 satisfy :: (FactorialMonoid s, Functor1 g) => (s -> Bool) -> Parser g s s
