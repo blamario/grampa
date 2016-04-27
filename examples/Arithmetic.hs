@@ -6,7 +6,7 @@ import Data.Char (isDigit, isSpace)
 import Data.Monoid ((<>))
 
 import Text.Grampa
-import Utilities (symbol)
+import Utilities (infixJoin, symbol)
 
 import Prelude hiding (negate, subtract)
 
@@ -33,8 +33,6 @@ instance ArithmeticDomain [Char] where
    negate = ("-" <>)
    subtract = infixJoin "-"
    divide = infixJoin "/"
-
-infixJoin op a b = "(" <> a <> op <> b <> ")"
 
 data Arithmetic e f =
    Arithmetic{

@@ -7,7 +7,7 @@ import Data.Char (isSpace)
 import Data.Monoid ((<>))
 
 import Text.Grampa
-import Utilities (keyword, symbol)
+import Utilities (infixJoin, keyword, symbol)
 
 import Prelude hiding (and, or, not)
 
@@ -31,8 +31,6 @@ instance BooleanDomain [Char] where
    and = infixJoin "&&"
    or = infixJoin "||"
    not = ("not " <> )
-
-infixJoin op a b = "(" <> a <> op <> b <> ")"
 
 data Boolean g e f =
    Boolean{

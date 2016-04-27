@@ -3,8 +3,11 @@ module Utilities where
 
 import Control.Applicative
 import Data.Char (isAlphaNum, isSpace)
+import Data.Monoid ((<>))
 
 import Text.Grampa
+
+infixJoin op a b = "(" <> a <> op <> b <> ")"
 
 keyword :: (Show s, TextualMonoid s, Functor1 g) => s -> Parser g s s
 keyword kwd = skipCharsWhile isSpace *> string kwd <* notFollowedBy (satisfyChar isAlphaNum)
