@@ -22,7 +22,7 @@ class Foldable1 g => Traversable1 g where
    traverse1 :: Applicative m => (forall a. p a -> m (q a)) -> g p -> m (g q)
 
 class Functor1 g => Reassemblable g where
-   composePer :: (g p -> g p) -> (g p -> g p) -> (g p -> g p)
+   applyFieldwise :: (g p -> g p) -> g p -> g p -> g p
    reassemble :: (forall a. (g p -> p a) -> (p a -> g p) -> g p -> q a) -> g p -> g q
 
 data Parser g s r = Failure String
@@ -47,7 +47,8 @@ instance (Show r, Show s, Show (Grammar g s)) => Show (Parser g s r) where
    showsPrec prec (Delay e f) rest = "(Delay " ++ showsPrec prec e (")" ++ rest)
    
 fixGrammar :: (MonoidNull s, Reassemblable g) => (Grammar g s -> Grammar g s) -> Grammar g s
-fixGrammar gf = tieRecursion $ fix (composePer gf (fmap1 $ Recursive) . reassemble nt)
+fixGrammar gf = tieRecursion (fix $ gf' . reassemble nt)
+   where gf' g = applyFieldwise gf (fmap1 Recursive g) g
 
 fixGrammar' :: Reassemblable g => (Grammar g s -> Grammar g s) -> Grammar g s
 fixGrammar' = fix . (. reassemble nt)

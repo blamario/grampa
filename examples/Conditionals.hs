@@ -43,14 +43,11 @@ instance (Traversable1 gTest, Traversable1 gTerm) => Traversable1 (Conditionals 
                    <*> traverse1 f (term a)
 
 instance (Reassemblable gTest, Reassemblable gTerm) => Reassemblable (Conditionals gTest gTerm e) where
-   composePer f g a = Conditionals{expr= expr (f a{expr= expr a'}),
-                                   test= composePer f1 g1 (test a),
-                                   term= composePer f2 g2 (term a)}
-      where a' = g a
-            f1 t = test (f $ a{test= t})
-            g1 t = test (g $ a{test= t})
-            f2 t = term (f $ a{term= t})
-            g2 t = term (g $ a{term= t})
+   applyFieldwise f a b = Conditionals{expr= expr (f b{expr= expr a}),
+                                       test= applyFieldwise f1 (test a) (test b),
+                                       term= applyFieldwise f2 (term a) (term b)}
+      where f1 t = test (f $ b{test= t})
+            f2 t = term (f $ b{term= t})
    reassemble f a = Conditionals{expr= f expr (\e->a{expr= e}) a,
                                  test= reassemble f1 (test a),
                                  term= reassemble f2 (term a)}

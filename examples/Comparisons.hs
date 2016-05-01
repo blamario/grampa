@@ -50,11 +50,9 @@ instance Traversable1 g => Traversable1 (Comparisons g e) where
                    <*> traverse1 f (comparable a)
 
 instance Reassemblable g => Reassemblable (Comparisons g e) where
-   composePer f g a = Comparisons{expr= expr (f a{expr= expr a'}),
-                                  comparable= composePer f' g' (comparable a)}
-      where a' = g a
-            f' c = comparable (f $ a{comparable= c})
-            g' c = comparable (g $ a{comparable= c})
+   applyFieldwise f a b = Comparisons{expr= expr (f b{expr= expr a}),
+                                      comparable= applyFieldwise f' (comparable a) (comparable b)}
+      where f' c = comparable (f $ b{comparable= c})
    reassemble f a = Comparisons{expr= f expr (\e->a{expr= e}) a,
                                 comparable= reassemble f' (comparable a)}
       where f' get set c = f (get . comparable) (\t->a{comparable= set t}) a{comparable= c}

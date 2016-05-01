@@ -61,13 +61,11 @@ instance Traversable1 g => Traversable1 (Boolean g e) where
                    <*> traverse1 f (subgrammar a)
 
 instance Reassemblable g => Reassemblable (Boolean g e) where
-   composePer f g a = Boolean{expr= expr (f a{expr= expr a'}),
-                              term= term (f a{term= term a'}),
-                              factor= factor (f a{factor= factor a'}),
-                              subgrammar= composePer f' g' (subgrammar a)}
-      where a' = g a
-            f' c = subgrammar (f $ a{subgrammar= c})
-            g' c = subgrammar (g $ a{subgrammar= c})
+   applyFieldwise f a b = Boolean{expr= expr (f b{expr= expr a}),
+                                  term= term (f b{term= term a}),
+                                  factor= factor (f b{factor= factor a}),
+                                  subgrammar= applyFieldwise f' (subgrammar a) (subgrammar b)}
+      where f' c = subgrammar (f $ b{subgrammar= c})
    reassemble f a = Boolean{expr= f expr (\e->a{expr= e}) a,
                             term= f term (\t->a{term= t}) a,
                             factor= f factor (\f->a{factor= f}) a,
