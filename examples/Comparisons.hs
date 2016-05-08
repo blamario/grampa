@@ -28,44 +28,30 @@ instance ComparisonDomain [Char] [Char] where
    greaterOrEqual = infixJoin ">="
    greaterThan = infixJoin ">"
 
-data Comparisons g e f =
+data Comparisons c e f =
+   Comparisons{expr :: f e}
+
+instance (Show (f c), Show (f e)) => Show (Comparisons c e f) where
+   showsPrec prec g rest = "Comparisons{expr=" ++ showsPrec prec (expr g) ("}" ++ rest)
+
+instance Functor1 (Comparisons c e) where
+   fmap1 f g = g{expr= f (expr g)}
+
+instance Foldable1 (Comparisons c e) where
+   foldMap1 f a = f (expr a)
+
+instance Traversable1 (Comparisons c e) where
+   traverse1 f a = Comparisons <$> f (expr a)
+
+instance Reassemblable (Comparisons c e) where
+   applyFieldwise f a b = Comparisons{expr= expr (f b{expr= expr a})}
+   reassemble f a = Comparisons{expr= f expr (\e->a{expr= e}) a}
+
+comparisons :: (ComparisonDomain c e, Functor1 g) => Parser g String c -> GrammarBuilder (Comparisons c e) g String
+comparisons comparable Comparisons{..} =
    Comparisons{
-      expr :: f e,
-      comparable :: g f}
-
-instance (Show (f e), Show (g f)) => Show (Comparisons g e f) where
-   showsPrec prec a rest = "Comparisons{expr=" ++ showsPrec prec (expr a)
-                           (", comparable=" ++ showsPrec prec (comparable a) ("}" ++ rest))
-
-instance Functor1 g => Functor1 (Comparisons g e) where
-   fmap1 f a = a{expr= f (expr a),
-                 comparable= fmap1 f (comparable a)}
-
-instance Foldable1 g => Foldable1 (Comparisons g e) where
-   foldMap1 f a = f (expr a) <> foldMap1 f (comparable a)
-
-instance Traversable1 g => Traversable1 (Comparisons g e) where
-   traverse1 f a = Comparisons
-                   <$> f (expr a)
-                   <*> traverse1 f (comparable a)
-
-instance Reassemblable g => Reassemblable (Comparisons g e) where
-   applyFieldwise f a b = Comparisons{expr= expr (f b{expr= expr a}),
-                                      comparable= applyFieldwise f' (comparable a) (comparable b)}
-      where f' c = comparable (f $ b{comparable= c})
-   reassemble f a = Comparisons{expr= f expr (\e->a{expr= e}) a,
-                                comparable= reassemble f' (comparable a)}
-      where f' get set c = f (get . comparable) (\t->a{comparable= set t}) a{comparable= c}
-
-comparisons :: (ComparisonDomain c e, Functor1 g, Functor1 g') =>
-               GrammarBuilder g g' String -> Production g (Parser g' String) c
-            -> GrammarBuilder (Comparisons g e) g' String
-comparisons subgrammar start Comparisons{..} =
-   let comparable' = start comparable
-   in Comparisons{
-            expr= lessThan <$> comparable' <* symbol "<" <*> comparable'
-                  <|> lessOrEqual <$> comparable' <* symbol "<=" <*> comparable'
-                  <|> equal <$> comparable' <* symbol "==" <*> comparable'
-                  <|> greaterOrEqual <$> comparable' <* symbol ">=" <*> comparable'
-                  <|> greaterThan <$> comparable' <* symbol ">" <*> comparable',
-            comparable= subgrammar comparable}
+      expr= lessThan <$> comparable <* symbol "<" <*> comparable
+            <|> lessOrEqual <$> comparable <* symbol "<=" <*> comparable
+            <|> equal <$> comparable <* symbol "==" <*> comparable
+            <|> greaterOrEqual <$> comparable <* symbol ">=" <*> comparable
+            <|> greaterThan <$> comparable <* symbol ">" <*> comparable}

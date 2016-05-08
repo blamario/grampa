@@ -1,7 +1,8 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, LambdaCase, RankNTypes, ScopedTypeVariables, UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, LambdaCase, KindSignatures,
+             RankNTypes, ScopedTypeVariables, UndecidableInstances #-}
 module Text.Grampa.Types (Functor1(..), Foldable1(..), Traversable1(..), Reassemblable(..),
-                          Grammar, GrammarBuilder, Parser(..), Production,
-                          feed, feedEnd, feedGrammar, fixGrammar, iterateMany, results)
+                          Grammar, GrammarBuilder, Parser(..), Production, Identity1(..), Product1(..),
+                          feed, feedEnd, feedGrammar, fixGrammar, iterateMany, production, results)
 where
 
 import Control.Applicative
@@ -31,6 +32,13 @@ data Parser g s r = Failure String
                   | Delay (Parser g s r) ([(Grammar g s, s)] -> Parser g s r)
                   | Recursive (Parser g s r)
 
+data Identity1 g (f :: * -> *) = Identity1 {runIdentity1 :: g f}
+                                 deriving (Eq, Ord, Show)
+
+data Product1 g h (f :: * -> *) = Pair {fst1 :: g f,
+                                        snd1 :: h f}
+                                deriving (Eq, Ord, Show)
+
 type Grammar g s = g (Parser g s)
 type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
 type Production g p r = g p -> p r
@@ -45,13 +53,45 @@ instance (Show r, Show s, Show (Grammar g s)) => Show (Parser g s r) where
       | prec > 0 = "(Recursive " ++ showsPrec (prec - 1) p (")" ++ rest)
       | otherwise = "Recursive" ++ rest
    showsPrec prec (Delay e f) rest = "(Delay " ++ showsPrec prec e (")" ++ rest)
-   
+
+instance Functor1 g => Functor1 (Identity1 g) where
+   fmap1 f (Identity1 g) = Identity1 (fmap1 f g)
+
+instance (Functor1 g, Functor1 h) => Functor1 (Product1 g h) where
+   fmap1 f (Pair g h) = Pair (fmap1 f g) (fmap1 f h)
+
+instance Foldable1 g => Foldable1 (Identity1 g) where
+   foldMap1 f (Identity1 g) = foldMap1 f g
+
+instance (Foldable1 g, Foldable1 h) => Foldable1 (Product1 g h) where
+   foldMap1 f (Pair g h) = foldMap1 f g <> foldMap1 f h
+
+instance Traversable1 g => Traversable1 (Identity1 g) where
+   traverse1 f (Identity1 g) = Identity1 <$> traverse1 f g
+
+instance (Traversable1 g, Traversable1 h) => Traversable1 (Product1 g h) where
+   traverse1 f (Pair g h) = Pair <$> traverse1 f g <*> traverse1 f h
+
+instance Reassemblable g => Reassemblable (Identity1 g) where
+   applyFieldwise f ~(Identity1 a) ~(Identity1 b) = Identity1 (applyFieldwise f' a b)
+      where f' x = runIdentity1 (f $ Identity1 x)
+   reassemble f ~(Identity1 a) = Identity1 (reassemble f' a)
+      where f' get set x = f (get . runIdentity1) (\t->Identity1 $ set t) (Identity1 x)
+
+instance (Reassemblable g, Reassemblable h) => Reassemblable (Product1 g h) where
+   applyFieldwise f ~(Pair a b) ~(Pair c d) = Pair (applyFieldwise f' a c) (applyFieldwise f'' b d)
+      where f' x = fst1 (f $ Pair x d)
+            f'' x = snd1 (f $ Pair c x)
+   reassemble f ~(Pair a b) = Pair (reassemble f' a) (reassemble f'' b)
+      where f' get set x = f (get . fst1) (\t->Pair (set t) b) (Pair x b)
+            f'' get set x = f (get . snd1) (\t->Pair a (set t)) (Pair a x)
+
 fixGrammar :: (MonoidNull s, Reassemblable g) => (Grammar g s -> Grammar g s) -> Grammar g s
-fixGrammar gf = tieRecursion (fix $ gf' . reassemble nt)
+fixGrammar gf = tieRecursion (fix $ gf' . reassemble (const . production id))
    where gf' g = applyFieldwise gf (fmap1 Recursive g) g
 
 fixGrammar' :: Reassemblable g => (Grammar g s -> Grammar g s) -> Grammar g s
-fixGrammar' = fix . (. reassemble nt)
+fixGrammar' = fix . (. reassemble (const . production id))
 
 tieRecursion :: (MonoidNull s, Reassemblable g) => Grammar g s -> Grammar g s
 tieRecursion = reassemble tie
@@ -79,8 +119,9 @@ fixGrammarInput parsers s = foldr parseTail [] (tails s)
    where parseTail input parsedTail = parsedInput
             where parsedInput = (fmap1 (feed parsedInput) parsers, input):parsedTail
 
-nt :: (Grammar g s -> Parser g s r) -> (Parser g s r -> Grammar g s) -> Grammar g s -> Parser g s r
-nt f _ g = Delay (f g) (\((t, _):_)-> f t)
+production :: (g' (Parser g' s) -> g (Parser g' s)) -> (g (Parser g' s) -> Parser g' s r) -> g (Parser g' s)
+           -> Parser g' s r
+production sub prod g = Delay (prod g) (\((g', _):_)-> prod $ sub g')
 
 feed :: (MonoidNull s, Functor1 g) => [(Grammar g s, s)] -> Parser g s r -> Parser g s r
 feed [] p = p
