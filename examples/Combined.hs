@@ -90,13 +90,11 @@ expression sub g =
    let arithmetic = Arithmetic.arithmetic
        comparisons = Comparisons.comparisons (production sub (Arithmetic.expr . arithmeticGrammar) g)
        boolean = Boolean.boolean (production sub ((BoolExpression <$>) . Comparisons.expr . comparisonGrammar) g)
-       conditionals = Conditionals.conditionals (production sub (Boolean.expr . booleanGrammar) g) ( production sub ((IntExpression <$>) . Arithmetic.expr . arithmeticGrammar) g)
-       expr' = expr
+       conditionals = Conditionals.conditionals (production sub expr g) (production sub expr g)
    in let Expression{..} = g
       in Expression{
             expr= IntExpression <$> Arithmetic.expr arithmeticGrammar
                   <|> Boolean.expr booleanGrammar
-                  <|> BoolExpression <$> Comparisons.expr comparisonGrammar
                   <|> Conditionals.expr conditionalGrammar,
             arithmeticGrammar= arithmetic arithmeticGrammar,
             booleanGrammar= boolean booleanGrammar,
