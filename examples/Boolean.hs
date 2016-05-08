@@ -32,50 +32,41 @@ instance BooleanDomain [Char] where
    or = infixJoin "||"
    not = ("not " <> )
 
-data Boolean g e f =
+data Boolean e f =
    Boolean{
       expr :: f e,
       term :: f e,
-      factor :: f e,
-      subgrammar :: g f}
+      factor :: f e}
 
-instance (Show (f e), Show (g f)) => Show (Boolean g e f) where
+instance Show (f e) => Show (Boolean e f) where
    showsPrec prec a rest = "Boolean{expr=" ++ showsPrec prec (expr a)
                            (", term=" ++ showsPrec prec (term a)
                             (", factor=" ++ showsPrec prec (factor a) ("}" ++ rest)))
 
-instance Functor1 g => Functor1 (Boolean g e) where
+instance Functor1 (Boolean e) where
    fmap1 f a = a{expr= f (expr a),
                  term= f (term a),
-                 factor= f (factor a),
-                 subgrammar= fmap1 f (subgrammar a)}
+                 factor= f (factor a)}
 
-instance Foldable1 g => Foldable1 (Boolean g e) where
-   foldMap1 f a = f (expr a) <> f (term a) <> f (factor a) <> foldMap1 f (subgrammar a)
+instance Foldable1 (Boolean e) where
+   foldMap1 f a = f (expr a) <> f (term a) <> f (factor a)
 
-instance Traversable1 g => Traversable1 (Boolean g e) where
+instance Traversable1 (Boolean e) where
    traverse1 f a = Boolean
                    <$> f (expr a)
                    <*> f (term a)
                    <*> f (factor a)
-                   <*> traverse1 f (subgrammar a)
 
-instance Reassemblable g => Reassemblable (Boolean g e) where
+instance Reassemblable (Boolean e) where
    applyFieldwise f a b = Boolean{expr= expr (f b{expr= expr a}),
                                   term= term (f b{term= term a}),
-                                  factor= factor (f b{factor= factor a}),
-                                  subgrammar= applyFieldwise f' (subgrammar a) (subgrammar b)}
-      where f' c = subgrammar (f $ b{subgrammar= c})
+                                  factor= factor (f b{factor= factor a})}
    reassemble f a = Boolean{expr= f expr (\e->a{expr= e}) a,
                             term= f term (\t->a{term= t}) a,
-                            factor= f factor (\f->a{factor= f}) a,
-                            subgrammar= reassemble f' (subgrammar a)}
-      where f' get set c = f (get . subgrammar) (\t->a{subgrammar= set t}) a{subgrammar= c}
+                            factor= f factor (\f->a{factor= f}) a}
 
-boolean :: (BooleanDomain e, Functor1 g, Functor1 g') =>
-           GrammarBuilder g g' String -> Production g (Parser g' String) e
-        -> GrammarBuilder (Boolean g e) g' String
-boolean sub start Boolean{..} = Boolean{
+boolean :: (BooleanDomain e, Functor1 g) => Parser g String e -> GrammarBuilder (Boolean e) g String
+boolean p Boolean{..} = Boolean{
    expr= term
          <|> or <$> expr <* symbol "||" <*> term,
    term= factor
@@ -83,6 +74,5 @@ boolean sub start Boolean{..} = Boolean{
    factor= keyword "True" *> pure true
            <|> keyword "False" *> pure false
            <|> keyword "not" *> takeCharsWhile isSpace *> (not <$> factor)
-           <|> start subgrammar
-           <|> symbol "(" *> expr <* symbol ")",
-   subgrammar= sub subgrammar}
+           <|> p
+           <|> symbol "(" *> expr <* symbol ")"}

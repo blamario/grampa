@@ -17,51 +17,27 @@ instance ConditionalDomain Bool e where
 instance ConditionalDomain [Char] [Char] where
    ifThenElse cond t f = "(if " <> cond <> " then " <> t <> " else " <> f <> ")"
 
-data Conditionals gTest gTerm e f =
+data Conditionals e f =
    Conditionals{
-      expr :: f e,
-      test :: gTest f,
-      term :: gTerm f}
+      expr :: f e}
 
-instance (Show (f e), Show (gTest f), Show (gTerm f)) => Show (Conditionals gTest gTerm e f) where
-   showsPrec prec a rest = "Conditionals{expr=" ++ showsPrec prec (expr a)
-                           (", test=" ++ showsPrec prec (test a)
-                            (", term=" ++ showsPrec prec (term a) ("}" ++ rest)))
+instance Show (f e) => Show (Conditionals e f) where
+   showsPrec prec a rest = "Conditionals{expr=" ++ showsPrec prec (expr a) ("}" ++ rest)
 
-instance (Functor1 gTest, Functor1 gTerm) => Functor1 (Conditionals gTest gTerm e) where
-   fmap1 f a = a{expr= f (expr a),
-                 test= fmap1 f (test a),
-                 term= fmap1 f (term a)}
+instance Functor1 (Conditionals e) where
+   fmap1 f a = a{expr= f (expr a)}
 
-instance (Foldable1 gTest, Foldable1 gTerm) => Foldable1 (Conditionals gTest gTerm e) where
-   foldMap1 f a = f (expr a) <> foldMap1 f (test a) <> foldMap1 f (term a)
+instance Foldable1 (Conditionals e) where
+   foldMap1 f a = f (expr a)
 
-instance (Traversable1 gTest, Traversable1 gTerm) => Traversable1 (Conditionals gTest gTerm e) where
-   traverse1 f a = Conditionals
-                   <$> f (expr a)
-                   <*> traverse1 f (test a)
-                   <*> traverse1 f (term a)
+instance Traversable1 (Conditionals e) where
+   traverse1 f a = Conditionals <$> f (expr a)
 
-instance (Reassemblable gTest, Reassemblable gTerm) => Reassemblable (Conditionals gTest gTerm e) where
-   applyFieldwise f a b = Conditionals{expr= expr (f b{expr= expr a}),
-                                       test= applyFieldwise f1 (test a) (test b),
-                                       term= applyFieldwise f2 (term a) (term b)}
-      where f1 t = test (f $ b{test= t})
-            f2 t = term (f $ b{term= t})
-   reassemble f a = Conditionals{expr= f expr (\e->a{expr= e}) a,
-                                 test= reassemble f1 (test a),
-                                 term= reassemble f2 (term a)}
-      where f1 get set t = f (get . test) (\t->a{test= set t}) a{test= t}
-            f2 get set t = f (get . term) (\t->a{term= set t}) a{term= t}
+instance Reassemblable (Conditionals e) where
+   applyFieldwise f a b = Conditionals{expr= expr (f b{expr= expr a})}
+   reassemble f a = Conditionals{expr= f expr (\e->a{expr= e}) a}
 
-conditionals :: (ConditionalDomain t e, Functor1 g, Functor1 gTest, Functor1 gTerm) =>
-               GrammarBuilder gTest g String -> Production gTest (Parser g String) t
-            -> GrammarBuilder gTerm g String -> Production gTerm (Parser g String) e
-            -> GrammarBuilder (Conditionals gTest gTerm e) g String
-conditionals testGrammar startTest termGrammar startTerm Conditionals{..} =
-   let test' = startTest test
-       term' = startTerm term
-   in Conditionals{
-            expr= ifThenElse <$> (keyword "if" *> test') <*> (keyword "then" *> term') <*> (keyword "else" *> term'),
-            term= termGrammar term,
-            test= testGrammar test}
+conditionals :: (ConditionalDomain t e, Functor1 g) =>
+                Parser g String t -> Parser g String e -> GrammarBuilder (Conditionals e) g String
+conditionals test term Conditionals{..} =
+   Conditionals{expr= ifThenElse <$> (keyword "if" *> test) <*> (keyword "then" *> term) <*> (keyword "else" *> term)}

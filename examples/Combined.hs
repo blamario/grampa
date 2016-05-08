@@ -18,9 +18,9 @@ data Expression f =
    Expression{
       expr :: f Tagged,
       arithmeticGrammar :: Arithmetic.Arithmetic Int f,
-      booleanGrammar :: Boolean.Boolean Expression Tagged f,
+      booleanGrammar :: Boolean.Boolean Tagged f,
       comparisonGrammar :: Comparisons.Comparisons Int Bool f,
-      conditionalGrammar :: Conditionals.Conditionals (Boolean.Boolean Expression Tagged) Expression Tagged f}
+      conditionalGrammar :: Conditionals.Conditionals Tagged f}
 
 data Tagged = IntExpression Int
              | BoolExpression Bool
@@ -86,23 +86,19 @@ instance Reassemblable Expression where
 
 expression :: forall g. (Functor1 g) =>
               (Grammar g String -> Expression (Parser g String)) -> GrammarBuilder Expression g String
---expression :: GrammarBuilder Expression Expression String
 expression sub g =
    let arithmetic = Arithmetic.arithmetic
        comparisons = Comparisons.comparisons (production sub (Arithmetic.expr . arithmeticGrammar) g)
---       comparisons = Comparisons.comparisons (production ((Arithmetic.expr :: Arithmetic Int (Parser g String) -> Parser g String Int) . arithmeticGrammar) g) :: GrammarBuilder (Comparisons.Comparisons Int Bool) g String
-       boolean = Boolean.boolean (expression sub) expr
-       conditionals = Conditionals.conditionals boolean Boolean.expr arithmetic Arithmetic.expr
+       boolean = Boolean.boolean (production sub ((BoolExpression <$>) . Comparisons.expr . comparisonGrammar) g)
+       conditionals = Conditionals.conditionals (production sub (Boolean.expr . booleanGrammar) g) ( production sub ((IntExpression <$>) . Arithmetic.expr . arithmeticGrammar) g)
        expr' = expr
    in let Expression{..} = g
       in Expression{
-            expr= -- IntExpression <$> Arithmetic.expr arithmeticGrammar
-                  -- <|>
-                  Boolean.expr booleanGrammar
-                             ,
---                  <|> BoolExpression <$> Comparisons.expr comparisonGrammar
---                  <|> Conditionals.expr conditionalGrammar,
+            expr= IntExpression <$> Arithmetic.expr arithmeticGrammar
+                  <|> Boolean.expr booleanGrammar
+                  <|> BoolExpression <$> Comparisons.expr comparisonGrammar
+                  <|> Conditionals.expr conditionalGrammar,
             arithmeticGrammar= arithmetic arithmeticGrammar,
             booleanGrammar= boolean booleanGrammar,
             comparisonGrammar= comparisons comparisonGrammar,
-            conditionalGrammar= Conditionals.conditionals boolean Boolean.expr (expression sub) expr' conditionalGrammar}
+            conditionalGrammar= conditionals conditionalGrammar}
