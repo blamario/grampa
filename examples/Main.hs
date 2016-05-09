@@ -1,5 +1,6 @@
 module Main (main) where
 
+import Control.Applicative (empty)
 import System.Environment (getArgs)
 import Text.Grampa (Functor1, Grammar, GrammarBuilder, Parser, Production, Product1(Pair, fst1, snd1),
                     fixGrammar, parse, production)
@@ -15,7 +16,7 @@ type ArithmeticComparisonsBoolean = Product1 ArithmeticComparisons (Boolean.Bool
 type ACBC = Product1 ArithmeticComparisonsBoolean (Conditionals.Conditionals Int)
    
 main = do args <- getArgs
-          print (parse Arithmetic.arithmetic expr args :: [Int])
+          print (parse (Arithmetic.arithmetic empty) Arithmetic.expr args :: [Int])
           print (parse comparisons (Comparisons.expr . snd1) args :: [Bool])
           print (parse boolean (Boolean.expr . snd1) args :: [Bool])
           print (parse conditionals (Conditionals.expr .snd1) args :: [Int])
@@ -23,7 +24,7 @@ main = do args <- getArgs
    where expr = Arithmetic.expr :: Production (Arithmetic Int) p Int
 
 comparisons :: Functor1 g => GrammarBuilder ArithmeticComparisons g String
-comparisons (Pair a c) = Pair (Arithmetic.arithmetic a) (Comparisons.comparisons (Arithmetic.expr a) c)
+comparisons (Pair a c) = Pair (Arithmetic.arithmetic empty a) (Comparisons.comparisons (Arithmetic.expr a) c)
 
 boolean :: Functor1 g => GrammarBuilder ArithmeticComparisonsBoolean g String
 boolean (Pair ac b) = Pair (comparisons ac) (Boolean.boolean (Comparisons.expr $ snd1 ac) b)

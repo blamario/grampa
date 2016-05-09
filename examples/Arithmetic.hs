@@ -67,8 +67,8 @@ instance Reassemblable (Arithmetic e) where
                                term= f term (\t->a{term= t}) a,
                                factor= f factor (\f->a{factor= f}) a}
 
-arithmetic :: (ArithmeticDomain e, Functor1 g) => GrammarBuilder (Arithmetic e) g String
-arithmetic Arithmetic{..} = Arithmetic{
+arithmetic :: (ArithmeticDomain e, Functor1 g) => Parser g String e -> GrammarBuilder (Arithmetic e) g String
+arithmetic sub Arithmetic{..} = Arithmetic{
    expr= term
          <|> symbol "-" *> (negate <$> term)
          <|> add <$> expr <* symbol "+" <*> term
@@ -77,4 +77,5 @@ arithmetic Arithmetic{..} = Arithmetic{
          <|> multiply <$> term <* symbol "*" <*> factor
          <|> divide <$> term <* symbol "/" <*> factor,
    factor= skipCharsWhile isSpace *> ((number . read) <$> takeCharsWhile1 isDigit)
+           <|> sub
            <|> symbol "(" *> expr <* symbol ")"}

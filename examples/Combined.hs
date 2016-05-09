@@ -22,8 +22,8 @@ data Expression f =
       comparisonGrammar :: Comparisons.Comparisons Int Bool f,
       conditionalGrammar :: Conditionals.Conditionals Tagged f}
 
-data Tagged = IntExpression Int
-             | BoolExpression Bool
+data Tagged = IntExpression {intFromExpression :: Int}
+             | BoolExpression {boolFromExpression :: Bool}
                deriving Show
 
 instance Boolean.BooleanDomain Tagged where
@@ -87,7 +87,8 @@ instance Reassemblable Expression where
 expression :: forall g. (Functor1 g) =>
               (Grammar g String -> Expression (Parser g String)) -> GrammarBuilder Expression g String
 expression sub g =
-   let arithmetic = Arithmetic.arithmetic
+   let arithmetic = Arithmetic.arithmetic empty
+       -- arithmetic = Arithmetic.arithmetic (production sub ((intFromExpression <$>) . expr) g)
        comparisons = Comparisons.comparisons (production sub (Arithmetic.expr . arithmeticGrammar) g)
        boolean = Boolean.boolean (production sub ((BoolExpression <$>) . Comparisons.expr . comparisonGrammar) g)
        conditionals = Conditionals.conditionals (production sub expr g) (production sub expr g)
