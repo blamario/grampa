@@ -6,7 +6,7 @@ module Text.Grampa (
    -- * Types
    Grammar, GrammarBuilder, Parser, Production, Identity1(..), Product1(..),
    -- * Grammar and parser manipulation
-   feed, feedEnd, feedGrammar, fixGrammar, parse, production, results,
+   feed, feedEnd, feedGrammar, fixGrammar, parse, production, recursive, results,
    -- * Parser combinators
    iterateMany, lookAhead, notFollowedBy, endOfInput,
    -- * Parsing primitives
@@ -28,13 +28,13 @@ import Text.Grampa.Types
 
 import Prelude hiding (length, null, span, takeWhile)
 
-parse :: (Reassemblable g, FactorialMonoid s) =>
-         GrammarBuilder g g s -> (Production g (Parser g s) r) -> [s] -> [r]
+recursive = Recursive
+
+parse :: (Reassemblable g, FactorialMonoid s) => Grammar g s -> (Production g (Parser g s) r) -> [s] -> [r]
 parse g prod chunks = fst <$> results ((<* endOfInput) $ prod
                                       $ fmap1 feedEnd
-                                      $ foldr (feedGrammar g') g'
+                                      $ foldr (feedGrammar g) g
                                       $ reverse chunks)
-   where g' = fixGrammar g
 
 -- | Behaves like the argument parser, but without consuming any input.
 lookAhead :: (MonoidNull s, Functor1 g) => Parser g s r -> Parser g s r

@@ -3,7 +3,7 @@ module Main (main) where
 import Control.Applicative (empty)
 import System.Environment (getArgs)
 import Text.Grampa (Functor1, Grammar, GrammarBuilder, Parser, Production, Product1(Pair, fst1, snd1),
-                    fixGrammar, parse, production)
+                    fixGrammar, parse, production, recursive)
 import Arithmetic (Arithmetic, arithmetic)
 import qualified Arithmetic
 import qualified Boolean
@@ -16,11 +16,13 @@ type ArithmeticComparisonsBoolean = Product1 ArithmeticComparisons (Boolean.Bool
 type ACBC = Product1 ArithmeticComparisonsBoolean (Conditionals.Conditionals Int)
    
 main = do args <- getArgs
-          print (parse (Arithmetic.arithmetic empty) Arithmetic.expr args :: [Int])
-          print (parse comparisons (Comparisons.expr . snd1) args :: [Bool])
-          print (parse boolean (Boolean.expr . snd1) args :: [Bool])
-          print (parse conditionals (Conditionals.expr .snd1) args :: [Int])
-          print (parse (Combined.expression id) Combined.expr args :: [Combined.Tagged])
+          -- let a = fixGrammar (Arithmetic.arithmetic (production id Arithmetic.expr a))
+          -- let a = fixGrammar (Arithmetic.arithmetic (recursive $ Arithmetic.expr a))
+          print (parse (fixGrammar $ arithmetic empty) Arithmetic.expr args :: [Int])
+          print (parse (fixGrammar comparisons) (Comparisons.expr . snd1) args :: [Bool])
+          print (parse (fixGrammar boolean) (Boolean.expr . snd1) args :: [Bool])
+          print (parse (fixGrammar conditionals) (Conditionals.expr .snd1) args :: [Int])
+          print (parse (fixGrammar $ Combined.expression id) Combined.expr args :: [Combined.Tagged])
    where expr = Arithmetic.expr :: Production (Arithmetic Int) p Int
 
 comparisons :: Functor1 g => GrammarBuilder ArithmeticComparisons g String
