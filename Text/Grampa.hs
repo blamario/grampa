@@ -30,7 +30,7 @@ import Prelude hiding (length, null, span, takeWhile)
 
 recursive = Recursive
 
-parse :: (Reassemblable g, FactorialMonoid s) => Grammar g s -> (Production g (Parser g s) r) -> [s] -> [r]
+parse :: (Reassemblable g, FactorialMonoid s) => Grammar g s -> Production g s r -> [s] -> [r]
 parse g prod chunks = fst <$> results ((<* endOfInput) $ prod
                                       $ fmap1 feedEnd
                                       $ foldr (feedGrammar g) g

@@ -41,7 +41,7 @@ data Product1 g h (f :: * -> *) = Pair {fst1 :: g f,
 
 type Grammar g s = g (Parser g s)
 type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
-type Production g p r = g p -> p r
+type Production g s r = g (Parser g s) -> Parser g s r
 
 instance (Show r, Show s, Show (Grammar g s)) => Show (Parser g s r) where
    showsPrec _ (Failure s) rest = "(Failure " ++ shows s (")" ++ rest)
