@@ -13,28 +13,35 @@ import Data.Monoid.Factorial (FactorialMonoid(spanMaybe', splitPrimePrefix, tail
 
 import Prelude hiding (null)
 
+-- | Equivalent of 'Functor' for rank 2 data types
 class Functor1 g where
    fmap1 :: (forall a. p a -> q a) -> g p -> g q
 
+-- | Equivalent of 'Foldable' for rank 2 data types
 class Functor1 g => Foldable1 g where
    foldMap1 :: Monoid m => (forall a. p a -> m) -> g p -> m
 
+-- | Equivalent of 'Traversable' for rank 2 data types
 class Foldable1 g => Traversable1 g where
    traverse1 :: Applicative m => (forall a. p a -> m (q a)) -> g p -> m (g q)
 
+-- | Subclass of 'Functor' that allows access to parts of the data structure
 class Functor1 g => Reassemblable g where
    applyFieldwise :: (g p -> g p) -> g p -> g p -> g p
    reassemble :: (forall a. (g p -> p a) -> (p a -> g p) -> g p -> q a) -> g p -> g q
 
+-- | Parser of streams of type `s`, as a part of grammar type `g`, producing a value of type `r`
 data Parser g s r = Failure String
                   | Result [(Grammar g s, s)] r
                   | Choice (Parser g s r) (Parser g s r)
                   | Delay (Parser g s r) ([(Grammar g s, s)] -> Parser g s r)
                   | Recursive (Parser g s r)
 
+-- | Equivalent of 'Data.Functor.Identity' for rank 2 data types
 data Identity1 g (f :: * -> *) = Identity1 {runIdentity1 :: g f}
                                  deriving (Eq, Ord, Show)
 
+-- | Equivalent of 'Data.Functor.Product' for rank 2 data types
 data Product1 g h (f :: * -> *) = Pair {fst1 :: g f,
                                         snd1 :: h f}
                                 deriving (Eq, Ord, Show)
@@ -86,6 +93,7 @@ instance (Reassemblable g, Reassemblable h) => Reassemblable (Product1 g h) wher
       where f' get set x = f (get . fst1) (\t->Pair (set t) b) (Pair x b)
             f'' get set x = f (get . snd1) (\t->Pair a (set t)) (Pair a x)
 
+-- | Tie the knot on a 'GrammarBuilder' and turn it into a 'Grammar'
 fixGrammar :: (MonoidNull s, Reassemblable g) => (Grammar g s -> Grammar g s) -> Grammar g s
 fixGrammar gf = tieRecursion (fix $ gf' . reassemble (const . production id))
    where gf' g = applyFieldwise gf (fmap1 Recursive g) g
@@ -111,6 +119,7 @@ tie get set g = case separate (get g)
          separate (Recursive p) = (empty, p)
          separate p = (p, empty)
 
+-- | Feeds a chunk of the input `s` to the given grammar.
 feedGrammar :: (FactorialMonoid s, Functor1 g) => Grammar g s -> s -> Grammar g s -> Grammar g s
 feedGrammar g s = fmap1 (feed $ fixGrammarInput g s)
 
@@ -123,6 +132,7 @@ production :: (g' (Parser g' s) -> g (Parser g' s)) -> (g (Parser g' s) -> Parse
            -> Parser g' s r
 production sub prod g = Delay (prod g) (\((g', _):_)-> prod $ sub g')
 
+-- | Feeds a chunk of the input to the given parser.
 feed :: (MonoidNull s, Functor1 g) => [(Grammar g s, s)] -> Parser g s r -> Parser g s r
 feed [] p = p
 feed s (Choice p q) = feed s p <|> feed s q
@@ -135,12 +145,14 @@ feed s (Result t r) = Result (foldr refeed s t) r
          s'' = snd (head s)
 feed s (Recursive p) = feed s p
 
+-- | Signals the end of the input.
 feedEnd :: (MonoidNull s, Functor1 g) => Parser g s r -> Parser g s r
 feedEnd (Choice p q) = feedEnd p <|> feedEnd q
 feedEnd (Delay e _) = feedEnd e
 feedEnd (Recursive p) = Recursive (feedEnd p)
 feedEnd p = p
 
+-- | Extracts all available parsing results from a 'Parser'.
 results :: (FactorialMonoid s, Functor1 g) => Parser g s r -> [(r, [(Grammar g s, s)])]
 results Failure{} = []
 results (Result s r) = [(r, s)]
