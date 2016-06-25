@@ -25,6 +25,26 @@ class Functor1 g => Foldable1 g where
 class Foldable1 g => Traversable1 g where
    traverse1 :: Applicative m => (forall a. p a -> m (q a)) -> g p -> m (g q)
 
+data Arrow1 p q a = Arrow1 (p a -> q a)
+
+-- | Equivalent of 'Applicative' with no 'pure' method, for rank 2 data types
+--
+-- > (.) <$> u <*> v <*> w == u <*> (v <*> w)
+class Functor1 g => Apply1 g where
+   ap1 :: g (Arrow1 p q) -> g p -> g q
+
+-- | Equivalent of 'Applicative' with no 'pure' method, for rank 2 data types
+--
+-- > choose1 empty1 x == x
+-- > choose1 x empty1 == x
+-- > x `choose1` (y `choose1` z) == (x `choose1` y) `choose1` z
+-- > ap1 empty x == empty
+-- > ap1 x (choose1 y z) == choose1 (ap1 x y) (ap1 x z)
+-- > ap1 (choose1 x y) z == choose1 (ap1 x z) (ap1 y z)
+class Apply1 g => Alternative1 g where
+   empty1 :: g p
+   choose1 :: g p -> g p -> g p
+
 -- | Subclass of 'Functor' that allows access to parts of the data structure
 class Functor1 g => Reassemblable g where
    applyFieldwise :: (g p -> g p) -> g p -> g p -> g p
@@ -38,8 +58,7 @@ data Parser g s r = Failure String
                   | Recursive (Parser g s r)
 
 -- | Equivalent of 'Data.Functor.Identity' for rank 2 data types
-data Identity1 g (f :: * -> *) = Identity1 {runIdentity1 :: g f}
-                                 deriving (Eq, Ord, Show)
+data Identity1 g (f :: * -> *) = Identity1 {runIdentity1 :: g f} deriving (Eq, Ord, Show)
 
 -- | Equivalent of 'Data.Functor.Product' for rank 2 data types
 data Product1 g h (f :: * -> *) = Pair {fst1 :: g f,
@@ -78,6 +97,20 @@ instance Traversable1 g => Traversable1 (Identity1 g) where
 
 instance (Traversable1 g, Traversable1 h) => Traversable1 (Product1 g h) where
    traverse1 f (Pair g h) = Pair <$> traverse1 f g <*> traverse1 f h
+
+instance Apply1 g => Apply1 (Identity1 g) where
+   ap1 (Identity1 g) (Identity1 h) = Identity1 (ap1 g h)
+
+instance (Apply1 g, Apply1 h) => Apply1 (Product1 g h) where
+   ap1 (Pair gf hf) (Pair g h) = Pair (ap1 gf g) (ap1 hf h)
+
+instance Alternative1 g => Alternative1 (Identity1 g) where
+   empty1 = Identity1 empty1
+   choose1 (Identity1 g) (Identity1 h) = Identity1 (choose1 g h)
+
+instance (Alternative1 g, Alternative1 h) => Alternative1 (Product1 g h) where
+   empty1 = Pair empty1 empty1
+   choose1 (Pair g1 h1) (Pair g2 h2) = Pair (choose1 g1 g2) (choose1 h1 h2)
 
 instance Reassemblable g => Reassemblable (Identity1 g) where
    applyFieldwise f ~(Identity1 a) ~(Identity1 b) = Identity1 (applyFieldwise f' a b)

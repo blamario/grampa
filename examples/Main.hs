@@ -21,7 +21,7 @@ main = do args <- getArgs
           print (parse (fixGrammar $ arithmetic empty) Arithmetic.expr args :: [Int])
           print (parse (fixGrammar comparisons) (Comparisons.expr . snd1) args :: [Bool])
           print (parse (fixGrammar boolean) (Boolean.expr . snd1) args :: [Bool])
-          print (parse (fixGrammar conditionals) (Conditionals.expr .snd1) args :: [Int])
+          print (parse (fixGrammar conditionals) (Conditionals.expr . snd1) args :: [Int])
           print (parse (fixGrammar $ Combined.expression id) Combined.expr args :: [Combined.Tagged])
 
 comparisons :: Functor1 g => GrammarBuilder ArithmeticComparisons g String
