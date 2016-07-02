@@ -225,5 +225,9 @@ instance (MonoidNull s, Functor1 g) => Monad (Parser g s) where
    (>>) = (*>)
    fail = Failure
 
+instance (Functor1 g, MonoidNull s, Monoid x) => Monoid (Parser g s x) where
+   mempty = pure mempty
+   mappend = liftA2 mappend
+
 iterateMany :: (MonoidNull s, Functor1 g) => Parser g s r -> (Parser g s r -> Parser g s r) -> Parser g s r
 iterateMany p f = p >>= (\r-> return r <|> iterateMany (f $ return r) f)
