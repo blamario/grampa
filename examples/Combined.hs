@@ -6,7 +6,8 @@ module Combined where
 import Control.Applicative
 import qualified Data.Bool
 import Data.Monoid ((<>))
-import Text.Grampa (Functor1(..), Foldable1(..), Traversable1(..), Reassemblable(..),
+import Text.Grampa (Functor1(..), Foldable1(..), Traversable1(..), Apply1(..), Alternative1(..), Arrow1(..),
+                    Reassemblable(..),
                     Grammar, GrammarBuilder, Parser, Production, production, recursive)
 import Arithmetic (Arithmetic)
 import qualified Arithmetic
@@ -50,6 +51,25 @@ instance Functor1 Expression where
                  booleanGrammar= fmap1 f (booleanGrammar g),
                  comparisonGrammar= fmap1 f (comparisonGrammar g),
                  conditionalGrammar= fmap1 f (conditionalGrammar g)}
+
+instance Apply1 Expression where
+   ap1 a b = Expression{expr= expr a `apply1` expr b,
+                        arithmeticGrammar= arithmeticGrammar a `ap1` arithmeticGrammar b,
+                        booleanGrammar= booleanGrammar a `ap1` booleanGrammar b,
+                        comparisonGrammar= comparisonGrammar a `ap1` comparisonGrammar b,
+                        conditionalGrammar= conditionalGrammar a `ap1` conditionalGrammar b}
+
+instance Alternative1 Expression where
+   empty1 = Expression{expr= empty,
+                       arithmeticGrammar= empty1,
+                       booleanGrammar= empty1,
+                       comparisonGrammar= empty1,
+                       conditionalGrammar= empty1}
+   choose1 a b = Expression{expr= expr a <|> expr b,
+                            arithmeticGrammar= arithmeticGrammar a `choose1` arithmeticGrammar b,
+                            booleanGrammar= booleanGrammar a `choose1` booleanGrammar b,
+                            comparisonGrammar= comparisonGrammar a `choose1` comparisonGrammar b,
+                            conditionalGrammar= conditionalGrammar a `choose1` conditionalGrammar b}
 
 instance Foldable1 Expression where
    foldMap1 f g = f (expr g) <> foldMap1 f (arithmeticGrammar g) <> foldMap1 f (booleanGrammar g)

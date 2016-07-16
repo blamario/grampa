@@ -27,6 +27,13 @@ instance Show (f e) => Show (Conditionals e f) where
 instance Functor1 (Conditionals e) where
    fmap1 f a = a{expr= f (expr a)}
 
+instance Apply1 (Conditionals e) where
+   ap1 a a' = Conditionals (expr a `apply1` expr a')
+
+instance Alternative1 (Conditionals e) where
+   empty1 = Conditionals empty
+   choose1 a a' = Conditionals{expr = expr a <|> expr a'}
+
 instance Foldable1 (Conditionals e) where
    foldMap1 f a = f (expr a)
 

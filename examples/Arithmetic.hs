@@ -50,6 +50,15 @@ instance Functor1 (Arithmetic e) where
                  term= f (term a),
                  factor= f (factor a)}
 
+instance Apply1 (Arithmetic e) where
+   ap1 a a' = Arithmetic (expr a `apply1` expr a') (term a `apply1` term a') (factor a `apply1` factor a')
+
+instance Alternative1 (Arithmetic e) where
+   empty1 = Arithmetic empty empty empty
+   choose1 a a' = Arithmetic{expr = expr a <|> expr a',
+                             term = term a <|> term a',
+                             factor = factor a <|> factor a'}
+
 instance Foldable1 (Arithmetic e) where
    foldMap1 f a = f (expr a) <> f (term a) <> f (factor a)
 

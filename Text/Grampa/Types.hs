@@ -1,7 +1,8 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, LambdaCase, KindSignatures,
              RankNTypes, ScopedTypeVariables, UndecidableInstances #-}
-module Text.Grampa.Types (Functor1(..), Foldable1(..), Traversable1(..), Reassemblable(..),
-                          Grammar, GrammarBuilder, Parser(..), Production, Identity1(..), Product1(..),
+module Text.Grampa.Types (Functor1(..), Apply1(..), Alternative1(..), Foldable1(..), Traversable1(..),
+                          Reassemblable(..),
+                          Grammar, GrammarBuilder, Parser(..), Production, Identity1(..), Product1(..), Arrow1(..),
                           feed, feedEnd, feedGrammar, fixGrammar, iterateMany, production, results)
 where
 
@@ -25,7 +26,7 @@ class Functor1 g => Foldable1 g where
 class Foldable1 g => Traversable1 g where
    traverse1 :: Applicative m => (forall a. p a -> m (q a)) -> g p -> m (g q)
 
-data Arrow1 p q a = Arrow1 (p a -> q a)
+data Arrow1 p q a = Arrow1{apply1 :: p a -> q a}
 
 -- | Equivalent of 'Applicative' with no 'pure' method, for rank 2 data types
 --
@@ -42,8 +43,8 @@ class Functor1 g => Apply1 g where
 -- > ap1 x (choose1 y z) == choose1 (ap1 x y) (ap1 x z)
 -- > ap1 (choose1 x y) z == choose1 (ap1 x z) (ap1 y z)
 class Apply1 g => Alternative1 g where
-   empty1 :: g p
-   choose1 :: g p -> g p -> g p
+   empty1 :: Alternative p => g p
+   choose1 :: Alternative p => g p -> g p -> g p
 
 -- | Subclass of 'Functor' that allows access to parts of the data structure
 class Functor1 g => Reassemblable g where

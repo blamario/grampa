@@ -1,10 +1,10 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, LambdaCase, RankNTypes, ScopedTypeVariables, UndecidableInstances #-}
 module Text.Grampa (
    -- * Classes
-   Functor1(..), Foldable1(..), Traversable1(..), Reassemblable(..),
+   Functor1(..), Apply1(..), Alternative1(..), Foldable1(..), Traversable1(..), Reassemblable(..),
    MonoidNull, FactorialMonoid, TextualMonoid,
    -- * Types
-   Grammar, GrammarBuilder, Parser, Production, Identity1(..), Product1(..),
+   Grammar, GrammarBuilder, Parser, Production, Identity1(..), Product1(..), Arrow1(..),
    -- * Grammar and parser manipulation
    feed, feedEnd, feedGrammar, fixGrammar, parse, production, recursive, results,
    -- * Parser combinators

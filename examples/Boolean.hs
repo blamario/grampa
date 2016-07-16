@@ -48,6 +48,15 @@ instance Functor1 (Boolean e) where
                  term= f (term a),
                  factor= f (factor a)}
 
+instance Apply1 (Boolean e) where
+   ap1 a a' = Boolean (expr a `apply1` expr a') (term a `apply1` term a') (factor a `apply1` factor a')
+
+instance Alternative1 (Boolean e) where
+   empty1 = Boolean empty empty empty
+   choose1 a a' = Boolean{expr = expr a <|> expr a',
+                             term = term a <|> term a',
+                             factor = factor a <|> factor a'}
+
 instance Foldable1 (Boolean e) where
    foldMap1 f a = f (expr a) <> f (term a) <> f (factor a)
 

@@ -37,6 +37,13 @@ instance (Show (f c), Show (f e)) => Show (Comparisons c e f) where
 instance Functor1 (Comparisons c e) where
    fmap1 f g = g{expr= f (expr g)}
 
+instance Apply1 (Comparisons c e) where
+   ap1 a a' = Comparisons (expr a `apply1` expr a')
+
+instance Alternative1 (Comparisons c e) where
+   empty1 = Comparisons empty
+   choose1 a a' = Comparisons{expr = expr a <|> expr a'}
+
 instance Foldable1 (Comparisons c e) where
    foldMap1 f a = f (expr a)
 
