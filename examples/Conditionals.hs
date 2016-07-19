@@ -41,8 +41,7 @@ instance Traversable1 (Conditionals e) where
    traverse1 f a = Conditionals <$> f (expr a)
 
 instance Reassemblable (Conditionals e) where
-   applyFieldwise f a b = Conditionals{expr= expr (f b{expr= expr a})}
-   reassemble f a = Conditionals{expr= f expr (\e->a{expr= e}) a}
+   reassemble f a = Conditionals{expr= f expr a}
 
 conditionals :: (ConditionalDomain t e, Functor1 g) =>
                 Parser g String t -> Parser g String e -> GrammarBuilder (Conditionals e) g String

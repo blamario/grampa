@@ -67,12 +67,9 @@ instance Traversable1 (Boolean e) where
                    <*> f (factor a)
 
 instance Reassemblable (Boolean e) where
-   applyFieldwise f a b = Boolean{expr= expr (f b{expr= expr a}),
-                                  term= term (f b{term= term a}),
-                                  factor= factor (f b{factor= factor a})}
-   reassemble f a = Boolean{expr= f expr (\e->a{expr= e}) a,
-                            term= f term (\t->a{term= t}) a,
-                            factor= f factor (\f->a{factor= f}) a}
+   reassemble f a = Boolean{expr= f expr a,
+                            term= f term a,
+                            factor= f factor a}
 
 boolean :: (BooleanDomain e, Functor1 g) => Parser g String e -> GrammarBuilder (Boolean e) g String
 boolean p Boolean{..} = Boolean{

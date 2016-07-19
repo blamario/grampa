@@ -69,12 +69,9 @@ instance Traversable1 (Arithmetic e) where
                    <*> f (factor a)
 
 instance Reassemblable (Arithmetic e) where
-   applyFieldwise f a b = Arithmetic{expr= expr (f b{expr= expr a}),
-                                     term= term (f b{term= term a}),
-                                     factor= factor (f b{factor= factor a})}
-   reassemble f a = Arithmetic{expr= f expr (\e->a{expr= e}) a,
-                               term= f term (\t->a{term= t}) a,
-                               factor= f factor (\f->a{factor= f}) a}
+   reassemble f a = Arithmetic{expr= f expr a,
+                               term= f term a,
+                               factor= f factor a}
 
 arithmetic :: (ArithmeticDomain e, Functor1 g) => Parser g String e -> GrammarBuilder (Arithmetic e) g String
 arithmetic sub Arithmetic{..} = Arithmetic{

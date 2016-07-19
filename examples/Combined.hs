@@ -1,5 +1,5 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,
-             PartialTypeSignatures, RecordWildCards, ScopedTypeVariables, UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, InstanceSigs, MultiParamTypeClasses,
+             PartialTypeSignatures, RankNTypes, RecordWildCards, ScopedTypeVariables, UndecidableInstances #-}
 
 module Combined where
 
@@ -8,7 +8,7 @@ import qualified Data.Bool
 import Data.Monoid ((<>))
 import Text.Grampa (Functor1(..), Foldable1(..), Traversable1(..), Apply1(..), Alternative1(..), Arrow1(..),
                     Reassemblable(..),
-                    Grammar, GrammarBuilder, Parser, Production, production, recursive)
+                    Grammar, GrammarBuilder, Parser, Production, production)
 import Arithmetic (Arithmetic)
 import qualified Arithmetic
 import qualified Boolean
@@ -84,25 +84,21 @@ instance Traversable1 Expression where
                    <*> traverse1 f (conditionalGrammar g)
 
 instance Reassemblable Expression where
-   applyFieldwise f a b = Expression{expr= expr (f b{expr= expr a}),
-                                     arithmeticGrammar= applyFieldwise fa (arithmeticGrammar a) (arithmeticGrammar b),
-                                     booleanGrammar= applyFieldwise fb (booleanGrammar a) (booleanGrammar b),
-                                     comparisonGrammar= applyFieldwise fc (comparisonGrammar a) (comparisonGrammar b),
-                                     conditionalGrammar= applyFieldwise fd (conditionalGrammar a)
-                                                         (conditionalGrammar b)}
-      where fa c = arithmeticGrammar (f $ b{arithmeticGrammar= c})
-            fb c = booleanGrammar (f $ b{booleanGrammar= c})
-            fc c = comparisonGrammar (f $ b{comparisonGrammar= c})
-            fd c = conditionalGrammar (f $ b{conditionalGrammar= c})
-   reassemble f g = Expression{expr= f expr (\e->g{expr= e}) g,
+   reassemble :: forall p q. (forall a. (forall f. Expression f -> f a) -> Expression p -> q a)
+              -> Expression p -> Expression q
+   reassemble f g = Expression{expr= f expr g,
                                arithmeticGrammar= reassemble f1 (arithmeticGrammar g),
                                booleanGrammar= reassemble f2 (booleanGrammar g),
                                comparisonGrammar= reassemble f3 (comparisonGrammar g),
                                conditionalGrammar= reassemble f4 (conditionalGrammar g)}
-      where f1 get set c = f (get . arithmeticGrammar) (\t->g{arithmeticGrammar= set t}) g{arithmeticGrammar= c}
-            f2 get set c = f (get . booleanGrammar) (\t->g{booleanGrammar= set t}) g{booleanGrammar= c}
-            f3 get set c = f (get . comparisonGrammar) (\t->g{comparisonGrammar= set t}) g{comparisonGrammar= c}
-            f4 get set c = f (get . conditionalGrammar) (\t->g{conditionalGrammar= set t}) g{conditionalGrammar= c}
+      where f1 :: (forall f. Arithmetic.Arithmetic Int f -> f a) -> Arithmetic.Arithmetic Int p -> q a
+            f2 :: (forall f. Boolean.Boolean Tagged f -> f a) -> Boolean.Boolean Tagged p -> q a
+            f3 :: (forall f. Comparisons.Comparisons Int Bool f -> f a) -> Comparisons.Comparisons Int Bool p -> q a
+            f4 :: (forall f. Conditionals.Conditionals Tagged f -> f a) -> Conditionals.Conditionals Tagged p -> q a
+            f1 get c = f (get . arithmeticGrammar) g{arithmeticGrammar= c}
+            f2 get c = f (get . booleanGrammar) g{booleanGrammar= c}
+            f3 get c = f (get . comparisonGrammar) g{comparisonGrammar= c}
+            f4 get c = f (get . conditionalGrammar) g{conditionalGrammar= c}
 
 expression :: forall g. (Functor1 g) =>
               (Grammar g String -> Expression (Parser g String)) -> GrammarBuilder Expression g String

@@ -3,7 +3,7 @@ module Main (main) where
 import Control.Applicative (empty)
 import System.Environment (getArgs)
 import Text.Grampa (Functor1, Grammar, GrammarBuilder, Parser, Production, Product1(Pair, fst1, snd1),
-                    fixGrammar, parse, production, recursive)
+                    fixGrammar, parse, production)
 import Arithmetic (Arithmetic, arithmetic)
 import qualified Arithmetic
 import qualified Boolean

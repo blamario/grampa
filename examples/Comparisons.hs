@@ -51,8 +51,7 @@ instance Traversable1 (Comparisons c e) where
    traverse1 f a = Comparisons <$> f (expr a)
 
 instance Reassemblable (Comparisons c e) where
-   applyFieldwise f a b = Comparisons{expr= expr (f b{expr= expr a})}
-   reassemble f a = Comparisons{expr= f expr (\e->a{expr= e}) a}
+   reassemble f a = Comparisons{expr= f expr a}
 
 comparisons :: (ComparisonDomain c e, Functor1 g) => Parser g String c -> GrammarBuilder (Comparisons c e) g String
 comparisons comparable Comparisons{..} =
