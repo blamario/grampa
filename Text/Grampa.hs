@@ -4,9 +4,9 @@ module Text.Grampa (
    Functor1(..), Apply1(..), Alternative1(..), Foldable1(..), Traversable1(..), Reassemblable(..),
    MonoidNull, FactorialMonoid, TextualMonoid,
    -- * Types
-   Grammar, GrammarBuilder, Parser, Production, Identity1(..), Product1(..), Arrow1(..),
+   Grammar, GrammarBuilder, Parser, Identity1(..), Product1(..), Arrow1(..),
    -- * Grammar and parser manipulation
-   feed, feedEnd, feedGrammar, fixGrammar, parse, production,
+   feed, feedEnd, feedGrammar, fixGrammar, parse,
    -- * Parser combinators
    iterateMany, lookAhead, notFollowedBy, endOfInput,
    -- * Parsing primitives

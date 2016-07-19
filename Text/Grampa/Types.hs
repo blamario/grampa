@@ -2,8 +2,8 @@
              RankNTypes, ScopedTypeVariables, UndecidableInstances #-}
 module Text.Grampa.Types (Functor1(..), Apply1(..), Alternative1(..), Foldable1(..), Traversable1(..),
                           Reassemblable(..),
-                          Grammar, GrammarBuilder, Parser(..), Production, Identity1(..), Product1(..), Arrow1(..),
-                          feed, feedEnd, feedGrammar, fixGrammar, grammarResults, iterateMany, production)
+                          Grammar, GrammarBuilder, Parser(..), Identity1(..), Product1(..), Arrow1(..),
+                          feed, feedEnd, feedGrammar, fixGrammar, grammarResults, iterateMany)
 where
 
 import Control.Applicative
@@ -71,7 +71,6 @@ data Product1 g h (f :: * -> *) = Pair {fst1 :: g f,
 
 type Grammar g s = g (Parser g s)
 type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
-type Production g s r = g (Parser g s) -> Parser g s r
 
 instance (Show r, Show s, Show (Grammar g s)) => Show (Parser g s r) where
    showsPrec _ (Failure s) rest = "(Failure " ++ shows s (")" ++ rest)
@@ -154,10 +153,6 @@ fixGrammarInput parsers s = foldr parseTail [] (tails s)
    where parseTail input parsedTail = parsedInput
             where parsedInput = (fmap1 (feed parsedInput) parsers, input):parsedTail
 
-production :: (g' (Parser g' s) -> g (Parser g' s)) -> (g (Parser g' s) -> Parser g' s r) -> g (Parser g' s)
-           -> Parser g' s r
-production sub prod g = Delay (prod g) (\((g', _):_)-> prod $ sub g')
-
 grammarResults :: forall s g. (MonoidNull s, Traversable1 g, Alternative1 g) => Grammar g s -> g (Compose [] ((,) s))
 grammarResults g = fmap1 toInput (grammarResults' g)
    where toInput x = Compose (first inputWith <$> getCompose x)
@@ -226,8 +221,7 @@ feed s (Result t r) = Result (foldr refeed s t) r
             | null s' = rest
             | otherwise = (fmap1 (feed s) t, s' <> s''):rest
          s'' = snd (head s)
-feed [] p@NonTerminal{} = p
-feed ((g, s):_) (NonTerminal i get map p) = NonTerminal i get map (get g)
+feed ((g, _):_) (NonTerminal i get map p) = NonTerminal i get map (get g)
 feed s (Bind p cont) = feed s p >>= cont
 
 -- | Signals the end of the input.

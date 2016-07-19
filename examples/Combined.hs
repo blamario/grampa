@@ -8,7 +8,7 @@ import qualified Data.Bool
 import Data.Monoid ((<>))
 import Text.Grampa (Functor1(..), Foldable1(..), Traversable1(..), Apply1(..), Alternative1(..), Arrow1(..),
                     Reassemblable(..),
-                    Grammar, GrammarBuilder, Parser, Production, production)
+                    Grammar, GrammarBuilder, Parser)
 import Arithmetic (Arithmetic)
 import qualified Arithmetic
 import qualified Boolean
@@ -106,9 +106,9 @@ expression sub g =
    let arithmetic = Arithmetic.arithmetic empty
        -- arithmetic = Arithmetic.arithmetic (production sub ((intFromExpression <$>) . recursive . expr) g)
        -- arithmetic = Arithmetic.arithmetic ((intFromExpression <$>) $ recursive $ expr g)
-       comparisons = Comparisons.comparisons (production sub (Arithmetic.expr . arithmeticGrammar) g)
-       boolean = Boolean.boolean (production sub ((BoolExpression <$>) . Comparisons.expr . comparisonGrammar) g)
-       conditionals = Conditionals.conditionals (production sub expr g) (production sub expr g)
+       comparisons = Comparisons.comparisons ((Arithmetic.expr . arithmeticGrammar) g)
+       boolean = Boolean.boolean (((BoolExpression <$>) . Comparisons.expr . comparisonGrammar) g)
+       conditionals = Conditionals.conditionals (expr g) (expr g)
    in let Expression{..} = g
       in Expression{
             expr= IntExpression <$> Arithmetic.expr arithmeticGrammar
