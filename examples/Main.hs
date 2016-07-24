@@ -15,7 +15,7 @@ type ArithmeticComparisons = Product1 (Arithmetic.Arithmetic Int) (Comparisons.C
 type ArithmeticComparisonsBoolean = Product1 ArithmeticComparisons (Boolean.Boolean Bool)
 type ACBC = Product1 ArithmeticComparisonsBoolean (Conditionals.Conditionals Int)
    
-main = do args <- getArgs
+main = do args <- concat <$> getArgs
           -- let a = fixGrammar (Arithmetic.arithmetic (production id Arithmetic.expr a))
           -- let a = fixGrammar (Arithmetic.arithmetic (recursive $ Arithmetic.expr a))
           print (parse (fixGrammar $ arithmetic empty) Arithmetic.expr args :: [Int])

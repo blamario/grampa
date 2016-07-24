@@ -6,7 +6,7 @@ module Text.Grampa (
    -- * Types
    Grammar, GrammarBuilder, Parser, Identity1(..), Product1(..), Arrow1(..),
    -- * Grammar and parser manipulation
-   feed, feedEnd, feedGrammar, fixGrammar, parse,
+   feed, feedEnd, fixGrammar, parse,
    -- * Parser combinators
    iterateMany, lookAhead, notFollowedBy, endOfInput,
    -- * Parsing primitives
@@ -17,7 +17,6 @@ where
 import Control.Applicative
 import Control.Arrow (second)
 import Data.Function(fix)
-import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Monoid (Monoid, mappend, mempty, (<>))
 import Data.Monoid.Cancellative (LeftReductiveMonoid (stripPrefix))
 import Data.Monoid.Null (MonoidNull(null))
@@ -30,8 +29,8 @@ import Text.Grampa.Types
 import Prelude hiding (length, null, span, takeWhile)
 
 parse :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g) =>
-         Grammar g s -> (forall f. g f -> f r) -> [s] -> [r]
-parse g prod chunks = snd <$> (getCompose $ prod $ grammarResults (foldr (feedGrammar g) g $ reverse chunks))
+         Grammar g s -> (forall f. g f -> f r) -> s -> [r]
+parse g prod input = snd <$> resultList (prod $ fst $ head $ fixGrammarInput g input)
 
 -- | Behaves like the argument parser, but without consuming any input.
 lookAhead :: (MonoidNull s, Functor1 g) => Parser g s r -> Parser g s r
