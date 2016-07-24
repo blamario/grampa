@@ -10,6 +10,7 @@ import Control.Applicative
 import Control.Arrow (first, second)
 import Control.Monad.Trans.State (State, evalState, get, modify)
 import Data.Function(fix)
+import Data.Functor.Classes (Show1(liftShowsPrec))
 import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Monoid (Monoid(mappend, mempty), All(..), (<>))
 import Data.Monoid.Null (MonoidNull(null))
@@ -82,6 +83,18 @@ instance (Show r, Show s, Show (Grammar g s), Show (GrammarResults g s)) => Show
    showsPrec prec (Bind p cont) rest = "(Bind " ++ showsPrec prec (const () <$> p) (")" ++ rest)
    showsPrec prec (NonTerminal i get map p) rest
       | prec > 0 = "(NonTerminal " ++ show i ++ " " ++ showsPrec (prec - 1) (map <$> p) (")" ++ rest)
+      | otherwise = "(NonTerminal " ++ show i ++ ")" ++ rest
+
+instance (Show s, Show (Grammar g s), Show (GrammarResults g s)) => Show1 (Parser g s) where
+   liftShowsPrec sp _ _ (Failure s) rest = "(Failure " ++ shows s (")" ++ rest)
+   liftShowsPrec sp _ prec (Result s r) rest
+      | prec > 0 = "(Result " ++ foldr (\(t, s)-> showsPrec (prec - 1) t . shows s) (" " ++ sp prec r (")" ++ rest)) s
+      | otherwise = "Result" ++ rest
+   liftShowsPrec sp sl prec (Choice p1 p2) rest = "(Choice " ++ liftShowsPrec sp sl prec p1 (" " ++ liftShowsPrec sp sl prec p2 (")" ++ rest))
+   liftShowsPrec sp sl prec (Delay e f) rest = "(Delay " ++ liftShowsPrec sp sl prec e (")" ++ rest)
+   liftShowsPrec sp sl prec (Bind p cont) rest = "(Bind " ++ liftShowsPrec showsPrec showList prec (const () <$> p) (")" ++ rest)
+   liftShowsPrec sp sl prec (NonTerminal i get map p) rest
+      | prec > 0 = "(NonTerminal " ++ show i ++ " " ++ liftShowsPrec sp sl (prec - 1) (map <$> p) (")" ++ rest)
       | otherwise = "(NonTerminal " ++ show i ++ ")" ++ rest
 
 instance Functor1 g => Functor1 (Identity1 g) where
@@ -168,6 +181,9 @@ type ParserResults g s r = GrammarDerived g s (ResultList g s r)
 
 instance (Show (g (ResultList g s)), Show s, Show r) => Show (ResultList g s r) where
    show (ResultList l) = "ResultList " ++ show l
+
+instance (Show (g (ResultList g s)), Show s) => Show1 (ResultList g s) where
+   liftShowsPrec sp sl prec (ResultList l) rest = "ResultList " ++ sl (snd <$> l) rest
 
 instance Functor (ResultList g s) where
    fmap f (ResultList l) = ResultList ((f <$>) <$> l)

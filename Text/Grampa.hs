@@ -6,7 +6,7 @@ module Text.Grampa (
    -- * Types
    Grammar, GrammarBuilder, Parser, Identity1(..), Product1(..), Arrow1(..),
    -- * Grammar and parser manipulation
-   feed, feedEnd, fixGrammar, parse,
+   feed, feedEnd, fixGrammar, fixGrammarInput, parse,
    -- * Parser combinators
    iterateMany, lookAhead, notFollowedBy, endOfInput,
    -- * Parsing primitives
@@ -146,6 +146,7 @@ token x = satisfy (== x)
 satisfy :: (FactorialMonoid s, Functor1 g) => (s -> Bool) -> Parser g s s
 satisfy predicate = p
    where p = Delay (Failure "satisfy") f
+         f [] = Failure "satisfy"
          f ((_, s):rest) = case splitPrimePrefix s
                            of Just (first, _) -> if predicate first then Result rest first else Failure "satisfy"
                               Nothing -> p
@@ -155,7 +156,7 @@ satisfy predicate = p
 satisfyChar :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s Char
 satisfyChar predicate = p
    where p = Delay (Failure "satisfyChar") f
-         f [] = p
+         f [] = Failure "satisfyChar"
          f i@((_, s):tl) = case splitPrimePrefix s
                            of Just (first, rest) ->
                                  case Textual.characterPrefix first
@@ -178,6 +179,7 @@ string x = Delay (Failure $ "string " ++ show x) $
 skipCharsWhile :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s ()
 skipCharsWhile pred = while
    where while = Delay (pure ()) f
+         f [] = while
          f i@((_, s):_) = let (prefix, suffix) = Textual.span_ False pred s
                           in if null suffix then while
                              else Result (drop (length prefix) i) ()
