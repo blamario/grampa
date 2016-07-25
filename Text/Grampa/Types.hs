@@ -59,7 +59,7 @@ data Parser g s r = Failure String
                   | Result [(GrammarResults g s, s)] r
                   | Choice (Parser g s r) (Parser g s r)
                   | Delay (Parser g s r) ([(GrammarResults g s, s)] -> Parser g s r)
-                  | forall r'. NonTerminal Int (forall f. g f -> f r') (r' -> r) (Parser g s r')
+                  | forall r'. NonTerminal Int (forall f. g f -> f r') (r' -> r)
                   | forall r'. Bind (Parser g s r') (r' -> Parser g s r)
 
 -- | Equivalent of 'Data.Functor.Identity' for rank 2 data types
@@ -81,9 +81,7 @@ instance (Show r, Show s, Show (Grammar g s), Show (GrammarResults g s)) => Show
    showsPrec prec (Choice p1 p2) rest = "(Choice " ++ showsPrec prec p1 (" " ++ showsPrec prec p2 (")" ++ rest))
    showsPrec prec (Delay e f) rest = "(Delay " ++ showsPrec prec e (")" ++ rest)
    showsPrec prec (Bind p cont) rest = "(Bind " ++ showsPrec prec (const () <$> p) (")" ++ rest)
-   showsPrec prec (NonTerminal i get map p) rest
-      | prec > 0 = "(NonTerminal " ++ show i ++ " " ++ showsPrec (prec - 1) (map <$> p) (")" ++ rest)
-      | otherwise = "(NonTerminal " ++ show i ++ ")" ++ rest
+   showsPrec prec (NonTerminal i get map) rest = "(NonTerminal " ++ show i ++ ")" ++ rest
 
 instance (Show s, Show (Grammar g s), Show (GrammarResults g s)) => Show1 (Parser g s) where
    liftShowsPrec sp _ _ (Failure s) rest = "(Failure " ++ shows s (")" ++ rest)
@@ -93,9 +91,7 @@ instance (Show s, Show (Grammar g s), Show (GrammarResults g s)) => Show1 (Parse
    liftShowsPrec sp sl prec (Choice p1 p2) rest = "(Choice " ++ liftShowsPrec sp sl prec p1 (" " ++ liftShowsPrec sp sl prec p2 (")" ++ rest))
    liftShowsPrec sp sl prec (Delay e f) rest = "(Delay " ++ liftShowsPrec sp sl prec e (")" ++ rest)
    liftShowsPrec sp sl prec (Bind p cont) rest = "(Bind " ++ liftShowsPrec showsPrec showList prec (const () <$> p) (")" ++ rest)
-   liftShowsPrec sp sl prec (NonTerminal i get map p) rest
-      | prec > 0 = "(NonTerminal " ++ show i ++ " " ++ liftShowsPrec sp sl (prec - 1) (map <$> p) (")" ++ rest)
-      | otherwise = "(NonTerminal " ++ show i ++ ")" ++ rest
+   liftShowsPrec sp sl prec (NonTerminal i get map) rest = "(NonTerminal " ++ show i ++ ")" ++ rest
 
 instance Functor1 g => Functor1 (Identity1 g) where
    fmap1 f (Identity1 g) = Identity1 (fmap1 f g)
@@ -151,11 +147,11 @@ fixGrammar gf = fix . (. mark) $ gf
    where mark :: g (Parser g s) -> g (Parser g s)
          mark g = evalState (traverse1 f $ reassemble nt g) 0
             where nt :: (forall p. g p -> p r) -> g (Parser g s) -> Parser g s r
-                  nt f g = NonTerminal 0 f id (f g)
+                  nt f g = NonTerminal 0 f id
          f :: Parser g s r -> State Int (Parser g s r)
-         f (NonTerminal 0 getP map p) = do modify succ
-                                           i <- get
-                                           return (NonTerminal i getP map p)
+         f (NonTerminal 0 getP map) = do modify succ
+                                         i <- get
+                                         return (NonTerminal i getP map)
 
 fixGrammarInput :: forall s g. (FactorialMonoid s, Alternative1 g, Traversable1 g) =>
                    Grammar g s -> s -> [(GrammarResults g s, s)]
@@ -223,7 +219,7 @@ sep1 Failure{} = GrammarDerived (ResultList []) (const $ ResultList [])
 sep1 (Result s r) = GrammarDerived (ResultList [(s, r)]) (const $ ResultList [])
 sep1 (Choice p q) = sep1 p <> sep1 q
 sep1 (Delay e _) = sep1 e
-sep1 (NonTerminal i get map p) = GrammarDerived (ResultList []) ((map <$>) . get)
+sep1 (NonTerminal i get map) = GrammarDerived (ResultList []) ((map <$>) . get)
 sep1 (Bind p cont) = foldMap f pn <> GrammarDerived (ResultList []) pr'
    where GrammarDerived (ResultList pn) pr = sep1 p
          --f :: ([(Grammar g s, s)], r') -> ParserResults g s r
@@ -239,7 +235,7 @@ feedSelf g input (Choice p q) = feedSelf g input p <|> feedSelf g input q
 feedSelf g input (Delay _ f) = f input
 feedSelf g input (Failure msg) = Failure msg
 feedSelf g input (Result t r) = Result (t <> input) r
-feedSelf g _ (NonTerminal i get map _) = NonTerminal i get map (get g)
+feedSelf g _ p@NonTerminal{} = p
 feedSelf g input (Bind p cont) = feedSelf g input p >>= cont
    
 -- | Feeds a chunk of the input to the given parser.
@@ -249,7 +245,7 @@ feed s (Delay _ f) = f s
 feed s (Failure msg) = Failure msg
 feed s (Result t r) = Result (t <> s) r
 feed [] p@NonTerminal{} = p
-feed ((rs, s):_) (NonTerminal i get map p) =
+feed ((rs, s):_) (NonTerminal i get map) =
    foldr Choice empty ((uncurry Result . second map) <$> resultList (get rs))
 feed s (Bind p cont) = feed s p >>= cont
 
@@ -265,7 +261,7 @@ instance Functor (Parser g s) where
    fmap f (Failure msg) = Failure msg
    fmap f (Result s r) = Result s (f r)
    fmap f (Bind p cont) = Bind p (fmap f . cont)
-   fmap f (NonTerminal i get map p) = NonTerminal i get (f . map) p
+   fmap f (NonTerminal i get map) = NonTerminal i get (f . map)
 
 instance Monoid s => Applicative (Parser g s) where
    pure = Result []
