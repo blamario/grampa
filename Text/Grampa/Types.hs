@@ -160,7 +160,7 @@ fixGrammarInput g s = foldr (parseTail g) [] (tails s)
                       Grammar g s -> s -> [(GrammarResults g s, s)] -> [(GrammarResults g s, s)]
          parseTail g input parsedTail = parsedInput
             where parsedInput = (grammarResults' g', input):parsedTail
-                  g' = fmap1 (feedSelf g' parsedInput) g
+                  g' = fmap1 (feedSelf parsedInput) g
 
 grammarResults' :: forall s g. (MonoidNull s, Traversable1 g, Alternative1 g) => Grammar g s -> GrammarResults g s
 grammarResults' g = foldr1 choose1 (iterate rf [rn])
@@ -230,13 +230,13 @@ sep1 (Bind p cont) = foldMap f pn <> GrammarDerived (ResultList []) pr'
                   gr2rl (i@((g',_):_), r) l = pr2rl gr (sep1 $ feed i $ cont r) <> l
                   pr2rl g (GrammarDerived rl rf) = rl <> rf g
 
-feedSelf :: Monoid s => Grammar g s -> [(GrammarResults g s, s)] -> Parser g s r -> Parser g s r
-feedSelf g input (Choice p q) = feedSelf g input p <|> feedSelf g input q
-feedSelf g input (Delay _ f) = f input
-feedSelf g input (Failure msg) = Failure msg
-feedSelf g input (Result t r) = Result (t <> input) r
-feedSelf g _ p@NonTerminal{} = p
-feedSelf g input (Bind p cont) = feedSelf g input p >>= cont
+feedSelf :: Monoid s => [(GrammarResults g s, s)] -> Parser g s r -> Parser g s r
+feedSelf input (Choice p q) = feedSelf input p <|> feedSelf input q
+feedSelf input (Delay _ f) = f input
+feedSelf input (Failure msg) = Failure msg
+feedSelf input (Result t r) = Result (t <> input) r
+feedSelf _ p@NonTerminal{} = p
+feedSelf input (Bind p cont) = feedSelf input p >>= cont
    
 -- | Feeds a chunk of the input to the given parser.
 feed :: Monoid s => [(GrammarResults g s, s)] -> Parser g s r -> Parser g s r
@@ -245,8 +245,7 @@ feed s (Delay _ f) = f s
 feed s (Failure msg) = Failure msg
 feed s (Result t r) = Result (t <> s) r
 feed [] p@NonTerminal{} = p
-feed ((rs, s):_) (NonTerminal i get map) =
-   foldr Choice empty ((uncurry Result . second map) <$> resultList (get rs))
+feed ((rs, s):_) (NonTerminal i get map) = foldr Choice empty ((uncurry Result . second map) <$> resultList (get rs))
 feed s (Bind p cont) = feed s p >>= cont
 
 -- | Signals the end of the input.
