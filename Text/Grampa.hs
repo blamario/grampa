@@ -30,7 +30,8 @@ import Prelude hiding (length, null, span, takeWhile)
 
 parse :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g) =>
          Grammar g s -> (forall f. g f -> f r) -> s -> [r]
-parse g prod input = snd <$> resultList (prod $ fst $ head $ fixGrammarInput g input)
+parse g prod input = third <$> resultList (prod $ fst $ head $ fixGrammarInput g input)
+   where third (_, _, x) = x
 
 -- | Behaves like the argument parser, but without consuming any input.
 lookAhead :: (MonoidNull s, Functor1 g) => Parser g s r -> Parser g s r
@@ -65,6 +66,7 @@ endOfInput = Delay (pure ()) f
 takeWhile :: (FactorialMonoid s, Functor1 g) => (s -> Bool) -> Parser g s s
 takeWhile pred = while
    where while = Delay (pure mempty) f
+         f [] = while
          f i@((_, s):_) = let (prefix, suffix) = span pred s
                           in if null suffix then resultPart (mappend prefix) while
                              else Result (if null prefix then Stuck else Advanced) (drop (length prefix) i) prefix
@@ -73,7 +75,8 @@ takeWhile pred = while
 -- version of 'concatSome . satisfy'.
 takeWhile1 :: (FactorialMonoid s, Functor1 g) => (s -> Bool) -> Parser g s s
 takeWhile1 pred = Delay (Failure "takeWhile1") f
-   where f i@((_, s):_) | null s = takeWhile1 pred
+   where f [] = takeWhile1 pred
+         f i@((_, s):_) | null s = takeWhile1 pred
                         | otherwise = let (prefix, suffix) = span pred s
                                       in if null prefix then Failure "takeWhile1"
                                          else if null suffix then resultPart (mappend prefix) (takeWhile pred)
@@ -87,6 +90,7 @@ takeWhile1 pred = Delay (Failure "takeWhile1") f
 takeCharsWhile :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s s
 takeCharsWhile pred = while
    where while = Delay (pure mempty) f
+         f [] = while
          f i@((_, s):_) = let (prefix, suffix) = Textual.span_ False pred s
                           in if null suffix then resultPart (mappend prefix) while
                              else Result (if null prefix then Stuck else Advanced) (drop (length prefix) i) prefix
@@ -95,7 +99,8 @@ takeCharsWhile pred = while
 -- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
 takeCharsWhile1 :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s s
 takeCharsWhile1 pred = Delay (Failure "takeCharsWhile1") f
-   where f i@((_, s):_) | null s = takeCharsWhile1 pred
+   where f [] = takeCharsWhile1 pred
+         f i@((_, s):_) | null s = takeCharsWhile1 pred
                         | otherwise = let (prefix, suffix) = Textual.span_ False pred s
                                       in if null prefix
                                          then Failure "takeCharsWhile1"

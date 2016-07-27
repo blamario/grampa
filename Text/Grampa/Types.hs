@@ -64,6 +64,8 @@ data Parser g s r = Failure String
                   | forall r'. NonTerminal Int (forall f. g f -> f r') (r' -> r)
                   | forall r'. Bind (Parser g s r') (r' -> Parser g s r)
 
+data ResultInfo g s r = ResultInfo InputStatus [(GrammarResults g s, s)] r
+
 -- | Equivalent of 'Data.Functor.Identity' for rank 2 data types
 data Identity1 g (f :: * -> *) = Identity1 {runIdentity1 :: g f} deriving (Eq, Ord, Show)
 
@@ -175,7 +177,7 @@ iterate f ns@(n:_) = if getAll (foldMap1 (All . null . resultList) n') then ns e
    where n' = f n
 
 type GrammarResults g s = g (ResultList g s)
-newtype ResultList g s r = ResultList {resultList :: [([(GrammarResults g s, s)], r)]}
+newtype ResultList g s r = ResultList {resultList :: [(InputStatus, [(GrammarResults g s, s)], r)]}
 data GrammarDerived g s a = GrammarDerived a (GrammarResults g s -> a)
 type ParserResults g s r = GrammarDerived g s (ResultList g s r)
 
@@ -183,19 +185,25 @@ instance (Show (g (ResultList g s)), Show s, Show r) => Show (ResultList g s r) 
    show (ResultList l) = "ResultList " ++ show l
 
 instance (Show (g (ResultList g s)), Show s) => Show1 (ResultList g s) where
-   liftShowsPrec sp sl prec (ResultList l) rest = "ResultList " ++ sl (snd <$> l) rest
+   liftShowsPrec sp sl prec (ResultList l) rest = "ResultList " ++ showsPrec prec (f <$> l) (sl (g <$> l) rest)
+      where f (is, grs, _) = (is, snd <$> take 1 grs)
+            g (_, _, r) = r
 
 instance Functor (ResultList g s) where
-   fmap f (ResultList l) = ResultList ((f <$>) <$> l)
-      
+   fmap f (ResultList l) = ResultList (third <$> l)
+      where third (a, b, c) = (a, b, f c)
+
 instance Applicative (ResultList g s) where
-   pure r = ResultList [([], r)]
-   ResultList a <*> ResultList b = ResultList (getCompose $ Compose a <*> Compose b)
+   pure r = ResultList [(Stuck, [], r)]
+   ResultList a <*> ResultList b = ResultList (apply a b)
+      where apply [] _ = []
+            apply _ [] = []
+            apply ((is1, i1, r1):rest1) ((is2, i2, r2):rest2) = (is1, i1, r1 r2):(apply rest1 rest2)
    
 instance Alternative (ResultList g s) where
    empty = ResultList []
    ResultList a <|> ResultList b = ResultList (a <|> b)
-   
+
 instance Monoid (ResultList g s r) where
    mempty = ResultList []
    ResultList a `mappend` ResultList b = ResultList (a <> b)
@@ -220,18 +228,20 @@ separate g = traverse1 sep1 g
    
 sep1 :: forall g s r. (Monoid s, Traversable1 g, Alternative1 g) => Parser g s r -> ParserResults g s r
 sep1 Failure{} = GrammarDerived (ResultList []) (const $ ResultList [])
-sep1 (Result _ s r) = GrammarDerived (ResultList [(s, r)]) (const $ ResultList [])
+sep1 (Result is s r) = GrammarDerived (ResultList [(is, s, r)]) (const $ ResultList [])
 sep1 (Choice p q) = sep1 p <> sep1 q
 sep1 (Delay e _) = sep1 e
 sep1 (NonTerminal i get map) = GrammarDerived (ResultList []) ((map <$>) . get)
 sep1 (Bind p cont) = foldMap f pn <> GrammarDerived (ResultList []) pr'
    where GrammarDerived (ResultList pn) pr = sep1 p
          --f :: ([(Grammar g s, s)], r') -> ParserResults g s r
-         f (i, r) = sep1 (feed i $ cont r)
+         f (Stuck, i, r) = sep1 (feedSelf i $ cont r)
+         f (Advanced, i, r) = sep1 (feed i $ cont r)
          pr' :: GrammarResults g s -> ResultList g s r
          pr' gr = foldr gr2rl empty (resultList $ pr gr)
-            where gr2rl ([], r) l = pr2rl gr (sep1 $ cont r) <> l
-                  gr2rl (i@((g',_):_), r) l = pr2rl gr (sep1 $ feed i $ cont r) <> l
+            where --gr2rl ([], r) l = pr2rl gr (sep1 $ cont r) <> l
+                  gr2rl (Stuck, i@((g',_):_), r) l = pr2rl gr (sep1 $ feedSelf i $ cont r) <> l
+                  gr2rl (Advanced, i@((g',_):_), r) l = pr2rl gr (sep1 $ feed i $ cont r) <> l
                   pr2rl g (GrammarDerived rl rf) = rl <> rf g
 
 feedSelf :: Monoid s => [(GrammarResults g s, s)] -> Parser g s r -> Parser g s r
@@ -247,10 +257,10 @@ feed :: Monoid s => [(GrammarResults g s, s)] -> Parser g s r -> Parser g s r
 feed s (Choice p q) = feed s p <|> feed s q
 feed s (Delay _ f) = f s
 feed s (Failure msg) = Failure msg
-feed s (Result is t r) = Result is (t <> s) r
-feed [] p@NonTerminal{} = p
-feed ((rs, s):_) (NonTerminal i get map) =
-   foldr Choice empty ((uncurry (Result Advanced) . second map) <$> resultList (get rs))
+feed s (Result is t r) = Result Advanced (t <> s) r
+--feed [] p@NonTerminal{} = p
+feed ((rs, s):_) (NonTerminal i get map) = foldr Choice empty (f <$> resultList (get rs))
+   where f (is, i, r) = Result is i (map r)
 feed s (Bind p cont) = feed s p >>= cont
 
 -- | Signals the end of the input.
