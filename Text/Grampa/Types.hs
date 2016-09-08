@@ -60,7 +60,7 @@ data InputStatus = Advanced | Stuck deriving (Eq, Show)
 data Parser g s r = Failure String
                   | Result InputStatus [(GrammarResults g s, s)] r
                   | Choice (Parser g s r) (Parser g s r)
-                  | Delay (Parser g s r) ([(GrammarResults g s, s)] -> Parser g s r)
+                  | Delay (Parser g s r) (InputStatus -> [(GrammarResults g s, s)] -> Parser g s r)
                   | forall r'. NonTerminal Int (forall f. g f -> f r') (r' -> r)
                   | forall r'. Bind (Parser g s r') (r' -> Parser g s r)
 
@@ -198,7 +198,8 @@ instance Applicative (ResultList g s) where
    ResultList a <*> ResultList b = ResultList (apply a b)
       where apply [] _ = []
             apply _ [] = []
-            apply ((is1, i1, r1):rest1) ((is2, i2, r2):rest2) = (is1, i1, r1 r2):(apply rest1 rest2)
+            apply ((is1, i1, r1):rest1) ((is2, i2, r2):rest2)
+               | is1 == is2 && length i1 == length i2 = (is1, i1, r1 r2):(apply rest1 rest2)
    
 instance Alternative (ResultList g s) where
    empty = ResultList []
@@ -240,13 +241,13 @@ sep1 (Bind p cont) = foldMap f pn <> GrammarDerived (ResultList []) pr'
          pr' :: GrammarResults g s -> ResultList g s r
          pr' gr = foldr gr2rl empty (resultList $ pr gr)
             where --gr2rl ([], r) l = pr2rl gr (sep1 $ cont r) <> l
-                  gr2rl (Stuck, i@((g',_):_), r) l = pr2rl gr (sep1 $ feedSelf i $ cont r) <> l
-                  gr2rl (Advanced, i@((g',_):_), r) l = pr2rl gr (sep1 $ feed i $ cont r) <> l
+                  gr2rl (Stuck, i, r) l = pr2rl gr (sep1 $ feedSelf i $ cont r) <> l
+                  gr2rl (Advanced, i, r) l = pr2rl gr (sep1 $ feed i $ cont r) <> l
                   pr2rl g (GrammarDerived rl rf) = rl <> rf g
 
 feedSelf :: Monoid s => [(GrammarResults g s, s)] -> Parser g s r -> Parser g s r
 feedSelf input (Choice p q) = feedSelf input p <|> feedSelf input q
-feedSelf input (Delay _ f) = f input
+feedSelf input (Delay _ f) = f Stuck input
 feedSelf input (Failure msg) = Failure msg
 feedSelf input (Result is t r) = Result is (t <> input) r
 feedSelf _ p@NonTerminal{} = p
@@ -255,9 +256,9 @@ feedSelf input (Bind p cont) = feedSelf input p >>= cont
 -- | Feeds a chunk of the input to the given parser.
 feed :: Monoid s => [(GrammarResults g s, s)] -> Parser g s r -> Parser g s r
 feed s (Choice p q) = feed s p <|> feed s q
-feed s (Delay _ f) = f s
+feed s (Delay _ f) = f Advanced s
 feed s (Failure msg) = Failure msg
-feed s (Result is t r) = Result Advanced (t <> s) r
+feed s (Result _ t r) = Result Advanced (t <> s) r
 --feed [] p@NonTerminal{} = p
 feed ((rs, s):_) (NonTerminal i get map) = foldr Choice empty (f <$> resultList (get rs))
    where f (is, i, r) = Result is i (map r)
@@ -271,7 +272,7 @@ feedEnd p = p
 
 instance Functor (Parser g s) where
    fmap f (Choice p q) = Choice (fmap f p) (fmap f q)
-   fmap g (Delay e f) = Delay (fmap g e) (fmap g . f)
+   fmap g (Delay e f) = Delay (fmap g e) (\is-> fmap g . f is)
    fmap f (Failure msg) = Failure msg
    fmap f (Result is s r) = Result is s (f r)
    fmap f (Bind p cont) = Bind p (fmap f . cont)
@@ -280,7 +281,7 @@ instance Functor (Parser g s) where
 instance Monoid s => Applicative (Parser g s) where
    pure = Result Stuck []
    Choice p q <*> r = p <*> r <|> q <*> r
-   Delay e f <*> p = Delay (e <*> p) ((<*> p) . f)
+   Delay e f <*> p = Delay (e <*> p) (\is-> (<*> p) . f is)
    Failure msg <*> _ = Failure msg
    Result Stuck s r <*> p = r <$> feedSelf s p
    Result Advanced s r <*> p = r <$> feed s p
@@ -299,7 +300,7 @@ instance Monoid s => Monad (Parser g s) where
    Result Stuck s r >>= f = feedSelf s (f r)
    Result Advanced s r >>= f = feed s (f r)
    Choice p q >>= f = (p >>= f) <|> (q >>= f)
-   Delay e f >>= g = Delay (e >>= g) ((>>= g) . f)
+   Delay e f >>= g = Delay (e >>= g) (\is-> (>>= g) . f is)
    Failure msg >>= f = Failure msg
    p >>= cont = Bind p cont
    (>>) = (*>)
