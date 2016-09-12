@@ -8,9 +8,9 @@ module Text.Grampa (
    -- * Grammar and parser manipulation
    feed, feedEnd, fixGrammar, fixGrammarInput, parse,
    -- * Parser combinators
-   iterateMany, lookAhead, notFollowedBy, endOfInput,
+   iterateMany, lookAhead, notFollowedBy,
    -- * Parsing primitives
-   anyToken, token, satisfy, satisfyChar, string,
+   endOfInput, getInput, anyToken, token, satisfy, satisfyChar, string,
    scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1, skipCharsWhile)
 where
 
@@ -57,6 +57,12 @@ endOfInput = Delay (pure ()) (const f)
    where f [] = endOfInput
          f ((_, s):_) | null s = endOfInput
          f _ = Failure "endOfInput"
+
+-- | Always sucessful parser that returns the remaining input without consuming it.
+getInput :: (MonoidNull s, Functor1 g) => Parser g s s
+getInput = Delay (pure mempty) f
+   where f _ [] = getInput
+         f is i@((_, s):_) = Result is i s
 
 -- | A parser accepting the longest sequence of input atoms that match the given predicate; an optimized version of
 -- 'concatMany . satisfy'.
