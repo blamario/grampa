@@ -6,7 +6,7 @@ module Text.Grampa (
    -- * Types
    Grammar, GrammarBuilder, Parser, Identity1(..), Product1(..), Arrow1(..),
    -- * Grammar and parser manipulation
-   feed, feedEnd, fixGrammar, fixGrammarInput, parse,
+   feed, feedEnd, fixGrammar, fixGrammarInput, parse, parseAll,
    -- * Parser combinators
    iterateMany, lookAhead, notFollowedBy,
    -- * Parsing primitives
@@ -32,6 +32,15 @@ parse :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g) =>
          Grammar g s -> (forall f. g f -> f r) -> s -> [r]
 parse g prod input = third <$> resultList (prod $ fst $ head $ fixGrammarInput g input)
    where third (_, _, x) = x
+
+parseAll :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g) =>
+         Grammar g s -> (forall f. g f -> f r) -> s -> [r]
+parseAll g prod input = snd <$> filter (null . fst) (resultsAndRest $ prod $ fst $ head $ fixGrammarInput g input)
+
+resultsAndRest :: Monoid s => ResultList g s r -> [(s, r)]
+resultsAndRest (ResultList rl) = f <$> rl
+   where f (_, [], r) = (mempty, r)
+         f (_, (_, s):_, r) = (s, r)
 
 -- | Behaves like the argument parser, but without consuming any input.
 lookAhead :: (MonoidNull s, Functor1 g) => Parser g s r -> Parser g s r
