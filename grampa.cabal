@@ -33,3 +33,15 @@ executable             arithmetic
   default-language:    Haskell2010
   build-depends:       base >=4.7 && <5,
                        grampa == 0.1
+
+test-suite           tests
+  type:              exitcode-stdio-1.0
+  hs-source-dirs:    test, examples
+  x-uses-tf:         true
+  build-depends:     base >=4.7 && < 5, monoid-subclasses < 0.5,
+                     grampa == 0.1,
+                     QuickCheck >= 2 && < 3, checkers >= 0.3.2 && < 0.5, testing-feat < 0.5,
+                     tasty >= 0.7, tasty-quickcheck >= 0.7
+  main-is:           Test.hs
+  other-modules:     Arithmetic, Boolean, Combined, Comparisons, Conditionals, Utilities
+  default-language:  Haskell2010

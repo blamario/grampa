@@ -15,7 +15,7 @@ instance ConditionalDomain Bool e where
    ifThenElse False _ f = f
 
 instance ConditionalDomain [Char] [Char] where
-   ifThenElse cond t f = "(if " <> cond <> " then " <> t <> " else " <> f <> ")"
+   ifThenElse cond t f = "if " <> cond <> " then " <> t <> " else " <> f
 
 data Conditionals e f =
    Conditionals{

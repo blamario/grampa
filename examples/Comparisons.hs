@@ -5,7 +5,7 @@ import Control.Applicative
 import Data.Monoid ((<>))
 
 import Text.Grampa
-import Utilities (infixJoin, symbol)
+import Utilities (symbol)
 
 class ComparisonDomain c e where
    greaterThan :: c -> c -> e
@@ -27,6 +27,8 @@ instance ComparisonDomain [Char] [Char] where
    equal = infixJoin "=="
    greaterOrEqual = infixJoin ">="
    greaterThan = infixJoin ">"
+
+infixJoin rel a b = a <> rel <> b
 
 data Comparisons c e f =
    Comparisons{expr :: f e}
