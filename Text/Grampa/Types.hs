@@ -2,7 +2,8 @@
              RankNTypes, ScopedTypeVariables, UndecidableInstances #-}
 module Text.Grampa.Types (Functor1(..), Apply1(..), Alternative1(..), Foldable1(..), Traversable1(..),
                           Reassemblable(..), ResultList(..), InputStatus(Advanced, Stuck),
-                          Grammar, GrammarBuilder, Parser(..), Identity1(..), Product1(..), Arrow1(..),
+                          Grammar, GrammarBuilder, Parser(..),
+                          Empty1(..), Singleton1(..), Identity1(..), Product1(..), Arrow1(..),
                           feed, feedEnd, fixGrammar, fixGrammarInput, iterateMany)
 where
 
@@ -66,6 +67,10 @@ data Parser g s r = Failure String
 
 data ResultInfo g s r = ResultInfo InputStatus [(GrammarResults g s, s)] r
 
+data Empty1 (f :: * -> *) = Empty1
+
+data Singleton1 a (f :: * -> *) = Singleton1 {getSingle :: f a}
+
 -- | Equivalent of 'Data.Functor.Identity' for rank 2 data types
 data Identity1 g (f :: * -> *) = Identity1 {runIdentity1 :: g f} deriving (Eq, Ord, Show)
 
@@ -99,11 +104,23 @@ instance (Show s, Show (Grammar g s), Show (GrammarResults g s)) => Show1 (Parse
    liftShowsPrec sp sl prec (Bind p cont) rest = "(Bind " ++ liftShowsPrec showsPrec showList prec (const () <$> p) (")" ++ rest)
    liftShowsPrec sp sl prec (NonTerminal i get map) rest = "(NonTerminal " ++ show i ++ ")" ++ rest
 
+instance Functor1 Empty1 where
+   fmap1 f Empty1 = Empty1
+
+instance Functor1 (Singleton1 a) where
+   fmap1 f (Singleton1 a) = Singleton1 (f a)
+
 instance Functor1 g => Functor1 (Identity1 g) where
    fmap1 f (Identity1 g) = Identity1 (fmap1 f g)
 
 instance (Functor1 g, Functor1 h) => Functor1 (Product1 g h) where
    fmap1 f (Pair g h) = Pair (fmap1 f g) (fmap1 f h)
+
+instance Foldable1 Empty1 where
+   foldMap1 f Empty1 = mempty
+
+instance Foldable1 (Singleton1 x) where
+   foldMap1 f (Singleton1 x) = f x
 
 instance Foldable1 g => Foldable1 (Identity1 g) where
    foldMap1 f (Identity1 g) = foldMap1 f g
@@ -111,17 +128,37 @@ instance Foldable1 g => Foldable1 (Identity1 g) where
 instance (Foldable1 g, Foldable1 h) => Foldable1 (Product1 g h) where
    foldMap1 f (Pair g h) = foldMap1 f g <> foldMap1 f h
 
+instance Traversable1 Empty1 where
+   traverse1 f Empty1 = pure Empty1
+
+instance Traversable1 (Singleton1 x) where
+   traverse1 f (Singleton1 x) = Singleton1 <$> f x
+
 instance Traversable1 g => Traversable1 (Identity1 g) where
    traverse1 f (Identity1 g) = Identity1 <$> traverse1 f g
 
 instance (Traversable1 g, Traversable1 h) => Traversable1 (Product1 g h) where
    traverse1 f (Pair g h) = Pair <$> traverse1 f g <*> traverse1 f h
 
+instance Apply1 Empty1 where
+   ap1 Empty1 Empty1 = Empty1
+
+instance Apply1 (Singleton1 x) where
+   ap1 (Singleton1 f) (Singleton1 x) = Singleton1 (apply1 f x)
+
 instance Apply1 g => Apply1 (Identity1 g) where
    ap1 (Identity1 g) (Identity1 h) = Identity1 (ap1 g h)
 
 instance (Apply1 g, Apply1 h) => Apply1 (Product1 g h) where
    ap1 (Pair gf hf) (Pair g h) = Pair (ap1 gf g) (ap1 hf h)
+
+instance Alternative1 Empty1 where
+   empty1 = Empty1
+   choose1 Empty1 Empty1 = Empty1
+
+instance Alternative1 (Singleton1 x) where
+   empty1 = Singleton1 empty
+   choose1 (Singleton1 x) (Singleton1 y) = Singleton1 (x <|> y)
 
 instance Alternative1 g => Alternative1 (Identity1 g) where
    empty1 = Identity1 empty1
@@ -130,6 +167,12 @@ instance Alternative1 g => Alternative1 (Identity1 g) where
 instance (Alternative1 g, Alternative1 h) => Alternative1 (Product1 g h) where
    empty1 = Pair empty1 empty1
    choose1 (Pair g1 h1) (Pair g2 h2) = Pair (choose1 g1 g2) (choose1 h1 h2)
+
+instance Reassemblable Empty1 where
+   reassemble f Empty1 = Empty1
+
+instance Reassemblable (Singleton1 x) where
+   reassemble f s@(Singleton1 x) = Singleton1 (f getSingle s)
 
 instance forall g. Reassemblable g => Reassemblable (Identity1 g) where
    reassemble :: forall p q. (forall a. (forall f. Identity1 g f -> f a) -> Identity1 g p -> q a)
