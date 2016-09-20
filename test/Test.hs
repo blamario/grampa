@@ -1,9 +1,9 @@
-{-# Language RankNTypes, DeriveDataTypeable #-}
+{-# Language RankNTypes, ScopedTypeVariables #-}
 module Main where
 
 import Control.Applicative (Applicative, Alternative, pure, (<*>), (*>), empty, (<|>))
 import Control.Monad (MonadPlus, liftM, liftM2, mzero, mplus)
-import Data.List (find, minimumBy, nub, sort)
+import Data.List (find, isPrefixOf, minimumBy, nub, sort)
 import Data.Monoid (Monoid(..), (<>))
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
@@ -28,10 +28,25 @@ import qualified Conditionals
 
 main = defaultMain tests
 
-tests = testGroup "Arithmetic" [testProperty "arithmetic" $ parseArithmetical,
-                                testProperty "comparisons" $ parseComparison,
-                                testProperty "boolean" $ parseBoolean,
-                                testProperty "conditionals" $ parseConditional]
+tests = testGroup "Grampa"
+          [testGroup "Arithmetic"
+             [testProperty "arithmetic" $ parseArithmetical,
+              testProperty "comparisons" $ parseComparison,
+              testProperty "boolean" $ parseBoolean,
+              testProperty "conditionals" $ parseConditional],
+           testGroup "primitives"
+             [testProperty "anyToken mempty" $ simpleParse anyToken "" == [],
+              testProperty "anyToken list" $ \(x::Word8) xs-> simpleParse anyToken (x:xs) == [([x],xs)],
+              testProperty "token success" $ \(x::Word8) xs-> simpleParse (token [x]) (x:xs) == [([x],xs)],
+              testProperty "token failure" $ \(x::Word8) y xs-> x /= y ==> simpleParse (token [y]) (x:xs) == [],
+              testProperty "token mempty" $ \x-> simpleParse (token [x]) "" == [],
+              testProperty "satisfy success" $ \bools-> simpleParse (satisfy head) (True:bools) == [([True], bools)],
+              testProperty "satisfy failure" $ \bools-> simpleParse (satisfy head) (False:bools) == [],
+              testProperty "satisfy mempty" $ simpleParse (satisfy (undefined :: [Char] -> Bool)) [] == [],
+              testProperty "string success" $ \(xs::[Word8]) ys-> simpleParse (string xs) (xs <> ys) == [(xs, ys)],
+              testProperty "string" $ \(xs::[Word8]) ys-> not (xs `isPrefixOf` ys) ==> simpleParse (string xs) ys == [],
+              testProperty "endOfInput mempty" $ simpleParse endOfInput "" == [((),"")],
+              testProperty "endOfInput failure" $ \s-> s /= "" ==> simpleParse endOfInput s == []]]
 
 parseArithmetical :: Sum -> Bool
 parseArithmetical (Sum s) = f s' == s'
@@ -137,3 +152,6 @@ uniqueParse g p s = case parseAll g p s
                     of [r] -> r
                        [] -> error "Unparseable"
                        _ -> error "Ambiguous"
+
+simpleParse :: FactorialMonoid s => Parser (Singleton1 a) s a -> s -> [(a, s)]
+simpleParse p s = parse (Singleton1 p) getSingle s

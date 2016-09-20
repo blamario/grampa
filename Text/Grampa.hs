@@ -29,18 +29,17 @@ import Text.Grampa.Types
 import Prelude hiding (length, null, span, takeWhile)
 
 parse :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g) =>
-         Grammar g s -> (forall f. g f -> f r) -> s -> [r]
-parse g prod input = third <$> resultList (prod $ fst $ head $ fixGrammarInput g input)
-   where third (_, _, x) = x
+         Grammar g s -> (forall f. g f -> f r) -> s -> [(r, s)]
+parse g prod input = resultsAndRest (prod $ fst $ head $ fixGrammarInput g input)
 
 parseAll :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g) =>
          Grammar g s -> (forall f. g f -> f r) -> s -> [r]
-parseAll g prod input = snd <$> filter (null . fst) (resultsAndRest $ prod $ fst $ head $ fixGrammarInput g input)
+parseAll g prod input = fst <$> filter (null . snd) (resultsAndRest $ prod $ fst $ head $ fixGrammarInput g input)
 
-resultsAndRest :: Monoid s => ResultList g s r -> [(s, r)]
+resultsAndRest :: Monoid s => ResultList g s r -> [(r, s)]
 resultsAndRest (ResultList rl) = f <$> rl
-   where f (_, [], r) = (mempty, r)
-         f (_, (_, s):_, r) = (s, r)
+   where f (_, [], r) = (r, mempty)
+         f (_, (_, s):_, r) = (r, s)
 
 -- | Behaves like the argument parser, but without consuming any input.
 lookAhead :: (MonoidNull s, Functor1 g) => Parser g s r -> Parser g s r
