@@ -9,6 +9,7 @@ where
 
 import Control.Applicative
 import Control.Arrow (first, second)
+import Control.Monad (Monad(..), MonadPlus(..))
 import Control.Monad.Trans.State (State, evalState, get, modify)
 import Data.Function(fix)
 import Data.Functor.Classes (Show1(liftShowsPrec))
@@ -348,6 +349,10 @@ instance Monoid s => Monad (Parser g s) where
    p >>= cont = Bind p cont
    (>>) = (*>)
    fail = Failure
+
+instance Monoid s => MonadPlus (Parser g s) where
+   mzero = empty
+   mplus = (<|>)
 
 instance (Functor1 g, MonoidNull s, Monoid x) => Monoid (Parser g s x) where
    mempty = pure mempty

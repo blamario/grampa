@@ -1,10 +1,13 @@
-{-# Language RankNTypes, ScopedTypeVariables #-}
+{-# Language FlexibleInstances, GeneralizedNewtypeDeriving, RankNTypes, ScopedTypeVariables #-}
 module Main where
 
 import Control.Applicative (Applicative, Alternative, pure, (<*>), (*>), empty, (<|>))
-import Control.Monad (MonadPlus, liftM, liftM2, mzero, mplus)
+import Control.Monad (MonadPlus(mzero, mplus), liftM, liftM2, void)
 import Data.List (find, isPrefixOf, minimumBy, nub, sort)
 import Data.Monoid (Monoid(..), (<>))
+import Data.Monoid.Cancellative (LeftReductiveMonoid)
+import Data.Monoid.Null (MonoidNull(null))
+import Data.Monoid.Factorial (FactorialMonoid(factors))
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
 import System.Environment (getArgs)
@@ -12,13 +15,14 @@ import Debug.Trace (trace)
 
 import Test.Feat (Enumerable(..), Enumerate, FreePair(Free), consts, shared, unary, uniform)
 import Test.Feat.Enumerate (pay)
-import Test.Tasty (defaultMain, testGroup)
+import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Positive(..), Property, testProperty, (===), (==>), (.&&.),
                               forAll, mapSize, oneof, resize, sized, whenFail)
 import Test.QuickCheck (verbose)
 import Test.QuickCheck.Gen (scale)
-import Test.QuickCheck.Checkers (Binop, EqProp(..), TestBatch, isAssoc, leftId, rightId, verboseBatch)
-import Test.QuickCheck.Classes (functor, monad, monoid, applicative, monadFunctor, monadApplicative, monadOr, monadPlus)
+import Test.QuickCheck.Checkers (Binop, EqProp(..), TestBatch, isAssoc, leftId, rightId, unbatch, verboseBatch)
+import Test.QuickCheck.Classes (functor, monad, monoid, applicative, alternative,
+                                monadFunctor, monadApplicative, monadOr, monadPlus)
 
 import Text.Grampa
 import qualified Arithmetic
@@ -26,10 +30,12 @@ import qualified Comparisons
 import qualified Boolean
 import qualified Conditionals
 
+import Prelude hiding (null)
+
 main = defaultMain tests
 
 tests = testGroup "Grampa"
-          [testGroup "Arithmetic"
+          [testGroup "arithmetic"
              [testProperty "arithmetic" $ parseArithmetical,
               testProperty "comparisons" $ parseComparison,
               testProperty "boolean" $ parseBoolean,
@@ -46,7 +52,37 @@ tests = testGroup "Grampa"
               testProperty "string success" $ \(xs::[Word8]) ys-> simpleParse (string xs) (xs <> ys) == [(xs, ys)],
               testProperty "string" $ \(xs::[Word8]) ys-> not (xs `isPrefixOf` ys) ==> simpleParse (string xs) ys == [],
               testProperty "endOfInput mempty" $ simpleParse endOfInput "" == [((),"")],
-              testProperty "endOfInput failure" $ \s-> s /= "" ==> simpleParse endOfInput s == []]]
+              testProperty "endOfInput failure" $ \s-> s /= "" ==> simpleParse endOfInput s == []],
+          testGroup "classes"
+             [testBatch (monoid parser3s),
+              testBatch (functor parser3s),
+              testBatch (applicative parser3s),
+              testBatch (alternative parser2s),
+              testBatch $ monad parser3s,
+              testBatch $ monadFunctor parser2s,
+              testBatch $ monadApplicative parser2s,
+              -- testBatch $ monadOr parser2s,
+              testBatch $ monadPlus parser2s
+              {-,
+              testProperty "lookAhead" $ lookAheadBatch,
+              testProperty "join" $ testJoin
+              -}
+             ]]
+
+testBatch :: TestBatch -> TestTree
+testBatch (label, tests) = testGroup label (uncurry testProperty <$> tests)
+
+instance (MonoidNull a, MonoidNull b, MonoidNull c) => MonoidNull (a, b, c) where
+   null (a, b, c) = null a && null b && null c
+
+instance (FactorialMonoid a, FactorialMonoid b, FactorialMonoid c) => FactorialMonoid (a, b, c) where
+   factors (a, b, c) = [(a1, b1, c1) | a1 <- factors a, b1 <- factors b, c1 <- factors c]
+
+parser2s :: DescribedParser ([Bool], [Bool]) ([Bool], [Bool])
+parser2s = undefined
+
+parser3s :: DescribedParser ([Bool], [Bool], [Bool]) ([Bool], [Bool], [Bool])
+parser3s = undefined
 
 parseArithmetical :: Sum -> Bool
 parseArithmetical (Sum s) = f s' == s'
@@ -106,6 +142,9 @@ instance Arbitrary Disjunction where
    arbitrary = sized uniform
 instance Arbitrary Conditional where
    arbitrary = sized uniform
+instance forall s r. (FactorialMonoid s, Typeable s, Eq s, Show r, Monoid r, Enumerable r) =>
+         Arbitrary (DescribedParser s r) where
+   arbitrary = sized uniform
 
 instance Enumerable Factor where
    enumerate = unary (Factor . (show :: Word8 -> String))
@@ -145,6 +184,75 @@ instance Enumerable Conditional where
    enumerate = Conditional
                <$> (\(Free (Disjunction a, Free (Sum b, Sum c)))-> "if " <> a <> " then " <> b <> " else " <> c)
                <$> pay enumerate
+
+data DescribedParser s r = DescribedParser String (forall g. (Typeable g, Functor1 g) => Parser g s r)
+
+instance Show (DescribedParser s r) where
+   show (DescribedParser d _) = d
+
+instance (MonoidNull s, Monoid r) => Monoid (DescribedParser s r) where
+   mempty = DescribedParser "mempty" mempty
+   DescribedParser d1 p1 `mappend` DescribedParser d2 p2 = DescribedParser (d1 ++ " <> " ++ d2) (mappend p1 p2)
+
+instance (Ord r, Show r, EqProp r, EqProp s, Show s, FactorialMonoid s, Arbitrary s) =>
+         EqProp (Parser (Singleton1 r) s r) where
+   p1 =-= p2 = forAll (sized $ \n-> resize (min n 20) arbitrary)
+                      (\s-> --whenFail (print (s, p1, p2))
+                                     parse (Singleton1 p1) getSingle s =-= parse (Singleton1 p2) getSingle s)
+
+instance (FactorialMonoid s, Show s, EqProp s, Arbitrary s, Ord r, Show r, EqProp r, Typeable r) =>
+         EqProp (DescribedParser s r) where
+   DescribedParser _ p1 =-= DescribedParser _ p2 =
+      forAll arbitrary (\s-> parse (Singleton1 p1) getSingle s =-= parse (Singleton1 p2) getSingle s)
+
+instance Monoid s => Functor (DescribedParser s) where
+   fmap f (DescribedParser d p) = DescribedParser ("fmap ? " ++ d) (fmap f p)
+
+instance Monoid s => Applicative (DescribedParser s) where
+   pure x = DescribedParser "pure ?" (pure x)
+   DescribedParser d1 p1 <*> DescribedParser d2 p2 = DescribedParser (d1 ++ " <*> " ++ d2) (p1 <*> p2)
+
+instance Monoid s => Monad (DescribedParser s) where
+   return x = DescribedParser "return ?" (return x)
+   DescribedParser d1 p1 >>= f = DescribedParser (d1 ++ " >>= ?") (p1 >>= \x-> let DescribedParser _ p = f x in p)
+   DescribedParser d1 p1 >> DescribedParser d2 p2 = DescribedParser (d1 ++ " >> " ++ d2) (p1 >> p2)
+
+instance Monoid s => Alternative (DescribedParser s) where
+   empty = DescribedParser "empty" empty
+   DescribedParser d1 p1 <|> DescribedParser d2 p2 = DescribedParser (d1 ++ " <|> " ++ d2) (p1 <|> p2)
+
+instance Monoid s => MonadPlus (DescribedParser s) where
+   mzero = DescribedParser "mzero" mzero
+   DescribedParser d1 p1 `mplus` DescribedParser d2 p2 = DescribedParser (d1 ++ " `mplus` " ++ d2) (mplus p1 p2)
+
+--instance Enumerable (DescribedParser [Bool] [Bool]) where
+instance forall s. (FactorialMonoid s, LeftReductiveMonoid s, Typeable s, Eq s, Show s, Enumerable s) =>
+         Enumerable (DescribedParser s s) where
+   enumerate = consts (pure <$> [DescribedParser "anyToken" anyToken])
+--                                 DescribedParser "satisfy" (satisfy head)])
+               <> pay (unary $ \t-> DescribedParser "token" (token t))
+               <> pay (unary $ \s-> DescribedParser "string" (string s))
+
+instance forall s r. (FactorialMonoid s, Typeable s, Eq s) => Enumerable (DescribedParser s ()) where
+   enumerate = consts (pure <$> [DescribedParser "endOfInput" endOfInput])
+--               <> pay (unary $ \(DescribedParser d p)-> DescribedParser ("void " <> d) (void p))
+--               <> pay (unary $ \(DescribedParser d p)-> DescribedParser ("notFollowedBy " <> d) (notFollowedBy p))
+
+instance forall s r. (FactorialMonoid s, Typeable s, Eq s, Show r, Monoid r, Enumerable r) =>
+         Enumerable (DescribedParser s r) where
+   enumerate = consts (pure <$> [DescribedParser "empty" empty,
+                                 DescribedParser "mempty" mempty])
+               <> pay (unary $ \r-> DescribedParser ("(pure " ++ shows r ")") (pure r))
+               <> pay (unary $ \(DescribedParser d p)-> DescribedParser ("lookAhead " <> d) (lookAhead p))
+               <> binary " *> " (*>)
+               <> binary " <> " (<>)
+               <> binary " <|> " (<|>)
+      where binary :: String -> (forall g. (Functor1 g, Typeable g) => Parser g s r -> Parser g s r -> Parser g s r) -> Enumerate (DescribedParser s r)
+            binary nm op = (\(Free (DescribedParser d1 p1, DescribedParser d2 p2))-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
+                           <$> pay enumerate
+
+instance Enumerable r => Enumerable ([Bool] -> r) where
+   enumerate = pay (unary const)
 
 uniqueParse :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g) =>
                Grammar g s -> (forall f. g f -> f r) -> s -> r
