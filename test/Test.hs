@@ -1,34 +1,27 @@
-{-# Language FlexibleInstances, GeneralizedNewtypeDeriving, RankNTypes, ScopedTypeVariables #-}
+{-# Language FlexibleContexts, FlexibleInstances, RankNTypes, ScopedTypeVariables, UndecidableInstances #-}
 module Main where
 
 import Control.Applicative (Applicative, Alternative, pure, (<*>), (*>), empty, (<|>))
 import Control.Monad (MonadPlus(mzero, mplus), liftM, liftM2, void)
-import Data.List (find, isPrefixOf, minimumBy, nub, sort)
-import Data.Monoid (Monoid(..), (<>))
-import Data.Monoid.Cancellative (LeftReductiveMonoid)
+import Data.List (find, minimumBy, nub, sort)
+import Data.Monoid (Monoid(..), Product(..), (<>))
+import Data.Monoid.Cancellative (LeftReductiveMonoid(..))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid(factors))
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
-import System.Environment (getArgs)
-import Debug.Trace (trace)
 
 import Test.Feat (Enumerable(..), Enumerate, FreePair(Free), consts, shared, unary, uniform)
 import Test.Feat.Enumerate (pay)
 import Test.Tasty (TestTree, defaultMain, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Positive(..), Property, testProperty, (===), (==>), (.&&.),
-                              forAll, mapSize, oneof, resize, sized, whenFail)
-import Test.QuickCheck (verbose)
-import Test.QuickCheck.Gen (scale)
-import Test.QuickCheck.Checkers (Binop, EqProp(..), TestBatch, isAssoc, leftId, rightId, unbatch, verboseBatch)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Positive(..), Property, testProperty, (===), (==>), (.&&.), forAll)
+import Test.QuickCheck.Checkers (Binop, EqProp(..), TestBatch, unbatch)
 import Test.QuickCheck.Classes (functor, monad, monoid, applicative, alternative,
                                 monadFunctor, monadApplicative, monadOr, monadPlus)
 
 import Text.Grampa
-import qualified Arithmetic
-import qualified Comparisons
-import qualified Boolean
-import qualified Conditionals
+
+import qualified Test.Examples
 
 import Prelude hiding (null)
 
@@ -36,10 +29,10 @@ main = defaultMain tests
 
 tests = testGroup "Grampa"
           [testGroup "arithmetic"
-             [testProperty "arithmetic" $ parseArithmetical,
-              testProperty "comparisons" $ parseComparison,
-              testProperty "boolean" $ parseBoolean,
-              testProperty "conditionals" $ parseConditional],
+             [testProperty "arithmetic"   $ Test.Examples.parseArithmetical,
+              testProperty "comparisons"  $ Test.Examples.parseComparison,
+              testProperty "boolean"      $ Test.Examples.parseBoolean,
+              testProperty "conditionals" $ Test.Examples.parseConditional],
            testGroup "primitives"
              [testProperty "anyToken mempty" $ simpleParse anyToken "" == [],
               testProperty "anyToken list" $ \(x::Word8) xs-> simpleParse anyToken (x:xs) == [([x],xs)],
@@ -69,6 +62,9 @@ tests = testGroup "Grampa"
               -}
              ]]
 
+instance Enumerable (DescribedParser s r) => Arbitrary (DescribedParser s r) where
+   arbitrary = sized uniform
+
 testBatch :: TestBatch -> TestTree
 testBatch (label, tests) = testGroup label (uncurry testProperty <$> tests)
 
@@ -78,112 +74,15 @@ instance (MonoidNull a, MonoidNull b, MonoidNull c) => MonoidNull (a, b, c) wher
 instance (FactorialMonoid a, FactorialMonoid b, FactorialMonoid c) => FactorialMonoid (a, b, c) where
    factors (a, b, c) = [(a1, b1, c1) | a1 <- factors a, b1 <- factors b, c1 <- factors c]
 
+instance (LeftReductiveMonoid a, LeftReductiveMonoid b, LeftReductiveMonoid c) => LeftReductiveMonoid (a, b, c) where
+   stripPrefix (p1, p2, p3) (s1, s2, s3) = (,,) <$> stripPrefix p1 s1 <*> stripPrefix p2 s2 <*> stripPrefix p3 s3
+   isPrefixOf (p1, p2, p3) (s1, s2, s3) = isPrefixOf p1 s1 && isPrefixOf p2 s2 && isPrefixOf p3 s3
+
 parser2s :: DescribedParser ([Bool], [Bool]) ([Bool], [Bool])
 parser2s = undefined
 
 parser3s :: DescribedParser ([Bool], [Bool], [Bool]) ([Bool], [Bool], [Bool])
 parser3s = undefined
-
-parseArithmetical :: Sum -> Bool
-parseArithmetical (Sum s) = f s' == s'
-   where f = uniqueParse (fixGrammar $ Arithmetic.arithmetic empty) Arithmetic.expr
-         s' = f s
-
-parseComparison :: Comparison -> Bool
-parseComparison (Comparison s) = f s' == s'
-   where f = uniqueParse (fixGrammar comparisons) (Comparisons.expr . snd1)
-         s' = f s
-
-comparisons :: Functor1 g => GrammarBuilder ArithmeticComparisons g String
-comparisons (Pair a c) = Pair (Arithmetic.arithmetic empty a) (Comparisons.comparisons (Arithmetic.expr a) c)
-
-parseBoolean :: Disjunction -> Bool
-parseBoolean (Disjunction s) = f s' == s'
-   where f = uniqueParse (fixGrammar boolean) (Boolean.expr . snd1)
-         s' = f s
-
-boolean :: Functor1 g => GrammarBuilder ArithmeticComparisonsBoolean g String
-boolean (Pair ac b) = Pair (comparisons ac) (Boolean.boolean (Comparisons.expr $ snd1 ac) b)
-
-parseConditional :: Conditional -> Bool
-parseConditional (Conditional s) = f s' == s'
-   where f = uniqueParse (fixGrammar conditionals) (Conditionals.expr . snd1)
-         s' = f s
-
-conditionals :: Functor1 g => GrammarBuilder ACBC g String
-conditionals (Pair acb c) = Pair (boolean acb) (Conditionals.conditionals (Boolean.expr $ snd1 acb) (Arithmetic.expr $ fst1 $ fst1 acb) c)
-
-type ArithmeticComparisons = Product1 (Arithmetic.Arithmetic String) (Comparisons.Comparisons String String)
-type ArithmeticComparisonsBoolean = Product1 ArithmeticComparisons (Boolean.Boolean String)
-type ACBC = Product1 ArithmeticComparisonsBoolean (Conditionals.Conditionals String)
-
-newtype Factor      = Factor {factorString :: String}           deriving (Show)
-newtype Product     = Product {productString :: String}         deriving (Show)
-newtype Sum         = Sum {sumString :: String}                 deriving (Show)
-newtype Comparison  = Comparison {compString :: String}         deriving (Show)
-newtype Truth       = Truth {truthString :: String}             deriving (Show)
-newtype Conjunction = Conjunction {conjunctionString :: String} deriving (Show)
-newtype Disjunction = Disjunction {disjunctionString :: String} deriving (Show)
-newtype Conditional = Conditional {conditionalString :: String} deriving (Show)
-
-instance Arbitrary Factor where
-   arbitrary = sized uniform
-instance Arbitrary Product where
-   arbitrary = sized uniform
-instance Arbitrary Sum where
-   arbitrary = sized uniform
-instance Arbitrary Comparison where
-   arbitrary = sized uniform
-instance Arbitrary Truth where
-   arbitrary = sized uniform
-instance Arbitrary Conjunction where
-   arbitrary = sized uniform
-instance Arbitrary Disjunction where
-   arbitrary = sized uniform
-instance Arbitrary Conditional where
-   arbitrary = sized uniform
-instance forall s r. (FactorialMonoid s, Typeable s, Eq s, Show r, Monoid r, Enumerable r) =>
-         Arbitrary (DescribedParser s r) where
-   arbitrary = sized uniform
-
-instance Enumerable Factor where
-   enumerate = unary (Factor . (show :: Word8 -> String))
-               <> pay (unary $ Factor . (\s-> "(" <> s <> ")") . productString)
-
-instance Enumerable Product where
-   enumerate = unary (Product . factorString)
-               <> (Product <$> (\(Free (Product a, Factor b))-> a <> "*" <> b) <$> pay enumerate)
-               <> (Product <$> (\(Free (Product a, Factor b))-> a <> "/" <> b) <$> pay enumerate)
-
-instance Enumerable Sum where
-   enumerate = unary (Sum . productString)
-               <> (Sum <$> (\(Free (Sum a, Product b))-> a <> "+" <> b) <$> pay enumerate)
-               <> (Sum <$> (\(Free (Sum a, Product b))-> a <> "-" <> b) <$> pay enumerate)
-
-instance Enumerable Comparison where
-   enumerate = Comparison <$> (((\(Free (Sum a, Sum b))-> a <> "<" <> b) <$> pay enumerate)
-                               <> ((\(Free (Sum a, Sum b))-> a <> "<=" <> b) <$> pay enumerate)
-                               <> ((\(Free (Sum a, Sum b))-> a <> "==" <> b) <$> pay enumerate)
-                               <> ((\(Free (Sum a, Sum b))-> a <> ">=" <> b) <$> pay enumerate)
-                               <> ((\(Free (Sum a, Sum b))-> a <> ">" <> b) <$> pay enumerate))
-
-instance Enumerable Truth where
-   enumerate = Truth <$> (consts [pure "False", pure "True"]
-                          <> pay (unary $ ("not " <>) . truthString)
-                          <> pay (unary $ (\s-> "(" <> s <> ")") . disjunctionString))
-
-instance Enumerable Conjunction where
-   enumerate = unary (Conjunction . truthString)
-               <> (Conjunction <$> (\(Free (Conjunction a, Truth b))-> a <> "&&" <> b) <$> pay enumerate)
-
-instance Enumerable Disjunction where
-   enumerate = unary (Disjunction . conjunctionString)
-               <> (Disjunction <$> (\(Free (Disjunction a, Conjunction b))-> a <> "||" <> b) <$> pay enumerate)
-
-instance Enumerable Conditional where
-   enumerate = Conditional
-               <$> (\(Free (Disjunction a, Free (Sum b, Sum c)))-> "if " <> a <> " then " <> b <> " else " <> c)
-               <$> pay enumerate
 
 data DescribedParser s r = DescribedParser String (forall g. (Typeable g, Functor1 g) => Parser g s r)
 
@@ -196,9 +95,7 @@ instance (MonoidNull s, Monoid r) => Monoid (DescribedParser s r) where
 
 instance (Ord r, Show r, EqProp r, EqProp s, Show s, FactorialMonoid s, Arbitrary s) =>
          EqProp (Parser (Singleton1 r) s r) where
-   p1 =-= p2 = forAll (sized $ \n-> resize (min n 20) arbitrary)
-                      (\s-> --whenFail (print (s, p1, p2))
-                                     parse (Singleton1 p1) getSingle s =-= parse (Singleton1 p2) getSingle s)
+   p1 =-= p2 = forAll arbitrary (\s-> parse (Singleton1 p1) getSingle s =-= parse (Singleton1 p2) getSingle s)
 
 instance (FactorialMonoid s, Show s, EqProp s, Arbitrary s, Ord r, Show r, EqProp r, Typeable r) =>
          EqProp (DescribedParser s r) where
@@ -233,13 +130,13 @@ instance forall s. (FactorialMonoid s, LeftReductiveMonoid s, Typeable s, Eq s, 
                <> pay (unary $ \t-> DescribedParser "token" (token t))
                <> pay (unary $ \s-> DescribedParser "string" (string s))
 
-instance forall s r. (FactorialMonoid s, Typeable s, Eq s) => Enumerable (DescribedParser s ()) where
+instance forall s r. (Eq s, FactorialMonoid s, LeftReductiveMonoid s, Show s, Enumerable s) =>
+         Enumerable (DescribedParser s ()) where
    enumerate = consts (pure <$> [DescribedParser "endOfInput" endOfInput])
---               <> pay (unary $ \(DescribedParser d p)-> DescribedParser ("void " <> d) (void p))
+               <> pay (unary $ \(DescribedParser d p :: DescribedParser s s)-> DescribedParser ("void " <> d) (void p))
 --               <> pay (unary $ \(DescribedParser d p)-> DescribedParser ("notFollowedBy " <> d) (notFollowedBy p))
 
-instance forall s r. (FactorialMonoid s, Typeable s, Eq s, Show r, Monoid r, Enumerable r) =>
-         Enumerable (DescribedParser s r) where
+instance forall s r. (FactorialMonoid s, Typeable s) => Enumerable (DescribedParser s [Bool]) where
    enumerate = consts (pure <$> [DescribedParser "empty" empty,
                                  DescribedParser "mempty" mempty])
                <> pay (unary $ \r-> DescribedParser ("(pure " ++ shows r ")") (pure r))
@@ -247,12 +144,26 @@ instance forall s r. (FactorialMonoid s, Typeable s, Eq s, Show r, Monoid r, Enu
                <> binary " *> " (*>)
                <> binary " <> " (<>)
                <> binary " <|> " (<|>)
-      where binary :: String -> (forall g. (Functor1 g, Typeable g) => Parser g s r -> Parser g s r -> Parser g s r) -> Enumerate (DescribedParser s r)
+      where binary :: String -> (forall g. (Functor1 g, Typeable g) => Parser g s [Bool] -> Parser g s [Bool] -> Parser g s [Bool]) -> Enumerate (DescribedParser s [Bool])
             binary nm op = (\(Free (DescribedParser d1 p1, DescribedParser d2 p2))-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
                            <$> pay enumerate
 
-instance Enumerable r => Enumerable ([Bool] -> r) where
-   enumerate = pay (unary const)
+instance forall s r. (FactorialMonoid s, Typeable s) => Enumerable (DescribedParser s ([Bool] -> [Bool])) where
+   enumerate = consts (pure <$> [DescribedParser "empty" empty,
+                                 DescribedParser "mempty" mempty])
+               <> pay (unary $ \r-> DescribedParser ("(pure " ++ shows r ")") (pure r))
+               <> pay (unary $ \(DescribedParser d p)-> DescribedParser ("lookAhead " <> d) (lookAhead p))
+               <> binary " *> " (*>)
+               <> binary " <> " (<>)
+               <> binary " <|> " (<|>)
+      where binary :: String -> (forall g. (Functor1 g, Typeable g) => Parser g s ([Bool] -> [Bool]) -> Parser g s ([Bool] -> [Bool]) -> Parser g s ([Bool] -> [Bool])) -> Enumerate (DescribedParser s ([Bool] -> [Bool]))
+            binary nm op = (\(Free (DescribedParser d1 p1, DescribedParser d2 p2))-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
+                           <$> pay enumerate
+
+instance Enumerable ([Bool] -> [Bool]) where
+   enumerate = consts [pure id,
+                       pure (map not)]
+               <> pay (unary const)
 
 uniqueParse :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g) =>
                Grammar g s -> (forall f. g f -> f r) -> s -> r
