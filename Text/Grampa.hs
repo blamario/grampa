@@ -6,7 +6,7 @@ module Text.Grampa (
    -- * Types
    Grammar, GrammarBuilder, Parser, Empty1(..), Singleton1(..), Identity1(..), Product1(..), Arrow1(..),
    -- * Grammar and parser manipulation
-   feed, feedEnd, fixGrammar, fixGrammarInput, parse, parseAll,
+   feed, feedEnd, fixGrammar, fixGrammarInput, parse, parseAll, simpleParse,
    -- * Parser combinators
    iterateMany, lookAhead, notFollowedBy,
    -- * Parsing primitives
@@ -35,6 +35,9 @@ parse g prod input = resultsAndRest (prod $ fst $ head $ fixGrammarInput g input
 parseAll :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g) =>
          Grammar g s -> (forall f. g f -> f r) -> s -> [r]
 parseAll g prod input = fst <$> filter (null . snd) (resultsAndRest $ prod $ fst $ head $ fixGrammarInput g input)
+
+simpleParse :: FactorialMonoid s => Parser (Singleton1 a) s a -> s -> [(a, s)]
+simpleParse p s = parse (Singleton1 p) getSingle s
 
 resultsAndRest :: Monoid s => ResultList g s r -> [(r, s)]
 resultsAndRest (ResultList rl) = f <$> rl

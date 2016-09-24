@@ -186,6 +186,3 @@ uniqueParse g p s = case parseAll g p s
                     of [r] -> r
                        [] -> error "Unparseable"
                        _ -> error "Ambiguous"
-
-simpleParse :: FactorialMonoid s => Parser (Singleton1 a) s a -> s -> [(a, s)]
-simpleParse p s = parse (Singleton1 p) getSingle s
