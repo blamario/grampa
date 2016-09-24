@@ -68,9 +68,9 @@ data Parser g s r = Failure String
 
 data ResultInfo g s r = ResultInfo InputStatus [(GrammarResults g s, s)] r
 
-data Empty1 (f :: * -> *) = Empty1
+data Empty1 (f :: * -> *) = Empty1 deriving (Eq, Ord, Show)
 
-data Singleton1 a (f :: * -> *) = Singleton1 {getSingle :: f a}
+data Singleton1 a (f :: * -> *) = Singleton1 {getSingle :: f a} deriving (Eq, Ord, Show)
 
 -- | Equivalent of 'Data.Functor.Identity' for rank 2 data types
 data Identity1 g (f :: * -> *) = Identity1 {runIdentity1 :: g f} deriving (Eq, Ord, Show)
@@ -304,7 +304,7 @@ feed s (Delay _ f) = f Advanced s
 feed s (Failure msg) = Failure msg
 feed s (Result _ t r) = Result Advanced (t <> s) r
 --feed [] p@NonTerminal{} = p
-feed ((rs, s):_) (NonTerminal i get map) = foldr Choice empty (f <$> resultList (get rs))
+feed ((rs, s):_) (NonTerminal i get map) = foldr (<|>) empty (f <$> resultList (get rs))
    where f (is, i, r) = Result is i (map r)
 feed s (Bind p cont) = feed s p >>= cont
 
@@ -337,6 +337,7 @@ instance Monoid s => Alternative (Parser g s) where
    Failure{} <|> p = p
 --   Delay e f <|> p = Delay (e <|> feedEnd p) (\i-> f i <|> feed i p)
 --   p <|> Delay e f = Delay (feedEnd p <|> e) (\i-> feed i p <|> f i)
+   Choice p q <|> r = p <|> Choice q r
    p <|> q = Choice p q
 
 instance Monoid s => Monad (Parser g s) where

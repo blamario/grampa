@@ -46,16 +46,17 @@ lookAhead :: (MonoidNull s, Functor1 g) => Parser g s r -> Parser g s r
 lookAhead = lookAheadInto Stuck []
    where -- lookAheadInto :: [(g (Parser g s), s)] -> Parser g s r -> Parser g s r
          lookAheadInto _ _ p@Failure{}        = p
-         lookAheadInto is t (Result _ _ r)     = Result is t r
-         lookAheadInto is t (Choice p1 p2)     = lookAheadInto is t p1 <|> lookAheadInto is t p2
-         lookAheadInto is t (Delay e f)        = Delay (lookAheadInto is t e) (\is s-> lookAheadInto is (mappend t s) (f is s))
+         lookAheadInto is t (Result _ _ r)    = Result is t r
+         lookAheadInto is t (Choice p1 p2)    = lookAheadInto is t p1 <|> lookAheadInto is t p2
+         lookAheadInto is t (Delay e f)       = Delay (lookAheadInto is t e) (\is s-> lookAheadInto is (mappend t s) (f is s))
 
 -- | Does not consume any input; succeeds (with 'mempty' result) iff the argument parser fails.
 notFollowedBy :: (MonoidNull s, Functor1 g) => Parser g s r -> Parser g s ()
 notFollowedBy = lookAheadNotInto Stuck []
    where -- lookAheadNotInto :: (Monoid s, Monoid r) => [(g (Parser g s), s)] -> Parser g s r -> Parser g s ()
-         lookAheadNotInto is t Failure{}   = Result is t mempty
-         lookAheadNotInto _ t Result{}   = Failure "notFollowedBy"
+         lookAheadNotInto is t Failure{} = Result is t mempty
+         lookAheadNotInto _ t Result{} = Failure "notFollowedBy"
+         lookAheadNotInto _ t (Choice Result{} _)  = Failure "notFollowedBy"
          lookAheadNotInto is t (Delay e f) = Delay (lookAheadNotInto is t e) (\is s-> lookAheadNotInto is (mappend t s) (f is s))
          lookAheadNotInto is t p = Delay (lookAheadNotInto is t $ feedEnd p) (\is s-> lookAheadNotInto is (mappend t s) (feed s p))
 
