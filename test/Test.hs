@@ -104,10 +104,6 @@ instance (MonoidNull s, Monoid r) => Monoid (DescribedParser s r) where
    mempty = DescribedParser "mempty" mempty
    DescribedParser d1 p1 `mappend` DescribedParser d2 p2 = DescribedParser (d1 ++ " <> " ++ d2) (mappend p1 p2)
 
--- orphan instance
-instance EqProp () where
-   () =-= () = property True
-
 instance (Ord r, Show r, EqProp r, Eq s, EqProp s, Show s, FactorialMonoid s, Arbitrary s) =>
          EqProp (Parser (Singleton1 r) s r) where
    p1 =-= p2 = forAll arbitrary (\s-> nub (simpleParse p1 s) =-= nub (simpleParse p2 s))
