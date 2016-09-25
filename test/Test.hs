@@ -24,7 +24,7 @@ import Text.Grampa
 
 import qualified Test.Examples
 
-import Prelude hiding (null)
+import Prelude hiding (null, takeWhile)
 
 main = defaultMain tests
 
@@ -49,8 +49,9 @@ tests = testGroup "Grampa"
               testProperty "endOfInput failure" $ \s-> s /= "" ==> simpleParse endOfInput s == []],
            testGroup "lookAhead"
              [testProperty "lookAhead" lookAheadP,
-              testProperty "lookAhead p >> p" lookAheadConsumeP,
-              testProperty "notFollowedBy p >< p" lookAheadNotOrP,
+              testProperty "lookAhead p *> p" lookAheadConsumeP,
+              testProperty "lookAhead or not" lookAheadOrNotP,
+              testProperty "notFollowedBy p *> p" lookAheadNotAndP,
               testProperty "not not" lookAheadNotNotP,
               testProperty "lookAhead anyToken" lookAheadTokenP],
            testGroup "classes"
@@ -63,20 +64,20 @@ tests = testGroup "Grampa"
               testBatch $ monadApplicative parser2s,
               -- testBatch $ monadOr parser2s,
               testBatch $ monadPlus parser2s
-              {-,
-              testProperty "join" $ testJoin
-              -}
              ]]
    where lookAheadP :: String -> DescribedParser String [Bool] -> Bool
          lookAheadConsumeP :: DescribedParser String [Bool] -> Property
-         lookAheadNotOrP :: DescribedParser String [Bool] -> Property
+         lookAheadOrNotP :: DescribedParser String () -> Property
+         lookAheadNotAndP :: DescribedParser String [Bool] -> Property
          lookAheadNotNotP :: DescribedParser String [Bool] -> Property
          lookAheadTokenP :: Char -> String -> Bool
          
          lookAheadP xs (DescribedParser _ p) =
             simpleParse (lookAhead p) xs == map (const xs <$>) (simpleParse p xs)
          lookAheadConsumeP (DescribedParser _ p) = (lookAhead p *> p :: Parser (Singleton1 [Bool]) String [Bool]) =-= p
-         lookAheadNotOrP (DescribedParser _ p) = within 2000000 $
+         lookAheadOrNotP (DescribedParser _ p) = within 2000000 $
+            (notFollowedBy p <|> lookAhead p) =-= (mempty :: Parser (Singleton1 ()) String ())
+         lookAheadNotAndP (DescribedParser _ p) = within 2000000 $
             (notFollowedBy p *> p) =-= (empty :: Parser (Singleton1 [Bool]) String [Bool])
          lookAheadNotNotP (DescribedParser d p) =
             notFollowedBy (notFollowedBy p) =-= (void (lookAhead p) :: Parser (Singleton1 ()) String ())
@@ -135,31 +136,42 @@ instance Monoid s => MonadPlus (DescribedParser s) where
    mzero = DescribedParser "mzero" mzero
    DescribedParser d1 p1 `mplus` DescribedParser d2 p2 = DescribedParser (d1 ++ " `mplus` " ++ d2) (mplus p1 p2)
 
---instance Enumerable (DescribedParser [Bool] [Bool]) where
-instance forall s. (FactorialMonoid s, LeftReductiveMonoid s, Typeable s, Eq s, Show s, Enumerable s) =>
+instance forall s. (FactorialMonoid s, LeftReductiveMonoid s, Ord s, Typeable s, Show s, Enumerable s) =>
          Enumerable (DescribedParser s s) where
    enumerate = consts (pure <$> [DescribedParser "anyToken" anyToken,
+                                 DescribedParser "getInput" getInput,
                                  DescribedParser "empty" empty,
                                  DescribedParser "mempty" mempty])
---                                 DescribedParser "satisfy" (satisfy head)])
                <> pay (unary $ \t-> DescribedParser "token" (token t))
                <> pay (unary $ \s-> DescribedParser "string" (string s))
+               <> pay (unary $ \pred-> DescribedParser "satisfy" (satisfy pred))
+               <> pay (unary $ \pred-> DescribedParser "takeWhile" (takeWhile pred))
+               <> pay (unary $ \pred-> DescribedParser "takeWhile1" (takeWhile1 pred))
+               <> binary " *> " (*>)
+               <> binary " <> " (<>)
+               <> binary " <|> " (<|>)
+      where binary :: String -> (forall g. Functor1 g => Parser g s s -> Parser g s s -> Parser g s s)
+                   -> Enumerate (DescribedParser s s)
+            binary nm op = (\(Free (DescribedParser d1 p1, DescribedParser d2 p2))-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
+                           <$> pay enumerate
 
-instance forall s r. (Eq s, FactorialMonoid s, LeftReductiveMonoid s, Show s, Enumerable s) =>
+instance forall s r. (Ord s, FactorialMonoid s, LeftReductiveMonoid s, Show s, Enumerable s) =>
          Enumerable (DescribedParser s ()) where
    enumerate = consts (pure <$> [DescribedParser "endOfInput" endOfInput])
                <> pay (unary $ \(DescribedParser d p :: DescribedParser s s)-> DescribedParser ("void " <> d) (void p))
---               <> pay (unary $ \(DescribedParser d p)-> DescribedParser ("notFollowedBy (" <> d <> ")") (notFollowedBy p))
+               <> pay (unary $ \(DescribedParser d p :: DescribedParser s s)->
+                                  DescribedParser ("(notFollowedBy " <> d <> ")") (notFollowedBy p))
 
 instance forall s r. (FactorialMonoid s, Typeable s) => Enumerable (DescribedParser s [Bool]) where
    enumerate = consts (pure <$> [DescribedParser "empty" empty,
                                  DescribedParser "mempty" mempty])
                <> pay (unary $ \r-> DescribedParser ("(pure " ++ shows r ")") (pure r))
-               <> pay (unary $ \(DescribedParser d p)-> DescribedParser ("lookAhead (" <> d <> ")") (lookAhead p))
+               <> pay (unary $ \(DescribedParser d p)-> DescribedParser ("(lookAhead " <> d <> ")") (lookAhead p))
                <> binary " *> " (*>)
                <> binary " <> " (<>)
                <> binary " <|> " (<|>)
-      where binary :: String -> (forall g. (Functor1 g, Typeable g) => Parser g s [Bool] -> Parser g s [Bool] -> Parser g s [Bool]) -> Enumerate (DescribedParser s [Bool])
+      where binary :: String -> (forall g. Functor1 g => Parser g s [Bool] -> Parser g s [Bool] -> Parser g s [Bool])
+                   -> Enumerate (DescribedParser s [Bool])
             binary nm op = (\(Free (DescribedParser d1 p1, DescribedParser d2 p2))-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
                            <$> pay enumerate
 
@@ -167,13 +179,19 @@ instance forall s r. (FactorialMonoid s, Typeable s) => Enumerable (DescribedPar
    enumerate = consts (pure <$> [DescribedParser "empty" empty,
                                  DescribedParser "mempty" mempty])
                <> pay (unary $ \r-> DescribedParser ("(pure " ++ shows r ")") (pure r))
-               <> pay (unary $ \(DescribedParser d p)-> DescribedParser ("lookAhead " <> d) (lookAhead p))
+               <> pay (unary $ \(DescribedParser d p)-> DescribedParser ("(lookAhead " <> d <> ")") (lookAhead p))
                <> binary " *> " (*>)
                <> binary " <> " (<>)
                <> binary " <|> " (<|>)
-      where binary :: String -> (forall g. (Functor1 g, Typeable g) => Parser g s ([Bool] -> [Bool]) -> Parser g s ([Bool] -> [Bool]) -> Parser g s ([Bool] -> [Bool])) -> Enumerate (DescribedParser s ([Bool] -> [Bool]))
+      where binary :: String -> (forall g. Functor1 g => Parser g s ([Bool] -> [Bool]) -> Parser g s ([Bool] -> [Bool])
+                                 -> Parser g s ([Bool] -> [Bool]))
+                   -> Enumerate (DescribedParser s ([Bool] -> [Bool]))
             binary nm op = (\(Free (DescribedParser d1 p1, DescribedParser d2 p2))-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
                            <$> pay enumerate
+
+instance (Ord s, Enumerable s) => Enumerable (s -> Bool) where
+   enumerate = pay (unary (<=))
+               <> pay (unary const)
 
 instance Enumerable ([Bool] -> [Bool]) where
    enumerate = consts [pure id,
