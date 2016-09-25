@@ -23,6 +23,12 @@ import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid(length, span, spanMaybe', splitPrimePrefix, tails))
 import Data.Monoid.Textual (TextualMonoid)
 import qualified Data.Monoid.Textual as Textual
+import Data.String (fromString)
+import qualified Text.Parser.Char as CharParsing
+import Text.Parser.Char (CharParsing(char, notChar, anyChar, text))
+import Text.Parser.Combinators (Parsing(..))
+import Text.Parser.LookAhead (LookAheadParsing(..))
+import Text.Parser.Token (TokenParsing)
 
 import Text.Grampa.Types
 
@@ -44,24 +50,38 @@ resultsAndRest (ResultList rl) = f <$> rl
    where f (_, [], r) = (r, mempty)
          f (_, (_, s):_, r) = (r, s)
 
--- | Behaves like the argument parser, but without consuming any input.
-lookAhead :: (MonoidNull s, Functor1 g) => Parser g s r -> Parser g s r
-lookAhead = lookAheadInto Stuck []
-   where -- lookAheadInto :: [(g (Parser g s), s)] -> Parser g s r -> Parser g s r
-         lookAheadInto _ _ p@Failure{}        = p
-         lookAheadInto is t (Result _ _ r)    = Result is t r
-         lookAheadInto is t (Choice p1 p2)    = lookAheadInto is t p1 <|> lookAheadInto is t p2
-         lookAheadInto is t (Delay e f)       = Delay (lookAheadInto is t e) (\is s-> lookAheadInto is (mappend t s) (f is s))
+instance (Functor1 g, MonoidNull s) => Parsing (Parser g s) where
+   try = id
+   (<?>) = const
+   notFollowedBy = lookAheadNotInto Stuck []
+      where -- lookAheadNotInto :: (Monoid s, Monoid r) => [(g (Parser g s), s)] -> Parser g s r -> Parser g s ()
+            lookAheadNotInto is t Failure{} = Result is t mempty
+            lookAheadNotInto _ t Result{} = Failure "notFollowedBy"
+            lookAheadNotInto _ t (Choice Result{} _)  = Failure "notFollowedBy"
+            lookAheadNotInto is t (Delay e f) = Delay (lookAheadNotInto is t e) (\is s-> lookAheadNotInto is (mappend t s) (f is s))
+            lookAheadNotInto is t p = Delay (lookAheadNotInto is t $ feedEnd p) (\is s-> lookAheadNotInto is (mappend t s) (feed s p))
+   skipMany p = go
+      where go = pure () <|> p *> go
+   unexpected = Failure
+   eof = endOfInput
 
--- | Does not consume any input; succeeds (with 'mempty' result) iff the argument parser fails.
-notFollowedBy :: (MonoidNull s, Functor1 g) => Parser g s r -> Parser g s ()
-notFollowedBy = lookAheadNotInto Stuck []
-   where -- lookAheadNotInto :: (Monoid s, Monoid r) => [(g (Parser g s), s)] -> Parser g s r -> Parser g s ()
-         lookAheadNotInto is t Failure{} = Result is t mempty
-         lookAheadNotInto _ t Result{} = Failure "notFollowedBy"
-         lookAheadNotInto _ t (Choice Result{} _)  = Failure "notFollowedBy"
-         lookAheadNotInto is t (Delay e f) = Delay (lookAheadNotInto is t e) (\is s-> lookAheadNotInto is (mappend t s) (f is s))
-         lookAheadNotInto is t p = Delay (lookAheadNotInto is t $ feedEnd p) (\is s-> lookAheadNotInto is (mappend t s) (feed s p))
+instance (Functor1 g, MonoidNull s) => LookAheadParsing (Parser g s) where
+   lookAhead = lookAheadInto Stuck []
+      where -- lookAheadInto :: [(g (Parser g s), s)] -> Parser g s r -> Parser g s r
+            lookAheadInto _ _ p@Failure{}     = p
+            lookAheadInto is t (Result _ _ r) = Result is t r
+            lookAheadInto is t (Choice p1 p2) = lookAheadInto is t p1 <|> lookAheadInto is t p2
+            lookAheadInto is t (Delay e f)    = Delay (lookAheadInto is t e) (\is s-> lookAheadInto is (mappend t s) (f is s))
+
+instance (Functor1 g, Show s, TextualMonoid s) => CharParsing (Parser g s) where
+   satisfy = satisfyChar
+   string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
+   char = satisfyChar . (==)
+   notChar = satisfyChar . (/=)
+   anyChar = satisfyChar (const True)
+   text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
+
+instance (Functor1 g, Show s, TextualMonoid s) => TokenParsing (Parser g s)
 
 -- | A parser that fails on any input and succeeds at its end
 endOfInput :: (MonoidNull s, Functor1 g) => Parser g s ()
