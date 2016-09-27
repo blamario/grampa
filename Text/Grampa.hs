@@ -10,13 +10,14 @@ module Text.Grampa (
    -- * Parser combinators
    iterateMany, lookAhead, notFollowedBy,
    -- * Parsing primitives
-   endOfInput, getInput, anyToken, token, satisfy, satisfyChar, string,
+   endOfInput, getInput, anyToken, token, satisfy, satisfyChar, spaces, string,
    scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1, skipCharsWhile)
 where
 
 import Control.Applicative
 import Control.Arrow (second)
-import Data.Function(fix)
+import Data.Char (isSpace)
+import Data.Function (fix)
 import Data.Monoid (Monoid, mappend, mempty, (<>))
 import Data.Monoid.Cancellative (LeftReductiveMonoid (stripPrefix))
 import Data.Monoid.Null (MonoidNull(null))
@@ -43,7 +44,7 @@ parseAll :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g)
 parseAll g prod input = fst <$> filter (null . snd) (resultsAndRest $ prod $ fst $ head $ fixGrammarInput g input)
 
 simpleParse :: FactorialMonoid s => Parser (Singleton1 a) s a -> s -> [(a, s)]
-simpleParse p s = parse (Singleton1 p) getSingle s
+simpleParse p = parse (Singleton1 p) getSingle
 
 resultsAndRest :: Monoid s => ResultList g s r -> [(r, s)]
 resultsAndRest (ResultList rl) = f <$> rl
@@ -58,8 +59,10 @@ instance (Functor1 g, MonoidNull s) => Parsing (Parser g s) where
             lookAheadNotInto is t Failure{} = Result is t mempty
             lookAheadNotInto _ t Result{} = Failure "notFollowedBy"
             lookAheadNotInto _ t (Choice Result{} _)  = Failure "notFollowedBy"
-            lookAheadNotInto is t (Delay e f) = Delay (lookAheadNotInto is t e) (\is s-> lookAheadNotInto is (mappend t s) (f is s))
-            lookAheadNotInto is t p = Delay (lookAheadNotInto is t $ feedEnd p) (\is s-> lookAheadNotInto is (mappend t s) (feed s p))
+            lookAheadNotInto is t (Delay e f) =
+               Delay (lookAheadNotInto is t e) (\is s-> lookAheadNotInto is (mappend t s) (f is s))
+            lookAheadNotInto is t p =
+               Delay (lookAheadNotInto is t $ feedEnd p) (\is s-> lookAheadNotInto is (mappend t s) (feed s p))
    skipMany p = go
       where go = pure () <|> p *> go
    unexpected = Failure
@@ -82,6 +85,9 @@ instance (Functor1 g, Show s, TextualMonoid s) => CharParsing (Parser g s) where
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
 instance (Functor1 g, Show s, TextualMonoid s) => TokenParsing (Parser g s)
+
+spaces :: (Functor1 g, TextualMonoid t) => Parser g t ()
+spaces = skipCharsWhile isSpace
 
 -- | A parser that fails on any input and succeeds at its end
 endOfInput :: (MonoidNull s, Functor1 g) => Parser g s ()
