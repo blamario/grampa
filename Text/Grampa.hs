@@ -31,6 +31,7 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing)
 
+import Text.Grampa.Classes
 import Text.Grampa.Types
 
 import Prelude hiding (length, null, span, takeWhile)
