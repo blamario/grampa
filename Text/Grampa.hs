@@ -49,8 +49,8 @@ simpleParse p = parse (Singleton1 p) getSingle
 
 resultsAndRest :: Monoid s => ResultList g s r -> [(r, s)]
 resultsAndRest (ResultList rl) = f <$> rl
-   where f (_, [], r) = (r, mempty)
-         f (_, (_, s):_, r) = (r, s)
+   where f (ResultInfo _ [] r) = (r, mempty)
+         f (ResultInfo _ ((_, s):_)  r) = (r, s)
 
 instance (Functor1 g, MonoidNull s) => Parsing (Parser g s) where
    try = id
