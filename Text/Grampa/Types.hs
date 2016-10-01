@@ -24,7 +24,7 @@ data InputStatus = Advanced | Stuck deriving (Eq, Show)
 
 -- | Parser of streams of type `s`, as a part of grammar type `g`, producing a value of type `r`
 data Parser g s r = Failure String
-                  | Result InputStatus [(GrammarResults g s, s)] r
+                  | Result {-# UNPACK #-} !(ResultInfo g s r)
                   | Choice (Parser g s r) (Parser g s r)
                   | Delay (Parser g s r) (InputStatus -> [(GrammarResults g s, s)] -> Parser g s r)
                   | forall r'. NonTerminal Int (forall f. g f -> f r') (r' -> r)
@@ -35,7 +35,7 @@ type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
 
 instance (Show r, Show s, Show (Grammar g s), Show (GrammarResults g s)) => Show (Parser g s r) where
    showsPrec _ (Failure s) rest = "(Failure " ++ shows s (")" ++ rest)
-   showsPrec prec (Result is s r) rest
+   showsPrec prec (Result (ResultInfo is s r)) rest
       | prec > 0 = "(Result " ++ show is ++ " "
                    ++ foldr (\(t, s)-> showsPrec (prec - 1) t . shows s) (" " ++ shows r (")" ++ rest)) s
       | otherwise = "Result" ++ rest
@@ -46,7 +46,7 @@ instance (Show r, Show s, Show (Grammar g s), Show (GrammarResults g s)) => Show
 
 instance (Show s, Show (Grammar g s), Show (GrammarResults g s)) => Show1 (Parser g s) where
    liftShowsPrec sp _ _ (Failure s) rest = "(Failure " ++ shows s (")" ++ rest)
-   liftShowsPrec sp _ prec (Result is s r) rest
+   liftShowsPrec sp _ prec (Result (ResultInfo is s r)) rest
       | prec > 0 = "(Result " ++ show is ++ " "
                    ++ foldr (\(t, s)-> showsPrec (prec - 1) t . shows s) (" " ++ sp prec r (")" ++ rest)) s
       | otherwise = "Result" ++ rest
@@ -94,7 +94,7 @@ instance (Show (g (ResultList g s)), Show s, Show r) => Show (ResultList g s r) 
    show (ResultList l) = "ResultList " ++ show l
 
 instance (Show (g (ResultList g s)), Show s, Show r) => Show (ResultInfo g s r) where
-   show (ResultInfo is i r) = "(ResultInfo " ++ show is ++ show r
+   show (ResultInfo is i r) = "(ResultInfo " ++ show is ++ " " ++ show (length i) ++ " " ++ shows r ")"
 
 instance (Show (g (ResultList g s)), Show s) => Show1 (ResultList g s) where
    liftShowsPrec sp sl prec (ResultList l) rest = "ResultList " ++ showsPrec prec (f <$> l) (sl (g <$> l) rest)
@@ -141,7 +141,7 @@ separate = traverse1 sep1
    
 sep1 :: forall g s r. (Monoid s, Traversable1 g, Alternative1 g) => Parser g s r -> ParserResults g s r
 sep1 Failure{} = GrammarDerived (ResultList []) (const $ ResultList [])
-sep1 (Result is s r) = GrammarDerived (ResultList [ResultInfo is s r]) (const $ ResultList [])
+sep1 (Result ri@(ResultInfo is s r)) = GrammarDerived (ResultList [ri]) (const $ ResultList [])
 sep1 (Choice p q) = sep1 p <> sep1 q
 sep1 (Delay e _) = sep1 e
 sep1 (NonTerminal i get map) = GrammarDerived (ResultList []) ((map <$>) . get)
@@ -161,7 +161,7 @@ feedSelf :: Monoid s => [(GrammarResults g s, s)] -> Parser g s r -> Parser g s 
 feedSelf input (Choice p q) = feedSelf input p <|> feedSelf input q
 feedSelf input (Delay _ f) = f Stuck input
 feedSelf input (Failure msg) = Failure msg
-feedSelf input (Result is t r) = Result is (t <> input) r
+feedSelf input (Result (ResultInfo is t r)) = Result (ResultInfo is (t <> input) r)
 feedSelf _ p@NonTerminal{} = p
 feedSelf input (Bind p cont) = feedSelf input p >>= cont
    
@@ -170,10 +170,10 @@ feed :: Monoid s => [(GrammarResults g s, s)] -> Parser g s r -> Parser g s r
 feed s (Choice p q) = feed s p <|> feed s q
 feed s (Delay _ f) = f Advanced s
 feed s (Failure msg) = Failure msg
-feed s (Result _ t r) = Result Advanced (t <> s) r
+feed s (Result (ResultInfo _ t r)) = Result (ResultInfo Advanced (t <> s) r)
 --feed [] p@NonTerminal{} = p
 feed ((rs, s):_) (NonTerminal i get map) = asum (f <$> resultList (get rs))
-   where f (ResultInfo is i r) = Result is i (map r)
+   where f (ResultInfo is i r) = Result (ResultInfo is i (map r))
 feed s (Bind p cont) = feed s p >>= cont
 
 -- | Signals the end of the input.
@@ -186,17 +186,17 @@ instance Functor (Parser g s) where
    fmap f (Choice p q) = Choice (fmap f p) (fmap f q)
    fmap g (Delay e f) = Delay (fmap g e) (\is-> fmap g . f is)
    fmap f (Failure msg) = Failure msg
-   fmap f (Result is s r) = Result is s (f r)
+   fmap f (Result (ResultInfo is s r)) = Result (ResultInfo is s (f r))
    fmap f (Bind p cont) = Bind p (fmap f . cont)
    fmap f (NonTerminal i get map) = NonTerminal i get (f . map)
 
 instance Monoid s => Applicative (Parser g s) where
-   pure = Result Stuck []
+   pure = Result . ResultInfo Stuck []
    Choice p q <*> r = p <*> r <|> q <*> r
    Delay e f <*> p = Delay (e <*> p) (\is-> (<*> p) . f is)
    Failure msg <*> _ = Failure msg
-   Result Stuck s r <*> p = r <$> feedSelf s p
-   Result Advanced s r <*> p = r <$> feed s p
+   Result (ResultInfo Stuck s r) <*> p = r <$> feedSelf s p
+   Result (ResultInfo Advanced s r) <*> p = r <$> feed s p
    p <*> q = Bind p (<$> q)
 
 instance Monoid s => Alternative (Parser g s) where
@@ -210,8 +210,8 @@ instance Monoid s => Alternative (Parser g s) where
 
 instance Monoid s => Monad (Parser g s) where
    return = pure
-   Result Stuck s r >>= f = feedSelf s (f r)
-   Result Advanced s r >>= f = feed s (f r)
+   Result (ResultInfo Stuck s r) >>= f = feedSelf s (f r)
+   Result (ResultInfo Advanced s r) >>= f = feed s (f r)
    Choice p q >>= f = (p >>= f) <|> (q >>= f)
    Delay e f >>= g = Delay (e >>= g) (\is-> (>>= g) . f is)
    Failure msg >>= f = Failure msg
