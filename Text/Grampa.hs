@@ -58,15 +58,15 @@ instance (Functor1 g, MonoidNull s) => Parsing (Parser g s) where
    notFollowedBy = lookAheadNotInto Stuck []
       where -- lookAheadNotInto :: (Monoid s, Monoid r) => [(g (Parser g s), s)] -> Parser g s r -> Parser g s ()
             lookAheadNotInto is t Failure{} = Result (ResultInfo is t mempty)
-            lookAheadNotInto _ t Result{} = Failure "notFollowedBy"
-            lookAheadNotInto _ t (Choice Result{} _)  = Failure "notFollowedBy"
+            lookAheadNotInto _ t Result{} = Failure (fromIntegral $ length t) ["notFollowedBy"]
+            lookAheadNotInto _ t (Choice Result{} _)  = Failure (fromIntegral $ length t) ["notFollowedBy"]
             lookAheadNotInto is t (Delay e f) =
                Delay (lookAheadNotInto is t e) (\is s-> lookAheadNotInto is (mappend t s) (f is s))
             lookAheadNotInto is t p =
                Delay (lookAheadNotInto is t $ feedEnd p) (\is s-> lookAheadNotInto is (mappend t s) (feed s p))
    skipMany p = go
       where go = pure () <|> p *> go
-   unexpected = Failure
+   unexpected msg = Failure maxBound [msg]
    eof = endOfInput
 
 instance (Functor1 g, MonoidNull s) => LookAheadParsing (Parser g s) where
@@ -95,7 +95,7 @@ endOfInput :: (MonoidNull s, Functor1 g) => Parser g s ()
 endOfInput = Delay (pure ()) (const f)
    where f [] = endOfInput
          f ((_, s):_) | null s = endOfInput
-         f _ = Failure "endOfInput"
+         f rest = Failure (fromIntegral $ length rest) ["endOfInput"]
 
 -- | Always sucessful parser that returns the remaining input without consuming it.
 getInput :: (MonoidNull s, Functor1 g) => Parser g s s
@@ -120,11 +120,11 @@ takeWhile pred = while
 -- | A parser accepting the longest non-empty sequence of input atoms that match the given predicate; an optimized
 -- version of 'concatSome . satisfy'.
 takeWhile1 :: (FactorialMonoid s, Functor1 g) => (s -> Bool) -> Parser g s s
-takeWhile1 pred = Delay (Failure "takeWhile1") (const f)
+takeWhile1 pred = Delay (Failure 0 ["takeWhile1"]) (const f)
    where f [] = takeWhile1 pred
          f i@((_, s):_) | null s = takeWhile1 pred
                         | otherwise = let (prefix, suffix) = span pred s
-                                      in if null prefix then Failure "takeWhile1"
+                                      in if null prefix then Failure (fromIntegral $ length i) ["takeWhile1"]
                                          else if null suffix then resultPart (mappend prefix) (takeWhile pred)
                                               else Result (ResultInfo Advanced (drop (length prefix) i) prefix)
 
@@ -145,11 +145,11 @@ takeCharsWhile pred = while
 -- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
 -- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
 takeCharsWhile1 :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s s
-takeCharsWhile1 pred = Delay (Failure "takeCharsWhile1") (const f)
+takeCharsWhile1 pred = Delay (Failure 0 ["takeCharsWhile1"]) (const f)
    where f [] = takeCharsWhile1 pred
          f i@((_, s):_)
             | null s = takeCharsWhile1 pred
-            | null prefix = Failure "takeCharsWhile1"
+            | null prefix = Failure (fromIntegral $ length i) ["takeCharsWhile1"]
             | null suffix = resultPart (mappend prefix) (takeCharsWhile pred)
             | otherwise = Result (ResultInfo Advanced (drop (length prefix) i) prefix)
             where (prefix, suffix) = Textual.span_ False pred s
@@ -187,7 +187,7 @@ scanChars s0 f = Delay (pure mempty) (go s0)
 
 -- | A parser that accepts any single input atom.
 anyToken :: (FactorialMonoid s, Functor1 g) => Parser g s s
-anyToken = Delay (Failure "anyToken") (const f)
+anyToken = Delay (Failure 0 ["anyToken"]) (const f)
    where f [] = anyToken
          f ((_, s):rest) = case splitPrimePrefix s
                            of Just (first, _) -> Result (ResultInfo Advanced rest first)
@@ -200,34 +200,34 @@ token x = satisfy (== x)
 -- | A parser that accepts an input atom only if it satisfies the given predicate.
 satisfy :: (FactorialMonoid s, Functor1 g) => (s -> Bool) -> Parser g s s
 satisfy predicate = p
-   where p = Delay (Failure "satisfy") (const f)
+   where p = Delay (Failure 0 ["satisfy"]) (const f)
          f [] = p
-         f ((_, s):rest) = case splitPrimePrefix s
-                           of Just (first, _)
-                                 | predicate first -> Result (ResultInfo Advanced rest first)
-                                 | otherwise -> Failure "satisfy"
-                              Nothing -> p
+         f i@((_, s):rest) = case splitPrimePrefix s
+                             of Just (first, _)
+                                   | predicate first -> Result (ResultInfo Advanced rest first)
+                                   | otherwise -> Failure (fromIntegral $ length i) ["satisfy"]
+                                Nothing -> p
 
 -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the given
 -- predicate.
 satisfyChar :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s Char
 satisfyChar predicate = p
-   where p = Delay (Failure "satisfyChar") (const f)
+   where p = Delay (Failure 0 ["satisfyChar"]) (const f)
          f [] = p
          f i@((_, s):tl) = case splitPrimePrefix s
                            of Just (first, rest) ->
                                  case Textual.characterPrefix first
                                  of Just c | predicate c -> Result (ResultInfo Advanced tl c)
-                                    _ -> Failure "satisfyChar"
+                                    _ -> Failure (fromIntegral $ length i) ["satisfyChar"]
                               Nothing -> p
 
 -- | A parser that consumes and returns the given prefix of the input.
 string :: (Show s, LeftReductiveMonoid s, FactorialMonoid s, Functor1 g) => s -> Parser g s s
 string x | null x = pure x
-string x = Delay (Failure $ "string " ++ show x) $ const $
+string x = Delay (Failure 0 ["string " ++ show x]) $ const $
            \case i@((_, y):_)-> case (stripPrefix x y, stripPrefix y x)
                                 of (Just y', _) -> Result (ResultInfo Advanced (drop (length x) i) x)
-                                   (Nothing, Nothing) -> Failure "string"
+                                   (Nothing, Nothing) -> Failure (fromIntegral $ length i) ["string " ++ show x]
                                    (Nothing, Just x') -> string x' *> pure x
                  [] -> string x
 
