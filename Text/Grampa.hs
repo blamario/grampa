@@ -4,7 +4,7 @@ module Text.Grampa (
    Functor1(..), Apply1(..), Alternative1(..), Foldable1(..), Traversable1(..), Reassemblable(..),
    MonoidNull, FactorialMonoid, TextualMonoid,
    -- * Types
-   Grammar, GrammarBuilder, Parser, Empty1(..), Singleton1(..), Identity1(..), Product1(..), Arrow1(..),
+   Grammar, GrammarBuilder, Parser, ParseResults, Empty1(..), Singleton1(..), Identity1(..), Product1(..), Arrow1(..),
    -- * Grammar and parser manipulation
    feed, feedEnd, fixGrammar, fixGrammarInput, parse, parseAll, simpleParse,
    -- * Parser combinators
@@ -25,6 +25,7 @@ import Data.Monoid.Factorial (FactorialMonoid(length, span, spanMaybe', splitPri
 import Data.Monoid.Textual (TextualMonoid)
 import qualified Data.Monoid.Textual as Textual
 import Data.String (fromString)
+import Data.Word (Word64)
 import qualified Text.Parser.Char as CharParsing
 import Text.Parser.Char (CharParsing(char, notChar, anyChar, text))
 import Text.Parser.Combinators (Parsing(..))
@@ -36,19 +37,23 @@ import Text.Grampa.Types
 
 import Prelude hiding (length, null, span, takeWhile)
 
+type ParseResults r = Either (Word64, [String]) [r]
+
 parse :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g) =>
-         Grammar g s -> (forall f. g f -> f r) -> s -> [(r, s)]
-parse g prod input = resultsAndRest (prod $ fst $ head $ fixGrammarInput g input)
+         Grammar g s -> (forall f. g f -> f r) -> s -> ParseResults (r, s)
+parse g prod input = fromResultList (prod $ fst $ head $ fixGrammarInput g input)
 
 parseAll :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g) =>
-         Grammar g s -> (forall f. g f -> f r) -> s -> [r]
-parseAll g prod input = fst <$> filter (null . snd) (resultsAndRest $ prod $ fst $ head $ fixGrammarInput g input)
+         Grammar g s -> (forall f. g f -> f r) -> s -> ParseResults r
+parseAll g prod input =
+   ((fst <$>) . filter (null . snd)) <$> fromResultList (prod $ fst $ head $ fixGrammarInput g input)
 
-simpleParse :: FactorialMonoid s => Parser (Singleton1 a) s a -> s -> [(a, s)]
+simpleParse :: FactorialMonoid s => Parser (Singleton1 r) s r -> s -> ParseResults (r, s)
 simpleParse p = parse (Singleton1 p) getSingle
 
-resultsAndRest :: Monoid s => ResultList g s r -> [(r, s)]
-resultsAndRest (ResultList rl) = f <$> rl
+fromResultList :: Monoid s => ResultList g s r -> Either (Word64, [String]) [(r, s)]
+fromResultList (ResultList (Left err)) = Left err
+fromResultList (ResultList (Right rl)) = Right (f <$> rl)
    where f (ResultInfo _ [] r) = (r, mempty)
          f (ResultInfo _ ((_, s):_)  r) = (r, s)
 

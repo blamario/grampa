@@ -117,6 +117,7 @@ instance Enumerable Conditional where
 uniqueParse :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g) =>
                Grammar g s -> (forall f. g f -> f r) -> s -> r
 uniqueParse g p s = case parseAll g p s
-                    of [r] -> r
-                       [] -> error "Unparseable"
-                       _ -> error "Ambiguous"
+                    of Right [r] -> r
+                       Right [] -> error "Unparseable"
+                       Right _ -> error "Ambiguous"
+                       Left (pos, exp) -> error ("At " <> show pos <> " expected " <> show exp)

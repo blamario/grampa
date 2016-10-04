@@ -9,7 +9,7 @@ import Data.Monoid.Cancellative (LeftReductiveMonoid(..))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid(factors))
 import Data.Typeable (Typeable)
-import Data.Word (Word8)
+import Data.Word (Word8, Word64)
 
 import Test.Feat (Enumerable(..), Enumerate, FreePair(Free), consts, shared, unary, uniform)
 import Test.Feat.Enumerate (pay)
@@ -35,18 +35,22 @@ tests = testGroup "Grampa"
               testProperty "boolean"      $ Test.Examples.parseBoolean,
               testProperty "conditionals" $ Test.Examples.parseConditional],
            testGroup "primitives"
-             [testProperty "anyToken mempty" $ simpleParse anyToken "" == [],
-              testProperty "anyToken list" $ \(x::Word8) xs-> simpleParse anyToken (x:xs) == [([x],xs)],
-              testProperty "token success" $ \(x::Word8) xs-> simpleParse (token [x]) (x:xs) == [([x],xs)],
-              testProperty "token failure" $ \(x::Word8) y xs-> x /= y ==> simpleParse (token [y]) (x:xs) == [],
-              testProperty "token mempty" $ \x-> simpleParse (token [x]) "" == [],
-              testProperty "satisfy success" $ \bools-> simpleParse (satisfy head) (True:bools) == [([True], bools)],
-              testProperty "satisfy failure" $ \bools-> simpleParse (satisfy head) (False:bools) == [],
-              testProperty "satisfy mempty" $ simpleParse (satisfy (undefined :: [Char] -> Bool)) [] == [],
-              testProperty "string success" $ \(xs::[Word8]) ys-> simpleParse (string xs) (xs <> ys) == [(xs, ys)],
-              testProperty "string" $ \(xs::[Word8]) ys-> not (xs `isPrefixOf` ys) ==> simpleParse (string xs) ys == [],
-              testProperty "endOfInput mempty" $ simpleParse endOfInput "" == [((),"")],
-              testProperty "endOfInput failure" $ \s-> s /= "" ==> simpleParse endOfInput s == []],
+             [testProperty "anyToken mempty" $ results (simpleParse anyToken "") == [],
+              testProperty "anyToken list" $ \(x::Word8) xs-> simpleParse anyToken (x:xs) == Right [([x],xs)],
+              testProperty "token success" $ \(x::Word8) xs-> simpleParse (token [x]) (x:xs) == Right [([x],xs)],
+              testProperty "token failure" $ \(x::Word8) y xs->
+                   x /= y ==> results (simpleParse (token [y]) (x:xs)) == [],
+              testProperty "token mempty" $ \x-> results (simpleParse (token [x]) "") == [],
+              testProperty "satisfy success" $ \bools->
+                   simpleParse (satisfy head) (True:bools) == Right [([True], bools)],
+              testProperty "satisfy failure" $ \bools-> results (simpleParse (satisfy head) (False:bools)) == [],
+              testProperty "satisfy mempty" $ results (simpleParse (satisfy (undefined :: [Char] -> Bool)) []) == [],
+              testProperty "string success" $ \(xs::[Word8]) ys->
+                   simpleParse (string xs) (xs <> ys) == Right [(xs, ys)],
+              testProperty "string" $ \(xs::[Word8]) ys->
+                   not (xs `isPrefixOf` ys) ==> results (simpleParse (string xs) ys) == [],
+              testProperty "endOfInput mempty" $ simpleParse endOfInput "" == Right [((),"")],
+              testProperty "endOfInput failure" $ \s-> s /= "" ==> results (simpleParse endOfInput s) == []],
            testGroup "lookAhead"
              [testProperty "lookAhead" lookAheadP,
               testProperty "lookAhead p *> p" lookAheadConsumeP,
@@ -73,7 +77,7 @@ tests = testGroup "Grampa"
          lookAheadTokenP :: Char -> String -> Bool
          
          lookAheadP xs (DescribedParser _ p) =
-            simpleParse (lookAhead p) xs == map (const xs <$>) (simpleParse p xs)
+            simpleParse (lookAhead p) xs == (map (const xs <$>) <$> (simpleParse p xs))
          lookAheadConsumeP (DescribedParser _ p) = (lookAhead p *> p :: Parser (Singleton1 [Bool]) String [Bool]) =-= p
          lookAheadOrNotP (DescribedParser _ p) = within 2000000 $
             (notFollowedBy p <|> lookAhead p) =-= (mempty :: Parser (Singleton1 ()) String ())
@@ -81,7 +85,7 @@ tests = testGroup "Grampa"
             (notFollowedBy p *> p) =-= (empty :: Parser (Singleton1 [Bool]) String [Bool])
          lookAheadNotNotP (DescribedParser d p) =
             notFollowedBy (notFollowedBy p) =-= (void (lookAhead p) :: Parser (Singleton1 ()) String ())
-         lookAheadTokenP x xs = simpleParse (lookAhead anyToken) (x:xs) == [([x], x:xs)]
+         lookAheadTokenP x xs = simpleParse (lookAhead anyToken) (x:xs) == Right [([x], x:xs)]
 
 instance Enumerable (DescribedParser s r) => Arbitrary (DescribedParser s r) where
    arbitrary = sized uniform
@@ -106,11 +110,12 @@ instance (MonoidNull s, Monoid r) => Monoid (DescribedParser s r) where
 
 instance (Ord r, Show r, EqProp r, Eq s, EqProp s, Show s, FactorialMonoid s, Arbitrary s) =>
          EqProp (Parser (Singleton1 r) s r) where
-   p1 =-= p2 = forAll arbitrary (\s-> nub (simpleParse p1 s) =-= nub (simpleParse p2 s))
+   p1 =-= p2 = forAll arbitrary (\s-> nub (results $ simpleParse p1 s) =-= nub (results $ simpleParse p2 s))
 
 instance (FactorialMonoid s, Show s, EqProp s, Arbitrary s, Ord r, Show r, EqProp r, Typeable r) =>
          EqProp (DescribedParser s r) where
-   DescribedParser _ p1 =-= DescribedParser _ p2 = forAll arbitrary (\s-> simpleParse p1 s =-= simpleParse p2 s)
+   DescribedParser _ p1 =-= DescribedParser _ p2 = forAll arbitrary $ \s->
+      results (simpleParse p1 s) =-= results (simpleParse p2 s)
 
 instance Monoid s => Functor (DescribedParser s) where
    fmap f (DescribedParser d p) = DescribedParser ("fmap ? " ++ d) (fmap f p)
@@ -194,9 +199,7 @@ instance Enumerable ([Bool] -> [Bool]) where
                        pure (map not)]
                <> pay (unary const)
 
-uniqueParse :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g) =>
-               Grammar g s -> (forall f. g f -> f r) -> s -> r
-uniqueParse g p s = case parseAll g p s
-                    of [r] -> r
-                       [] -> error "Unparseable"
-                       _ -> error "Ambiguous"
+instance EqProp Word64 where
+   a =-= b = property (a == b)
+
+results = either (const []) id
