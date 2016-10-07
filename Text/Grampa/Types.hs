@@ -85,7 +85,7 @@ grammarResults' g = foldr1 choose1 (iterate rf [rn])
 
 iterate :: Foldable1 g => (GrammarResults g s -> GrammarResults g s) -> [GrammarResults g s] -> [GrammarResults g s]
 iterate f ns@(n:_) = if getAll (foldMap1 (either (const mempty) (All . null) . resultList) n')
-                     then ns else iterate f (n':ns)
+                     then n':ns else iterate f (n':ns)
    where n' = f n
 
 type GrammarResults g s = g (ResultList g s)
@@ -94,7 +94,7 @@ data ResultInfo g s r = ResultInfo InputStatus [(GrammarResults g s, s)] r
 data GrammarDerived g s a = GrammarDerived a (GrammarResults g s -> a)
 
 instance (Show (g (ResultList g s)), Show s, Show r) => Show (ResultList g s r) where
-   show (ResultList l) = "ResultList " ++ show l
+   show (ResultList l) = "ResultList (" ++ shows l ")"
 
 instance (Show (g (ResultList g s)), Show s, Show r) => Show (ResultInfo g s r) where
    show (ResultInfo is i r) = "(ResultInfo " ++ show is ++ " " ++ show (length i) ++ " " ++ shows r ")"
@@ -120,11 +120,13 @@ instance Applicative (ResultList g s) where
                | is1 == is2 && length i1 == length i2 = ResultInfo is1 i1 (r1 r2) : apply rest1 rest2
    
 instance Alternative (ResultList g s) where
-   empty = ResultList (Right [])
+   empty = ResultList (Left (maxBound, ["empty"]))
    ResultList (Left (pos1, exp1)) <|> ResultList (Left (pos2, exp2))
       | pos1 < pos2 = ResultList (Left (pos1, exp1))
       | pos2 < pos1 = ResultList (Left (pos2, exp2))
       | otherwise = ResultList (Left (pos1, exp1 <> exp2))
+   ResultList (Right []) <|> rl = rl
+   rl <|> ResultList (Right []) = rl
    ResultList Left{} <|> rl = rl
    rl <|> ResultList Left{} = rl
    ResultList (Right a) <|> ResultList (Right b) = ResultList (Right $ a <|> b)
@@ -153,22 +155,22 @@ separate = traverse1 sep1
    
 sep1 :: forall g s r. (Monoid s, Traversable1 g, Alternative1 g) =>
         Parser g s r -> GrammarDerived g s (ResultList g s r)
-sep1 (Failure pos exp) = GrammarDerived (ResultList $ Left (pos, exp)) (const empty)
-sep1 (Result ri@(ResultInfo is s r)) = GrammarDerived (ResultList $ Right [ri]) (const empty)
+sep1 (Failure pos exp) = GrammarDerived (ResultList $ Left (pos, exp)) (const mempty)
+sep1 (Result ri@(ResultInfo is s r)) = GrammarDerived (ResultList $ Right [ri]) (const mempty)
 sep1 (Choice p q) = sep1 p <> sep1 q
 sep1 (Delay e _) = sep1 e
-sep1 (NonTerminal i get map) = GrammarDerived (ResultList $ Right []) ((map <$>) . get)
-sep1 (Bind p cont) = either ((`GrammarDerived` const empty) . ResultList . Left) (foldMap f) pn
-                     <> GrammarDerived empty pr'
+sep1 (NonTerminal i get map) = GrammarDerived (ResultList $ Left (maxBound, ["NT#" ++ show i])) ((map <$>) . get)
+sep1 (Bind p cont) = either (\pair-> GrammarDerived (ResultList $ Left pair) (const mempty)) (foldMap f) pn
+                     <> GrammarDerived mempty pr'
    where GrammarDerived (ResultList pn) pr = sep1 p
          --f :: ([(Grammar g s, s)], r') -> GrammarDerived g s (ResultList g s r)
          f (ResultInfo Stuck i r) = sep1 (feedSelf i $ cont r)
          f (ResultInfo Advanced i r) = sep1 (feed i $ cont r)
          pr' :: GrammarResults g s -> ResultList g s r
-         pr' gr = either (ResultList . Left) (foldr gr2rl empty) (resultList $ pr gr)
+         pr' gr = either (ResultList . Left) (foldMap gr2rl) (resultList $ pr gr)
             where --gr2rl ([], r) l = pr2rl gr (sep1 $ cont r) <> l
-                  gr2rl (ResultInfo Stuck i r) l = pr2rl gr (sep1 $ feedSelf i $ cont r) <> l
-                  gr2rl (ResultInfo Advanced i r) l = pr2rl gr (sep1 $ feed i $ cont r) <> l
+                  gr2rl (ResultInfo Stuck i r) = pr2rl gr (sep1 $ feedSelf i $ cont r)
+                  gr2rl (ResultInfo Advanced i r) = pr2rl gr (sep1 $ feed i $ cont r)
                   pr2rl g (GrammarDerived rl rf) = rl <> rf g
 
 feedSelf :: Monoid s => [(GrammarResults g s, s)] -> Parser g s r -> Parser g s r
@@ -219,8 +221,12 @@ instance Monoid s => Alternative (Parser g s) where
       | pos1 < pos2 = Failure pos1 exp1
       | pos2 < pos1 = Failure pos2 exp2
       | otherwise = Failure pos1 (exp1 <> exp2)
-   p <|> Failure{} = p
-   Failure{} <|> p = p
+   Failure{} <|> p@Result{} = p
+   p@Result{} <|> Failure{} = p
+   Failure{} <|> p@(Choice Result{} _) = p
+   p@(Choice Result{} _) <|> Failure{} = p
+--   p <|> Failure{} = p
+--   Failure{} <|> p = p
 --   Delay e f <|> p = Delay (e <|> feedEnd p) (\i-> f i <|> feed i p)
 --   p <|> Delay e f = Delay (feedEnd p <|> e) (\i-> feed i p <|> f i)
    Choice p q <|> r = p <|> Choice q r
