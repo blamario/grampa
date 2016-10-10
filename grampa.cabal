@@ -46,3 +46,13 @@ test-suite           tests
   main-is:           Test.hs
   other-modules:     Test.Examples, Arithmetic, Boolean, Combined, Comparisons, Conditionals, Utilities
   default-language:  Haskell2010
+
+benchmark            benchmarks
+  type:              exitcode-stdio-1.0
+  hs-source-dirs:    test, examples
+  ghc-options:       -O2 -Wall -rtsopts
+  Build-Depends:     base >=4.7 && < 5, grampa == 0.1,
+                     criterion >= 1.0, deepseq >= 1.1, text >= 1.1
+  main-is:           Benchmark.hs
+  other-modules:     Arithmetic
+  default-language:  Haskell2010

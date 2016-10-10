@@ -1,12 +1,12 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, RecordWildCards, ScopedTypeVariables #-}
 module Utilities where
 
-import Control.Applicative
 import Data.Char (isAlphaNum, isSpace)
 import Data.Monoid ((<>))
 
 import Text.Grampa
 
+infixJoin :: String -> String -> String -> String
 infixJoin op a b = "(" <> a <> op <> b <> ")"
 
 keyword :: (Show s, TextualMonoid s, Functor1 g) => s -> Parser g s s
