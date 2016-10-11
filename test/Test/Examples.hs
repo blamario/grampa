@@ -120,4 +120,4 @@ uniqueParse g p s = case parseAll g p s
                     of Right [r] -> r
                        Right [] -> error "Unparseable"
                        Right _ -> error "Ambiguous"
-                       Left (pos, exp) -> error ("At " <> show pos <> " expected " <> show exp)
+                       Left (FailureInfo pos exp) -> error ("At " <> show pos <> " expected " <> show exp)

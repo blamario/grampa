@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, GADTs, RankNTypes, ScopedTypeVariables, UndecidableInstances #-}
-module Text.Grampa.Types (ResultInfo(..), ResultList(..), InputStatus(Advanced, Stuck),
+module Text.Grampa.Types (FailureInfo(..), ResultInfo(..), ResultList(..), InputStatus(Advanced, Stuck),
                           Grammar, GrammarBuilder, Parser(..),
                           feed, feedEnd, fixGrammar, fixGrammarInput, iterateMany)
 where
@@ -25,7 +25,7 @@ import Prelude hiding (iterate, null)
 data InputStatus = Advanced | Stuck deriving (Eq, Show)
 
 -- | Parser of streams of type `s`, as a part of grammar type `g`, producing a value of type `r`
-data Parser g s r = Failure Word64 [String]
+data Parser g s r = Failure {-# UNPACK #-} !FailureInfo
                   | Result {-# UNPACK #-} !(ResultInfo g s r)
                   | Choice (Parser g s r) (Parser g s r)
                   | Delay (Parser g s r) (InputStatus -> [(GrammarResults g s, s)] -> Parser g s r)
@@ -36,7 +36,8 @@ type Grammar g s = g (Parser g s)
 type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
 
 instance (Show r, Show s, Show (Grammar g s), Show (GrammarResults g s)) => Show (Parser g s r) where
-   showsPrec _ (Failure pos expectations) rest = "(Failure at " ++ show pos ++ ": " ++ shows expectations (")" ++ rest)
+   showsPrec _ (Failure (FailureInfo pos expectations)) rest =
+      "(Failure at " ++ show pos ++ ": " ++ shows expectations (")" ++ rest)
    showsPrec prec (Result (ResultInfo is s r)) rest
       | prec > 0 = "(Result " ++ show is ++ " "
                    ++ foldr (\(t, s)-> showsPrec (prec - 1) t . shows s) (" " ++ shows r (")" ++ rest)) s
@@ -47,7 +48,7 @@ instance (Show r, Show s, Show (Grammar g s), Show (GrammarResults g s)) => Show
    showsPrec prec (NonTerminal i get map) rest = "(NonTerminal " ++ show i ++ ")" ++ rest
 
 instance (Show s, Show (Grammar g s), Show (GrammarResults g s)) => Show1 (Parser g s) where
-   liftShowsPrec sp _ _ (Failure pos expectations) rest =
+   liftShowsPrec sp _ _ (Failure (FailureInfo pos expectations)) rest =
       "(Failure at " ++ show pos ++ ": " ++ shows expectations (")" ++ rest)
    liftShowsPrec sp _ prec (Result (ResultInfo is s r)) rest
       | prec > 0 = "(Result " ++ show is ++ " "
@@ -89,8 +90,9 @@ iterate f ns@(n:_) = if getAll (foldMap1 (either (const mempty) (All . null) . r
    where n' = f n
 
 type GrammarResults g s = g (ResultList g s)
-newtype ResultList g s r = ResultList {resultList :: Either (Word64, [String]) [ResultInfo g s r]}
+newtype ResultList g s r = ResultList {resultList :: Either FailureInfo [ResultInfo g s r]}
 data ResultInfo g s r = ResultInfo InputStatus [(GrammarResults g s, s)] r
+data FailureInfo =  FailureInfo Word64 [String] deriving (Eq, Show)
 data GrammarDerived g s a = GrammarDerived a (GrammarResults g s -> a)
 
 instance (Show (g (ResultList g s)), Show s, Show r) => Show (ResultList g s r) where
@@ -120,11 +122,11 @@ instance Applicative (ResultList g s) where
                | is1 == is2 && length i1 == length i2 = ResultInfo is1 i1 (r1 r2) : apply rest1 rest2
    
 instance Alternative (ResultList g s) where
-   empty = ResultList (Left (maxBound, ["empty"]))
-   ResultList (Left (pos1, exp1)) <|> ResultList (Left (pos2, exp2))
-      | pos1 < pos2 = ResultList (Left (pos1, exp1))
-      | pos2 < pos1 = ResultList (Left (pos2, exp2))
-      | otherwise = ResultList (Left (pos1, exp1 <> exp2))
+   empty = ResultList (Left $ FailureInfo maxBound ["empty"])
+   ResultList (Left f1@(FailureInfo pos1 exp1)) <|> ResultList (Left f2@(FailureInfo pos2 exp2))
+      | pos1 < pos2 = ResultList (Left f1)
+      | pos2 < pos1 = ResultList (Left f2)
+      | otherwise = ResultList (Left $ FailureInfo pos1 (exp1 <> exp2))
    ResultList (Right []) <|> rl = rl
    rl <|> ResultList (Right []) = rl
    ResultList Left{} <|> rl = rl
@@ -155,11 +157,12 @@ separate = traverse1 sep1
    
 sep1 :: forall g s r. (Monoid s, Traversable1 g, Alternative1 g) =>
         Parser g s r -> GrammarDerived g s (ResultList g s r)
-sep1 (Failure pos exp) = GrammarDerived (ResultList $ Left (pos, exp)) (const mempty)
+sep1 (Failure f) = GrammarDerived (ResultList $ Left f) (const mempty)
 sep1 (Result ri@(ResultInfo is s r)) = GrammarDerived (ResultList $ Right [ri]) (const mempty)
 sep1 (Choice p q) = sep1 p <> sep1 q
 sep1 (Delay e _) = sep1 e
-sep1 (NonTerminal i get map) = GrammarDerived (ResultList $ Left (maxBound, ["NT#" ++ show i])) ((map <$>) . get)
+sep1 (NonTerminal i get map) =
+   GrammarDerived (ResultList $ Left $ FailureInfo maxBound ["NT#" ++ show i]) ((map <$>) . get)
 sep1 (Bind p cont) = either (\pair-> GrammarDerived (ResultList $ Left pair) (const mempty)) (foldMap f) pn
                      <> GrammarDerived mempty pr'
    where GrammarDerived (ResultList pn) pr = sep1 p
@@ -188,7 +191,7 @@ feed s (Delay _ f) = f Advanced s
 feed s p@Failure{} = p
 feed s (Result (ResultInfo _ t r)) = Result (ResultInfo Advanced (t <> s) r)
 --feed [] p@NonTerminal{} = p
-feed ((rs, s):_) (NonTerminal i get map) = either (uncurry Failure) (asum . (f <$>)) (resultList (get rs))
+feed ((rs, s):_) (NonTerminal i get map) = either Failure (asum . (f <$>)) (resultList (get rs))
    where f (ResultInfo is i r) = Result (ResultInfo is i (map r))
 feed s (Bind p cont) = feed s p >>= cont
 
@@ -201,7 +204,7 @@ feedEnd p = p
 instance Functor (Parser g s) where
    fmap f (Choice p q) = Choice (fmap f p) (fmap f q)
    fmap g (Delay e f) = Delay (fmap g e) (\is-> fmap g . f is)
-   fmap f (Failure rest expectations) = Failure rest expectations
+   fmap _ (Failure f) = Failure f
    fmap f (Result (ResultInfo is s r)) = Result (ResultInfo is s (f r))
    fmap f (Bind p cont) = Bind p (fmap f . cont)
    fmap f (NonTerminal i get map) = NonTerminal i get (f . map)
@@ -210,17 +213,17 @@ instance Monoid s => Applicative (Parser g s) where
    pure = Result . ResultInfo Stuck []
    Choice p q <*> r = p <*> r <|> q <*> r
    Delay e f <*> p = Delay (e <*> p) (\is-> (<*> p) . f is)
-   Failure rest expectations <*> _ = Failure rest expectations
+   Failure f <*> _ = Failure f
    Result (ResultInfo Stuck s r) <*> p = r <$> feedSelf s p
    Result (ResultInfo Advanced s r) <*> p = r <$> feed s p
    p <*> q = Bind p (<$> q)
 
 instance Monoid s => Alternative (Parser g s) where
-   empty = Failure maxBound []
-   Failure pos1 exp1 <|> Failure pos2 exp2
-      | pos1 < pos2 = Failure pos1 exp1
-      | pos2 < pos1 = Failure pos2 exp2
-      | otherwise = Failure pos1 (exp1 <> exp2)
+   empty = Failure (FailureInfo maxBound [])
+   Failure f1@(FailureInfo pos1 exp1) <|> Failure f2@(FailureInfo pos2 exp2)
+      | pos1 < pos2 = Failure f1
+      | pos2 < pos1 = Failure f2
+      | otherwise = Failure (FailureInfo pos1 (exp1 <> exp2))
    Failure{} <|> p@Result{} = p
    p@Result{} <|> Failure{} = p
    Failure{} <|> p@(Choice Result{} _) = p
@@ -238,10 +241,10 @@ instance Monoid s => Monad (Parser g s) where
    Result (ResultInfo Advanced s r) >>= f = feed s (f r)
    Choice p q >>= f = (p >>= f) <|> (q >>= f)
    Delay e f >>= g = Delay (e >>= g) (\is-> (>>= g) . f is)
-   Failure rest expectations >>= f = Failure rest expectations
+   Failure f >>= _ = Failure f
    p >>= cont = Bind p cont
    (>>) = (*>)
-   fail msg = Failure maxBound [msg]
+   fail msg = Failure (FailureInfo maxBound [msg])
 
 instance Monoid s => MonadPlus (Parser g s) where
    mzero = empty
