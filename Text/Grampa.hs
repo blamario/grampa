@@ -217,6 +217,3 @@ skipCharsWhile pred = while
    where while = P f
          f s t = succeed (ResultInfo (if null prefix then Stuck else Advanced) (drop (length prefix - 1) t) ())
             where (prefix, suffix) = Textual.span_ False pred s
-
-resultPart :: (r -> r) -> Parser g s r -> Parser g s r
-resultPart f p = f <$> p

@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, RecordWildCards, ScopedTypeVariables #-}
 module Utilities where
 
-import Data.Char (isAlphaNum, isSpace)
+import Data.Char (isAlphaNum)
 import Data.Monoid ((<>))
 
 import Text.Grampa
