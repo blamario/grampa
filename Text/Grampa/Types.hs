@@ -25,7 +25,8 @@ import Prelude hiding (iterate, null)
 data InputStatus = Advanced | Stuck deriving (Eq, Show)
 
 -- | Parser of streams of type `s`, as a part of grammar type `g`, producing a value of type `r`
-newtype Parser g s r = P {parseP :: s -> [(GrammarResults g s, s)] -> GrammarDerived g s (ResultList g s r)}
+newtype Parser g s r = P {parseP :: Maybe (GrammarResults g s) -> s -> [(GrammarResults g s, s)]
+                                 -> GrammarDerived g s (ResultList g s r)}
 newtype GrammarParseResults g s r = GrammarParseResults {grammarParseResults :: GrammarDerived g s (ResultList g s r)}
 type Grammar g s = g (Parser g s)
 type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
@@ -45,7 +46,7 @@ concede a = GrammarDerived (ResultList $ Left a) (const $ ResultList $ Right [])
 fixGrammar :: forall g s. (Reassemblable g, Traversable1 g) => (Grammar g s -> Grammar g s) -> Grammar g s
 fixGrammar gf = fix . (. reassemble nt) $ gf
    where nt :: (forall p. g p -> p r) -> g (Parser g s) -> Parser g s r
-         nt f _ = P (\s t-> GrammarDerived mempty f)
+         nt f _ = P (\g s t-> maybe (GrammarDerived mempty f) ((`GrammarDerived` mempty) . f) g)
 
 fixGrammarInput :: forall s g. (FactorialMonoid s, Alternative1 g, Traversable1 g) =>
                    Grammar g s -> s -> [(GrammarResults g s, s)]
@@ -55,7 +56,7 @@ fixGrammarInput g s = foldr (parseTail g) [] (tails s)
          parseTail g input parsedTail = parsedInput
             where parsedInput = (grammarResults' g', input):parsedTail
                   g' :: g (GrammarParseResults g s)
-                  g' = fmap1 (\(P p)-> GrammarParseResults $ p input parsedTail) g
+                  g' = fmap1 (\(P p)-> GrammarParseResults $ p Nothing input parsedTail) g
                   grammarResults' :: forall s g. (MonoidNull s, Traversable1 g, Alternative1 g) =>
                                      g (GrammarParseResults g s) -> GrammarResults g s
                   grammarResults' g = foldr1 choose1 (iterate rf [rn])
@@ -67,7 +68,7 @@ iterate f ns@(n:_) = if getAll (foldMap1 (either (const mempty) (All . null) . r
    where n' = f n
 
 gd2rl :: GrammarResults g s -> GrammarDerived g s (ResultList g s r) -> ResultList g s r
-gd2rl gr (GrammarDerived rl f) = rl <> f gr
+gd2rl gr (GrammarDerived rl f) = rl
 
 instance Functor (GrammarParseResults g s) where
    fmap f (GrammarParseResults gd) = GrammarParseResults ((f <$>) <$> gd)
@@ -130,47 +131,47 @@ instance Applicative (GrammarDerived g s) where
    GrammarDerived a fa <*> GrammarDerived b fb = GrammarDerived (a b) (\g-> fa g $ fb g)
 
 instance Functor (Parser g s) where
-   fmap f (P p) = P (\s t-> (f <$>) <$> p s t)
+   fmap f (P p) = P (\g s t-> (f <$>) <$> p g s t)
 
 instance Monoid s => Applicative (Parser g s) where
-   pure a = P (\s t-> succeed $ ResultInfo Stuck undefined a)
+   pure a = P (\g s t-> succeed $ ResultInfo Stuck undefined a)
    P p <*> P q = P r
-      where r s t = GrammarDerived pr' (gr' <> gr'')
-               where GrammarDerived (ResultList rl) gr = p s t
+      where r g s t = GrammarDerived pr' (gr' <> gr'')
+               where GrammarDerived (ResultList rl) gr = p g s t
                      GrammarDerived pr' gr' = case rl
                         of Left f -> GrammarDerived (ResultList $ Left f) (const $ ResultList $ Right [])
                            Right rs -> foldMap cont rs
 --                     gr'' :: GrammarResults g s -> ParseResults b
                      gr'' g' = either (ResultList . Left) (foldMap $ gd2rl g' . cont) (resultList $ gr g')
-                     cont (ResultInfo Stuck _ r) = (r <$>) <$> q s t
+                     cont (ResultInfo Stuck _ r) = (r <$>) <$> q g s t
                      cont (ResultInfo Advanced t'@((g', s'):t'') r) =
-                        GrammarDerived (ResultList $ ((advance <$>) <$>) $ resultList $ gd2rl g' $ q s' t'')
+                        GrammarDerived (ResultList $ ((advance <$>) <$>) $ resultList $ gd2rl g' $ q (Just g') s' t'')
                                        (const $ ResultList $ Right [])
                         where advance (ResultInfo Stuck _ r') = ResultInfo Advanced t' (r r')
                               advance (ResultInfo Advanced t' r') = ResultInfo Advanced t' (r r')
 
 instance Monoid s => Alternative (Parser g s) where
-   empty = P (\s t-> concede $ FailureInfo maxBound [])
-   P p <|> P q = P (\s t-> p s t <> q s t)
+   empty = P (\g s t-> concede $ FailureInfo maxBound [])
+   P p <|> P q = P (\g s t-> p g s t <> q g s t)
 
 instance Monoid s => Monad (Parser g s) where
    return = pure
    P p >>= f = P q
-      where q s t = GrammarDerived pr' (gr' <> gr'')
-               where GrammarDerived (ResultList rl) gr = p s t
+      where q g s t = GrammarDerived pr' (gr' <> gr'')
+               where GrammarDerived (ResultList rl) gr = p g s t
                      GrammarDerived pr' gr' = case rl
                         of Left f -> GrammarDerived (ResultList $ Left f) (const $ ResultList $ Right [])
                            Right rs -> foldMap cont rs
 --                     gr'' :: GrammarResults g s -> ParseResults b
                      gr'' g' = either (ResultList . Left) (foldMap $ gd2rl g' . cont) (resultList $ gr g')
-                     cont (ResultInfo Stuck _ r) = parseP (f r) s t
+                     cont (ResultInfo Stuck _ r) = parseP (f r) g s t
                      cont (ResultInfo Advanced t'@((g', s'):t'') r) =
                         GrammarDerived (ResultList $ ((advance <$>) <$>) $
-                                        resultList $ gd2rl g' $ parseP (f r) s' t'') (const $ ResultList $ Right [])
+                                        resultList $ gd2rl g' $ parseP (f r) (Just g') s' t'') (const $ ResultList $ Right [])
                         where advance (ResultInfo Stuck _ r) = ResultInfo Advanced t' r
                               advance r = r
    (>>) = (*>)
-   fail msg = P (\_ _-> concede $ FailureInfo maxBound [msg])
+   fail msg = P (\_ _ _-> concede $ FailureInfo maxBound [msg])
 
 instance Monoid s => MonadPlus (Parser g s) where
    mzero = empty
