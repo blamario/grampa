@@ -58,31 +58,25 @@ simpleParse p = parse (Singleton1 p) getSingle
 fromResultList :: Monoid s => s -> ResultList g s r -> Either FailureInfo [(r, s)]
 fromResultList _ (ResultList (Left err)) = Left err
 fromResultList s (ResultList (Right rl)) = Right (f <$> rl)
-   where f (ResultInfo Stuck _ r) = (r, s)
-         f (ResultInfo _ [] r) = (r, mempty)
-         f (ResultInfo _ ((_, s):_)  r) = (r, s)
+   where f (ResultInfo g s' t r) = (r, s')
 
 instance (Functor1 g, MonoidNull s) => Parsing (Parser g s) where
    try = id
    (<?>) = const
-   notFollowedBy = lookAheadNotInto Stuck []
-      where -- lookAheadNotInto :: (Monoid s, Monoid r) => [(g (Parser g s), s)] -> Parser g s r -> Parser g s ()
-            lookAheadNotInto _ _ (P p) = P f
-               where f g s t = (ResultList . invert . resultList) <$> p g s t
-                        where invert Left{} =  Right [ResultInfo Stuck undefined ()]
-                              invert (Right []) = Right []
-                              invert Right{} = Left (FailureInfo (fromIntegral $ length t) ["notFollowedBy"])
+   notFollowedBy (P p) = P f
+      where f g s t = (ResultList . invert . resultList) <$> p g s t
+               where invert Left{} =  Right [ResultInfo g s t ()]
+                     invert (Right []) = Right []
+                     invert Right{} = Left (FailureInfo (fromIntegral $ length t) ["notFollowedBy"])
    skipMany p = go
       where go = pure () <|> p *> go
    unexpected msg = P (\_ _ _-> concede (FailureInfo maxBound [msg]))
    eof = endOfInput
 
 instance (Functor1 g, MonoidNull s) => LookAheadParsing (Parser g s) where
-   lookAhead = lookAheadInto Stuck []
-      where -- lookAheadInto :: [(g (Parser g s), s)] -> Parser g s r -> Parser g s r
-            lookAheadInto _ _ (P p) = P f
-               where f g s t = (ResultList . ((restoreInput <$>) <$>) . resultList) <$> p g s t
-                        where restoreInput (ResultInfo _ _ r) = ResultInfo Stuck t r
+   lookAhead (P p) = P f
+      where f g s t = (ResultList . ((restoreInput <$>) <$>) . resultList) <$> p g s t
+               where restoreInput (ResultInfo _ _ _ r) = ResultInfo g s t r
 
 instance (Functor1 g, Show s, TextualMonoid s) => CharParsing (Parser g s) where
    satisfy = satisfyChar
@@ -101,13 +95,14 @@ spaces = skipCharsWhile isSpace
 endOfInput :: (MonoidNull s, Functor1 g) => Parser g s ()
 endOfInput = P f
    where f g s t
-            | null s = succeed (ResultInfo Stuck t ())
+            | null s = succeed (ResultInfo g s t ())
             | otherwise = concede (FailureInfo (fromIntegral $ length t) ["endOfInput"])
 
 -- | Always sucessful parser that returns the remaining input without consuming it.
 getInput :: (MonoidNull s, Functor1 g) => Parser g s s
 getInput = P f
-   where f g s t = succeed (ResultInfo (if null s then Stuck else Advanced) [last t] s)
+   where f g s t = succeed (if null s then ResultInfo g s t s
+                            else let (g', s') = last t in ResultInfo (Just g') s' [] s)
 
 -- | A parser accepting the longest sequence of input atoms that match the given predicate; an optimized version of
 -- 'concatMany . satisfy'.
@@ -116,8 +111,9 @@ getInput = P f
 -- until a failure occurs.  Careless use will thus result in an infinite loop.
 takeWhile :: (FactorialMonoid s, Functor1 g) => (s -> Bool) -> Parser g s s
 takeWhile pred = P f
-   where f g s t = succeed (ResultInfo (if null prefix then Stuck else Advanced) (drop (length prefix - 1) t) prefix)
+   where f g s t = succeed (if null prefix then ResultInfo g s t prefix else ResultInfo (Just g') s' t' prefix)
             where prefix = Factorial.takeWhile pred s
+                  (g', s'):t' = drop (length prefix - 1) t
 
 -- | A parser accepting the longest non-empty sequence of input atoms that match the given predicate; an optimized
 -- version of 'concatSome . satisfy'.
@@ -125,9 +121,9 @@ takeWhile1 :: (FactorialMonoid s, Functor1 g) => (s -> Bool) -> Parser g s s
 takeWhile1 pred = P f
    where f g s t
             | null prefix = concede (FailureInfo (fromIntegral $ length t) ["takeCharsWhile1"])
-            | otherwise = -- trace ("takeCharsWhile1 " ++ show (prefix, suffix)) $
-                          succeed (ResultInfo Advanced (drop (length prefix - 1) t) prefix)
+            | otherwise = succeed (ResultInfo (Just g') s' t' prefix)
             where prefix = Factorial.takeWhile pred s
+                  (g', s'):t' = drop (length prefix - 1) t
 
 -- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
 -- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
@@ -136,8 +132,9 @@ takeWhile1 pred = P f
 -- until a failure occurs.  Careless use will thus result in an infinite loop.
 takeCharsWhile :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s s
 takeCharsWhile pred = P f
-   where f g s t = succeed (ResultInfo (if null prefix then Stuck else Advanced) (drop (length prefix - 1) t) prefix)
+   where f g s t = succeed (if null prefix then ResultInfo g s t prefix else ResultInfo (Just g') s' t' prefix)
             where (prefix, suffix) = Textual.span_ False pred s
+                  (g', s'):t' = drop (length prefix - 1) t
 
 -- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
 -- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
@@ -145,9 +142,9 @@ takeCharsWhile1 :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s
 takeCharsWhile1 pred = P f
    where f g s t
             | null prefix = concede (FailureInfo (fromIntegral $ length t) ["takeCharsWhile1"])
-            | otherwise = -- trace ("takeCharsWhile1 " ++ show (prefix, suffix)) $
-                          succeed (ResultInfo Advanced (drop (length prefix - 1) t) prefix)
+            | otherwise = succeed (ResultInfo (Just g') s' t' prefix)
             where (prefix, suffix) = Textual.span_ False pred s
+                  (g', s'):t' = drop (length prefix - 1) t
 
 -- | A stateful scanner.  The predicate consumes and transforms a state argument, and each transformed state is passed
 -- to successive invocations of the predicate on each token of the input until one returns 'Nothing' or the input ends.
@@ -159,8 +156,9 @@ takeCharsWhile1 pred = P f
 -- until a failure occurs.  Careless use will thus result in an infinite loop.
 scan :: (FactorialMonoid t, Show t, Functor1 g) => s -> (s -> t -> Maybe s) -> Parser g t t
 scan s0 f = P (go s0)
- where go s g i t = succeed (ResultInfo (if null prefix then Stuck else Advanced) (drop (length prefix - 1) t) prefix)
-          where (prefix, suffix, s') = spanMaybe' s f i
+ where go s g i t = succeed (if null prefix then ResultInfo g i t prefix else ResultInfo (Just g') i' t' prefix)
+          where (prefix, suffix, _) = spanMaybe' s f i
+                (g', i'):t' = drop (length prefix - 1) t
 
 -- | A stateful scanner.  The predicate consumes and transforms a
 -- state argument, and each transformed state is passed to successive invocations of the predicate on each token of the
@@ -172,14 +170,15 @@ scan s0 f = P (go s0)
 -- until a failure occurs.  Careless use will thus result in an infinite loop.
 scanChars :: (TextualMonoid t, Show t, Functor1 g) => s -> (s -> Char -> Maybe s) -> Parser g t t
 scanChars s0 f = P (go s0)
- where go s g i t = succeed (ResultInfo (if null prefix then Stuck else Advanced) (drop (length prefix - 1) t) prefix)
-          where (prefix, suffix, s') = Textual.spanMaybe_' s f i
+ where go s g i t = succeed (if null prefix then ResultInfo g i t prefix else ResultInfo (Just g') i' t' prefix)
+          where (prefix, suffix, _) = Textual.spanMaybe_' s f i
+                (g', i'):t' = drop (length prefix - 1) t
 
 -- | A parser that accepts any single input atom.
 anyToken :: (FactorialMonoid s, Functor1 g) => Parser g s s
 anyToken = P f
    where f g s t = case splitPrimePrefix s
-                 of Just (first, _) -> succeed (ResultInfo Advanced t first)
+                 of Just (first, _) | (g', s'):t' <- t -> succeed (ResultInfo (Just g') s' t' first)
                     Nothing -> concede (FailureInfo (fromIntegral $ length s) ["anyToken"])
 
 -- | A parser that accepts a specific input atom.
@@ -190,7 +189,7 @@ token x = satisfy (== x)
 satisfy :: (FactorialMonoid s, Functor1 g) => (s -> Bool) -> Parser g s s
 satisfy predicate = P f
    where f g s t = case splitPrimePrefix s
-                 of Just (first, _) | predicate first -> succeed (ResultInfo Advanced t first)
+                 of Just (first, _) | predicate first, (g', s'):t' <- t -> succeed (ResultInfo (Just g') s' t' first)
                     _ -> concede (FailureInfo (fromIntegral $ length s) ["satisfy"])
 
 -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the given
@@ -198,7 +197,7 @@ satisfy predicate = P f
 satisfyChar :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s Char
 satisfyChar predicate = P f
    where f g s t = case Textual.splitCharacterPrefix s
-                 of Just (first, _) | predicate first -> succeed (ResultInfo Advanced t first)
+                 of Just (first, _) | predicate first, (g', s'):t' <- t -> succeed (ResultInfo (Just g') s' t' first)
                     _ -> concede (FailureInfo (fromIntegral $ length s) ["satisfyChar"])
 
 -- | A parser that consumes and returns the given prefix of the input.
@@ -206,14 +205,13 @@ string :: (Show s, LeftReductiveMonoid s, FactorialMonoid s, Functor1 g) => s ->
 string x | null x = pure x
 string x = P $ \g y t-> 
    case stripPrefix x y
-   of Just y' -> -- trace ("string " ++ show (x, y', snd $ head t)) $
-                 succeed (ResultInfo Advanced (drop (length x - 1) t) x)
+   of Just y' | (g', s'):t' <- drop (length x - 1) t -> succeed (ResultInfo (Just g') s' t' x)
       _ -> concede (FailureInfo (fromIntegral $ length t) ["string " ++ show x])
 
 -- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
 -- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
 skipCharsWhile :: (TextualMonoid s, Functor1 g) => (Char -> Bool) -> Parser g s ()
-skipCharsWhile pred = while
-   where while = P f
-         f g s t = succeed (ResultInfo (if null prefix then Stuck else Advanced) (drop (length prefix - 1) t) ())
+skipCharsWhile pred = P f
+   where f g s t = succeed (if null prefix then ResultInfo g s t () else ResultInfo (Just g') s' t' ())
             where (prefix, suffix) = Textual.span_ False pred s
+                  (g', s'):t' = drop (length prefix - 1) t

@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, GADTs, RankNTypes, ScopedTypeVariables, UndecidableInstances #-}
-module Text.Grampa.Types (FailureInfo(..), ResultInfo(..), ResultList(..), InputStatus(Advanced, Stuck),
+module Text.Grampa.Types (FailureInfo(..), ResultInfo(..), ResultList(..),
                           Grammar, GrammarBuilder, Parser(..),
                           succeed, concede, fixGrammar, fixGrammarInput)
 where
@@ -22,7 +22,6 @@ import Text.Grampa.Classes
 
 import Prelude hiding (iterate, null)
 
-data InputStatus = Advanced | Stuck deriving (Eq, Show)
 
 -- | Parser of streams of type `s`, as a part of grammar type `g`, producing a value of type `r`
 newtype Parser g s r = P {parseP :: Maybe (GrammarResults g s) -> s -> [(GrammarResults g s, s)]
@@ -32,7 +31,7 @@ type Grammar g s = g (Parser g s)
 type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
 type GrammarResults g s = g (ResultList g s)
 newtype ResultList g s r = ResultList {resultList :: Either FailureInfo [ResultInfo g s r]}
-data ResultInfo g s r = ResultInfo InputStatus [(GrammarResults g s, s)] r
+data ResultInfo g s r = ResultInfo (Maybe (GrammarResults g s)) s [(GrammarResults g s, s)] r
 data FailureInfo =  FailureInfo Word64 [String] deriving (Eq, Show)
 data GrammarDerived g s a = GrammarDerived a (GrammarResults g s -> a)
 
@@ -43,7 +42,7 @@ concede :: FailureInfo -> GrammarDerived g s (ResultList g s r)
 concede a = GrammarDerived (ResultList $ Left a) (const $ ResultList $ Right [])
 
 -- | Tie the knot on a 'GrammarBuilder' and turn it into a 'Grammar'
-fixGrammar :: forall g s. (Reassemblable g, Traversable1 g) => (Grammar g s -> Grammar g s) -> Grammar g s
+fixGrammar :: forall g s. (Monoid s, Reassemblable g, Traversable1 g) => (Grammar g s -> Grammar g s) -> Grammar g s
 fixGrammar gf = fix . (. reassemble nt) $ gf
    where nt :: (forall p. g p -> p r) -> g (Parser g s) -> Parser g s r
          nt f _ = P (\g s t-> maybe (GrammarDerived mempty f) ((`GrammarDerived` mempty) . f) g)
@@ -77,30 +76,29 @@ instance (Show (g (ResultList g s)), Show s, Show r) => Show (ResultList g s r) 
    show (ResultList l) = "ResultList (" ++ shows l ")"
 
 instance (Show (g (ResultList g s)), Show s, Show r) => Show (ResultInfo g s r) where
-   show (ResultInfo is@Advanced i r) = "(ResultInfo " ++ show is ++ " " ++ show (length i) ++ " " ++ shows r ")"
-   show (ResultInfo is@Stuck _ r) = "(ResultInfo " ++ show is ++ " " ++ shows r ")"
+   show (ResultInfo g s t r) = "(ResultInfo " ++ show s ++ " " ++ show (length t) ++ " " ++ shows r ")"
 
 instance (Show (g (ResultList g s)), Show s) => Show1 (ResultList g s) where
    liftShowsPrec sp sl prec (ResultList (Left err)) rest =
       "ResultList " ++ showsPrec prec err rest
    liftShowsPrec sp sl prec (ResultList (Right l)) rest =
       "ResultList (Right " ++ showsPrec prec (f <$> l) (")" ++ sl (g <$> l) rest)
-      where f (ResultInfo is grs _) = (is, snd <$> take 1 grs)
-            g (ResultInfo _ _ r) = r
+      where f (ResultInfo g s t _) = (s, snd <$> take 1 t)
+            g (ResultInfo _ _ _ r) = r
 
 instance Functor (ResultList g s) where
-   fmap f (ResultList l) = ResultList ((third <$>) <$> l)
-      where third (ResultInfo a b c) = ResultInfo a b (f c)
+   fmap f (ResultList l) = ResultList ((fourth <$>) <$> l)
+      where fourth (ResultInfo a b c d) = ResultInfo a b c (f d)
 
-instance Applicative (ResultList g s) where
-   pure r = ResultList (Right [ResultInfo Stuck [] r])
+instance Monoid s => Applicative (ResultList g s) where
+   pure r = ResultList (Right [ResultInfo Nothing mempty [] r])
    ResultList a <*> ResultList b = ResultList (apply <$> a <*> b)
       where apply [] _ = []
             apply _ [] = []
-            apply (ResultInfo is1 i1 r1 : rest1) (ResultInfo is2 i2 r2 : rest2)
-               | is1 == is2 && length i1 == length i2 = ResultInfo is1 i1 (r1 r2) : apply rest1 rest2
-   
-instance Alternative (ResultList g s) where
+            apply (ResultInfo g1 s1 t1 r1 : rest1) (ResultInfo g2 s2 t2 r2 : rest2)
+               | length t1 == length t2 = ResultInfo g1 s1 t1 (r1 r2) : apply rest1 rest2
+
+instance Monoid s => Alternative (ResultList g s) where
    empty = ResultList (Left $ FailureInfo maxBound ["empty"])
    ResultList (Left f1@(FailureInfo pos1 exp1)) <|> ResultList (Left f2@(FailureInfo pos2 exp2))
       | pos1 < pos2 = ResultList (Left f1)
@@ -112,7 +110,7 @@ instance Alternative (ResultList g s) where
    rl <|> ResultList Left{} = rl
    ResultList (Right a) <|> ResultList (Right b) = ResultList (Right $ a <|> b)
 
-instance Monoid (ResultList g s r) where
+instance Monoid s => Monoid (ResultList g s r) where
    mempty = ResultList (Right [])
    mappend a b = a <|> b
 
@@ -134,7 +132,7 @@ instance Functor (Parser g s) where
    fmap f (P p) = P (\g s t-> (f <$>) <$> p g s t)
 
 instance Monoid s => Applicative (Parser g s) where
-   pure a = P (\g s t-> succeed $ ResultInfo Stuck undefined a)
+   pure a = P (\g s t-> succeed $ ResultInfo g s t a)
    P p <*> P q = P r
       where r g s t = GrammarDerived pr' (gr' <> gr'')
                where GrammarDerived (ResultList rl) gr = p g s t
@@ -143,12 +141,7 @@ instance Monoid s => Applicative (Parser g s) where
                            Right rs -> foldMap cont rs
 --                     gr'' :: GrammarResults g s -> ParseResults b
                      gr'' g' = either (ResultList . Left) (foldMap $ gd2rl g' . cont) (resultList $ gr g')
-                     cont (ResultInfo Stuck _ r) = (r <$>) <$> q g s t
-                     cont (ResultInfo Advanced t'@((g', s'):t'') r) =
-                        GrammarDerived (ResultList $ ((advance <$>) <$>) $ resultList $ gd2rl g' $ q (Just g') s' t'')
-                                       (const $ ResultList $ Right [])
-                        where advance (ResultInfo Stuck _ r') = ResultInfo Advanced t' (r r')
-                              advance (ResultInfo Advanced t' r') = ResultInfo Advanced t' (r r')
+                     cont (ResultInfo g' s' t' r) = (r <$>) <$> q g' s' t'
 
 instance Monoid s => Alternative (Parser g s) where
    empty = P (\g s t-> concede $ FailureInfo maxBound [])
@@ -164,12 +157,7 @@ instance Monoid s => Monad (Parser g s) where
                            Right rs -> foldMap cont rs
 --                     gr'' :: GrammarResults g s -> ParseResults b
                      gr'' g' = either (ResultList . Left) (foldMap $ gd2rl g' . cont) (resultList $ gr g')
-                     cont (ResultInfo Stuck _ r) = parseP (f r) g s t
-                     cont (ResultInfo Advanced t'@((g', s'):t'') r) =
-                        GrammarDerived (ResultList $ ((advance <$>) <$>) $
-                                        resultList $ gd2rl g' $ parseP (f r) (Just g') s' t'') (const $ ResultList $ Right [])
-                        where advance (ResultInfo Stuck _ r) = ResultInfo Advanced t' r
-                              advance r = r
+                     cont (ResultInfo g' s' t' r) = parseP (f r) g' s' t'
    (>>) = (*>)
    fail msg = P (\_ _ _-> concede $ FailureInfo maxBound [msg])
 
