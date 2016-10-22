@@ -1,4 +1,4 @@
-module Main (main) where
+module Main (main, arithmetic, comparisons, boolean, conditionals) where
 
 import Control.Applicative (empty)
 import Data.Word (Word64)

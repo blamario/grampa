@@ -50,7 +50,7 @@ test-suite           tests
 benchmark            benchmarks
   type:              exitcode-stdio-1.0
   hs-source-dirs:    test, examples
-  ghc-options:       -O2 -Wall -rtsopts
+  ghc-options:       -O2 -Wall -rtsopts -main-is Benchmark.main
   Build-Depends:     base >=4.7 && < 5, grampa == 0.1,
                      criterion >= 1.0, deepseq >= 1.1, text >= 1.1
   main-is:           Benchmark.hs
