@@ -1,7 +1,7 @@
 {-# LANGUAGE InstanceSigs, FlexibleContexts, GADTs, RankNTypes, ScopedTypeVariables, UndecidableInstances #-}
 module Text.Grampa.Types (FailureInfo(..), ResultInfo(..), ResultList(..),
                           Grammar, GrammarBuilder, GrammarDerived(..), Parser(..),
-                          gd2rl, succeed, concede, fixGrammar, fixGrammarInput)
+                          gd2rl, concede, fixGrammar, fixGrammarInput)
 where
 
 import Control.Applicative
@@ -32,12 +32,9 @@ type Grammar g s = g (Parser g s)
 type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
 type GrammarResults g s = g (ResultList g s)
 newtype ResultList g s r = ResultList {resultList :: Either FailureInfo [ResultInfo g s r]}
-data ResultInfo g s r = ResultInfo (Maybe (GrammarResults g s)) s [(GrammarResults g s, s)] r
+data ResultInfo g s r = ResultInfo !(Maybe (GrammarResults g s)) !s ![(GrammarResults g s, s)] !r
 data FailureInfo =  FailureInfo Word64 [String] deriving (Eq, Show)
 data GrammarDerived g s a = GrammarDerived a (GrammarResults g s -> a)
-
-succeed :: ResultInfo g s r -> GrammarDerived g s (ResultList g s r)
-succeed a = GrammarDerived (ResultList $ Right [a]) (const $ ResultList $ Right [])
 
 concede :: FailureInfo -> GrammarDerived g s (ResultList g s r)
 concede a = GrammarDerived (ResultList $ Left a) (const $ ResultList $ Right [])
