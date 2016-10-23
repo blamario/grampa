@@ -18,7 +18,7 @@ import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid(spanMaybe', splitPrimePrefix, tails))
 import Data.Word (Word64)
 
-import Text.Grampa.Classes
+import Rank2
 
 import Prelude hiding (iterate, null)
 

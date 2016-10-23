@@ -34,7 +34,7 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing)
 
-import Text.Grampa.Classes
+import Rank2
 import Text.Grampa.Types
 
 import Debug.Trace (trace)

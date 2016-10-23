@@ -1,6 +1,6 @@
-{-# LANGUAGE InstanceSigs, KindSignatures, RankNTypes, ScopedTypeVariables #-}
-module Text.Grampa.Classes (Functor1(..), Apply1(..), Alternative1(..), Foldable1(..), Traversable1(..),
-                            Reassemblable(..), Empty1(..), Singleton1(..), Identity1(..), Product1(..), Arrow1(..))
+{-# LANGUAGE InstanceSigs, KindSignatures, Rank2Types, ScopedTypeVariables #-}
+module Rank2 (Functor1(..), Apply1(..), Alternative1(..), Foldable1(..), Traversable1(..),
+              Reassemblable(..), Empty1(..), Singleton1(..), Identity1(..), Product1(..), Arrow1(..))
 where
 
 import Control.Applicative
