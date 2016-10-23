@@ -41,6 +41,7 @@ import Debug.Trace (trace)
 
 import Prelude hiding (length, null, span, takeWhile)
 
+type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
 type ParseResults r = Either FailureInfo [r]
 
 parse :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g) =>
@@ -69,7 +70,7 @@ instance (Functor1 g, MonoidNull s) => Parsing (Parser g s) where
                (\rs -> if null rs then cont (ResultInfo g s t ())
                        else GrammarDerived
                             (ResultList $ Left $ FailureInfo (fromIntegral $ length t) ["notFollowedBy"])
-                            (const $ ResultList $ Right []))
+                            (const mempty))
                (resultList $ gd2rl (error "notFollowedBy nonTerminal") $ p g s t (pure . pure))
    skipMany p = go
       where go = pure () <|> p *> go

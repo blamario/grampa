@@ -1,6 +1,6 @@
 {-# LANGUAGE InstanceSigs, FlexibleContexts, GADTs, RankNTypes, ScopedTypeVariables, UndecidableInstances #-}
 module Text.Grampa.Types (FailureInfo(..), ResultInfo(..), ResultList(..),
-                          Grammar, GrammarBuilder, GrammarDerived(..), Parser(..),
+                          Grammar, GrammarDerived(..), Parser(..),
                           gd2rl, concede, fixGrammar, fixGrammarInput)
 where
 
@@ -28,13 +28,12 @@ newtype Parser g s r = P {parseP :: forall r'. Maybe (GrammarResults g s) -> s -
                                  -> (ResultInfo g s r -> GrammarDerived g s (ResultList g s r'))
                                  -> GrammarDerived g s (ResultList g s r')}
 newtype GrammarParseResults g s r = GrammarParseResults {grammarParseResults :: GrammarDerived g s (ResultList g s r)}
-type Grammar g s = g (Parser g s)
-type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
-type GrammarResults g s = g (ResultList g s)
 newtype ResultList g s r = ResultList {resultList :: Either FailureInfo [ResultInfo g s r]}
 data ResultInfo g s r = ResultInfo !(Maybe (GrammarResults g s)) !s ![(GrammarResults g s, s)] !r
 data FailureInfo =  FailureInfo Word64 [String] deriving (Eq, Show)
 data GrammarDerived g s a = GrammarDerived a (GrammarResults g s -> a)
+type Grammar g s = g (Parser g s)
+type GrammarResults g s = g (ResultList g s)
 
 concede :: FailureInfo -> GrammarDerived g s (ResultList g s r)
 concede a = GrammarDerived (ResultList $ Left a) (const $ ResultList $ Right [])
@@ -64,8 +63,8 @@ fixGrammarInput g s = foldr (parseTail g) [] (tails s)
          parseTail g input parsedTail = parsedInput
             where parsedInput = (grammarResults' g', input):parsedTail
                   g' :: g (GrammarParseResults g s)
-                  g' = fmap1 (\(P p)-> GrammarParseResults $
-                                       p Nothing input parsedTail ((`GrammarDerived` const mempty) . ResultList . Right . (:[]))) g
+                  g' = fmap1 (\(P p)-> GrammarParseResults $ p Nothing input parsedTail cont) g
+                  cont r = GrammarDerived (ResultList $ Right [r]) (const mempty)
                   grammarResults' :: forall s g. (MonoidNull s, Traversable1 g, Alternative1 g) =>
                                      g (GrammarParseResults g s) -> GrammarResults g s
                   grammarResults' g = foldr1 choose1 (iterate rf [rn])
