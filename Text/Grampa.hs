@@ -64,13 +64,13 @@ instance (Functor1 g, MonoidNull s) => Parsing (Parser g s) where
    try = id
    (<?>) = const
    notFollowedBy (P p) = P f
-      where f g s t cont = case rl
-                           of Left{} -> cont (ResultInfo g s t ())
-                              Right [] -> GrammarDerived (ResultList $ Right []) (const $ ResultList $ Right [])
-                              Right{} -> GrammarDerived (ResultList $ Left $
-                                                         FailureInfo (fromIntegral $ length t) ["notFollowedBy"])
-                                         (const $ ResultList $ Right [])
-               where rl = resultList (gd2rl (error "notFollowedBy nonTerminal") $ p g s t (pure . pure))
+      where f g s t cont = either
+               (const $ cont $ ResultInfo g s t ())
+               (\rs -> if null rs then cont (ResultInfo g s t ())
+                       else GrammarDerived
+                            (ResultList $ Left $ FailureInfo (fromIntegral $ length t) ["notFollowedBy"])
+                            (const $ ResultList $ Right []))
+               (resultList $ gd2rl (error "notFollowedBy nonTerminal") $ p g s t (pure . pure))
    skipMany p = go
       where go = pure () <|> p *> go
    unexpected msg = P (\_ _ _ _-> concede (FailureInfo maxBound [msg]))
