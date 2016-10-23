@@ -4,6 +4,7 @@ module Comparisons where
 import Control.Applicative
 import Data.Monoid ((<>))
 
+import qualified Rank2
 import Text.Grampa
 import Utilities (symbol)
 
@@ -36,26 +37,26 @@ data Comparisons c e f =
 instance (Show (f c), Show (f e)) => Show (Comparisons c e f) where
    showsPrec prec g rest = "Comparisons{expr=" ++ showsPrec prec (expr g) ("}" ++ rest)
 
-instance Functor1 (Comparisons c e) where
-   fmap1 f g = g{expr= f (expr g)}
+instance Rank2.Functor (Comparisons c e) where
+   fmap f g = g{expr= f (expr g)}
 
-instance Apply1 (Comparisons c e) where
-   ap1 a a' = Comparisons (expr a `apply1` expr a')
+instance Rank2.Apply (Comparisons c e) where
+   ap a a' = Comparisons (expr a `Rank2.apply` expr a')
 
-instance Alternative1 (Comparisons c e) where
-   empty1 = Comparisons empty
-   choose1 a a' = Comparisons{expr = expr a <|> expr a'}
+instance Rank2.Alternative (Comparisons c e) where
+   empty = Comparisons empty
+   choose a a' = Comparisons{expr = expr a <|> expr a'}
 
-instance Foldable1 (Comparisons c e) where
-   foldMap1 f a = f (expr a)
+instance Rank2.Foldable (Comparisons c e) where
+   foldMap f a = f (expr a)
 
-instance Traversable1 (Comparisons c e) where
-   traverse1 f a = Comparisons <$> f (expr a)
+instance Rank2.Traversable (Comparisons c e) where
+   traverse f a = Comparisons <$> f (expr a)
 
-instance Reassemblable (Comparisons c e) where
+instance Rank2.Reassemblable (Comparisons c e) where
    reassemble f a = Comparisons{expr= f expr a}
 
-comparisons :: (ComparisonDomain c e, Functor1 g) => Parser g String c -> GrammarBuilder (Comparisons c e) g String
+comparisons :: (ComparisonDomain c e, Rank2.Functor g) => Parser g String c -> GrammarBuilder (Comparisons c e) g String
 comparisons comparable Comparisons{..} =
    Comparisons{
       expr= lessThan <$> comparable <* symbol "<" <*> comparable

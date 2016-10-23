@@ -18,7 +18,7 @@ import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid(spanMaybe', splitPrimePrefix, tails))
 import Data.Word (Word64)
 
-import Rank2
+import qualified Rank2
 
 import Prelude hiding (iterate, null)
 
@@ -39,8 +39,9 @@ concede :: FailureInfo -> GrammarDerived g s (ResultList g s r)
 concede a = GrammarDerived (ResultList $ Left a) (const $ ResultList $ Right [])
 
 -- | Tie the knot on a 'GrammarBuilder' and turn it into a 'Grammar'
-fixGrammar :: forall g s. (Monoid s, Reassemblable g, Traversable1 g) => (Grammar g s -> Grammar g s) -> Grammar g s
-fixGrammar gf = fix . (. reassemble nt) $ gf
+fixGrammar :: forall g s. (Monoid s, Rank2.Reassemblable g, Rank2.Traversable g) =>
+              (Grammar g s -> Grammar g s) -> Grammar g s
+fixGrammar gf = fix . (. Rank2.reassemble nt) $ gf
    where nt :: forall r. (forall p. g p -> p r) -> g (Parser g s) -> Parser g s r
          nt f _ = P p
             where p :: forall r'. Maybe (GrammarResults g s) -> s -> [(GrammarResults g s, s)]
@@ -55,23 +56,24 @@ fixGrammar gf = fix . (. reassemble nt) $ gf
                                    of Left err -> ResultList (Left err)
                                       Right rs -> gd2rl gr (foldMap cont rs)
 
-fixGrammarInput :: forall s g. (FactorialMonoid s, Alternative1 g, Traversable1 g) =>
+fixGrammarInput :: forall s g. (FactorialMonoid s, Rank2.Alternative g, Rank2.Traversable g) =>
                    Grammar g s -> s -> [(GrammarResults g s, s)]
 fixGrammarInput g s = foldr (parseTail g) [] (tails s)
-   where parseTail :: (FactorialMonoid s, Alternative1 g, Traversable1 g) =>
+   where parseTail :: (FactorialMonoid s, Rank2.Alternative g, Rank2.Traversable g) =>
                       Grammar g s -> s -> [(GrammarResults g s, s)] -> [(GrammarResults g s, s)]
          parseTail g input parsedTail = parsedInput
             where parsedInput = (grammarResults' g', input):parsedTail
                   g' :: g (GrammarParseResults g s)
-                  g' = fmap1 (\(P p)-> GrammarParseResults $ p Nothing input parsedTail cont) g
+                  g' = Rank2.fmap (\(P p)-> GrammarParseResults $ p Nothing input parsedTail cont) g
                   cont r = GrammarDerived (ResultList $ Right [r]) (const mempty)
-                  grammarResults' :: forall s g. (MonoidNull s, Traversable1 g, Alternative1 g) =>
+                  grammarResults' :: forall s g. (MonoidNull s, Rank2.Traversable g, Rank2.Alternative g) =>
                                      g (GrammarParseResults g s) -> GrammarResults g s
-                  grammarResults' g = foldr1 choose1 (iterate rf [rn])
-                     where GrammarDerived rn rf = traverse1 grammarParseResults g
+                  grammarResults' g = foldr1 Rank2.choose (iterate rf [rn])
+                     where GrammarDerived rn rf = Rank2.traverse grammarParseResults g
 
-iterate :: Foldable1 g => (GrammarResults g s -> GrammarResults g s) -> [GrammarResults g s] -> [GrammarResults g s]
-iterate f ns@(n:_) = if getAll (foldMap1 (either (const mempty) (All . null) . resultList) n')
+iterate :: Rank2.Foldable g =>
+           (GrammarResults g s -> GrammarResults g s) -> [GrammarResults g s] -> [GrammarResults g s]
+iterate f ns@(n:_) = if getAll (Rank2.foldMap (either (const mempty) (All . null) . resultList) n')
                      then n':ns else iterate f (n':ns)
    where n' = f n
 
@@ -176,6 +178,6 @@ instance Monoid s => MonadPlus (Parser g s) where
    mzero = empty
    mplus = (<|>)
 
-instance (Functor1 g, MonoidNull s, Monoid x) => Monoid (Parser g s x) where
+instance (Rank2.Functor g, MonoidNull s, Monoid x) => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend

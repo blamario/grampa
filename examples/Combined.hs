@@ -6,9 +6,8 @@ module Combined where
 import Control.Applicative
 import qualified Data.Bool
 import Data.Monoid ((<>))
-import Text.Grampa (Functor1(..), Foldable1(..), Traversable1(..), Apply1(..), Alternative1(..), Arrow1(..),
-                    Reassemblable(..),
-                    Grammar, GrammarBuilder, Parser)
+import qualified Rank2
+import Text.Grampa (Grammar, GrammarBuilder, Parser)
 import Arithmetic (Arithmetic)
 import qualified Arithmetic
 import qualified Boolean
@@ -45,52 +44,52 @@ instance (Show (f Tagged), Show (f Int), Show (f Bool)) => Show (Expression f) w
                            (", comparisonGrammar=" ++ showsPrec prec (comparisonGrammar g)
                            (", conditionalGrammar=" ++ showsPrec prec (conditionalGrammar g) "}"))))
 
-instance Functor1 Expression where
-   fmap1 f g = g{expr= f (expr g),
-                 arithmeticGrammar= fmap1 f (arithmeticGrammar g),
-                 booleanGrammar= fmap1 f (booleanGrammar g),
-                 comparisonGrammar= fmap1 f (comparisonGrammar g),
-                 conditionalGrammar= fmap1 f (conditionalGrammar g)}
+instance Rank2.Functor Expression where
+   fmap f g = g{expr= f (expr g),
+                arithmeticGrammar= Rank2.fmap f (arithmeticGrammar g),
+                booleanGrammar= Rank2.fmap f (booleanGrammar g),
+                comparisonGrammar= Rank2.fmap f (comparisonGrammar g),
+                conditionalGrammar= Rank2.fmap f (conditionalGrammar g)}
 
-instance Apply1 Expression where
-   ap1 a b = Expression{expr= expr a `apply1` expr b,
-                        arithmeticGrammar= arithmeticGrammar a `ap1` arithmeticGrammar b,
-                        booleanGrammar= booleanGrammar a `ap1` booleanGrammar b,
-                        comparisonGrammar= comparisonGrammar a `ap1` comparisonGrammar b,
-                        conditionalGrammar= conditionalGrammar a `ap1` conditionalGrammar b}
+instance Rank2.Apply Expression where
+   ap a b = Expression{expr= expr a `Rank2.apply` expr b,
+                       arithmeticGrammar= arithmeticGrammar a `Rank2.ap` arithmeticGrammar b,
+                       booleanGrammar= booleanGrammar a `Rank2.ap` booleanGrammar b,
+                       comparisonGrammar= comparisonGrammar a `Rank2.ap` comparisonGrammar b,
+                       conditionalGrammar= conditionalGrammar a `Rank2.ap` conditionalGrammar b}
 
-instance Alternative1 Expression where
-   empty1 = Expression{expr= empty,
-                       arithmeticGrammar= empty1,
-                       booleanGrammar= empty1,
-                       comparisonGrammar= empty1,
-                       conditionalGrammar= empty1}
-   choose1 a b = Expression{expr= expr a <|> expr b,
-                            arithmeticGrammar= arithmeticGrammar a `choose1` arithmeticGrammar b,
-                            booleanGrammar= booleanGrammar a `choose1` booleanGrammar b,
-                            comparisonGrammar= comparisonGrammar a `choose1` comparisonGrammar b,
-                            conditionalGrammar= conditionalGrammar a `choose1` conditionalGrammar b}
+instance Rank2.Alternative Expression where
+   empty = Expression{expr= empty,
+                      arithmeticGrammar= Rank2.empty,
+                      booleanGrammar= Rank2.empty,
+                      comparisonGrammar= Rank2.empty,
+                      conditionalGrammar= Rank2.empty}
+   choose a b = Expression{expr= expr a <|> expr b,
+                           arithmeticGrammar= arithmeticGrammar a `Rank2.choose` arithmeticGrammar b,
+                           booleanGrammar= booleanGrammar a `Rank2.choose` booleanGrammar b,
+                           comparisonGrammar= comparisonGrammar a `Rank2.choose` comparisonGrammar b,
+                           conditionalGrammar= conditionalGrammar a `Rank2.choose` conditionalGrammar b}
 
-instance Foldable1 Expression where
-   foldMap1 f g = f (expr g) <> foldMap1 f (arithmeticGrammar g) <> foldMap1 f (booleanGrammar g)
-                  <> foldMap1 f (comparisonGrammar g) <> foldMap1 f (conditionalGrammar g)
+instance Rank2.Foldable Expression where
+   foldMap f g = f (expr g) <> Rank2.foldMap f (arithmeticGrammar g) <> Rank2.foldMap f (booleanGrammar g)
+                 <> Rank2.foldMap f (comparisonGrammar g) <> Rank2.foldMap f (conditionalGrammar g)
 
-instance Traversable1 Expression where
-   traverse1 f g = Expression
-                   <$> f (expr g)
-                   <*> traverse1 f (arithmeticGrammar g)
-                   <*> traverse1 f (booleanGrammar g)
-                   <*> traverse1 f (comparisonGrammar g)
-                   <*> traverse1 f (conditionalGrammar g)
+instance Rank2.Traversable Expression where
+   traverse f g = Expression
+                  <$> f (expr g)
+                  <*> Rank2.traverse f (arithmeticGrammar g)
+                  <*> Rank2.traverse f (booleanGrammar g)
+                  <*> Rank2.traverse f (comparisonGrammar g)
+                  <*> Rank2.traverse f (conditionalGrammar g)
 
-instance Reassemblable Expression where
+instance Rank2.Reassemblable Expression where
    reassemble :: forall p q. (forall a. (forall f. Expression f -> f a) -> Expression p -> q a)
               -> Expression p -> Expression q
    reassemble f g = Expression{expr= f expr g,
-                               arithmeticGrammar= reassemble f1 (arithmeticGrammar g),
-                               booleanGrammar= reassemble f2 (booleanGrammar g),
-                               comparisonGrammar= reassemble f3 (comparisonGrammar g),
-                               conditionalGrammar= reassemble f4 (conditionalGrammar g)}
+                               arithmeticGrammar= Rank2.reassemble f1 (arithmeticGrammar g),
+                               booleanGrammar= Rank2.reassemble f2 (booleanGrammar g),
+                               comparisonGrammar= Rank2.reassemble f3 (comparisonGrammar g),
+                               conditionalGrammar= Rank2.reassemble f4 (conditionalGrammar g)}
       where f1 :: (forall f. Arithmetic.Arithmetic Int f -> f a) -> Arithmetic.Arithmetic Int p -> q a
             f2 :: (forall f. Boolean.Boolean Tagged f -> f a) -> Boolean.Boolean Tagged p -> q a
             f3 :: (forall f. Comparisons.Comparisons Int Bool f -> f a) -> Comparisons.Comparisons Int Bool p -> q a
@@ -100,7 +99,7 @@ instance Reassemblable Expression where
             f3 get c = f (get . comparisonGrammar) g{comparisonGrammar= c}
             f4 get c = f (get . conditionalGrammar) g{conditionalGrammar= c}
 
-expression :: forall g. (Functor1 g) =>
+expression :: forall g. (Rank2.Functor g) =>
               (Grammar g String -> Expression (Parser g String)) -> GrammarBuilder Expression g String
 expression sub g =
    let arithmetic = Arithmetic.arithmetic empty

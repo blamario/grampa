@@ -10,6 +10,7 @@ import Test.Feat.Enumerate (pay)
 import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Positive(..), Property, testProperty, (===), (==>), (.&&.),
                               forAll, mapSize, oneof, resize, sized, whenFail)
 
+import qualified Rank2
 import Text.Grampa
 import qualified Arithmetic
 import qualified Comparisons
@@ -23,31 +24,34 @@ parseArithmetical (Sum s) = f s' == s'
 
 parseComparison :: Comparison -> Bool
 parseComparison (Comparison s) = f s' == s'
-   where f = uniqueParse (fixGrammar comparisons) (Comparisons.expr . snd1)
+   where f = uniqueParse (fixGrammar comparisons) (Comparisons.expr . Rank2.snd)
          s' = f s
 
-comparisons :: Functor1 g => GrammarBuilder ArithmeticComparisons g String
-comparisons (Pair a c) = Pair (Arithmetic.arithmetic empty a) (Comparisons.comparisons (Arithmetic.expr a) c)
+comparisons :: Rank2.Functor g => GrammarBuilder ArithmeticComparisons g String
+comparisons (Rank2.Pair a c) =
+   Rank2.Pair (Arithmetic.arithmetic empty a) (Comparisons.comparisons (Arithmetic.expr a) c)
 
 parseBoolean :: Disjunction -> Bool
 parseBoolean (Disjunction s) = f s' == s'
-   where f = uniqueParse (fixGrammar boolean) (Boolean.expr . snd1)
+   where f = uniqueParse (fixGrammar boolean) (Boolean.expr . Rank2.snd)
          s' = f s
 
-boolean :: Functor1 g => GrammarBuilder ArithmeticComparisonsBoolean g String
-boolean (Pair ac b) = Pair (comparisons ac) (Boolean.boolean (Comparisons.expr $ snd1 ac) b)
+boolean :: Rank2.Functor g => GrammarBuilder ArithmeticComparisonsBoolean g String
+boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Comparisons.expr $ Rank2.snd ac) b)
 
 parseConditional :: Conditional -> Bool
 parseConditional (Conditional s) = f s' == s'
-   where f = uniqueParse (fixGrammar conditionals) (Conditionals.expr . snd1)
+   where f = uniqueParse (fixGrammar conditionals) (Conditionals.expr . Rank2.snd)
          s' = f s
 
-conditionals :: Functor1 g => GrammarBuilder ACBC g String
-conditionals (Pair acb c) = Pair (boolean acb) (Conditionals.conditionals (Boolean.expr $ snd1 acb) (Arithmetic.expr $ fst1 $ fst1 acb) c)
+conditionals :: Rank2.Functor g => GrammarBuilder ACBC g String
+conditionals (Rank2.Pair acb c) =
+   boolean acb `Rank2.Pair`
+   Conditionals.conditionals (Boolean.expr $ Rank2.snd acb) (Arithmetic.expr $ Rank2.fst $ Rank2.fst acb) c
 
-type ArithmeticComparisons = Product1 (Arithmetic.Arithmetic String) (Comparisons.Comparisons String String)
-type ArithmeticComparisonsBoolean = Product1 ArithmeticComparisons (Boolean.Boolean String)
-type ACBC = Product1 ArithmeticComparisonsBoolean (Conditionals.Conditionals String)
+type ArithmeticComparisons = Rank2.Product (Arithmetic.Arithmetic String) (Comparisons.Comparisons String String)
+type ArithmeticComparisonsBoolean = Rank2.Product ArithmeticComparisons (Boolean.Boolean String)
+type ACBC = Rank2.Product ArithmeticComparisonsBoolean (Conditionals.Conditionals String)
 
 newtype Factor      = Factor {factorString :: String}           deriving (Show)
 newtype Product     = Product {productString :: String}         deriving (Show)
@@ -114,7 +118,7 @@ instance Enumerable Conditional where
                <$> (\(Free (Disjunction a, Free (Sum b, Sum c)))-> "if " <> a <> " then " <> b <> " else " <> c)
                <$> pay enumerate
 
-uniqueParse :: (FactorialMonoid s, Alternative1 g, Reassemblable g, Traversable1 g) =>
+uniqueParse :: (FactorialMonoid s, Rank2.Alternative g, Rank2.Reassemblable g, Rank2.Traversable g) =>
                Grammar g s -> (forall f. g f -> f r) -> s -> r
 uniqueParse g p s = case parseAll g p s
                     of Right [r] -> r

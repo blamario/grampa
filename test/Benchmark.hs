@@ -9,6 +9,7 @@ import Data.Monoid ((<>))
 import Control.DeepSeq (deepseq)
 import Criterion.Main (bench, bgroup, defaultMain, nf)
 
+import qualified Rank2
 import Text.Grampa hiding (parse)
 import qualified Arithmetic
 import qualified Boolean
@@ -20,7 +21,7 @@ parse s = case parseAll (fixGrammar $ arithmetic empty) Arithmetic.expr s
              r -> error ("Unexpected " <> show r)
 
 parseBoolean :: String -> [Bool]
-parseBoolean s = case parseAll (fixGrammar boolean) (Boolean.expr . snd1) s
+parseBoolean s = case parseAll (fixGrammar boolean) (Boolean.expr . Rank2.snd) s
                  of Right [r] -> [r]
                     r -> error ("Unexpected " <> show r)
 

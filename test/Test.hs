@@ -20,6 +20,7 @@ import Test.QuickCheck.Checkers (Binop, EqProp(..), TestBatch, unbatch)
 import Test.QuickCheck.Classes (functor, monad, monoid, applicative, alternative,
                                 monadFunctor, monadApplicative, monadOr, monadPlus)
 
+import qualified Rank2
 import Text.Grampa
 
 import qualified Test.Examples
@@ -78,13 +79,14 @@ tests = testGroup "Grampa"
          
          lookAheadP xs (DescribedParser _ p) =
             simpleParse (lookAhead p) xs == (map (const xs <$>) <$> (simpleParse p xs))
-         lookAheadConsumeP (DescribedParser _ p) = (lookAhead p *> p :: Parser (Singleton1 [Bool]) String [Bool]) =-= p
+         lookAheadConsumeP (DescribedParser _ p) = (lookAhead p *> p :: Parser (Rank2.Singleton [Bool]) String [Bool])
+                                                   =-= p
          lookAheadOrNotP (DescribedParser _ p) = within 2000000 $
-            (notFollowedBy p <|> lookAhead p) =-= (mempty :: Parser (Singleton1 ()) String ())
+            (notFollowedBy p <|> lookAhead p) =-= (mempty :: Parser (Rank2.Singleton ()) String ())
          lookAheadNotAndP (DescribedParser _ p) = within 2000000 $
-            (notFollowedBy p *> p) =-= (empty :: Parser (Singleton1 [Bool]) String [Bool])
+            (notFollowedBy p *> p) =-= (empty :: Parser (Rank2.Singleton [Bool]) String [Bool])
          lookAheadNotNotP (DescribedParser d p) =
-            notFollowedBy (notFollowedBy p) =-= (void (lookAhead p) :: Parser (Singleton1 ()) String ())
+            notFollowedBy (notFollowedBy p) =-= (void (lookAhead p) :: Parser (Rank2.Singleton ()) String ())
          lookAheadTokenP x xs = simpleParse (lookAhead anyToken) (x:xs) == Right [([x], x:xs)]
 
 instance Enumerable (DescribedParser s r) => Arbitrary (DescribedParser s r) where
@@ -99,7 +101,7 @@ parser2s = undefined
 parser3s :: DescribedParser ([Bool], [Bool], [Bool]) ([Bool], [Bool], [Bool])
 parser3s = undefined
 
-data DescribedParser s r = DescribedParser String (forall g. (Typeable g, Functor1 g) => Parser g s r)
+data DescribedParser s r = DescribedParser String (forall g. (Typeable g, Rank2.Functor g) => Parser g s r)
 
 instance Show (DescribedParser s r) where
    show (DescribedParser d _) = d
@@ -109,7 +111,7 @@ instance (MonoidNull s, Monoid r) => Monoid (DescribedParser s r) where
    DescribedParser d1 p1 `mappend` DescribedParser d2 p2 = DescribedParser (d1 ++ " <> " ++ d2) (mappend p1 p2)
 
 instance (Ord r, Show r, EqProp r, Eq s, EqProp s, Show s, FactorialMonoid s, Arbitrary s) =>
-         EqProp (Parser (Singleton1 r) s r) where
+         EqProp (Parser (Rank2.Singleton r) s r) where
    p1 =-= p2 = forAll arbitrary (\s-> nub (results $ simpleParse p1 s) =-= nub (results $ simpleParse p2 s))
 
 instance (FactorialMonoid s, Show s, EqProp s, Arbitrary s, Ord r, Show r, EqProp r, Typeable r) =>
@@ -151,7 +153,7 @@ instance forall s. (FactorialMonoid s, LeftReductiveMonoid s, Ord s, Typeable s,
                <> binary " *> " (*>)
                <> binary " <> " (<>)
                <> binary " <|> " (<|>)
-      where binary :: String -> (forall g. Functor1 g => Parser g s s -> Parser g s s -> Parser g s s)
+      where binary :: String -> (forall g. Rank2.Functor g => Parser g s s -> Parser g s s -> Parser g s s)
                    -> Enumerate (DescribedParser s s)
             binary nm op = (\(Free (DescribedParser d1 p1, DescribedParser d2 p2))-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
                            <$> pay enumerate
@@ -171,7 +173,8 @@ instance forall s r. (FactorialMonoid s, Typeable s) => Enumerable (DescribedPar
                <> binary " *> " (*>)
                <> binary " <> " (<>)
                <> binary " <|> " (<|>)
-      where binary :: String -> (forall g. Functor1 g => Parser g s [Bool] -> Parser g s [Bool] -> Parser g s [Bool])
+      where binary :: String
+                   -> (forall g. Rank2.Functor g => Parser g s [Bool] -> Parser g s [Bool] -> Parser g s [Bool])
                    -> Enumerate (DescribedParser s [Bool])
             binary nm op = (\(Free (DescribedParser d1 p1, DescribedParser d2 p2))-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
                            <$> pay enumerate
@@ -184,8 +187,9 @@ instance forall s r. (FactorialMonoid s, Typeable s) => Enumerable (DescribedPar
                <> binary " *> " (*>)
                <> binary " <> " (<>)
                <> binary " <|> " (<|>)
-      where binary :: String -> (forall g. Functor1 g => Parser g s ([Bool] -> [Bool]) -> Parser g s ([Bool] -> [Bool])
-                                 -> Parser g s ([Bool] -> [Bool]))
+      where binary :: String
+                   -> (forall g. Rank2.Functor g => Parser g s ([Bool] -> [Bool]) -> Parser g s ([Bool] -> [Bool])
+                                                    -> Parser g s ([Bool] -> [Bool]))
                    -> Enumerate (DescribedParser s ([Bool] -> [Bool]))
             binary nm op = (\(Free (DescribedParser d1 p1, DescribedParser d2 p2))-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
                            <$> pay enumerate

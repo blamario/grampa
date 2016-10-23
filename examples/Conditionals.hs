@@ -4,6 +4,7 @@ module Conditionals where
 import Control.Applicative
 import Data.Monoid ((<>))
 
+import qualified Rank2
 import Text.Grampa
 import Utilities (keyword)
 
@@ -24,26 +25,26 @@ data Conditionals e f =
 instance Show (f e) => Show (Conditionals e f) where
    showsPrec prec a rest = "Conditionals{expr=" ++ showsPrec prec (expr a) ("}" ++ rest)
 
-instance Functor1 (Conditionals e) where
-   fmap1 f a = a{expr= f (expr a)}
+instance Rank2.Functor (Conditionals e) where
+   fmap f a = a{expr= f (expr a)}
 
-instance Apply1 (Conditionals e) where
-   ap1 a a' = Conditionals (expr a `apply1` expr a')
+instance Rank2.Apply (Conditionals e) where
+   ap a a' = Conditionals (expr a `Rank2.apply` expr a')
 
-instance Alternative1 (Conditionals e) where
-   empty1 = Conditionals empty
-   choose1 a a' = Conditionals{expr = expr a <|> expr a'}
+instance Rank2.Alternative (Conditionals e) where
+   empty = Conditionals empty
+   choose a a' = Conditionals{expr = expr a <|> expr a'}
 
-instance Foldable1 (Conditionals e) where
-   foldMap1 f a = f (expr a)
+instance Rank2.Foldable (Conditionals e) where
+   foldMap f a = f (expr a)
 
-instance Traversable1 (Conditionals e) where
-   traverse1 f a = Conditionals <$> f (expr a)
+instance Rank2.Traversable (Conditionals e) where
+   traverse f a = Conditionals <$> f (expr a)
 
-instance Reassemblable (Conditionals e) where
+instance Rank2.Reassemblable (Conditionals e) where
    reassemble f a = Conditionals{expr= f expr a}
 
-conditionals :: (ConditionalDomain t e, Functor1 g) =>
+conditionals :: (ConditionalDomain t e, Rank2.Functor g) =>
                 Parser g String t -> Parser g String e -> GrammarBuilder (Conditionals e) g String
 conditionals test term Conditionals{..} =
    Conditionals{expr= ifThenElse <$> (keyword "if" *> test) <*> (keyword "then" *> term) <*> (keyword "else" *> term)}

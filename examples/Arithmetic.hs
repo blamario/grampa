@@ -8,6 +8,7 @@ import Data.Monoid ((<>))
 import Text.Grampa
 import Utilities (infixJoin, symbol)
 
+import qualified Rank2
 import Prelude hiding (negate, subtract)
 
 class ArithmeticDomain e where
@@ -45,35 +46,37 @@ instance Show (f e) => Show (Arithmetic e f) where
                            (", term=" ++ showsPrec prec (term a)
                             (", factor=" ++ showsPrec prec (factor a) ("}" ++ rest)))
 
-instance Functor1 (Arithmetic e) where
-   fmap1 f a = a{expr= f (expr a),
-                 term= f (term a),
-                 factor= f (factor a)}
+instance Rank2.Functor (Arithmetic e) where
+   fmap f a = a{expr= f (expr a),
+                term= f (term a),
+                factor= f (factor a)}
 
-instance Apply1 (Arithmetic e) where
-   ap1 a a' = Arithmetic (expr a `apply1` expr a') (term a `apply1` term a') (factor a `apply1` factor a')
+instance Rank2.Apply (Arithmetic e) where
+   ap a a' = Arithmetic (expr a `Rank2.apply` expr a')
+                        (term a `Rank2.apply` term a')
+                        (factor a `Rank2.apply` factor a')
 
-instance Alternative1 (Arithmetic e) where
-   empty1 = Arithmetic empty empty empty
-   choose1 a a' = Arithmetic{expr = expr a <|> expr a',
-                             term = term a <|> term a',
-                             factor = factor a <|> factor a'}
+instance Rank2.Alternative (Arithmetic e) where
+   empty = Arithmetic empty empty empty
+   choose a a' = Arithmetic{expr = expr a <|> expr a',
+                            term = term a <|> term a',
+                            factor = factor a <|> factor a'}
 
-instance Foldable1 (Arithmetic e) where
-   foldMap1 f a = f (expr a) <> f (term a) <> f (factor a)
+instance Rank2.Foldable (Arithmetic e) where
+   foldMap f a = f (expr a) <> f (term a) <> f (factor a)
 
-instance Traversable1 (Arithmetic e) where
-   traverse1 f a = Arithmetic
-                   <$> f (expr a)
-                   <*> f (term a)
-                   <*> f (factor a)
+instance Rank2.Traversable (Arithmetic e) where
+   traverse f a = Arithmetic
+                  <$> f (expr a)
+                  <*> f (term a)
+                  <*> f (factor a)
 
-instance Reassemblable (Arithmetic e) where
+instance Rank2.Reassemblable (Arithmetic e) where
    reassemble f a = Arithmetic{expr= f expr a,
                                term= f term a,
                                factor= f factor a}
 
-arithmetic :: (ArithmeticDomain e, Functor1 g) => Parser g String e -> GrammarBuilder (Arithmetic e) g String
+arithmetic :: (ArithmeticDomain e, Rank2.Functor g) => Parser g String e -> GrammarBuilder (Arithmetic e) g String
 arithmetic sub Arithmetic{..} = Arithmetic{
    expr= term
          <|> symbol "-" *> (negate <$> term)
