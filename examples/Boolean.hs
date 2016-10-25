@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, RecordWildCards, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, RecordWildCards, ScopedTypeVariables, TemplateHaskell #-}
 module Boolean where
 
 import Control.Applicative
@@ -9,6 +9,8 @@ import Data.Monoid ((<>))
 import qualified Rank2
 import Text.Grampa
 import Utilities (infixJoin, keyword, symbol)
+
+import Rank2.TH
 
 import Prelude hiding (and, or, not)
 
@@ -44,10 +46,14 @@ instance Show (f e) => Show (Boolean e f) where
                            (", term=" ++ showsPrec prec (term a)
                             (", factor=" ++ showsPrec prec (factor a) ("}" ++ rest)))
 
+$(deriveFunctor ''Boolean)
+
+{-
 instance Rank2.Functor (Boolean e) where
    fmap f a = a{expr= f (expr a),
                 term= f (term a),
                 factor= f (factor a)}
+-}
 
 instance Rank2.Apply (Boolean e) where
    ap a a' = Boolean (expr a `Rank2.apply` expr a') (term a `Rank2.apply` term a') (factor a `Rank2.apply` factor a')
