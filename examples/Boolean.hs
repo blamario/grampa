@@ -7,10 +7,10 @@ import Data.Char (isSpace)
 import Data.Monoid ((<>))
 
 import qualified Rank2
+import qualified Rank2.TH
+
 import Text.Grampa
 import Utilities (infixJoin, keyword, symbol)
-
-import Rank2.TH
 
 import Prelude hiding (and, or, not)
 
@@ -40,43 +40,9 @@ data Boolean e f =
       expr :: f e,
       term :: f e,
       factor :: f e}
+   deriving Show
 
-instance Show (f e) => Show (Boolean e f) where
-   showsPrec prec a rest = "Boolean{expr=" ++ showsPrec prec (expr a)
-                           (", term=" ++ showsPrec prec (term a)
-                            (", factor=" ++ showsPrec prec (factor a) ("}" ++ rest)))
-
-$(deriveFunctor ''Boolean)
-
-{-
-instance Rank2.Functor (Boolean e) where
-   fmap f a = a{expr= f (expr a),
-                term= f (term a),
-                factor= f (factor a)}
--}
-
-instance Rank2.Apply (Boolean e) where
-   ap a a' = Boolean (expr a `Rank2.apply` expr a') (term a `Rank2.apply` term a') (factor a `Rank2.apply` factor a')
-
-instance Rank2.Alternative (Boolean e) where
-   empty = Boolean empty empty empty
-   choose a a' = Boolean{expr = expr a <|> expr a',
-                         term = term a <|> term a',
-                         factor = factor a <|> factor a'}
-
-instance Rank2.Foldable (Boolean e) where
-   foldMap f a = f (expr a) <> f (term a) <> f (factor a)
-
-instance Rank2.Traversable (Boolean e) where
-   traverse f a = Boolean
-                  <$> f (expr a)
-                  <*> f (term a)
-                  <*> f (factor a)
-
-instance Rank2.Reassemblable (Boolean e) where
-   reassemble f a = Boolean{expr= f expr a,
-                            term= f term a,
-                            factor= f factor a}
+$(Rank2.TH.deriveAll ''Boolean)
 
 boolean :: (BooleanDomain e, Rank2.Functor g) => Parser g String e -> GrammarBuilder (Boolean e) g String
 boolean p Boolean{..} = Boolean{
