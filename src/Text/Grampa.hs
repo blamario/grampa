@@ -61,20 +61,33 @@ fromResultList _ (ResultList (Left err)) = Left err
 fromResultList s (ResultList (Right rl)) = Right (f <$> rl)
    where f (ResultInfo g s' t r) = (r, s')
 
+failureStrength :: Maybe x -> Int
+failureStrength = maybe 0 (const 1)
+
 instance (Rank2.Functor g, MonoidNull s) => Parsing (Parser g s) where
-   try = id
-   (<?>) = const
+   try (P p) = P f
+      where f g s t cont = strengthenBy pred <$> p g s t ((strengthenBy succ <$>) . cont)
+            strengthenBy :: (Int -> Int) -> ResultList g s r -> ResultList g s r
+            strengthenBy f (ResultList (Left (FailureInfo s pos msgs))) = ResultList (Left $ FailureInfo (f s) pos msgs)
+            strengthenBy _ rl = rl
+   P p <?> msg  = P f
+      where f g s t cont = applyMsg <$> p g s t ((wrap <$>) . cont)
+               where wrap :: ResultList g s r -> ResultList g s (Either FailureInfo [ResultInfo g s r])
+                     wrap (ResultList (Left err)) = ResultList (Right [ResultInfo g s t $ Left err])
+                     wrap (ResultList (Right rs)) = ResultList (Right [ResultInfo g s t $ Right rs])
+            applyMsg :: ResultList g s (Either FailureInfo [ResultInfo g s r]) -> ResultList g s r
+            applyMsg (ResultList (Left (FailureInfo s pos _))) = ResultList (Left $ FailureInfo (succ s) pos [msg])
+            applyMsg (ResultList (Right [ResultInfo g s t (Left err)])) = ResultList (Left err)
+            applyMsg (ResultList (Right [ResultInfo g s t (Right rs)])) = ResultList (Right rs)
    notFollowedBy (P p) = P f
       where f g s t cont = either
                (const $ cont $ ResultInfo g s t ())
                (\rs -> if null rs then cont (ResultInfo g s t ())
-                       else GrammarDerived
-                            (ResultList $ Left $ FailureInfo (fromIntegral $ length t) ["notFollowedBy"])
-                            (const mempty))
+                       else concede (FailureInfo (failureStrength g) (fromIntegral $ length t) ["notFollowedBy"]))
                (resultList $ gd2rl (error "notFollowedBy nonTerminal") $ p g s t (pure . pure))
    skipMany p = go
       where go = pure () <|> p *> go
-   unexpected msg = P (\_ _ _ _-> concede (FailureInfo maxBound [msg]))
+   unexpected msg = P (\g _ t _-> concede (FailureInfo (failureStrength g) (fromIntegral $ length t) [msg]))
    eof = endOfInput
 
 instance (Rank2.Functor g, MonoidNull s) => LookAheadParsing (Parser g s) where
@@ -100,7 +113,7 @@ endOfInput :: (MonoidNull s, Rank2.Functor g) => Parser g s ()
 endOfInput = P f
    where f g s t cont
             | null s = cont (ResultInfo g s t ())
-            | otherwise = concede (FailureInfo (fromIntegral $ length t) ["endOfInput"])
+            | otherwise = concede (FailureInfo (failureStrength g) (fromIntegral $ length t) ["endOfInput"])
 
 -- | Always sucessful parser that returns the remaining input without consuming it.
 getInput :: (MonoidNull s, Rank2.Functor g) => Parser g s s
@@ -124,7 +137,7 @@ takeWhile pred = P f
 takeWhile1 :: (FactorialMonoid s, Rank2.Functor g) => (s -> Bool) -> Parser g s s
 takeWhile1 pred = P f
    where f g s t cont
-            | null prefix = concede (FailureInfo (fromIntegral $ length t) ["takeCharsWhile1"])
+            | null prefix = concede (FailureInfo (failureStrength g) (fromIntegral $ length t) ["takeCharsWhile1"])
             | otherwise = cont (ResultInfo (Just g') s' t' prefix)
             where prefix = Factorial.takeWhile pred s
                   (g', s'):t' = drop (length prefix - 1) t
@@ -145,7 +158,7 @@ takeCharsWhile pred = P f
 takeCharsWhile1 :: (TextualMonoid s, Rank2.Functor g) => (Char -> Bool) -> Parser g s s
 takeCharsWhile1 pred = P f
    where f g s t cont
-            | null prefix = concede (FailureInfo (fromIntegral $ length t) ["takeCharsWhile1"])
+            | null prefix = concede (FailureInfo (failureStrength g) (fromIntegral $ length t) ["takeCharsWhile1"])
             | otherwise = cont (ResultInfo (Just g') s' t' prefix)
             where (prefix, suffix) = Textual.span_ False pred s
                   (g', s'):t' = drop (length prefix - 1) t
@@ -184,7 +197,7 @@ anyToken = P f
    where f g s t cont =
             case splitPrimePrefix s
             of Just (first, _) | (g', s'):t' <- t -> cont (ResultInfo (Just g') s' t' first)
-               Nothing -> concede (FailureInfo (fromIntegral $ length s) ["anyToken"])
+               Nothing -> concede (FailureInfo (failureStrength g) (fromIntegral $ length s) ["anyToken"])
 
 -- | A parser that accepts a specific input atom.
 token :: (Eq s, FactorialMonoid s, Rank2.Functor g) => s -> Parser g s s
@@ -196,7 +209,7 @@ satisfy predicate = P f
    where f g s t cont =
             case splitPrimePrefix s
             of Just (first, _) | predicate first, (g', s'):t' <- t -> cont (ResultInfo (Just g') s' t' first)
-               _ -> concede (FailureInfo (fromIntegral $ length s) ["satisfy"])
+               _ -> concede (FailureInfo (failureStrength g) (fromIntegral $ length s) ["satisfy"])
 
 -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the given
 -- predicate.
@@ -205,7 +218,7 @@ satisfyChar predicate = P f
    where f g s t cont =
             case Textual.splitCharacterPrefix s
             of Just (first, _) | predicate first, (g', s'):t' <- t -> cont (ResultInfo (Just g') s' t' first)
-               _ -> concede (FailureInfo (fromIntegral $ length s) ["satisfyChar"])
+               _ -> concede (FailureInfo (failureStrength g) (fromIntegral $ length s) ["satisfyChar"])
 
 -- | A parser that consumes and returns the given prefix of the input.
 string :: (Show s, LeftReductiveMonoid s, FactorialMonoid s, Rank2.Functor g) => s -> Parser g s s
@@ -213,7 +226,7 @@ string x | null x = pure x
 string x = P $ \g y t cont-> 
    case stripPrefix x y
    of Just y' | (g', s'):t' <- drop (length x - 1) t -> cont (ResultInfo (Just g') s' t' x)
-      _ -> concede (FailureInfo (fromIntegral $ length t) ["string " ++ show x])
+      _ -> concede (FailureInfo (1 + failureStrength g) (fromIntegral $ length t) ["string " ++ show x])
 
 -- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
 -- match the given predicate; an optimized version of 'concatMany . satisfyChar'.

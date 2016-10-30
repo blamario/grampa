@@ -30,7 +30,7 @@ newtype Parser g s r = P {parseP :: forall r'. Maybe (GrammarResults g s) -> s -
 newtype GrammarParseResults g s r = GrammarParseResults {grammarParseResults :: GrammarDerived g s (ResultList g s r)}
 newtype ResultList g s r = ResultList {resultList :: Either FailureInfo [ResultInfo g s r]}
 data ResultInfo g s r = ResultInfo !(Maybe (GrammarResults g s)) !s ![(GrammarResults g s, s)] !r
-data FailureInfo =  FailureInfo Word64 [String] deriving (Eq, Show)
+data FailureInfo =  FailureInfo Int Word64 [String] deriving (Eq, Show)
 data GrammarDerived g s a = GrammarDerived a (GrammarResults g s -> a)
 type Grammar g s = g (Parser g s)
 type GrammarResults g s = g (ResultList g s)
@@ -113,11 +113,14 @@ instance Monoid s => Applicative (ResultList g s) where
                | length t1 == length t2 = ResultInfo g1 s1 t1 (r1 r2) : apply rest1 rest2
 
 instance Monoid s => Alternative (ResultList g s) where
-   empty = ResultList (Left $ FailureInfo maxBound ["empty"])
-   ResultList (Left f1@(FailureInfo pos1 exp1)) <|> ResultList (Left f2@(FailureInfo pos2 exp2))
-      | pos1 < pos2 = ResultList (Left f1)
-      | pos2 < pos1 = ResultList (Left f2)
-      | otherwise = ResultList (Left $ FailureInfo pos1 (exp1 <> exp2))
+   empty = ResultList (Left $ FailureInfo 0 maxBound ["empty"])
+   ResultList (Left f1@(FailureInfo s1 pos1 exp1)) <|> ResultList (Left f2@(FailureInfo s2 pos2 exp2)) =
+      ResultList (Left f')
+      where f' | s1 < s2 = f2
+               | s1 > s2 = f1
+               | pos1 < pos2 = f1
+               | pos1 > pos2 = f2
+               | otherwise = FailureInfo s1 pos1 (exp1 <> exp2)
    ResultList (Right []) <|> rl = rl
    rl <|> ResultList (Right []) = rl
    ResultList Left{} <|> rl = rl
@@ -159,7 +162,7 @@ instance Monoid s => Applicative (Parser g s) where
                      cont'' f (ResultInfo g s t a) = cont (ResultInfo g s t $ f a)
 
 instance Monoid s => Alternative (Parser g s) where
-   empty = P (\g s t cont-> concede $ FailureInfo maxBound [])
+   empty = P (\g s t cont-> concede $ FailureInfo 0 maxBound [])
    P p <|> P q = P (\g s t cont-> p g s t cont <> q g s t cont)
 
 instance Monoid s => Monad (Parser g s) where
@@ -172,7 +175,7 @@ instance Monoid s => Monad (Parser g s) where
             q g s t cont = p g s t cont'
                where cont' (ResultInfo g' s' t' r) = parseP (f r) g' s' t' cont
    (>>) = (*>)
-   fail msg = P (\g s t cont-> concede $ FailureInfo maxBound [msg])
+   fail msg = P (\g s t cont-> concede $ FailureInfo 0 maxBound [msg])
 
 instance Monoid s => MonadPlus (Parser g s) where
    mzero = empty
