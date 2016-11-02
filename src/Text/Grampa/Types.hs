@@ -117,13 +117,13 @@ instance Monoid s => Applicative (ResultList g s) where
 
 instance Monoid s => Alternative (ResultList g s) where
    empty = ResultList (Left $ FailureInfo 0 maxBound ["empty"])
-   rl1@(ResultList (Left f1@(FailureInfo s1 pos1 exp1))) <|> rl2@(ResultList (Left f2@(FailureInfo s2 pos2 exp2)))
+   rl1@(ResultList (Left (FailureInfo s1 pos1 exp1))) <|> rl2@(ResultList (Left (FailureInfo s2 pos2 exp2)))
       | s1 < s2 = rl2
       | s1 > s2 = rl1
-      | otherwise = ResultList (Left f')
-      where f' | pos1 < pos2 = f1
-               | pos1 > pos2 = f2
-               | otherwise = FailureInfo s1 pos1 (exp1 <> exp2)
+      | otherwise = ResultList (Left $ FailureInfo s1 pos' exp')
+      where (pos', exp') | pos1 < pos2 = (pos1, exp1)
+                         | pos1 > pos2 = (pos2, exp2)
+                         | otherwise = (pos1, exp1 <> exp2)
    ResultList (Right []) <|> rl = rl
    rl <|> ResultList (Right []) = rl
    ResultList Left{} <|> rl = rl
@@ -172,14 +172,14 @@ instance Monoid s => Alternative (Parser g s) where
 infixl 3 <<|>
 (<<|>) :: Monoid s => Parser g s r -> Parser g s r -> Parser g s r
 P p <<|> P q = P (\g s t rc fc-> p g s t rc $
-                    \f1@(FailureInfo strength1 pos1 exp1)-> q g s t rc $
-                    \f2@(FailureInfo strength2 pos2 exp2)->
-                       fc $
+                    \ f1@(FailureInfo strength1 pos1 exp1)-> q g s t rc $
+                    \ f2@(FailureInfo strength2 pos2 exp2)-> fc $
                        if strength1 < strength2 then f2
                        else if strength1 > strength2 then f1
-                       else if pos1 < pos2 then f1
-                       else if pos1 > pos2 then f2
-                       else FailureInfo strength1 pos1 (exp1 <> exp2))
+                       else let (pos', exp') | pos1 < pos2 = (pos1, exp1)
+                                             | pos1 > pos2 = (pos2, exp2)
+                                             | otherwise = (pos1, exp1 <> exp2)
+                            in FailureInfo strength1 pos' exp')
 
 instance Monoid s => Monad (Parser g s) where
    return = pure
