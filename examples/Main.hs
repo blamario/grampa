@@ -15,6 +15,7 @@ type ArithmeticComparisons = Rank2.Product (Arithmetic.Arithmetic Int) (Comparis
 type ArithmeticComparisonsBoolean = Rank2.Product ArithmeticComparisons (Boolean.Boolean Bool)
 type ACBC = Rank2.Product ArithmeticComparisonsBoolean (Conditionals.Conditionals Int)
    
+main :: IO ()
 main = do args <- concat <$> getArgs
           -- let a = fixGrammar (Arithmetic.arithmetic (production id Arithmetic.expr a))
           -- let a = fixGrammar (Arithmetic.arithmetic (recursive $ Arithmetic.expr a))
@@ -24,7 +25,7 @@ main = do args <- concat <$> getArgs
           print (parseAll (fixGrammar conditionals) (Conditionals.expr . Rank2.snd) args :: ParseResults Int)
           print (parseAll (fixGrammar $ Combined.expression id) Combined.expr args :: ParseResults Combined.Tagged)
 
-comparisons :: Rank2.Functor g => GrammarBuilder ArithmeticComparisons g String
+comparisons :: GrammarBuilder ArithmeticComparisons g String
 comparisons (Rank2.Pair a c) =
    Rank2.Pair (Arithmetic.arithmetic empty a) (Comparisons.comparisons (Arithmetic.expr a) c)
 

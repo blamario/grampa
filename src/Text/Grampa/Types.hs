@@ -1,21 +1,17 @@
-{-# LANGUAGE InstanceSigs, FlexibleContexts, GADTs, RankNTypes, ScopedTypeVariables, UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables #-}
 module Text.Grampa.Types (FailureInfo(..), ResultInfo(..), ResultList(..),
-                          Grammar, GrammarDerived(..), Parser(..),
+                          Grammar, GrammarDerived(..), Parser(..), (<<|>),
                           concede, gd2rl, fixGrammar, fixGrammarInput)
 where
 
 import Control.Applicative
-import Control.Arrow (first, second)
 import Control.Monad (Monad(..), MonadPlus(..))
-import Control.Monad.Trans.State (State, evalState, get, modify)
 import Data.Either (either)
-import Data.Foldable (asum)
 import Data.Function (fix)
 import Data.Functor.Classes (Show1(liftShowsPrec))
-import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Monoid (Monoid(mappend, mempty), All(..), (<>))
 import Data.Monoid.Null (MonoidNull(null))
-import Data.Monoid.Factorial (FactorialMonoid(spanMaybe', splitPrimePrefix, tails))
+import Data.Monoid.Factorial (FactorialMonoid(tails))
 import Data.Word (Word64)
 
 import qualified Rank2
@@ -40,7 +36,7 @@ concede :: FailureInfo -> GrammarDerived g s (ResultList g s r)
 concede a = GrammarDerived (ResultList $ Left a) (const $ ResultList $ Right [])
 
 -- | Tie the knot on a 'GrammarBuilder' and turn it into a 'Grammar'
-fixGrammar :: forall g s. (Monoid s, Rank2.Reassemblable g, Rank2.Traversable g) =>
+fixGrammar :: forall g s. (Monoid s, Rank2.Reassemblable g) =>
               (Grammar g s -> Grammar g s) -> Grammar g s
 fixGrammar gf = fix . (. Rank2.reassemble nt) $ gf
    where nt :: forall r. (forall p. g p -> p r) -> g (Parser g s) -> Parser g s r
@@ -49,7 +45,7 @@ fixGrammar gf = fix . (. Rank2.reassemble nt) $ gf
                     -> (ResultInfo g s r -> GrammarDerived g s (ResultList g s r'))
                     -> (FailureInfo -> GrammarDerived g s (ResultList g s r'))
                     -> GrammarDerived g s (ResultList g s r')
-                  p g s t rc fc = maybe (GrammarDerived mempty f') (continue . resultList . f) g
+                  p g _ _ rc fc = maybe (GrammarDerived mempty f') (continue . resultList . f) g
                      where continue :: Either FailureInfo [ResultInfo g s r] -> GrammarDerived g s (ResultList g s r')
                            continue (Left (FailureInfo strength pos msgs)) = fc (FailureInfo (succ strength) pos msgs)
                            continue (Right rs) = foldMap rc rs
@@ -60,24 +56,23 @@ fixGrammar gf = fix . (. Rank2.reassemble nt) $ gf
 
 fixGrammarInput :: forall s g. (FactorialMonoid s, Rank2.Alternative g, Rank2.Traversable g) =>
                    Grammar g s -> s -> [(GrammarResults g s, s)]
-fixGrammarInput g s = foldr (parseTail g) [] (tails s)
-   where parseTail :: (FactorialMonoid s, Rank2.Alternative g, Rank2.Traversable g) =>
-                      Grammar g s -> s -> [(GrammarResults g s, s)] -> [(GrammarResults g s, s)]
-         parseTail g input parsedTail = parsedInput
-            where parsedInput = (grammarResults' g', input):parsedTail
+fixGrammarInput g s = foldr parseTail [] (tails s)
+   where parseTail :: s -> [(GrammarResults g s, s)] -> [(GrammarResults g s, s)]
+         parseTail input parsedTail = parsedInput
+            where parsedInput = (grammarResults', input):parsedTail
                   g' :: g (GrammarParseResults g s)
                   g' = Rank2.fmap (\(P p)-> GrammarParseResults $ p Nothing input parsedTail rc fc) g
                   fc = concede
                   rc r = GrammarDerived (ResultList $ Right [r]) (const mempty)
-                  grammarResults' :: forall s g. (MonoidNull s, Rank2.Traversable g, Rank2.Alternative g) =>
-                                     g (GrammarParseResults g s) -> GrammarResults g s
-                  grammarResults' g = foldr1 Rank2.choose (iterate fc [rn])
-                     where GrammarDerived rn fc = Rank2.traverse grammarParseResults g
+                  grammarResults' :: GrammarResults g s
+                  grammarResults' = foldr1 Rank2.choose (iterate rf rl [])
+                     where GrammarDerived rl rf = Rank2.traverse grammarParseResults g'
 
 iterate :: Rank2.Foldable g =>
-           (GrammarResults g s -> GrammarResults g s) -> [GrammarResults g s] -> [GrammarResults g s]
-iterate f ns@(n:_) = if getAll (Rank2.foldMap (either (const mempty) (All . null) . resultList) n')
-                     then n':ns else iterate f (n':ns)
+           (GrammarResults g s -> GrammarResults g s) -> GrammarResults g s -> [GrammarResults g s]
+        -> [GrammarResults g s]
+iterate f n ns = if getAll (Rank2.foldMap (either (const mempty) (All . null) . resultList) n')
+                 then n':n:ns else iterate f n' (n:ns)
    where n' = f n
 
 gd2rl :: GrammarResults g s -> GrammarDerived g s (ResultList g s r) -> ResultList g s r
@@ -86,18 +81,18 @@ gd2rl gr (GrammarDerived rl f) = rl
 instance Functor (GrammarParseResults g s) where
    fmap f (GrammarParseResults gd) = GrammarParseResults ((f <$>) <$> gd)
 
-instance (Show (g (ResultList g s)), Show s, Show r) => Show (ResultList g s r) where
+instance (Show s, Show r) => Show (ResultList g s r) where
    show (ResultList l) = "ResultList (" ++ shows l ")"
 
-instance (Show (g (ResultList g s)), Show s, Show r) => Show (ResultInfo g s r) where
-   show (ResultInfo g s t r) = "(ResultInfo " ++ show s ++ " " ++ show (length t) ++ " " ++ shows r ")"
+instance (Show s, Show r) => Show (ResultInfo g s r) where
+   show (ResultInfo _ s t r) = "(ResultInfo " ++ show s ++ " " ++ show (length t) ++ " " ++ shows r ")"
 
-instance (Show (g (ResultList g s)), Show s) => Show1 (ResultList g s) where
-   liftShowsPrec sp sl prec (ResultList (Left err)) rest =
+instance (Show s) => Show1 (ResultList g s) where
+   liftShowsPrec _ _ prec (ResultList (Left err)) rest =
       "ResultList " ++ showsPrec prec err rest
-   liftShowsPrec sp sl prec (ResultList (Right l)) rest =
+   liftShowsPrec _ sl prec (ResultList (Right l)) rest =
       "ResultList (Right " ++ showsPrec prec (f <$> l) (")" ++ sl (g <$> l) rest)
-      where f (ResultInfo g s t _) = (s, snd <$> take 1 t)
+      where f (ResultInfo _ s t _) = (s, snd <$> take 1 t)
             g (ResultInfo _ _ _ r) = r
 
 instance Functor (ResultInfo g s) where
@@ -112,7 +107,7 @@ instance Monoid s => Applicative (ResultList g s) where
    ResultList a <*> ResultList b = ResultList (apply <$> a <*> b)
       where apply [] _ = []
             apply _ [] = []
-            apply (ResultInfo g1 s1 t1 r1 : rest1) (ResultInfo g2 s2 t2 r2 : rest2)
+            apply (ResultInfo g1 s1 t1 r1 : rest1) (ResultInfo _g2 _s2 t2 r2 : rest2)
                | length t1 == length t2 = ResultInfo g1 s1 t1 (r1 r2) : apply rest1 rest2
 
 instance Monoid s => Alternative (ResultList g s) where
@@ -151,9 +146,9 @@ instance Applicative (GrammarDerived g s) where
 instance Functor (Parser g s) where
    fmap f (P p) = P (\g s t rc fc-> p g s t (rc . (f <$>)) fc)
 
-instance Monoid s => Applicative (Parser g s) where
-   pure a = P (\g s t rc fc-> rc $ ResultInfo g s t a)
-   (<*>) :: forall g s a b. Parser g s (a -> b) -> Parser g s a -> Parser g s b
+instance Applicative (Parser g s) where
+   pure a = P (\g s t rc _fc-> rc $ ResultInfo g s t a)
+   (<*>) :: forall a b. Parser g s (a -> b) -> Parser g s a -> Parser g s b
    P p <*> P q = P r
       where r :: forall r'. Maybe (GrammarResults g s) -> s -> [(GrammarResults g s, s)]
                -> (ResultInfo g s b -> GrammarDerived g s (ResultList g s r'))
@@ -161,16 +156,16 @@ instance Monoid s => Applicative (Parser g s) where
                -> GrammarDerived g s (ResultList g s r')
             r g s t rc fc = p g s t rc' fc
                where rc' :: ResultInfo g s (a -> b) -> GrammarDerived g s (ResultList g s r')
-                     rc' (ResultInfo g s t f) = q g s t (rc'' f) fc
+                     rc' (ResultInfo g' s' t' f) = q g' s' t' (rc'' f) fc
                      rc'' :: (a -> b) -> ResultInfo g s a -> GrammarDerived g s (ResultList g s r')
-                     rc'' f (ResultInfo g s t a) = rc (ResultInfo g s t $ f a)
+                     rc'' f (ResultInfo g' s' t' a) = rc (ResultInfo g' s' t' $ f a)
 
 instance Monoid s => Alternative (Parser g s) where
-   empty = P (\g s t rc fc-> fc $ FailureInfo 0 maxBound [])
+   empty = P (\g s t _rc fc-> fc $ FailureInfo 0 maxBound [])
    P p <|> P q = P (\g s t rc fc-> p g s t rc fc <> q g s t rc fc)
 
 infixl 3 <<|>
-(<<|>) :: Monoid s => Parser g s r -> Parser g s r -> Parser g s r
+(<<|>) :: Parser g s r -> Parser g s r -> Parser g s r
 P p <<|> P q = P (\g s t rc fc-> p g s t rc $
                     \ f1@(FailureInfo strength1 pos1 exp1)-> q g s t rc $
                     \ f2@(FailureInfo strength2 pos2 exp2)-> fc $
@@ -181,9 +176,9 @@ P p <<|> P q = P (\g s t rc fc-> p g s t rc $
                                              | otherwise = (pos1, exp1 <> exp2)
                             in FailureInfo strength1 pos' exp')
 
-instance Monoid s => Monad (Parser g s) where
+instance Monad (Parser g s) where
    return = pure
-   (>>=) :: forall g s a b. Parser g s a -> (a -> Parser g s b) -> Parser g s b
+   (>>=) :: forall a b. Parser g s a -> (a -> Parser g s b) -> Parser g s b
    P p >>= f = P q
       where q :: forall r'. Maybe (GrammarResults g s) -> s -> [(GrammarResults g s, s)]
                -> (ResultInfo g s b -> GrammarDerived g s (ResultList g s r'))
@@ -192,12 +187,12 @@ instance Monoid s => Monad (Parser g s) where
             q g s t rc fc = p g s t rc' fc
                where rc' (ResultInfo g' s' t' r) = parseP (f r) g' s' t' rc fc
    (>>) = (*>)
-   fail msg = P (\g s t rc fc-> fc $ FailureInfo 0 maxBound [msg])
+   fail msg = P (\_ _ _ _ fc-> fc $ FailureInfo 0 maxBound [msg])
 
 instance Monoid s => MonadPlus (Parser g s) where
    mzero = empty
    mplus = (<|>)
 
-instance (Rank2.Functor g, MonoidNull s, Monoid x) => Monoid (Parser g s x) where
+instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend

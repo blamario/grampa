@@ -13,5 +13,5 @@ infixJoin op a b = "(" <> a <> op <> b <> ")"
 keyword :: (Show s, TextualMonoid s, Rank2.Functor g) => s -> Parser g s s
 keyword kwd = spaces *> string kwd <* notFollowedBy (satisfyChar isAlphaNum)
 
-symbol :: (Show s, TextualMonoid s, Rank2.Functor g) => s -> Parser g s s
+symbol :: (Show s, TextualMonoid s) => s -> Parser g s s
 symbol s = spaces *> string s

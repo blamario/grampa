@@ -25,6 +25,7 @@ parseBoolean s = case parseAll (fixGrammar boolean) (Boolean.expr . Rank2.snd) s
                  of Right [r] -> [r]
                     r -> error ("Unexpected " <> show r)
 
+zeroes, ones, falsehoods, truths, groupedLeft, groupedRight :: Int -> String
 zeroes n = "0" <> concat (replicate n "+0")
 ones n = "1" <> concat (replicate n "*1")
 falsehoods n = "False" <> concat (replicate n " || False")

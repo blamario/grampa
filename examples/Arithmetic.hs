@@ -76,7 +76,7 @@ instance Rank2.Reassemblable (Arithmetic e) where
                                term= f term a,
                                factor= f factor a}
 
-arithmetic :: (ArithmeticDomain e, Rank2.Functor g) => Parser g String e -> GrammarBuilder (Arithmetic e) g String
+arithmetic :: ArithmeticDomain e => Parser g String e -> GrammarBuilder (Arithmetic e) g String
 arithmetic sub Arithmetic{..} = Arithmetic{
    expr= term
          <|> symbol "-" *> (negate <$> term)

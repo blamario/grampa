@@ -42,7 +42,7 @@ instance (Show (f Tagged), Show (f Int), Show (f Bool)) => Show (Expression f) w
                            (", arithmeticGrammar=" ++ showsPrec prec (arithmeticGrammar g)
                            (", booleanGrammar=" ++ showsPrec prec (booleanGrammar g)
                            (", comparisonGrammar=" ++ showsPrec prec (comparisonGrammar g)
-                           (", conditionalGrammar=" ++ showsPrec prec (conditionalGrammar g) "}"))))
+                           (", conditionalGrammar=" ++ showsPrec prec (conditionalGrammar g) ("}" ++ rest)))))
 
 instance Rank2.Functor Expression where
    fmap f g = g{expr= f (expr g),

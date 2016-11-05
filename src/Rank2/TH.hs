@@ -4,18 +4,15 @@
 module Rank2.TH where
 
 import Control.Monad (replicateM)
-import Data.Foldable (foldMap)
-import Data.Functor
 import Data.Monoid ((<>))
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax (BangType, VarBangType, getQ, putQ)
 
-import Debug.Trace (trace)
-
 import qualified Rank2
 
-data Deriving = Deriving { tyCon :: Name, tyVar :: Name }
+data Deriving = Deriving { derivingConstructor :: Name, derivingVariable :: Name }
 
+deriveAll :: Name -> Q [Dec]
 deriveAll ty = foldr f (pure []) [deriveFunctor, deriveApply, deriveAlternative, deriveReassemblable,
                                   deriveFoldable, deriveTraversable]
    where f derive rest = (<>) <$> derive ty <*> rest
@@ -50,9 +47,10 @@ deriveTraversable ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Traversable ty
    sequence [instanceD (return []) instanceType [genTraverse cs]]
 
+reifyConstructors :: Name -> Name -> Q (TypeQ, [Con])
 reifyConstructors cls ty = do
    (TyConI tyCon) <- reify ty
-   (tyConName, tyVars, kind, cs) <- case tyCon of
+   (tyConName, tyVars, _kind, cs) <- case tyCon of
       DataD _ nm tyVars kind cs _   -> return (nm, tyVars, kind, cs)
       NewtypeD _ nm tyVars kind c _ -> return (nm, tyVars, kind, [c])
       _ -> fail "deriveApply: tyCon may not be a type synonym."
@@ -91,10 +89,10 @@ genFmapClause (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
    let pats = [varP f, conP name (map varP fieldNames)]
-       body = normalB $ appsE $ conE name : map (newField f) (zip fieldNames fieldTypes)
-       newField :: Name -> (Name, BangType) -> Q Exp
-       newField f (x, (_, fieldType)) = do
-          Just (Deriving typeCon typeVar) <- getQ
+       body = normalB $ appsE $ conE name : zipWith newField fieldNames fieldTypes
+       newField :: Name -> BangType -> Q Exp
+       newField x (_, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> [| $(varE f) $(varE x) |]
              _ -> [| $(varE x) |]
@@ -102,10 +100,10 @@ genFmapClause (NormalC name fieldTypes) = do
 genFmapClause (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
-   let body = normalB $ recConE name $ map (newNamedField f x) fields
-       newNamedField :: Name -> Name -> VarBangType -> Q (Name, Exp)
-       newNamedField f x (fieldName, _, fieldType) = do
-          Just (Deriving typeCon typeVar) <- getQ
+   let body = normalB $ recConE name $ map newNamedField fields
+       newNamedField :: VarBangType -> Q (Name, Exp)
+       newNamedField (fieldName, _, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE f) ($(varE fieldName) $(varE x)) |]
              _ -> fieldExp fieldName [| $(varE x) |]
@@ -119,17 +117,17 @@ genApClause (NormalC name fieldTypes) = do
        body = normalB $ appsE $ conE name : zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
        newField :: (Name, Name) -> BangType -> Q Exp
        newField (x, y) (_, fieldType) = do
-          Just (Deriving typeCon typeVar) <- getQ
+          Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> [| Rank2.apply $(varE x) $(varE y) |]
    clause pats body []
 genApClause (RecC name fields) = do
    x <- newName "x"
    y <- newName "y"
-   let body = normalB $ recConE name $ map (newNamedField x y) fields
-       newNamedField :: Name -> Name -> VarBangType -> Q (Name, Exp)
-       newNamedField x y (fieldName, _, fieldType) = do
-          Just (Deriving typeCon typeVar) <- getQ
+   let body = normalB $ recConE name $ map newNamedField fields
+       newNamedField :: VarBangType -> Q (Name, Exp)
+       newNamedField (fieldName, _, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE fieldName) $(varE x) `Rank2.apply`
                                                                        $(varE fieldName) $(varE y) |]
@@ -142,7 +140,7 @@ genEmptyClause (RecC name fields) = clause [] body []
    where body = normalB $ recConE name $ map emptyField fields
          emptyField :: VarBangType -> Q (Name, Exp)
          emptyField (fieldName, _, fieldType) = do
-            Just (Deriving typeCon typeVar) <- getQ
+            Just (Deriving _ typeVar) <- getQ
             case fieldType of
                AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| empty |]
  
@@ -154,17 +152,17 @@ genChooseClause (NormalC name fieldTypes) = do
        body = normalB $ appsE $ conE name : zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
        newField :: (Name, Name) -> BangType -> Q Exp
        newField (x, y) (_, fieldType) = do
-          Just (Deriving typeCon typeVar) <- getQ
+          Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> [| $(varE x) <|> $(varE y) |]
    clause pats body []
 genChooseClause (RecC name fields) = do
    x <- newName "x"
    y <- newName "y"
-   let body = normalB $ recConE name $ map (newNamedField x y) fields
-       newNamedField :: Name -> Name -> VarBangType -> Q (Name, Exp)
-       newNamedField x y (fieldName, _, fieldType) = do
-          Just (Deriving typeCon typeVar) <- getQ
+   let body = normalB $ recConE name $ map newNamedField fields
+       newNamedField :: VarBangType -> Q (Name, Exp)
+       newNamedField (fieldName, _, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE fieldName) $(varE x) <|>
                                                                      $(varE fieldName) $(varE y) |]
@@ -174,10 +172,10 @@ genReassembleClause :: Con -> Q Clause
 genReassembleClause (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
-   let body = normalB $ recConE name $ map (newNamedField f x) fields
-       newNamedField :: Name -> Name -> VarBangType -> Q (Name, Exp)
-       newNamedField f x (fieldName, _, fieldType) = do
-          Just (Deriving typeCon typeVar) <- getQ
+   let body = normalB $ recConE name $ map newNamedField fields
+       newNamedField :: VarBangType -> Q (Name, Exp)
+       newNamedField (fieldName, _, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE f) $(varE fieldName) $(varE x) |]
              _ -> fieldExp fieldName [| $(varE x) |]
@@ -188,23 +186,23 @@ genFoldMapClause (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
    let pats = [varP f, conP name (map varP fieldNames)]
-       body = normalB $ foldr1 append $ map (newField f) (zip fieldNames fieldTypes)
+       body = normalB $ foldr1 append $ zipWith newField fieldNames fieldTypes
        append a b = [| $(a) <> $(b) |]
-       newField :: Name -> (Name, BangType) -> Q Exp
-       newField f (x, (_, fieldType)) = do
-          Just (Deriving typeCon typeVar) <- getQ
+       newField :: Name -> BangType -> Q Exp
+       newField x (_, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> [| $(varE f) $(varE x) |]
              _ -> [| $(varE x) |]
    clause pats body []
-genFoldMapClause (RecC name fields) = do
+genFoldMapClause (RecC _name fields) = do
    f <- newName "f"
    x <- newName "x"
-   let body = normalB $ foldr1 append $ map (newField f x) fields
+   let body = normalB $ foldr1 append $ map newField fields
        append a b = [| $(a) <> $(b) |]
-       newField :: Name -> Name -> VarBangType -> Q Exp
-       newField f x (fieldName, _, fieldType) = do
-          Just (Deriving typeCon typeVar) <- getQ
+       newField :: VarBangType -> Q Exp
+       newField (fieldName, _, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> [| $(varE f) ($(varE fieldName) $(varE x)) |]
              _ -> [| $(varE x) |]
@@ -215,12 +213,12 @@ genTraverseClause (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
    let pats = [varP f, conP name (map varP fieldNames)]
-       body = normalB $ fst $ foldl apply (conE name, False) $ map (newField f) (zip fieldNames fieldTypes)
+       body = normalB $ fst $ foldl apply (conE name, False) $ zipWith newField fieldNames fieldTypes
        apply (a, False) b = ([| $(a) <$> $(b) |], True)
        apply (a, True) b = ([| $(a) <*> $(b) |], True)
-       newField :: Name -> (Name, BangType) -> Q Exp
-       newField f (x, (_, fieldType)) = do
-          Just (Deriving typeCon typeVar) <- getQ
+       newField :: Name -> BangType -> Q Exp
+       newField x (_, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> [| $(varE f) $(varE x) |]
              _ -> [| $(varE x) |]
@@ -228,12 +226,12 @@ genTraverseClause (NormalC name fieldTypes) = do
 genTraverseClause (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
-   let body = normalB $ fst $ foldl apply (conE name, False) $ map (newField f x) fields
+   let body = normalB $ fst $ foldl apply (conE name, False) $ map newField fields
        apply (a, False) b = ([| $(a) <$> $(b) |], True)
        apply (a, True) b = ([| $(a) <*> $(b) |], True)
-       newField :: Name -> Name -> VarBangType -> Q Exp
-       newField f x (fieldName, _, fieldType) = do
-          Just (Deriving typeCon typeVar) <- getQ
+       newField :: VarBangType -> Q Exp
+       newField (fieldName, _, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> [| $(varE f) ($(varE fieldName) $(varE x)) |]
              _ -> [| $(varE x) |]

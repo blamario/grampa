@@ -29,12 +29,13 @@ instance ComparisonDomain [Char] [Char] where
    greaterOrEqual = infixJoin ">="
    greaterThan = infixJoin ">"
 
+infixJoin :: String -> String -> String -> String
 infixJoin rel a b = a <> rel <> b
 
 data Comparisons c e f =
    Comparisons{expr :: f e}
 
-instance (Show (f c), Show (f e)) => Show (Comparisons c e f) where
+instance (Show (f e)) => Show (Comparisons c e f) where
    showsPrec prec g rest = "Comparisons{expr=" ++ showsPrec prec (expr g) ("}" ++ rest)
 
 instance Rank2.Functor (Comparisons c e) where
@@ -56,7 +57,7 @@ instance Rank2.Traversable (Comparisons c e) where
 instance Rank2.Reassemblable (Comparisons c e) where
    reassemble f a = Comparisons{expr= f expr a}
 
-comparisons :: (ComparisonDomain c e, Rank2.Functor g) => Parser g String c -> GrammarBuilder (Comparisons c e) g String
+comparisons :: (ComparisonDomain c e) => Parser g String c -> GrammarBuilder (Comparisons c e) g String
 comparisons comparable Comparisons{..} =
    Comparisons{
       expr= lessThan <$> comparable <* symbol "<" <*> comparable

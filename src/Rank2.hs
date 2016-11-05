@@ -4,17 +4,9 @@ module Rank2 (Functor(..), Apply(..), Alternative(..), Foldable(..), Traversable
 where
 
 import qualified Control.Applicative as Rank1
-import Control.Arrow (first, second)
-import Control.Monad (Monad(..), MonadPlus(..))
-import Control.Monad.Trans.State (State, evalState, get, modify)
-import Data.Function(fix)
-import Data.Functor.Classes (Show1(liftShowsPrec))
-import Data.Functor.Compose (Compose(Compose, getCompose))
-import Data.Monoid (Monoid(mappend, mempty), All(..), (<>))
-import Data.Monoid.Null (MonoidNull(null))
-import Data.Monoid.Factorial (FactorialMonoid(spanMaybe', splitPrimePrefix, tails))
+import Data.Monoid (mempty, (<>))
 
-import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), Alternative(..), fst, snd)
+import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), fst, snd)
 
 -- | Equivalent of 'Functor' for rank 2 data types
 class Functor g where
@@ -65,7 +57,7 @@ data Product g h (f :: * -> *) = Pair {fst :: g f,
                                deriving (Eq, Ord, Show)
 
 instance Functor Empty where
-   fmap f Empty = Empty
+   fmap _ Empty = Empty
 
 instance Functor (Singleton a) where
    fmap f (Singleton a) = Singleton (f a)
@@ -77,7 +69,7 @@ instance (Functor g, Functor h) => Functor (Product g h) where
    fmap f (Pair g h) = Pair (fmap f g) (fmap f h)
 
 instance Foldable Empty where
-   foldMap f Empty = mempty
+   foldMap _ Empty = mempty
 
 instance Foldable (Singleton x) where
    foldMap f (Singleton x) = f x
@@ -89,7 +81,7 @@ instance (Foldable g, Foldable h) => Foldable (Product g h) where
    foldMap f (Pair g h) = foldMap f g <> foldMap f h
 
 instance Traversable Empty where
-   traverse f Empty = Rank1.pure Empty
+   traverse _ Empty = Rank1.pure Empty
 
 instance Traversable (Singleton x) where
    traverse f (Singleton x) = Singleton <$> f x
@@ -129,10 +121,10 @@ instance (Alternative g, Alternative h) => Alternative (Product g h) where
    choose (Pair g1 h1) (Pair g2 h2) = Pair (choose g1 g2) (choose h1 h2)
 
 instance Reassemblable Empty where
-   reassemble f Empty = Empty
+   reassemble _ Empty = Empty
 
 instance Reassemblable (Singleton x) where
-   reassemble f s@(Singleton x) = Singleton (f getSingle s)
+   reassemble f s@Singleton{} = Singleton (f getSingle s)
 
 instance forall g. Reassemblable g => Reassemblable (Identity g) where
    reassemble :: forall p q. (forall a. (forall f. Identity g f -> f a) -> Identity g p -> q a)
