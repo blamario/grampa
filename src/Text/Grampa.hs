@@ -68,7 +68,7 @@ instance (Rank2.Functor g, MonoidNull s) => Parsing (Parser g s) where
                (const $ rc $ ResultInfo g s t ())
                (\rs -> if null rs then rc (ResultInfo g s t ())
                        else fc (FailureInfo (failureStrength g) (fromIntegral $ length t) ["notFollowedBy"]))
-               (resultList $ gd2rl (error "notFollowedBy nonTerminal") $ p g s t (pure . pure) concede)
+               (resultList $ gd2rl (error "notFollowedBy nonTerminal") $ p g s t succeed concede)
    skipMany p = go
       where go = pure () <|> p *> go
    unexpected msg = P (\g _ t _ fc -> fc (FailureInfo (failureStrength g) (fromIntegral $ length t) [msg]))
