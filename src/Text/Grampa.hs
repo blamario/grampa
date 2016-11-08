@@ -15,6 +15,7 @@ where
 
 import Control.Applicative
 import Data.Char (isSpace)
+import Data.List (genericLength)
 import Data.Monoid.Cancellative (LeftReductiveMonoid (stripPrefix))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid(length, spanMaybe', splitPrimePrefix))
@@ -67,11 +68,11 @@ instance (Rank2.Functor g, MonoidNull s) => Parsing (Parser g s) where
       where f g s t rc fc = either
                (const $ rc $ ResultInfo g s t ())
                (\rs -> if null rs then rc (ResultInfo g s t ())
-                       else fc (FailureInfo (failureStrength g) (fromIntegral $ length t) ["notFollowedBy"]))
+                       else fc (FailureInfo (failureStrength g) (genericLength t) ["notFollowedBy"]))
                (resultList $ gd2rl (error "notFollowedBy nonTerminal") $ p g s t succeed concede)
    skipMany p = go
       where go = pure () <|> p *> go
-   unexpected msg = P (\g _ t _ fc -> fc (FailureInfo (failureStrength g) (fromIntegral $ length t) [msg]))
+   unexpected msg = P (\g _ t _ fc -> fc (FailureInfo (failureStrength g) (genericLength t) [msg]))
    eof = endOfInput
 
 instance (Rank2.Functor g, MonoidNull s) => LookAheadParsing (Parser g s) where
@@ -97,7 +98,7 @@ endOfInput :: (MonoidNull s) => Parser g s ()
 endOfInput = P f
    where f g s t rc fc
             | null s = rc (ResultInfo g s t ())
-            | otherwise = fc (FailureInfo (failureStrength g) (fromIntegral $ length t) ["endOfInput"])
+            | otherwise = fc (FailureInfo (failureStrength g) (genericLength t) ["endOfInput"])
 
 -- | Always sucessful parser that returns the remaining input without consuming it.
 getInput :: (MonoidNull s) => Parser g s s
@@ -121,7 +122,7 @@ takeWhile predicate = P f
 takeWhile1 :: (FactorialMonoid s) => (s -> Bool) -> Parser g s s
 takeWhile1 predicate = P f
    where f g s t rc fc
-            | null prefix = fc (FailureInfo (failureStrength g) (fromIntegral $ length t) ["takeCharsWhile1"])
+            | null prefix = fc (FailureInfo (failureStrength g) (genericLength t) ["takeCharsWhile1"])
             | otherwise = rc (ResultInfo (Just g') s' t' prefix)
             where prefix = Factorial.takeWhile predicate s
                   (g', s'):t' = drop (length prefix - 1) t
@@ -142,7 +143,7 @@ takeCharsWhile predicate = P f
 takeCharsWhile1 :: (TextualMonoid s) => (Char -> Bool) -> Parser g s s
 takeCharsWhile1 predicate = P f
    where f g s t rc fc
-            | null prefix = fc (FailureInfo (failureStrength g) (fromIntegral $ length t) ["takeCharsWhile1"])
+            | null prefix = fc (FailureInfo (failureStrength g) (genericLength t) ["takeCharsWhile1"])
             | otherwise = rc (ResultInfo (Just g') s' t' prefix)
             where prefix = Textual.takeWhile_ False predicate s
                   (g', s'):t' = drop (length prefix - 1) t
@@ -181,7 +182,7 @@ anyToken = P f
    where f g s t rc fc =
             case splitPrimePrefix s
             of Just (first, _) | (g', s'):t' <- t -> rc (ResultInfo (Just g') s' t' first)
-               _ -> fc (FailureInfo (failureStrength g) (fromIntegral $ length s) ["anyToken"])
+               _ -> fc (FailureInfo (failureStrength g) (genericLength t) ["anyToken"])
 
 -- | A parser that accepts a specific input atom.
 token :: (Eq s, FactorialMonoid s) => s -> Parser g s s
@@ -193,7 +194,7 @@ satisfy predicate = P f
    where f g s t rc fc =
             case splitPrimePrefix s
             of Just (first, _) | predicate first, (g', s'):t' <- t -> rc (ResultInfo (Just g') s' t' first)
-               _ -> fc (FailureInfo (failureStrength g) (fromIntegral $ length s) ["satisfy"])
+               _ -> fc (FailureInfo (failureStrength g) (genericLength t) ["satisfy"])
 
 -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the given
 -- predicate.
@@ -202,7 +203,7 @@ satisfyChar predicate = P f
    where f g s t rc fc =
             case Textual.splitCharacterPrefix s
             of Just (first, _) | predicate first, (g', s'):t' <- t -> rc (ResultInfo (Just g') s' t' first)
-               _ -> fc (FailureInfo (failureStrength g) (fromIntegral $ length s) ["satisfyChar"])
+               _ -> fc (FailureInfo (failureStrength g) (genericLength t) ["satisfyChar"])
 
 -- | A parser that consumes and returns the given prefix of the input.
 string :: (Show s, LeftReductiveMonoid s, FactorialMonoid s) => s -> Parser g s s
@@ -210,7 +211,7 @@ string x | null x = pure x
 string x = P $ \g y t rc fc-> 
    case stripPrefix x y
    of Just{} | (g', s'):t' <- drop (length x - 1) t -> rc (ResultInfo (Just g') s' t' x)
-      _ -> fc (FailureInfo (1 + failureStrength g) (fromIntegral $ length t) ["string " ++ show x])
+      _ -> fc (FailureInfo (1 + failureStrength g) (genericLength t) ["string " ++ show x])
 
 -- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
 -- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
