@@ -1,16 +1,20 @@
 {-# LANGUAGE InstanceSigs, KindSignatures, Rank2Types, ScopedTypeVariables #-}
-module Rank2 (Functor(..), Apply(..), Alternative(..), Foldable(..), Traversable(..),
-              Reassemblable(..), Empty(..), Singleton(..), Identity(..), Product(..), Arrow(..))
+module Rank2 (Functor(..), Apply(..), Foldable(..), Traversable(..), Reassemblable(..),
+              Empty(..), Singleton(..), Identity(..), Product(..), Arrow(..),
+             (<$>), (<*>), liftA2, liftA3)
 where
 
 import qualified Control.Applicative as Rank1
 import Data.Monoid (mempty, (<>))
 
-import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), fst, snd)
+import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
 -- | Equivalent of 'Functor' for rank 2 data types
 class Functor g where
    fmap :: (forall a. p a -> q a) -> g p -> g q
+
+(<$>) :: Functor g => (forall a. p a -> q a) -> g p -> g q
+(<$>) = fmap
 
 -- | Equivalent of 'Foldable' for rank 2 data types
 class Functor g => Foldable g where
@@ -20,7 +24,7 @@ class Functor g => Foldable g where
 class Foldable g => Traversable g where
    traverse :: Rank1.Applicative m => (forall a. p a -> m (q a)) -> g p -> m (g q)
 
-data Arrow p q a = Arrow{apply :: p a -> q a}
+newtype Arrow p q a = Arrow{apply :: p a -> q a}
 
 -- | Equivalent of 'Rank1.Applicative' with no 'pure' method, for rank 2 data types
 --
@@ -28,17 +32,14 @@ data Arrow p q a = Arrow{apply :: p a -> q a}
 class Functor g => Apply g where
    ap :: g (Arrow p q) -> g p -> g q
 
--- | Equivalent of 'Rank1.Applicative' with no 'pure' method, for rank 2 data types
---
--- > choose empty x == x
--- > choose x empty == x
--- > x `choose` (y `choose` z) == (x `choose` y) `choose` z
--- > ap empty x == empty
--- > ap x (choose y z) == choose (ap x y) (ap x z)
--- > ap (choose x y) z == choose (ap x z) (ap y z)
-class Apply g => Alternative g where
-   empty :: Rank1.Alternative p => g p
-   choose :: Rank1.Alternative p => g p -> g p -> g p
+(<*>) :: Apply g => g (Arrow p q) -> g p -> g q
+(<*>) = ap
+
+liftA2 :: Apply g => (forall a. p a -> q a -> r a) -> g p -> g q -> g r
+liftA2 f g h = (Arrow . f) <$> g <*> h
+
+liftA3 :: Apply g => (forall a. p a -> q a -> r a -> s a) -> g p -> g q -> g r -> g s
+liftA3 f g h i = (\x-> Arrow (Arrow . f x)) <$> g <*> h <*> i
 
 -- | Subclass of 'Functor' that allows access to parts of the data structure
 class Functor g => Reassemblable g where
@@ -46,10 +47,10 @@ class Functor g => Reassemblable g where
 
 data Empty (f :: * -> *) = Empty deriving (Eq, Ord, Show)
 
-data Singleton a (f :: * -> *) = Singleton {getSingle :: f a} deriving (Eq, Ord, Show)
+newtype Singleton a (f :: * -> *) = Singleton {getSingle :: f a} deriving (Eq, Ord, Show)
 
 -- | Equivalent of 'Data.Functor.Identity' for rank 2 data types
-data Identity g (f :: * -> *) = Identity {runIdentity :: g f} deriving (Eq, Ord, Show)
+newtype Identity g (f :: * -> *) = Identity {runIdentity :: g f} deriving (Eq, Ord, Show)
 
 -- | Equivalent of 'Data.Functor.Product' for rank 2 data types
 data Product g h (f :: * -> *) = Pair {fst :: g f,
@@ -84,7 +85,7 @@ instance Traversable Empty where
    traverse _ Empty = Rank1.pure Empty
 
 instance Traversable (Singleton x) where
-   traverse f (Singleton x) = Singleton <$> f x
+   traverse f (Singleton x) = Singleton Rank1.<$> f x
 
 instance Traversable g => Traversable (Identity g) where
    traverse f (Identity g) = Identity Rank1.<$> traverse f g
@@ -103,22 +104,6 @@ instance Apply g => Apply (Identity g) where
 
 instance (Apply g, Apply h) => Apply (Product g h) where
    ap (Pair gf hf) (Pair g h) = Pair (ap gf g) (ap hf h)
-
-instance Alternative Empty where
-   empty = Empty
-   choose Empty Empty = Empty
-
-instance Alternative (Singleton x) where
-   empty = Singleton Rank1.empty
-   choose (Singleton x) (Singleton y) = Singleton (x Rank1.<|> y)
-
-instance Alternative g => Alternative (Identity g) where
-   empty = Identity empty
-   choose (Identity g) (Identity h) = Identity (choose g h)
-
-instance (Alternative g, Alternative h) => Alternative (Product g h) where
-   empty = Pair empty empty
-   choose (Pair g1 h1) (Pair g2 h2) = Pair (choose g1 g2) (choose h1 h2)
 
 instance Reassemblable Empty where
    reassemble _ Empty = Empty

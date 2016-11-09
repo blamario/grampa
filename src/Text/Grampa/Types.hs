@@ -57,7 +57,7 @@ fixGrammar gf = fix . (. Rank2.reassemble nt) $ gf
                                    of Left err -> ResultList (Left err)
                                       Right rs -> gd2rl gr (foldMap rc rs)
 
-fixGrammarInput :: forall s g. (FactorialMonoid s, Rank2.Alternative g, Rank2.Traversable g) =>
+fixGrammarInput :: forall s g. (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g) =>
                    Grammar g s -> s -> [(GrammarResults g s, s)]
 fixGrammarInput g s = foldr parseTail [] (tails s)
    where parseTail :: s -> [(GrammarResults g s, s)] -> [(GrammarResults g s, s)]
@@ -66,7 +66,7 @@ fixGrammarInput g s = foldr parseTail [] (tails s)
                   g' :: g (GrammarParseResults g s)
                   g' = Rank2.fmap (\(P p)-> GrammarParseResults $ p Nothing input parsedTail succeed concede) g
                   grammarResults' :: GrammarResults g s
-                  grammarResults' = foldr1 Rank2.choose (iterate rf rl [])
+                  grammarResults' = foldr1 (Rank2.liftA2 (<>)) (iterate rf rl [])
                      where GrammarDerived rl rf = Rank2.traverse grammarParseResults g'
 
 iterate :: Rank2.Foldable g =>
@@ -102,15 +102,6 @@ instance Functor (ResultInfo g s) where
 instance Functor (ResultList g s) where
    fmap f (ResultList l) = ResultList ((fourth <$>) <$> l)
       where fourth (ResultInfo a b c d) = ResultInfo a b c (f d)
-
-instance Monoid s => Applicative (ResultList g s) where
-   pure r = ResultList (Right [ResultInfo Nothing mempty [] r])
-   ResultList a <*> ResultList b = ResultList (apply <$> a <*> b)
-      where apply rl1 rl2 = [ResultInfo g1 s1 t1 (f x) | ResultInfo g1 s1 t1 f <- rl1, ResultInfo _g2 _s2 _t2 x <- rl2]
-
-instance Monoid s => Alternative (ResultList g s) where
-   empty = mempty
-   (<|>) = mappend
 
 instance Monoid (ResultList g s r) where
    mempty = ResultList (Left $ FailureInfo 0 maxBound ["empty"])
@@ -187,7 +178,7 @@ instance Monad (Parser g s) where
    (>>) = (*>)
    fail msg = P (\_ _ _ _ fc-> fc $ FailureInfo 0 maxBound [msg])
 
-instance Monoid s => MonadPlus (Parser g s) where
+instance MonadPlus (Parser g s) where
    mzero = empty
    mplus = (<|>)
 

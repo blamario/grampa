@@ -58,18 +58,6 @@ instance Rank2.Apply Expression where
                        comparisonGrammar= comparisonGrammar a `Rank2.ap` comparisonGrammar b,
                        conditionalGrammar= conditionalGrammar a `Rank2.ap` conditionalGrammar b}
 
-instance Rank2.Alternative Expression where
-   empty = Expression{expr= empty,
-                      arithmeticGrammar= Rank2.empty,
-                      booleanGrammar= Rank2.empty,
-                      comparisonGrammar= Rank2.empty,
-                      conditionalGrammar= Rank2.empty}
-   choose a b = Expression{expr= expr a <|> expr b,
-                           arithmeticGrammar= arithmeticGrammar a `Rank2.choose` arithmeticGrammar b,
-                           booleanGrammar= booleanGrammar a `Rank2.choose` booleanGrammar b,
-                           comparisonGrammar= comparisonGrammar a `Rank2.choose` comparisonGrammar b,
-                           conditionalGrammar= conditionalGrammar a `Rank2.choose` conditionalGrammar b}
-
 instance Rank2.Foldable Expression where
    foldMap f g = f (expr g) <> Rank2.foldMap f (arithmeticGrammar g) <> Rank2.foldMap f (booleanGrammar g)
                  <> Rank2.foldMap f (comparisonGrammar g) <> Rank2.foldMap f (conditionalGrammar g)

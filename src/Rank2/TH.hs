@@ -13,8 +13,7 @@ import qualified Rank2
 data Deriving = Deriving { derivingConstructor :: Name, derivingVariable :: Name }
 
 deriveAll :: Name -> Q [Dec]
-deriveAll ty = foldr f (pure []) [deriveFunctor, deriveApply, deriveAlternative, deriveReassemblable,
-                                  deriveFoldable, deriveTraversable]
+deriveAll ty = foldr f (pure []) [deriveFunctor, deriveApply, deriveReassemblable, deriveFoldable, deriveTraversable]
    where f derive rest = (<>) <$> derive ty <*> rest
 
 deriveFunctor :: Name -> Q [Dec]
@@ -26,11 +25,6 @@ deriveApply :: Name -> Q [Dec]
 deriveApply ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Apply ty
    sequence [instanceD (return []) instanceType [genAp cs]]
-
-deriveAlternative :: Name -> Q [Dec]
-deriveAlternative ty = do
-   (instanceType, cs) <- reifyConstructors ''Rank2.Alternative ty
-   sequence [instanceD (return []) instanceType [genEmpty cs, genChoose cs]]
 
 deriveReassemblable :: Name -> Q [Dec]
 deriveReassemblable ty = do
@@ -68,12 +62,6 @@ genFmap cs = funD 'Rank2.fmap (map genFmapClause cs)
 
 genAp :: [Con] -> Q Dec
 genAp cs = funD 'Rank2.ap (map genApClause cs)
-
-genEmpty :: [Con] -> Q Dec
-genEmpty (con:_) = funD 'Rank2.empty [genEmptyClause con]
-
-genChoose :: [Con] -> Q Dec
-genChoose cs = funD 'Rank2.choose (map genChooseClause cs)
 
 genReassemble :: [Con] -> Q Dec
 genReassemble cs = funD 'Rank2.reassemble (map genReassembleClause cs)
@@ -131,41 +119,6 @@ genApClause (RecC name fields) = do
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE fieldName) $(varE x) `Rank2.apply`
                                                                        $(varE fieldName) $(varE y) |]
-   clause [varP x, varP y] body []
-
-genEmptyClause :: Con -> Q Clause
-genEmptyClause (NormalC name fieldTypes) = clause [] body []
-   where body = normalB $ appsE $ conE name : replicate (length fieldTypes) [| empty |]
-genEmptyClause (RecC name fields) = clause [] body []
-   where body = normalB $ recConE name $ map emptyField fields
-         emptyField :: VarBangType -> Q (Name, Exp)
-         emptyField (fieldName, _, fieldType) = do
-            Just (Deriving _ typeVar) <- getQ
-            case fieldType of
-               AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| empty |]
- 
-genChooseClause :: Con -> Q Clause
-genChooseClause (NormalC name fieldTypes) = do
-   fieldNames1 <- replicateM (length fieldTypes) (newName "x")
-   fieldNames2 <- replicateM (length fieldTypes) (newName "y")
-   let pats = [conP name (map varP fieldNames1), conP name (map varP fieldNames2)]
-       body = normalB $ appsE $ conE name : zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
-       newField :: (Name, Name) -> BangType -> Q Exp
-       newField (x, y) (_, fieldType) = do
-          Just (Deriving _ typeVar) <- getQ
-          case fieldType of
-             AppT ty _ | ty == VarT typeVar -> [| $(varE x) <|> $(varE y) |]
-   clause pats body []
-genChooseClause (RecC name fields) = do
-   x <- newName "x"
-   y <- newName "y"
-   let body = normalB $ recConE name $ map newNamedField fields
-       newNamedField :: VarBangType -> Q (Name, Exp)
-       newNamedField (fieldName, _, fieldType) = do
-          Just (Deriving _ typeVar) <- getQ
-          case fieldType of
-             AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE fieldName) $(varE x) <|>
-                                                                     $(varE fieldName) $(varE y) |]
    clause [varP x, varP y] body []
 
 genReassembleClause :: Con -> Q Clause

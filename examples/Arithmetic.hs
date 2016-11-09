@@ -56,12 +56,6 @@ instance Rank2.Apply (Arithmetic e) where
                         (term a `Rank2.apply` term a')
                         (factor a `Rank2.apply` factor a')
 
-instance Rank2.Alternative (Arithmetic e) where
-   empty = Arithmetic empty empty empty
-   choose a a' = Arithmetic{expr = expr a <|> expr a',
-                            term = term a <|> term a',
-                            factor = factor a <|> factor a'}
-
 instance Rank2.Foldable (Arithmetic e) where
    foldMap f a = f (expr a) <> f (term a) <> f (factor a)
 

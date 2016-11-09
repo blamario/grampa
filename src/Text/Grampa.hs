@@ -37,11 +37,11 @@ import Prelude hiding (length, null, span, takeWhile)
 type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
 type ParseResults r = Either FailureInfo [r]
 
-parse :: (FactorialMonoid s, Rank2.Alternative g, Rank2.Traversable g) =>
+parse :: (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g) =>
          Grammar g s -> (forall f. g f -> f r) -> s -> ParseResults (r, s)
 parse g prod input = fromResultList input (prod $ fst $ head $ fixGrammarInput g input)
 
-parseAll :: (FactorialMonoid s, Rank2.Alternative g, Rank2.Traversable g) =>
+parseAll :: (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g) =>
          Grammar g s -> (forall f. g f -> f r) -> s -> ParseResults r
 parseAll g prod input =
    ((fst <$>) . filter (null . snd)) <$> fromResultList input (prod $ fst $ head $ fixGrammarInput g input)

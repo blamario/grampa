@@ -31,10 +31,6 @@ instance Rank2.Functor (Conditionals e) where
 instance Rank2.Apply (Conditionals e) where
    ap a a' = Conditionals (expr a `Rank2.apply` expr a')
 
-instance Rank2.Alternative (Conditionals e) where
-   empty = Conditionals empty
-   choose a a' = Conditionals{expr = expr a <|> expr a'}
-
 instance Rank2.Foldable (Conditionals e) where
    foldMap f a = f (expr a)
 
