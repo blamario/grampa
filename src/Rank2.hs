@@ -5,7 +5,10 @@ module Rank2 (Functor(..), Apply(..), Foldable(..), Traversable(..), Reassemblab
 where
 
 import qualified Control.Applicative as Rank1
-import Data.Monoid (mempty, (<>))
+import qualified Data.Foldable as Rank1
+import qualified Data.Functor as Rank1
+import qualified Data.Traversable as Rank1
+import Data.Monoid (Monoid(..), (<>))
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
@@ -17,11 +20,11 @@ class Functor g where
 (<$>) = fmap
 
 -- | Equivalent of 'Foldable' for rank 2 data types
-class Functor g => Foldable g where
+class Foldable g where
    foldMap :: Monoid m => (forall a. p a -> m) -> g p -> m
 
 -- | Equivalent of 'Traversable' for rank 2 data types
-class Foldable g => Traversable g where
+class (Functor g, Foldable g) => Traversable g where
    traverse :: Rank1.Applicative m => (forall a. p a -> m (q a)) -> g p -> m (g q)
 
 newtype Arrow p q a = Arrow{apply :: p a -> q a}
@@ -56,6 +59,24 @@ newtype Identity g (f :: * -> *) = Identity {runIdentity :: g f} deriving (Eq, O
 data Product g h (f :: * -> *) = Pair {fst :: g f,
                                        snd :: h f}
                                deriving (Eq, Ord, Show)
+
+newtype Flip g a f = Flip (g (f a)) deriving (Eq, Ord, Show)
+
+instance Monoid (g (f a)) => Monoid (Flip g a f) where
+   mempty = Flip mempty
+   Flip x `mappend` Flip y = Flip (x `mappend` y)
+
+instance Rank1.Functor g => Rank2.Functor (Flip g a) where
+   fmap f (Flip g) = Flip (Rank1.fmap f g)
+
+instance Rank1.Applicative g => Rank2.Apply (Flip g a) where
+   Flip g `ap` Flip h = Flip (apply Rank1.<$> g Rank1.<*> h)
+
+instance Rank1.Foldable g => Rank2.Foldable (Flip g a) where
+   foldMap f (Flip g) = Rank1.foldMap f g
+
+instance Rank1.Traversable g => Rank2.Traversable (Flip g a) where
+   traverse f (Flip g) = Flip Rank1.<$> Rank1.traverse f g
 
 instance Functor Empty where
    fmap _ Empty = Empty
