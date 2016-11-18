@@ -45,6 +45,8 @@ liftA3 :: Apply g => (forall a. p a -> q a -> r a -> s a) -> g p -> g q -> g r -
 liftA3 f g h i = (\x-> Arrow (Arrow . f x)) <$> g <*> h <*> i
 
 -- | Subclass of 'Functor' that allows access to parts of the data structure
+-- > reassemble ($) == id
+-- > reassemble (\get-> f get . g get) == reassemble f . reassemble g
 class Functor g => Reassemblable g where
    reassemble :: (forall a. (forall f. g f -> f a) -> g p -> q a) -> g p -> g q
 

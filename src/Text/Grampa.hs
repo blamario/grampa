@@ -3,7 +3,7 @@ module Text.Grampa (
    -- * Classes
    MonoidNull, FactorialMonoid, TextualMonoid,
    -- * Types
-   FailureInfo(..), Grammar, GrammarBuilder, Parser, ParseResults,
+   Grammar, GrammarBuilder, Parser, ParseResults,
    -- * Grammar and parser manipulation
    fixGrammar, fixGrammarInput, parse, parseAll, simpleParse,
    -- * Parser combinators
@@ -35,7 +35,7 @@ import Text.Grampa.Types
 import Prelude hiding (length, null, span, takeWhile)
 
 type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
-type ParseResults r = Either FailureInfo [r]
+type ParseResults r = Either (Int, [String]) [r]
 
 parse :: (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g) =>
          Grammar g s -> (forall f. g f -> f r) -> s -> ParseResults (r, s)
@@ -46,11 +46,11 @@ parseAll :: (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g) =>
 parseAll g prod input =
    ((fst <$>) . filter (null . snd)) <$> fromResultList input (prod $ fst $ head $ fixGrammarInput g input)
 
-simpleParse :: (FactorialMonoid s) => Parser (Rank2.Singleton r) s r -> s -> ParseResults (r, s)
+simpleParse :: FactorialMonoid s => Parser (Rank2.Singleton r) s r -> s -> ParseResults (r, s)
 simpleParse p = parse (Rank2.Singleton p) Rank2.getSingle
 
-fromResultList :: s -> ResultList g s r -> Either FailureInfo [(r, s)]
-fromResultList _ (ResultList (Left err)) = Left err
+fromResultList :: FactorialMonoid s => s -> ResultList g s r -> ParseResults (r, s)
+fromResultList s (ResultList (Left (FailureInfo _ pos msgs))) = Left (length s - fromIntegral pos, msgs)
 fromResultList _ (ResultList (Right rl)) = Right (f <$> rl)
    where f (ResultInfo _ s' _ r) = (r, s')
 

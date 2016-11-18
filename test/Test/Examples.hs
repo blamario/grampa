@@ -118,10 +118,10 @@ instance Enumerable Conditional where
                <$> (\(Free (Disjunction a, Free (Sum b, Sum c)))-> "if " <> a <> " then " <> b <> " else " <> c)
                <$> pay enumerate
 
-uniqueParse :: (FactorialMonoid s, Rank2.Apply g, Rank2.Reassemblable g, Rank2.Traversable g) =>
+uniqueParse :: (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g) =>
                Grammar g s -> (forall f. g f -> f r) -> s -> r
 uniqueParse g p s = case parseAll g p s
                     of Right [r] -> r
                        Right [] -> error "Unparseable"
                        Right _ -> error "Ambiguous"
-                       Left (FailureInfo _ pos exp) -> error ("At " <> show pos <> " expected " <> show exp)
+                       Left (pos, exp) -> error ("At " <> show pos <> " expected one of " <> show exp)
