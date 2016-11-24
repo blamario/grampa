@@ -7,15 +7,18 @@ module Text.Grampa (
    -- * Grammar and parser manipulation
    fixGrammar, fixGrammarInput, parse, parseAll, simpleParse,
    -- * Parser combinators
-   lookAhead, notFollowedBy,
+   module Text.Parser.Combinators,
+   module Text.Parser.LookAhead,
    -- * Parsing primitives
+   module Text.Parser.Char,
+   module Text.Parser.Token,
    endOfInput, getInput, anyToken, token, satisfy, satisfyChar, spaces, string,
    scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1, skipCharsWhile)
 where
 
 import Control.Applicative
 import Data.Char (isSpace)
-import Data.List (genericLength)
+import Data.List (genericLength, nub)
 import Data.Monoid.Cancellative (LeftReductiveMonoid (stripPrefix))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid(length, spanMaybe', splitPrimePrefix))
@@ -37,20 +40,20 @@ import Prelude hiding (length, null, span, takeWhile)
 type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
 type ParseResults r = Either (Int, [String]) [r]
 
-parse :: (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g) =>
+parse :: (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Reassemblable g) =>
          Grammar g s -> (forall f. g f -> f r) -> s -> ParseResults (r, s)
-parse g prod input = fromResultList input (prod $ fst $ head $ fixGrammarInput g input)
+parse g prod input = fromResultList input (prod $ fst $ head $ fixGrammarInput (selfReferring g) g input)
 
-parseAll :: (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g) =>
+parseAll :: (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Reassemblable g) =>
          Grammar g s -> (forall f. g f -> f r) -> s -> ParseResults r
-parseAll g prod input =
-   ((fst <$>) . filter (null . snd)) <$> fromResultList input (prod $ fst $ head $ fixGrammarInput g input)
+parseAll g prod input = (fst <$>) <$> fromResultList input (prod $ fst $ head $ fixGrammarInput close g input)
+   where close = Rank2.fmap (<* endOfInput) $ selfReferring g
 
 simpleParse :: FactorialMonoid s => Parser (Rank2.Singleton r) s r -> s -> ParseResults (r, s)
 simpleParse p = parse (Rank2.Singleton p) Rank2.getSingle
 
 fromResultList :: FactorialMonoid s => s -> ResultList g s r -> ParseResults (r, s)
-fromResultList s (ResultList (Left (FailureInfo _ pos msgs))) = Left (length s - fromIntegral pos, msgs)
+fromResultList s (ResultList (Left (FailureInfo _ pos msgs))) = Left (length s - fromIntegral pos, nub msgs)
 fromResultList _ (ResultList (Right rl)) = Right (f <$> rl)
    where f (ResultInfo _ s' _ r) = (r, s')
 

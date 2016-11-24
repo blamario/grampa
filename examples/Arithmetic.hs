@@ -70,7 +70,7 @@ instance Rank2.Reassemblable (Arithmetic e) where
                                term= f term a,
                                factor= f factor a}
 
-arithmetic :: ArithmeticDomain e => Parser g String e -> GrammarBuilder (Arithmetic e) g String
+arithmetic :: (Rank2.Functor g, ArithmeticDomain e) => Parser g String e -> GrammarBuilder (Arithmetic e) g String
 arithmetic sub Arithmetic{..} = Arithmetic{
    expr= term
          <|> symbol "-" *> (negate <$> term)
@@ -79,6 +79,6 @@ arithmetic sub Arithmetic{..} = Arithmetic{
    term= factor
          <|> multiply <$> term <* symbol "*" <*> factor
          <|> divide <$> term <* symbol "/" <*> factor,
-   factor= skipCharsWhile isSpace *> ((number . read) <$> takeCharsWhile1 isDigit)
+   factor= skipCharsWhile isSpace *> ((number . read) <$> takeCharsWhile1 isDigit <?> "digits")
            <|> sub
            <|> symbol "(" *> expr <* symbol ")"}

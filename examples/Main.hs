@@ -25,7 +25,7 @@ main = do args <- concat <$> getArgs
           print (parseAll (fixGrammar conditionals) (Conditionals.expr . Rank2.snd) args :: ParseResults Int)
           print (parseAll (fixGrammar $ Combined.expression id) Combined.expr args :: ParseResults Combined.Tagged)
 
-comparisons :: GrammarBuilder ArithmeticComparisons g String
+comparisons :: Rank2.Functor g => GrammarBuilder ArithmeticComparisons g String
 comparisons (Rank2.Pair a c) =
    Rank2.Pair (Arithmetic.arithmetic empty a) (Comparisons.comparisons (Arithmetic.expr a) c)
 

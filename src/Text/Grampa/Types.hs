@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables #-}
 module Text.Grampa.Types (FailureInfo(..), ResultInfo(..), ResultList(..),
                           Grammar, GrammarDerived(..), Parser(..), (<<|>),
-                          concede, succeed, gd2rl, fixGrammar, fixGrammarInput)
+                          concede, succeed, gd2rl, fixGrammar, fixGrammarInput, selfReferring)
 where
 
 import Control.Applicative
@@ -24,7 +24,7 @@ newtype Parser g s r = P {parseP :: forall r'. Maybe (GrammarResults g s) -> s -
                                  -> (ResultInfo g s r -> GrammarDerived g s (ResultList g s r'))
                                  -> (FailureInfo -> GrammarDerived g s (ResultList g s r'))
                                  -> GrammarDerived g s (ResultList g s r')}
-newtype GrammarParseResults g s r = GrammarParseResults {grammarParseResults :: GrammarDerived g s (ResultList g s r)}
+newtype DerivedResultList g s r = DerivedResultList {derivedResultList :: GrammarDerived g s (ResultList g s r)}
 newtype ResultList g s r = ResultList {resultList :: Either FailureInfo [ResultInfo g s r]}
 data ResultInfo g s r = ResultInfo !(Maybe (GrammarResults g s)) !s ![(GrammarResults g s, s)] !r
 data FailureInfo =  FailureInfo !Int Word64 [String] deriving (Eq, Show)
@@ -41,9 +41,12 @@ succeed a = GrammarDerived (ResultList $ Right [a]) (const mempty)
 
 -- | Tie the knot on a 'GrammarBuilder' and turn it into a 'Grammar'
 fixGrammar :: forall g s. Rank2.Reassemblable g => (Grammar g s -> Grammar g s) -> Grammar g s
-fixGrammar gf = fix . (. Rank2.reassemble nt) $ gf
-   where nt :: forall r. (forall p. g p -> p r) -> g (Parser g s) -> Parser g s r
-         nt f _ = P p
+fixGrammar gf = fix (gf . selfReferring)
+
+selfReferring :: Rank2.Reassemblable g => Grammar g s -> Grammar g s
+selfReferring = Rank2.reassemble nonTerminal
+   where nonTerminal :: forall g s r. (forall p. g p -> p r) -> g (Parser g s) -> Parser g s r
+         nonTerminal f _ = P p
             where p :: forall r'. Maybe (GrammarResults g s) -> s -> [(GrammarResults g s, s)]
                     -> (ResultInfo g s r -> GrammarDerived g s (ResultList g s r'))
                     -> (FailureInfo -> GrammarDerived g s (ResultList g s r'))
@@ -58,16 +61,19 @@ fixGrammar gf = fix . (. Rank2.reassemble nt) $ gf
                                       Right rs -> gd2rl gr (foldMap rc rs)
 
 fixGrammarInput :: forall s g. (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g) =>
-                   Grammar g s -> s -> [(GrammarResults g s, s)]
-fixGrammarInput g s = foldr parseTail [] (tails s)
+                   Grammar g s -> Grammar g s -> s -> [(GrammarResults g s, s)]
+fixGrammarInput final grammar input = parseTailWith input $ foldr parseTail [] (tails input)
    where parseTail :: s -> [(GrammarResults g s, s)] -> [(GrammarResults g s, s)]
-         parseTail input parsedTail = parsedInput
-            where parsedInput = (grammarResults', input):parsedTail
-                  g' :: g (GrammarParseResults g s)
-                  g' = Rank2.fmap (\(P p)-> GrammarParseResults $ p Nothing input parsedTail succeed concede) g
-                  grammarResults' :: GrammarResults g s
-                  grammarResults' = foldr1 (Rank2.liftA2 (<>)) (iterate rf rl [])
-                     where GrammarDerived rl rf = Rank2.traverse grammarParseResults g'
+         parseTail s parsedTail = (collectGrammarResults gpr, s):parsedTail
+            where gpr = Rank2.fmap (\p-> DerivedResultList $ parseP p Nothing s parsedTail succeed concede) grammar
+         parseTailWith :: s -> [(GrammarResults g s, s)] -> [(GrammarResults g s, s)]
+         parseTailWith s parsed@((gh, _):_) = (collectGrammarResults gpr, input):parsed
+            where gpr = Rank2.fmap (\p-> DerivedResultList $ parseP p (Just gh) s parsed succeed concede) final
+         parseTailWith _ [] = error "Impossible"
+
+collectGrammarResults :: (Rank2.Apply g, Rank2.Traversable g) => g (DerivedResultList g s) -> GrammarResults g s
+collectGrammarResults gpr = foldr1 (Rank2.liftA2 (<>)) (iterate rf rl [])
+   where GrammarDerived rl rf = Rank2.traverse derivedResultList gpr
 
 iterate :: Rank2.Foldable g =>
            (GrammarResults g s -> GrammarResults g s) -> GrammarResults g s -> [GrammarResults g s]
@@ -79,8 +85,8 @@ iterate f n ns = if getAll (Rank2.foldMap (either (const mempty) (All . null) . 
 gd2rl :: GrammarResults g s -> GrammarDerived g s (ResultList g s r) -> ResultList g s r
 gd2rl gr (GrammarDerived rl rf) = rl <> rf gr
 
-instance Functor (GrammarParseResults g s) where
-   fmap f (GrammarParseResults gd) = GrammarParseResults ((f <$>) <$> gd)
+instance Functor (DerivedResultList g s) where
+   fmap f (DerivedResultList gd) = DerivedResultList ((f <$>) <$> gd)
 
 instance (Show s, Show r) => Show (ResultList g s r) where
    show (ResultList l) = "ResultList (" ++ shows l ")"
