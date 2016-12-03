@@ -69,15 +69,15 @@ instance (Rank2.Functor g, MonoidNull s) => Parsing (Parser g s) where
       where d' g s t rc fc = d g s t rc (fc . strengthen)
             r' g s t rc fc = r g s t rc (fc . strengthen)
             strengthen (FailureInfo s pos _msgs) = FailureInfo (succ s) pos [msg]
-   notFollowedBy (Parser d r) = Parser d' mempty
-      where d' g s t rc fc = either
-               (const $ rc $ ResultInfo g s t ())
+   notFollowedBy (Parser d r) = primitive d'
+      where d' g s t rc0 rc fc = either
+               (const $ rc0 ())
                (\rs -> if null rs then rc (ResultInfo g s t ())
-                       else fc (FailureInfo (failureStrength g) (genericLength t) ["notFollowedBy"]))
+                       else fc "notFollowedBy")
                (resultList $ d g s t succeed concede)
    skipMany p = go
       where go = pure () <|> p *> go
-   unexpected msg = Parser (\g _ t _ fc -> fc (FailureInfo (failureStrength g) (genericLength t) [msg])) mempty
+   unexpected msg = primitive (\g _ t _ _ fc -> fc msg)
    eof = endOfInput
 
 instance (Rank2.Functor g, MonoidNull s) => LookAheadParsing (Parser g s) where
@@ -102,16 +102,16 @@ spaces = skipCharsWhile isSpace
 
 -- | A parser that fails on any input and succeeds at its end
 endOfInput :: (MonoidNull s) => Parser g s ()
-endOfInput = Parser f mempty
-   where f g s t rc fc
-            | null s = rc (ResultInfo g s t ())
-            | otherwise = fc (FailureInfo (failureStrength g) (genericLength t) ["endOfInput"])
+endOfInput = primitive f
+   where f g s t rc0 rc fc
+            | null s = rc0 ()
+            | otherwise = fc "endOfInput"
 
 -- | Always sucessful parser that returns the remaining input without consuming it.
 getInput :: (MonoidNull s) => Parser g s s
-getInput = Parser f mempty
-   where f g s t rc _fc = rc (if null s then ResultInfo g s t s
-                              else let (g', s') = last t in ResultInfo (Just g') s' [] s)
+getInput = primitive f
+   where f g s t rc0 rc _fc = if null s then rc0 s
+                              else let (g', s') = last t in rc (ResultInfo (Just g') s' [] s)
 
 -- | A parser accepting the longest sequence of input atoms that match the given predicate; an optimized version of
 -- 'concatMany . satisfy'.
@@ -119,17 +119,17 @@ getInput = Parser f mempty
 -- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers loop
 -- until a failure occurs.  Careless use will thus result in an infinite loop.
 takeWhile :: (FactorialMonoid s) => (s -> Bool) -> Parser g s s
-takeWhile predicate = Parser f mempty
-   where f g s t rc _fc = rc (if null prefix then ResultInfo g s t prefix else ResultInfo (Just g') s' t' prefix)
+takeWhile predicate = primitive f
+   where f g s t rc0 rc _fc = if null prefix then rc0 prefix else rc (ResultInfo (Just g') s' t' prefix)
             where prefix = Factorial.takeWhile predicate s
                   (g', s'):t' = drop (length prefix - 1) t
 
 -- | A parser accepting the longest non-empty sequence of input atoms that match the given predicate; an optimized
 -- version of 'concatSome . satisfy'.
 takeWhile1 :: (FactorialMonoid s) => (s -> Bool) -> Parser g s s
-takeWhile1 predicate = Parser f mempty
-   where f g s t rc fc
-            | null prefix = fc (FailureInfo (failureStrength g) (genericLength t) ["takeCharsWhile1"])
+takeWhile1 predicate = primitive f
+   where f g s t _rc0 rc fc
+            | null prefix = fc "takeCharsWhile1"
             | otherwise = rc (ResultInfo (Just g') s' t' prefix)
             where prefix = Factorial.takeWhile predicate s
                   (g', s'):t' = drop (length prefix - 1) t
@@ -140,17 +140,17 @@ takeWhile1 predicate = Parser f mempty
 -- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers loop
 -- until a failure occurs.  Careless use will thus result in an infinite loop.
 takeCharsWhile :: (TextualMonoid s) => (Char -> Bool) -> Parser g s s
-takeCharsWhile predicate = Parser f mempty
-   where f g s t rc _fc = rc (if null prefix then ResultInfo g s t prefix else ResultInfo (Just g') s' t' prefix)
+takeCharsWhile predicate = primitive f
+   where f g s t rc0 rc _fc = if null prefix then rc0 prefix else rc (ResultInfo (Just g') s' t' prefix)
             where prefix = Textual.takeWhile_ False predicate s
                   (g', s'):t' = drop (length prefix - 1) t
 
 -- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
 -- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
 takeCharsWhile1 :: (TextualMonoid s) => (Char -> Bool) -> Parser g s s
-takeCharsWhile1 predicate = Parser f mempty
-   where f g s t rc fc
-            | null prefix = fc (FailureInfo (failureStrength g) (genericLength t) ["takeCharsWhile1"])
+takeCharsWhile1 predicate = primitive f
+   where f g s t _rc0 rc fc
+            | null prefix = fc "takeCharsWhile1"
             | otherwise = rc (ResultInfo (Just g') s' t' prefix)
             where prefix = Textual.takeWhile_ False predicate s
                   (g', s'):t' = drop (length prefix - 1) t
@@ -164,8 +164,8 @@ takeCharsWhile1 predicate = Parser f mempty
 -- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers loop
 -- until a failure occurs.  Careless use will thus result in an infinite loop.
 scan :: (FactorialMonoid t) => s -> (s -> t -> Maybe s) -> Parser g t t
-scan s0 f = Parser (go s0) mempty
- where go s g i t rc _fc = rc (if null prefix then ResultInfo g i t prefix else ResultInfo (Just g') i' t' prefix)
+scan s0 f = primitive (go s0)
+ where go s g i t rc0 rc _fc = if null prefix then rc0 prefix else rc (ResultInfo (Just g') i' t' prefix)
           where (prefix, _, _) = spanMaybe' s f i
                 (g', i'):t' = drop (length prefix - 1) t
 
@@ -178,18 +178,18 @@ scan s0 f = Parser (go s0) mempty
 -- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers loop
 -- until a failure occurs.  Careless use will thus result in an infinite loop.
 scanChars :: (TextualMonoid t) => s -> (s -> Char -> Maybe s) -> Parser g t t
-scanChars s0 f = Parser (go s0) mempty
- where go s g i t rc _fc = rc (if null prefix then ResultInfo g i t prefix else ResultInfo (Just g') i' t' prefix)
+scanChars s0 f = primitive (go s0)
+ where go s g i t rc0 rc _fc = if null prefix then rc0 prefix else rc (ResultInfo (Just g') i' t' prefix)
           where (prefix, _, _) = Textual.spanMaybe_' s f i
                 (g', i'):t' = drop (length prefix - 1) t
 
 -- | A parser that accepts any single input atom.
 anyToken :: (FactorialMonoid s) => Parser g s s
-anyToken = Parser f mempty
-   where f g s t rc fc =
+anyToken = primitive f
+   where f g s t _rc0 rc fc =
             case splitPrimePrefix s
             of Just (first, _) | (g', s'):t' <- t -> rc (ResultInfo (Just g') s' t' first)
-               _ -> fc (FailureInfo (failureStrength g) (genericLength t) ["anyToken"])
+               _ -> fc "anyToken"
 
 -- | A parser that accepts a specific input atom.
 token :: (Eq s, FactorialMonoid s) => s -> Parser g s s
@@ -197,33 +197,33 @@ token x = satisfy (== x)
 
 -- | A parser that accepts an input atom only if it satisfies the given predicate.
 satisfy :: (FactorialMonoid s) => (s -> Bool) -> Parser g s s
-satisfy predicate = Parser f mempty
-   where f g s t rc fc =
+satisfy predicate = primitive f
+   where f g s t _rc0 rc fc =
             case splitPrimePrefix s
             of Just (first, _) | predicate first, (g', s'):t' <- t -> rc (ResultInfo (Just g') s' t' first)
-               _ -> fc (FailureInfo (failureStrength g) (genericLength t) ["satisfy"])
+               _ -> fc "satisfy"
 
 -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the given
 -- predicate.
 satisfyChar :: (TextualMonoid s) => (Char -> Bool) -> Parser g s Char
-satisfyChar predicate = Parser f mempty
-   where f g s t rc fc =
+satisfyChar predicate = primitive f
+   where f g s t _rc0 rc fc =
             case Textual.splitCharacterPrefix s
             of Just (first, _) | predicate first, (g', s'):t' <- t -> rc (ResultInfo (Just g') s' t' first)
-               _ -> fc (FailureInfo (failureStrength g) (genericLength t) ["satisfyChar"])
+               _ -> fc "satisfyChar"
 
 -- | A parser that consumes and returns the given prefix of the input.
 string :: (Show s, LeftReductiveMonoid s, FactorialMonoid s) => s -> Parser g s s
 string x | null x = pure x
-string x = (`Parser` mempty) $ \g y t rc fc-> 
+string x = primitive $ \g y t _rc0 rc fc-> 
    case stripPrefix x y
    of Just{} | (g', s'):t' <- drop (length x - 1) t -> rc (ResultInfo (Just g') s' t' x)
-      _ -> fc (FailureInfo (1 + failureStrength g) (genericLength t) ["string " ++ show x])
+      _ -> fc ("string " ++ show x)
 
 -- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
 -- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
 skipCharsWhile :: (TextualMonoid s) => (Char -> Bool) -> Parser g s ()
-skipCharsWhile predicate = Parser f mempty
-   where f g s t rc _fc = rc (if null prefix then ResultInfo g s t () else ResultInfo (Just g') s' t' ())
+skipCharsWhile predicate = primitive f
+   where f g s t rc0 rc _fc = if null prefix then rc0 () else rc (ResultInfo (Just g') s' t' ())
             where prefix = Textual.takeWhile_ False predicate s
                   (g', s'):t' = drop (length prefix - 1) t

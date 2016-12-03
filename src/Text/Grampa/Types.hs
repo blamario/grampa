@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables #-}
 module Text.Grampa.Types (FailureInfo(..), ResultInfo(..), ResultList(..),
                           Grammar, GrammarDerived(..), Parser(..), (<<|>),
-                          concede, succeed, gd2rl, fixGrammar, fixGrammarInput, selfReferring)
+                          concede, succeed, gd2rl, fixGrammar, fixGrammarInput, primitive, selfReferring)
 where
 
 import Control.Applicative
@@ -9,6 +9,7 @@ import Control.Monad (Monad(..), MonadPlus(..))
 import Data.Either (either)
 import Data.Function (fix)
 import Data.Functor.Classes (Show1(liftShowsPrec))
+import Data.List (genericLength)
 import Data.Monoid (Monoid(mappend, mempty), All(..), (<>))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid(tails))
@@ -29,7 +30,7 @@ data Parser g s r = Parser {direct :: Maybe (GrammarResults g s) -> Parsing g s 
 newtype DerivedResultList g s r = DerivedResultList {derivedResultList :: GrammarResults g s -> ResultList g s r}
 newtype ResultList g s r = ResultList {resultList :: Either FailureInfo [ResultInfo g s r]}
 data ResultInfo g s r = ResultInfo !(Maybe (GrammarResults g s)) !s ![(GrammarResults g s, s)] !r
-data FailureInfo =  FailureInfo !Int Word64 [String] deriving (Eq, Show)
+data FailureInfo = FailureInfo !Int Word64 [String] deriving (Eq, Show)
 data GrammarDerived g s a = GrammarDerived a (GrammarResults g s -> a)
 type Grammar g s = g (Parser g s)
 type GrammarResults g s = g (ResultList g s)
@@ -39,6 +40,13 @@ concede a = ResultList (Left a)
 
 succeed :: ResultInfo g s r -> ResultList g s r
 succeed a = ResultList (Right [a])
+
+primitive :: (forall r'. Maybe (GrammarResults g s) -> s -> [(GrammarResults g s, s)]
+              -> (r -> ResultList g s r') -> (ResultInfo g s r -> ResultList g s r') -> (String -> ResultList g s r') -> ResultList g s r')
+          -> Parser g s r
+primitive parser = Parser p mempty
+   where p g s t rc fc =
+            parser g s t (rc . ResultInfo g s t) rc (fc . FailureInfo (maybe 0 (const 1) g) (genericLength t) . (:[]))
 
 -- | Tie the knot on a 'GrammarBuilder' and turn it into a 'Grammar'
 fixGrammar :: forall g s. Rank2.Reassemblable g => (Grammar g s -> Grammar g s) -> Grammar g s
