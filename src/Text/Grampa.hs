@@ -62,13 +62,13 @@ fromResultList _ (ResultList (Right rl)) = Right (f <$> rl)
 instance MonoidNull s => Parsing (Parser g s) where
    try p = Parser{continued= \t rc fc-> continued p t rc (fc . weaken),
                   direct= \s t-> weakenResults (direct p s t),
-                  recursive= \g-> weakenResults (recursive p g)}
+                  recursive= \g s t-> weakenResults (recursive p g s t)}
       where weaken (FailureInfo s pos msgs) = FailureInfo (pred s) pos msgs
             weakenResults (InitialResultList (Left err)) = InitialResultList (Left $ weaken err)
             weakenResults rl = rl
    p <?> msg  = Parser{continued= \t rc fc-> continued p t rc (fc . strengthen),
                        direct= \s t-> strengthenResults (direct p s t),
-                       recursive= \g-> strengthenResults (recursive p g)}
+                       recursive= \g s t-> strengthenResults (recursive p g s t)}
       where strengthen (FailureInfo s pos _msgs) = FailureInfo (succ s) pos [msg]
             strengthenResults (InitialResultList (Left err)) = InitialResultList (Left $ strengthen err)
             strengthenResults rl = rl
@@ -83,12 +83,12 @@ instance MonoidNull s => Parsing (Parser g s) where
                                       if null rs then Right [StuckResultInfo ()]
                                       else Left (FailureInfo 0 (genericLength t) ["notFollowedBy"]))
                               (initialResultList $ direct p s t),
-                            recursive= \g-> either
+                            recursive= \g s t-> either
                               (const $ InitialResultList $ Right [StuckResultInfo ()])
                               (\rs -> InitialResultList $
                                       if null rs then Right []
-                                      else Left (FailureInfo 0 maxBound ["notFollowedBy"])) -- the location is incorrect
-                              (initialResultList $ recursive p g)}
+                                      else Left (FailureInfo 0 (genericLength t) ["notFollowedBy"]))
+                              (initialResultList $ recursive p g s t)}
    skipMany p = go
       where go = pure () <|> p *> go
    unexpected msg = primitive (\_s _t _ _ fc -> fc msg)
@@ -97,7 +97,7 @@ instance MonoidNull s => Parsing (Parser g s) where
 instance MonoidNull s => LookAheadParsing (Parser g s) where
    lookAhead p = Parser{continued= \t rc fc-> continued p t (\r _-> rc r t) fc,
                         direct= \s t-> restoreResultInputs (direct p s t),
-                        recursive= \g-> restoreResultInputs (recursive p g)}
+                        recursive= \g s t-> restoreResultInputs (recursive p g s t)}
                where restoreResultInputs rl@(InitialResultList Left{}) = rl
                      restoreResultInputs (InitialResultList (Right rl)) = InitialResultList (Right $ rewind <$> rl)
                      rewind (CompleteResultInfo _ r) = StuckResultInfo r
