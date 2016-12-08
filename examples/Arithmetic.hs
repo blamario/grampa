@@ -56,6 +56,9 @@ instance Rank2.Apply (Arithmetic e) where
                         (term a `Rank2.apply` term a')
                         (factor a `Rank2.apply` factor a')
 
+instance Rank2.Applicative (Arithmetic e) where
+   pure f = Arithmetic f f f
+
 instance Rank2.Foldable (Arithmetic e) where
    foldMap f a = f (expr a) <> f (term a) <> f (factor a)
 

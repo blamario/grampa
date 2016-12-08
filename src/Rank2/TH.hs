@@ -1,7 +1,9 @@
 {-# Language TemplateHaskell #-}
 -- Adapted from https://wiki.haskell.org/A_practical_Template_Haskell_Tutorial
 
-module Rank2.TH where
+module Rank2.TH (deriveAll, deriveFunctor, deriveApply, deriveApplicative,
+                 deriveReassemblable, deriveFoldable, deriveTraversable)
+where
 
 import Control.Monad (replicateM)
 import Data.Monoid ((<>))
@@ -13,7 +15,8 @@ import qualified Rank2
 data Deriving = Deriving { derivingConstructor :: Name, derivingVariable :: Name }
 
 deriveAll :: Name -> Q [Dec]
-deriveAll ty = foldr f (pure []) [deriveFunctor, deriveApply, deriveReassemblable, deriveFoldable, deriveTraversable]
+deriveAll ty = foldr f (pure []) [deriveFunctor, deriveApply, deriveApplicative,
+                                  deriveReassemblable, deriveFoldable, deriveTraversable]
    where f derive rest = (<>) <$> derive ty <*> rest
 
 deriveFunctor :: Name -> Q [Dec]
@@ -25,6 +28,11 @@ deriveApply :: Name -> Q [Dec]
 deriveApply ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Apply ty
    sequence [instanceD (return []) instanceType [genAp cs]]
+
+deriveApplicative :: Name -> Q [Dec]
+deriveApplicative ty = do
+   (instanceType, cs) <- reifyConstructors ''Rank2.Applicative ty
+   sequence [instanceD (return []) instanceType [genPure cs]]
 
 deriveReassemblable :: Name -> Q [Dec]
 deriveReassemblable ty = do
@@ -62,6 +70,9 @@ genFmap cs = funD 'Rank2.fmap (map genFmapClause cs)
 
 genAp :: [Con] -> Q Dec
 genAp cs = funD 'Rank2.ap (map genApClause cs)
+
+genPure :: [Con] -> Q Dec
+genPure cs = funD 'Rank2.pure (map genPureClause cs)
 
 genReassemble :: [Con] -> Q Dec
 genReassemble cs = funD 'Rank2.reassemble (map genReassembleClause cs)
@@ -120,6 +131,21 @@ genApClause (RecC name fields) = do
              AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE fieldName) $(varE x) `Rank2.apply`
                                                                        $(varE fieldName) $(varE y) |]
    clause [varP x, varP y] body []
+
+genPureClause :: Con -> Q Clause
+genPureClause (NormalC name fieldTypes) = do
+   argName <- newName "f"
+   let body = normalB $ appsE $ conE name : replicate (length fieldTypes) (varE argName)
+   clause [varP argName] body []
+genPureClause (RecC name fields) = do
+   argName <- newName "f"
+   let body = normalB $ recConE name $ map newNamedField fields
+       newNamedField :: VarBangType -> Q (Name, Exp)
+       newNamedField (fieldName, _, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
+          case fieldType of
+             AppT ty _ | ty == VarT typeVar -> fieldExp fieldName (varE argName)
+   clause [varP argName] body []
 
 genReassembleClause :: Con -> Q Clause
 genReassembleClause (RecC name fields) = do

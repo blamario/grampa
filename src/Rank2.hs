@@ -1,5 +1,5 @@
 {-# LANGUAGE InstanceSigs, KindSignatures, Rank2Types, ScopedTypeVariables #-}
-module Rank2 (Functor(..), Apply(..), Foldable(..), Traversable(..), Reassemblable(..),
+module Rank2 (Functor(..), Apply(..), Applicative(..), Foldable(..), Traversable(..), Reassemblable(..),
               Empty(..), Singleton(..), Identity(..), Product(..), Arrow(..),
              (<$>), (<*>), liftA2, liftA3)
 where
@@ -29,7 +29,7 @@ class (Functor g, Foldable g) => Traversable g where
 
 newtype Arrow p q a = Arrow{apply :: p a -> q a}
 
--- | Equivalent of 'Rank1.Applicative' with no 'pure' method, for rank 2 data types
+-- | Subclass of 'Functor' halfway to 'Applicative'
 --
 -- > (.) <$> u <*> v <*> w == u <*> (v <*> w)
 class Functor g => Apply g where
@@ -43,6 +43,10 @@ liftA2 f g h = (Arrow . f) <$> g <*> h
 
 liftA3 :: Apply g => (forall a. p a -> q a -> r a -> s a) -> g p -> g q -> g r -> g s
 liftA3 f g h i = (\x-> Arrow (Arrow . f x)) <$> g <*> h <*> i
+
+-- | Equivalent of 'Rank1.Applicative' for rank 2 data types
+class Apply g => Applicative g where
+   pure :: (forall a. f a) -> g f
 
 -- | Subclass of 'Functor' that allows access to parts of the data structure
 -- > reassemble ($) == id
@@ -73,6 +77,9 @@ instance Rank1.Functor g => Rank2.Functor (Flip g a) where
 
 instance Rank1.Applicative g => Rank2.Apply (Flip g a) where
    Flip g `ap` Flip h = Flip (apply Rank1.<$> g Rank1.<*> h)
+
+instance Rank1.Applicative g => Rank2.Applicative (Flip g a) where
+   pure f = Flip (Rank1.pure f)
 
 instance Rank1.Foldable g => Rank2.Foldable (Flip g a) where
    foldMap f (Flip g) = Rank1.foldMap f g
@@ -127,6 +134,18 @@ instance Apply g => Apply (Identity g) where
 
 instance (Apply g, Apply h) => Apply (Product g h) where
    ap (Pair gf hf) (Pair g h) = Pair (ap gf g) (ap hf h)
+
+instance Applicative Empty where
+   pure = const Empty
+
+instance Applicative (Singleton x) where
+   pure = Singleton
+
+instance Applicative g => Applicative (Identity g) where
+   pure f = Identity (pure f)
+
+instance (Applicative g, Applicative h) => Applicative (Product g h) where
+   pure f = Pair (pure f) (pure f)
 
 instance Reassemblable Empty where
    reassemble _ Empty = Empty

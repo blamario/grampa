@@ -44,6 +44,9 @@ instance Rank2.Functor (Comparisons c e) where
 instance Rank2.Apply (Comparisons c e) where
    ap a a' = Comparisons (expr a `Rank2.apply` expr a')
 
+instance Rank2.Applicative (Comparisons c e) where
+   pure = Comparisons
+
 instance Rank2.Foldable (Comparisons c e) where
    foldMap f a = f (expr a)
 
