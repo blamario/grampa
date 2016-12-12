@@ -47,6 +47,12 @@ instance Rank2.Apply (Comparisons c e) where
 instance Rank2.Applicative (Comparisons c e) where
    pure = Comparisons
 
+instance Rank2.Distributive (Comparisons c e) where
+   distribute f = Comparisons{expr= f >>= expr}
+
+instance Rank2.Reapplicative (Comparisons c e) where
+   purify f = Comparisons{expr= f expr}
+
 instance Rank2.Foldable (Comparisons c e) where
    foldMap f a = f (expr a)
 

@@ -7,7 +7,6 @@ where
 import Control.Applicative
 import Control.Monad (Monad(..), MonadPlus(..))
 import Data.Either (either)
-import Data.Function (fix)
 import Data.Functor.Classes (Show1(liftShowsPrec))
 import Data.Monoid (Monoid(mappend, mempty), All(..), (<>))
 import Data.Monoid.Null (MonoidNull(null))
@@ -40,13 +39,30 @@ succeed :: ResultInfo g s r -> GrammarDerived g s (ResultList g s r)
 succeed a = GrammarDerived (ResultList $ Right [a]) (const mempty)
 
 -- | Tie the knot on a 'GrammarBuilder' and turn it into a 'Grammar'
-fixGrammar :: forall g s. Rank2.Reassemblable g => (Grammar g s -> Grammar g s) -> Grammar g s
-fixGrammar gf = fix (gf . selfReferring)
+fixGrammar :: forall g s. Rank2.Distributive g => (Grammar g s -> Grammar g s) -> Grammar g s
+fixGrammar gf = gf selfReferring
 
-selfReferring :: Rank2.Reassemblable g => Grammar g s -> Grammar g s
-selfReferring = Rank2.reassemble nonTerminal
-   where nonTerminal :: forall g s r. (forall p. g p -> p r) -> g (Parser g s) -> Parser g s r
-         nonTerminal f _ = P p
+selfReferring :: forall g s. Rank2.Distributive g => Grammar g s
+selfReferring = Rank2.distribute nonTerminal
+   where nonTerminal :: Parser g s (g (Parser g s))
+         nonTerminal = P p
+            where p :: forall r'. Maybe (GrammarResults g s) -> s -> [(GrammarResults g s, s)]
+                    -> (ResultInfo g s (g (Parser g s)) -> GrammarDerived g s (ResultList g s r'))
+                    -> (FailureInfo -> GrammarDerived g s (ResultList g s r'))
+                    -> GrammarDerived g s (ResultList g s r')
+                  p g s t rc fc = maybe (GrammarDerived mempty start) continue g
+                     where continue :: g (ResultList g s) -> GrammarDerived g s (ResultList g s r')
+                           continue gr = rc (ResultInfo g s t (Rank2.fmap resultsToParser gr))
+                           resultsToParser :: forall r. ResultList g s r -> Parser g s r
+                           resultsToParser (ResultList (Left failure)) = P (\_ _ _ _ fc'-> fc' failure)
+                           resultsToParser (ResultList (Right rs)) = P (\_ _ _ rc' _-> foldMap rc' rs)
+                           start :: g (ResultList g s) -> ResultList g s r'
+                           start gr = gd2rl gr (continue gr)
+
+selfReferring' :: Rank2.Reapplicative g => Grammar g s
+selfReferring' = Rank2.purify nonTerminal
+   where nonTerminal :: forall g s r. (forall p. g p -> p r) -> Parser g s r
+         nonTerminal f = P p
             where p :: forall r'. Maybe (GrammarResults g s) -> s -> [(GrammarResults g s, s)]
                     -> (ResultInfo g s r -> GrammarDerived g s (ResultList g s r'))
                     -> (FailureInfo -> GrammarDerived g s (ResultList g s r'))

@@ -65,6 +65,30 @@ instance Rank2.Applicative Expression where
                        comparisonGrammar= Rank2.pure f,
                        conditionalGrammar= Rank2.pure f}
 
+instance Rank2.Distributive Expression where
+   distribute f = Expression{expr= f >>= expr,
+                             arithmeticGrammar= Rank2.distribute (arithmeticGrammar <$> f),
+                             booleanGrammar= Rank2.distribute (booleanGrammar <$> f),
+                             comparisonGrammar= Rank2.distribute (comparisonGrammar <$> f),
+                             conditionalGrammar= Rank2.distribute (conditionalGrammar <$> f)}
+
+instance Rank2.Reapplicative Expression where
+   purify :: forall q. (forall a. (forall f. Expression f -> f a) -> q a) -> Expression q
+   purify f = Expression{expr= f expr,
+                         arithmeticGrammar= Rank2.purify f1,
+                         booleanGrammar= Rank2.purify f2,
+                         comparisonGrammar= Rank2.purify f3,
+                         conditionalGrammar= Rank2.purify f4}
+      where f1 :: (forall f. Arithmetic.Arithmetic Int f -> f a) -> q a
+            f2 :: (forall f. Boolean.Boolean Tagged f -> f a) -> q a
+            f3 :: (forall f. Comparisons.Comparisons Int Bool f -> f a) -> q a
+            f4 :: (forall f. Conditionals.Conditionals Tagged f -> f a) -> q a
+            f1 get = f (get . arithmeticGrammar)
+            -- f1 get = (f . (. arithmeticGrammar)) get
+            f2 get = f (get . booleanGrammar)
+            f3 get = f (get . comparisonGrammar)
+            f4 get = f (get . conditionalGrammar)
+
 instance Rank2.Foldable Expression where
    foldMap f g = f (expr g) <> Rank2.foldMap f (arithmeticGrammar g) <> Rank2.foldMap f (booleanGrammar g)
                  <> Rank2.foldMap f (comparisonGrammar g) <> Rank2.foldMap f (conditionalGrammar g)

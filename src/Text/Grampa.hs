@@ -40,14 +40,14 @@ import Prelude hiding (length, null, span, takeWhile)
 type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
 type ParseResults r = Either (Int, [String]) [r]
 
-parse :: (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Reassemblable g) =>
+parse :: (FactorialMonoid s, Rank2.Traversable g, Rank2.Distributive g, Rank2.Apply g) =>
          Grammar g s -> (forall f. g f -> f r) -> s -> ParseResults (r, s)
-parse g prod input = fromResultList input (prod $ fst $ head $ fixGrammarInput (selfReferring g) g input)
+parse g prod input = fromResultList input (prod $ fst $ head $ fixGrammarInput selfReferring g input)
 
-parseAll :: (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Reassemblable g) =>
+parseAll :: (FactorialMonoid s, Rank2.Traversable g, Rank2.Distributive g, Rank2.Apply g) =>
          Grammar g s -> (forall f. g f -> f r) -> s -> ParseResults r
 parseAll g prod input = (fst <$>) <$> fromResultList input (prod $ fst $ head $ fixGrammarInput close g input)
-   where close = Rank2.fmap (<* endOfInput) $ selfReferring g
+   where close = Rank2.fmap (<* endOfInput) selfReferring
 
 simpleParse :: FactorialMonoid s => Parser (Rank2.Singleton r) s r -> s -> ParseResults (r, s)
 simpleParse p = parse (Rank2.Singleton p) Rank2.getSingle

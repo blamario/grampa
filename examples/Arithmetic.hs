@@ -59,6 +59,16 @@ instance Rank2.Apply (Arithmetic e) where
 instance Rank2.Applicative (Arithmetic e) where
    pure f = Arithmetic f f f
 
+instance Rank2.Reapplicative (Arithmetic e) where
+   purify f = Arithmetic{expr= f expr,
+                         term= f term,
+                         factor= f factor}
+
+instance Rank2.Distributive (Arithmetic e) where
+   distribute f = Arithmetic{expr= f >>= expr,
+                             term= f >>= term,
+                             factor= f >>= factor}
+
 instance Rank2.Foldable (Arithmetic e) where
    foldMap f a = f (expr a) <> f (term a) <> f (factor a)
 

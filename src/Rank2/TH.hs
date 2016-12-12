@@ -2,7 +2,8 @@
 -- Adapted from https://wiki.haskell.org/A_practical_Template_Haskell_Tutorial
 
 module Rank2.TH (deriveAll, deriveFunctor, deriveApply, deriveApplicative,
-                 deriveReassemblable, deriveFoldable, deriveTraversable)
+                 deriveReapplicative, deriveReassemblable,
+                 deriveFoldable, deriveTraversable, deriveDistributive)
 where
 
 import Control.Monad (replicateM)
@@ -16,7 +17,8 @@ data Deriving = Deriving { derivingConstructor :: Name, derivingVariable :: Name
 
 deriveAll :: Name -> Q [Dec]
 deriveAll ty = foldr f (pure []) [deriveFunctor, deriveApply, deriveApplicative,
-                                  deriveReassemblable, deriveFoldable, deriveTraversable]
+                                  deriveReapplicative, deriveReassemblable,
+                                  deriveFoldable, deriveTraversable, deriveDistributive]
    where f derive rest = (<>) <$> derive ty <*> rest
 
 deriveFunctor :: Name -> Q [Dec]
@@ -34,6 +36,11 @@ deriveApplicative ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Applicative ty
    sequence [instanceD (return []) instanceType [genPure cs]]
 
+deriveReapplicative :: Name -> Q [Dec]
+deriveReapplicative ty = do
+   (instanceType, cs) <- reifyConstructors ''Rank2.Reapplicative ty
+   sequence [instanceD (return []) instanceType [genPurify cs]]
+
 deriveReassemblable :: Name -> Q [Dec]
 deriveReassemblable ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Reassemblable ty
@@ -48,6 +55,11 @@ deriveTraversable :: Name -> Q [Dec]
 deriveTraversable ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Traversable ty
    sequence [instanceD (return []) instanceType [genTraverse cs]]
+
+deriveDistributive :: Name -> Q [Dec]
+deriveDistributive ty = do
+   (instanceType, cs) <- reifyConstructors ''Rank2.Distributive ty
+   sequence [instanceD (return []) instanceType [genDistribute cs]]
 
 reifyConstructors :: Name -> Name -> Q (TypeQ, [Con])
 reifyConstructors cls ty = do
@@ -74,6 +86,9 @@ genAp cs = funD 'Rank2.ap (map genApClause cs)
 genPure :: [Con] -> Q Dec
 genPure cs = funD 'Rank2.pure (map genPureClause cs)
 
+genPurify :: [Con] -> Q Dec
+genPurify cs = funD 'Rank2.purify (map genPurifyClause cs)
+
 genReassemble :: [Con] -> Q Dec
 genReassemble cs = funD 'Rank2.reassemble (map genReassembleClause cs)
 
@@ -82,6 +97,9 @@ genFoldMap cs = funD 'Rank2.foldMap (map genFoldMapClause cs)
 
 genTraverse :: [Con] -> Q Dec
 genTraverse cs = funD 'Rank2.traverse (map genTraverseClause cs)
+
+genDistribute :: [Con] -> Q Dec
+genDistribute cs = funD 'Rank2.distribute (map genDistributeClause cs)
 
 genFmapClause :: Con -> Q Clause
 genFmapClause (NormalC name fieldTypes) = do
@@ -145,6 +163,17 @@ genPureClause (RecC name fields) = do
           Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> fieldExp fieldName (varE argName)
+   clause [varP argName] body []
+
+genPurifyClause :: Con -> Q Clause
+genPurifyClause (RecC name fields) = do
+   argName <- newName "f"
+   let body = normalB $ recConE name $ map newNamedField fields
+       newNamedField :: VarBangType -> Q (Name, Exp)
+       newNamedField (fieldName, _, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
+          case fieldType of
+             AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE argName) $(varE fieldName) |]
    clause [varP argName] body []
 
 genReassembleClause :: Con -> Q Clause
@@ -215,3 +244,14 @@ genTraverseClause (RecC name fields) = do
              AppT ty _ | ty == VarT typeVar -> [| $(varE f) ($(varE fieldName) $(varE x)) |]
              _ -> [| $(varE x) |]
    clause [varP f, varP x] body []
+
+genDistributeClause :: Con -> Q Clause
+genDistributeClause (RecC name fields) = do
+   argName <- newName "f"
+   let body = normalB $ recConE name $ map newNamedField fields
+       newNamedField :: VarBangType -> Q (Name, Exp)
+       newNamedField (fieldName, _, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
+          case fieldType of
+             AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE argName) >>= $(varE fieldName) |]
+   clause [varP argName] body []

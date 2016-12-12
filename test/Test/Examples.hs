@@ -118,7 +118,7 @@ instance Enumerable Conditional where
                <$> (\(Free (Disjunction a, Free (Sum b, Sum c)))-> "if " <> a <> " then " <> b <> " else " <> c)
                <$> pay enumerate
 
-uniqueParse :: (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Reassemblable g) =>
+uniqueParse :: (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g) =>
                Grammar g s -> (forall f. g f -> f r) -> s -> r
 uniqueParse g p s = case parseAll g p s
                     of Right [r] -> r
