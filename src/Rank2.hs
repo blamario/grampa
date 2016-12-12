@@ -1,6 +1,6 @@
 {-# LANGUAGE InstanceSigs, KindSignatures, Rank2Types, ScopedTypeVariables #-}
-module Rank2 (Functor(..), Apply(..), Applicative(..), Distributive(..), Reapplicative(..),
-              Foldable(..), Traversable(..), Reassemblable(..),
+module Rank2 (Functor(..), Apply(..), Applicative(..),
+              Foldable(..), Traversable(..), Distributive(..),
               Empty(..), Singleton(..), Identity(..), Product(..), Arrow(..),
              (<$>), (<*>), liftA2, liftA3)
 where
@@ -49,20 +49,9 @@ liftA3 f g h i = (\x-> Arrow (Arrow . f x)) <$> g <*> h <*> i
 class Apply g => Applicative g where
    pure :: (forall a. f a) -> g f
 
--- | Subclass of 'Applicative' that allows access to parts of the data structure
--- > purify (const f) == pure f
-class Applicative g => Reapplicative g where
-   purify :: (forall a. (forall p. g p -> p a) -> f a) -> g f
-
 -- | Equivalent of 'Distributive' for rank 2 data types
 class Functor g => Distributive g where
    distribute :: Monad f => f (g f) -> g f
-
--- | Subclass of 'Functor' that allows access to parts of the data structure
--- > reassemble ($) == id
--- > reassemble (\get-> f get . g get) == reassemble f . reassemble g
-class Functor g => Reassemblable g where
-   reassemble :: (forall a. (forall f. g f -> f a) -> g p -> q a) -> g p -> g q
 
 data Empty (f :: * -> *) = Empty deriving (Eq, Ord, Show)
 
@@ -157,26 +146,6 @@ instance Applicative g => Applicative (Identity g) where
 instance (Applicative g, Applicative h) => Applicative (Product g h) where
    pure f = Pair (pure f) (pure f)
 
-instance Reapplicative Empty where
-   purify _ = Empty
-
-instance Reapplicative (Singleton x) where
-   purify f = Singleton (f getSingle)
-
-instance Reapplicative g => Reapplicative (Identity g) where
-   purify :: forall f. (forall a. (forall p. Identity g p -> p a) -> f a) -> Identity g f
-   purify f = Identity (purify f')
-      where f' :: (forall f. g f -> f a) -> f a
-            f' get = f (get . runIdentity)
-
-instance (Reapplicative g, Reapplicative h) => Reapplicative (Product g h) where
-   purify :: forall f. (forall a. (forall p. Product g h p -> p a) -> f a) -> Product g h f
-   purify f = Pair (purify f1) (purify f2)
-      where f1 :: (forall f. g f -> f a) -> f a
-            f2 :: (forall f. h f -> f a) -> f a
-            f1 get = f (get . fst)
-            f2 get = f (get . snd)
-
 instance Distributive Empty where
    distribute _ = Empty
 
@@ -188,25 +157,3 @@ instance Distributive g => Distributive (Identity g) where
 
 instance (Distributive g, Distributive h) => Distributive (Product g h) where
    distribute f = Pair (distribute $ Rank1.fmap fst f) (distribute $ Rank1.fmap snd f)
-
-instance Reassemblable Empty where
-   reassemble _ Empty = Empty
-
-instance Reassemblable (Singleton x) where
-   reassemble f s@Singleton{} = Singleton (f getSingle s)
-
-instance forall g. Reassemblable g => Reassemblable (Identity g) where
-   reassemble :: forall p q. (forall a. (forall f. Identity g f -> f a) -> Identity g p -> q a)
-              -> Identity g p -> Identity g q
-   reassemble f ~(Identity a) = Identity (reassemble f' a)
-      where f' :: forall a. (forall f. g f -> f a) -> g p -> q a
-            f' get x = f (get . runIdentity) (Identity x)
-
-instance forall g h. (Reassemblable g, Reassemblable h) => Reassemblable (Product g h) where
-   reassemble :: forall p q. (forall a. (forall f. Product g h f -> f a) -> Product g h p -> q a)
-              -> Product g h p -> Product g h q
-   reassemble f ~(Pair a b) = Pair (reassemble f' a) (reassemble f'' b)
-      where f' :: forall a. (forall f. g f -> f a) -> g p -> q a
-            f' get x = f (get . fst) (Pair x b)
-            f'' :: forall a. (forall f. h f -> f a) -> h p -> q a
-            f'' get x = f (get . snd) (Pair a x)

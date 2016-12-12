@@ -59,11 +59,6 @@ instance Rank2.Apply (Arithmetic e) where
 instance Rank2.Applicative (Arithmetic e) where
    pure f = Arithmetic f f f
 
-instance Rank2.Reapplicative (Arithmetic e) where
-   purify f = Arithmetic{expr= f expr,
-                         term= f term,
-                         factor= f factor}
-
 instance Rank2.Distributive (Arithmetic e) where
    distribute f = Arithmetic{expr= f >>= expr,
                              term= f >>= term,
@@ -77,11 +72,6 @@ instance Rank2.Traversable (Arithmetic e) where
                   <$> f (expr a)
                   <*> f (term a)
                   <*> f (factor a)
-
-instance Rank2.Reassemblable (Arithmetic e) where
-   reassemble f a = Arithmetic{expr= f expr a,
-                               term= f term a,
-                               factor= f factor a}
 
 arithmetic :: (Rank2.Functor g, ArithmeticDomain e) => Parser g String e -> GrammarBuilder (Arithmetic e) g String
 arithmetic sub Arithmetic{..} = Arithmetic{

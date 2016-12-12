@@ -59,23 +59,6 @@ selfReferring = Rank2.distribute nonTerminal
                            start :: g (ResultList g s) -> ResultList g s r'
                            start gr = gd2rl gr (continue gr)
 
-selfReferring' :: Rank2.Reapplicative g => Grammar g s
-selfReferring' = Rank2.purify nonTerminal
-   where nonTerminal :: forall g s r. (forall p. g p -> p r) -> Parser g s r
-         nonTerminal f = P p
-            where p :: forall r'. Maybe (GrammarResults g s) -> s -> [(GrammarResults g s, s)]
-                    -> (ResultInfo g s r -> GrammarDerived g s (ResultList g s r'))
-                    -> (FailureInfo -> GrammarDerived g s (ResultList g s r'))
-                    -> GrammarDerived g s (ResultList g s r')
-                  p g _ _ rc fc = maybe (GrammarDerived mempty f') (continue . resultList . f) g
-                     where continue :: Either FailureInfo [ResultInfo g s r] -> GrammarDerived g s (ResultList g s r')
-                           continue (Left (FailureInfo strength pos msgs)) = fc (FailureInfo (succ strength) pos msgs)
-                           continue (Right rs) = foldMap rc rs
-                           f' :: GrammarResults g s -> ResultList g s r'
-                           f' gr = case resultList (f gr)
-                                   of Left err -> ResultList (Left err)
-                                      Right rs -> gd2rl gr (foldMap rc rs)
-
 fixGrammarInput :: forall s g. (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g) =>
                    Grammar g s -> Grammar g s -> s -> [(GrammarResults g s, s)]
 fixGrammarInput final grammar input = parseTailWith input $ foldr parseTail [] (tails input)

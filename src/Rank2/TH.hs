@@ -2,7 +2,6 @@
 -- Adapted from https://wiki.haskell.org/A_practical_Template_Haskell_Tutorial
 
 module Rank2.TH (deriveAll, deriveFunctor, deriveApply, deriveApplicative,
-                 deriveReapplicative, deriveReassemblable,
                  deriveFoldable, deriveTraversable, deriveDistributive)
 where
 
@@ -17,7 +16,6 @@ data Deriving = Deriving { derivingConstructor :: Name, derivingVariable :: Name
 
 deriveAll :: Name -> Q [Dec]
 deriveAll ty = foldr f (pure []) [deriveFunctor, deriveApply, deriveApplicative,
-                                  deriveReapplicative, deriveReassemblable,
                                   deriveFoldable, deriveTraversable, deriveDistributive]
    where f derive rest = (<>) <$> derive ty <*> rest
 
@@ -35,16 +33,6 @@ deriveApplicative :: Name -> Q [Dec]
 deriveApplicative ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Applicative ty
    sequence [instanceD (return []) instanceType [genPure cs]]
-
-deriveReapplicative :: Name -> Q [Dec]
-deriveReapplicative ty = do
-   (instanceType, cs) <- reifyConstructors ''Rank2.Reapplicative ty
-   sequence [instanceD (return []) instanceType [genPurify cs]]
-
-deriveReassemblable :: Name -> Q [Dec]
-deriveReassemblable ty = do
-   (instanceType, cs) <- reifyConstructors ''Rank2.Reassemblable ty
-   sequence [instanceD (return []) instanceType [genReassemble cs]]
 
 deriveFoldable :: Name -> Q [Dec]
 deriveFoldable ty = do
@@ -85,12 +73,6 @@ genAp cs = funD 'Rank2.ap (map genApClause cs)
 
 genPure :: [Con] -> Q Dec
 genPure cs = funD 'Rank2.pure (map genPureClause cs)
-
-genPurify :: [Con] -> Q Dec
-genPurify cs = funD 'Rank2.purify (map genPurifyClause cs)
-
-genReassemble :: [Con] -> Q Dec
-genReassemble cs = funD 'Rank2.reassemble (map genReassembleClause cs)
 
 genFoldMap :: [Con] -> Q Dec
 genFoldMap cs = funD 'Rank2.foldMap (map genFoldMapClause cs)
@@ -164,30 +146,6 @@ genPureClause (RecC name fields) = do
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> fieldExp fieldName (varE argName)
    clause [varP argName] body []
-
-genPurifyClause :: Con -> Q Clause
-genPurifyClause (RecC name fields) = do
-   argName <- newName "f"
-   let body = normalB $ recConE name $ map newNamedField fields
-       newNamedField :: VarBangType -> Q (Name, Exp)
-       newNamedField (fieldName, _, fieldType) = do
-          Just (Deriving _ typeVar) <- getQ
-          case fieldType of
-             AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE argName) $(varE fieldName) |]
-   clause [varP argName] body []
-
-genReassembleClause :: Con -> Q Clause
-genReassembleClause (RecC name fields) = do
-   f <- newName "f"
-   x <- newName "x"
-   let body = normalB $ recConE name $ map newNamedField fields
-       newNamedField :: VarBangType -> Q (Name, Exp)
-       newNamedField (fieldName, _, fieldType) = do
-          Just (Deriving _ typeVar) <- getQ
-          case fieldType of
-             AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE f) $(varE fieldName) $(varE x) |]
-             _ -> fieldExp fieldName [| $(varE x) |]
-   clause [varP f, varP x] body []
 
 genFoldMapClause :: Con -> Q Clause
 genFoldMapClause (NormalC name fieldTypes) = do
