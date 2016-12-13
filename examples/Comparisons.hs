@@ -44,14 +44,17 @@ instance Rank2.Functor (Comparisons c e) where
 instance Rank2.Apply (Comparisons c e) where
    ap a a' = Comparisons (expr a `Rank2.apply` expr a')
 
+instance Rank2.Applicative (Comparisons c e) where
+   pure = Comparisons
+
+instance Rank2.Distributive (Comparisons c e) where
+   distribute f = Comparisons{expr= f >>= expr}
+
 instance Rank2.Foldable (Comparisons c e) where
    foldMap f a = f (expr a)
 
 instance Rank2.Traversable (Comparisons c e) where
    traverse f a = Comparisons <$> f (expr a)
-
-instance Rank2.Reassemblable (Comparisons c e) where
-   reassemble f a = Comparisons{expr= f expr a}
 
 comparisons :: (ComparisonDomain c e) => Parser g String c -> GrammarBuilder (Comparisons c e) g String
 comparisons comparable Comparisons{..} =

@@ -58,6 +58,20 @@ instance Rank2.Apply Expression where
                        comparisonGrammar= comparisonGrammar a `Rank2.ap` comparisonGrammar b,
                        conditionalGrammar= conditionalGrammar a `Rank2.ap` conditionalGrammar b}
 
+instance Rank2.Applicative Expression where
+   pure f = Expression{expr= f,
+                       arithmeticGrammar= Rank2.pure f,
+                       booleanGrammar= Rank2.pure f,
+                       comparisonGrammar= Rank2.pure f,
+                       conditionalGrammar= Rank2.pure f}
+
+instance Rank2.Distributive Expression where
+   distribute f = Expression{expr= f >>= expr,
+                             arithmeticGrammar= Rank2.distribute (arithmeticGrammar <$> f),
+                             booleanGrammar= Rank2.distribute (booleanGrammar <$> f),
+                             comparisonGrammar= Rank2.distribute (comparisonGrammar <$> f),
+                             conditionalGrammar= Rank2.distribute (conditionalGrammar <$> f)}
+
 instance Rank2.Foldable Expression where
    foldMap f g = f (expr g) <> Rank2.foldMap f (arithmeticGrammar g) <> Rank2.foldMap f (booleanGrammar g)
                  <> Rank2.foldMap f (comparisonGrammar g) <> Rank2.foldMap f (conditionalGrammar g)
@@ -69,23 +83,6 @@ instance Rank2.Traversable Expression where
                   <*> Rank2.traverse f (booleanGrammar g)
                   <*> Rank2.traverse f (comparisonGrammar g)
                   <*> Rank2.traverse f (conditionalGrammar g)
-
-instance Rank2.Reassemblable Expression where
-   reassemble :: forall p q. (forall a. (forall f. Expression f -> f a) -> Expression p -> q a)
-              -> Expression p -> Expression q
-   reassemble f g = Expression{expr= f expr g,
-                               arithmeticGrammar= Rank2.reassemble f1 (arithmeticGrammar g),
-                               booleanGrammar= Rank2.reassemble f2 (booleanGrammar g),
-                               comparisonGrammar= Rank2.reassemble f3 (comparisonGrammar g),
-                               conditionalGrammar= Rank2.reassemble f4 (conditionalGrammar g)}
-      where f1 :: (forall f. Arithmetic.Arithmetic Int f -> f a) -> Arithmetic.Arithmetic Int p -> q a
-            f2 :: (forall f. Boolean.Boolean Tagged f -> f a) -> Boolean.Boolean Tagged p -> q a
-            f3 :: (forall f. Comparisons.Comparisons Int Bool f -> f a) -> Comparisons.Comparisons Int Bool p -> q a
-            f4 :: (forall f. Conditionals.Conditionals Tagged f -> f a) -> Conditionals.Conditionals Tagged p -> q a
-            f1 get c = f (get . arithmeticGrammar) g{arithmeticGrammar= c}
-            f2 get c = f (get . booleanGrammar) g{booleanGrammar= c}
-            f3 get c = f (get . comparisonGrammar) g{comparisonGrammar= c}
-            f4 get c = f (get . conditionalGrammar) g{conditionalGrammar= c}
 
 expression :: forall g. (Rank2.Functor g) =>
               (Grammar g String -> Expression (Parser g String)) -> GrammarBuilder Expression g String

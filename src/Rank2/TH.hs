@@ -1,7 +1,9 @@
 {-# Language TemplateHaskell #-}
 -- Adapted from https://wiki.haskell.org/A_practical_Template_Haskell_Tutorial
 
-module Rank2.TH where
+module Rank2.TH (deriveAll, deriveFunctor, deriveApply, deriveApplicative,
+                 deriveFoldable, deriveTraversable, deriveDistributive)
+where
 
 import Control.Monad (replicateM)
 import Data.Monoid ((<>))
@@ -13,7 +15,8 @@ import qualified Rank2
 data Deriving = Deriving { derivingConstructor :: Name, derivingVariable :: Name }
 
 deriveAll :: Name -> Q [Dec]
-deriveAll ty = foldr f (pure []) [deriveFunctor, deriveApply, deriveReassemblable, deriveFoldable, deriveTraversable]
+deriveAll ty = foldr f (pure []) [deriveFunctor, deriveApply, deriveApplicative,
+                                  deriveFoldable, deriveTraversable, deriveDistributive]
    where f derive rest = (<>) <$> derive ty <*> rest
 
 deriveFunctor :: Name -> Q [Dec]
@@ -26,10 +29,10 @@ deriveApply ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Apply ty
    sequence [instanceD (return []) instanceType [genAp cs]]
 
-deriveReassemblable :: Name -> Q [Dec]
-deriveReassemblable ty = do
-   (instanceType, cs) <- reifyConstructors ''Rank2.Reassemblable ty
-   sequence [instanceD (return []) instanceType [genReassemble cs]]
+deriveApplicative :: Name -> Q [Dec]
+deriveApplicative ty = do
+   (instanceType, cs) <- reifyConstructors ''Rank2.Applicative ty
+   sequence [instanceD (return []) instanceType [genPure cs]]
 
 deriveFoldable :: Name -> Q [Dec]
 deriveFoldable ty = do
@@ -40,6 +43,11 @@ deriveTraversable :: Name -> Q [Dec]
 deriveTraversable ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Traversable ty
    sequence [instanceD (return []) instanceType [genTraverse cs]]
+
+deriveDistributive :: Name -> Q [Dec]
+deriveDistributive ty = do
+   (instanceType, cs) <- reifyConstructors ''Rank2.Distributive ty
+   sequence [instanceD (return []) instanceType [genDistribute cs]]
 
 reifyConstructors :: Name -> Name -> Q (TypeQ, [Con])
 reifyConstructors cls ty = do
@@ -63,14 +71,17 @@ genFmap cs = funD 'Rank2.fmap (map genFmapClause cs)
 genAp :: [Con] -> Q Dec
 genAp cs = funD 'Rank2.ap (map genApClause cs)
 
-genReassemble :: [Con] -> Q Dec
-genReassemble cs = funD 'Rank2.reassemble (map genReassembleClause cs)
+genPure :: [Con] -> Q Dec
+genPure cs = funD 'Rank2.pure (map genPureClause cs)
 
 genFoldMap :: [Con] -> Q Dec
 genFoldMap cs = funD 'Rank2.foldMap (map genFoldMapClause cs)
 
 genTraverse :: [Con] -> Q Dec
 genTraverse cs = funD 'Rank2.traverse (map genTraverseClause cs)
+
+genDistribute :: [Con] -> Q Dec
+genDistribute cs = funD 'Rank2.distribute (map genDistributeClause cs)
 
 genFmapClause :: Con -> Q Clause
 genFmapClause (NormalC name fieldTypes) = do
@@ -121,18 +132,20 @@ genApClause (RecC name fields) = do
                                                                        $(varE fieldName) $(varE y) |]
    clause [varP x, varP y] body []
 
-genReassembleClause :: Con -> Q Clause
-genReassembleClause (RecC name fields) = do
-   f <- newName "f"
-   x <- newName "x"
+genPureClause :: Con -> Q Clause
+genPureClause (NormalC name fieldTypes) = do
+   argName <- newName "f"
+   let body = normalB $ appsE $ conE name : replicate (length fieldTypes) (varE argName)
+   clause [varP argName] body []
+genPureClause (RecC name fields) = do
+   argName <- newName "f"
    let body = normalB $ recConE name $ map newNamedField fields
        newNamedField :: VarBangType -> Q (Name, Exp)
        newNamedField (fieldName, _, fieldType) = do
           Just (Deriving _ typeVar) <- getQ
           case fieldType of
-             AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE f) $(varE fieldName) $(varE x) |]
-             _ -> fieldExp fieldName [| $(varE x) |]
-   clause [varP f, varP x] body []
+             AppT ty _ | ty == VarT typeVar -> fieldExp fieldName (varE argName)
+   clause [varP argName] body []
 
 genFoldMapClause :: Con -> Q Clause
 genFoldMapClause (NormalC name fieldTypes) = do
@@ -189,3 +202,14 @@ genTraverseClause (RecC name fields) = do
              AppT ty _ | ty == VarT typeVar -> [| $(varE f) ($(varE fieldName) $(varE x)) |]
              _ -> [| $(varE x) |]
    clause [varP f, varP x] body []
+
+genDistributeClause :: Con -> Q Clause
+genDistributeClause (RecC name fields) = do
+   argName <- newName "f"
+   let body = normalB $ recConE name $ map newNamedField fields
+       newNamedField :: VarBangType -> Q (Name, Exp)
+       newNamedField (fieldName, _, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
+          case fieldType of
+             AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE argName) >>= $(varE fieldName) |]
+   clause [varP argName] body []

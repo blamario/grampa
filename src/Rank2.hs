@@ -1,5 +1,6 @@
 {-# LANGUAGE InstanceSigs, KindSignatures, Rank2Types, ScopedTypeVariables #-}
-module Rank2 (Functor(..), Apply(..), Foldable(..), Traversable(..), Reassemblable(..),
+module Rank2 (Functor(..), Apply(..), Applicative(..),
+              Foldable(..), Traversable(..), Distributive(..),
               Empty(..), Singleton(..), Identity(..), Product(..), Arrow(..),
              (<$>), (<*>), liftA2, liftA3)
 where
@@ -29,7 +30,7 @@ class (Functor g, Foldable g) => Traversable g where
 
 newtype Arrow p q a = Arrow{apply :: p a -> q a}
 
--- | Equivalent of 'Rank1.Applicative' with no 'pure' method, for rank 2 data types
+-- | Subclass of 'Functor' halfway to 'Applicative'
 --
 -- > (.) <$> u <*> v <*> w == u <*> (v <*> w)
 class Functor g => Apply g where
@@ -44,11 +45,13 @@ liftA2 f g h = (Arrow . f) <$> g <*> h
 liftA3 :: Apply g => (forall a. p a -> q a -> r a -> s a) -> g p -> g q -> g r -> g s
 liftA3 f g h i = (\x-> Arrow (Arrow . f x)) <$> g <*> h <*> i
 
--- | Subclass of 'Functor' that allows access to parts of the data structure
--- > reassemble ($) == id
--- > reassemble (\get-> f get . g get) == reassemble f . reassemble g
-class Functor g => Reassemblable g where
-   reassemble :: (forall a. (forall f. g f -> f a) -> g p -> q a) -> g p -> g q
+-- | Equivalent of 'Rank1.Applicative' for rank 2 data types
+class Apply g => Applicative g where
+   pure :: (forall a. f a) -> g f
+
+-- | Equivalent of 'Distributive' for rank 2 data types
+class Functor g => Distributive g where
+   distribute :: Monad f => f (g f) -> g f
 
 data Empty (f :: * -> *) = Empty deriving (Eq, Ord, Show)
 
@@ -73,6 +76,9 @@ instance Rank1.Functor g => Rank2.Functor (Flip g a) where
 
 instance Rank1.Applicative g => Rank2.Apply (Flip g a) where
    Flip g `ap` Flip h = Flip (apply Rank1.<$> g Rank1.<*> h)
+
+instance Rank1.Applicative g => Rank2.Applicative (Flip g a) where
+   pure f = Flip (Rank1.pure f)
 
 instance Rank1.Foldable g => Rank2.Foldable (Flip g a) where
    foldMap f (Flip g) = Rank1.foldMap f g
@@ -128,24 +134,26 @@ instance Apply g => Apply (Identity g) where
 instance (Apply g, Apply h) => Apply (Product g h) where
    ap (Pair gf hf) (Pair g h) = Pair (ap gf g) (ap hf h)
 
-instance Reassemblable Empty where
-   reassemble _ Empty = Empty
+instance Applicative Empty where
+   pure = const Empty
 
-instance Reassemblable (Singleton x) where
-   reassemble f s@Singleton{} = Singleton (f getSingle s)
+instance Applicative (Singleton x) where
+   pure = Singleton
 
-instance forall g. Reassemblable g => Reassemblable (Identity g) where
-   reassemble :: forall p q. (forall a. (forall f. Identity g f -> f a) -> Identity g p -> q a)
-              -> Identity g p -> Identity g q
-   reassemble f ~(Identity a) = Identity (reassemble f' a)
-      where f' :: forall a. (forall f. g f -> f a) -> g p -> q a
-            f' get x = f (get . runIdentity) (Identity x)
+instance Applicative g => Applicative (Identity g) where
+   pure f = Identity (pure f)
 
-instance forall g h. (Reassemblable g, Reassemblable h) => Reassemblable (Product g h) where
-   reassemble :: forall p q. (forall a. (forall f. Product g h f -> f a) -> Product g h p -> q a)
-              -> Product g h p -> Product g h q
-   reassemble f ~(Pair a b) = Pair (reassemble f' a) (reassemble f'' b)
-      where f' :: forall a. (forall f. g f -> f a) -> g p -> q a
-            f' get x = f (get . fst) (Pair x b)
-            f'' :: forall a. (forall f. h f -> f a) -> h p -> q a
-            f'' get x = f (get . snd) (Pair a x)
+instance (Applicative g, Applicative h) => Applicative (Product g h) where
+   pure f = Pair (pure f) (pure f)
+
+instance Distributive Empty where
+   distribute _ = Empty
+
+instance Distributive (Singleton x) where
+   distribute f = Singleton (f >>= getSingle)
+
+instance Distributive g => Distributive (Identity g) where
+   distribute f = Identity (distribute $ Rank1.fmap runIdentity f)
+
+instance (Distributive g, Distributive h) => Distributive (Product g h) where
+   distribute f = Pair (distribute $ Rank1.fmap fst f) (distribute $ Rank1.fmap snd f)

@@ -7,10 +7,9 @@ where
 import Control.Applicative
 import Control.Monad (Monad(..), MonadPlus(..))
 import Data.Either (either)
-import Data.Function (fix)
 import Data.Functor.Classes (Show1(liftShowsPrec))
 import Data.List (genericLength)
-import Data.Monoid (Monoid(mappend, mempty), All(..), (<>), Sum(..))
+import Data.Monoid (Monoid(mappend, mempty), All(..), (<>))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid(tails))
 import Data.Word (Word64)
@@ -72,22 +71,45 @@ primitive n parser = Parser{continued= \t@((_, s):t') rc fc ->
          failAt t msg = InitialResultList (Left $ FailureInfo 0 (genericLength t) [msg])
 
 -- | Tie the knot on a 'GrammarBuilder' and turn it into a 'Grammar'
-fixGrammar :: forall g s. Rank2.Reassemblable g => (Grammar g s -> Grammar g s) -> Grammar g s
-fixGrammar gf = fix (gf . selfReferring)
+fixGrammar :: forall g s. Rank2.Distributive g => (Grammar g s -> Grammar g s) -> Grammar g s
+fixGrammar gf = gf selfReferring
 
-selfReferring :: Rank2.Reassemblable g => Grammar g s -> Grammar g s
-selfReferring = Rank2.reassemble nonTerminal
-   where nonTerminal :: forall g s r. (forall p. g p -> p r) -> g (Parser g s) -> Parser g s r
-         nonTerminal f _ = Parser{continued= continue . resultList . f . fst . head,
-                                  direct= mempty,
-                                  recursive= const . const . f,
-                                  nullable= True}
-            where continue :: Either FailureInfo [ResultInfo g s r]
-                           -> (r -> [(GrammarResults g s, s)] -> ResultList g s r')
+selfReferring :: forall g s. Rank2.Distributive g => Grammar g s
+selfReferring = Rank2.distribute nonTerminal
+   where nonTerminal :: Parser g s (g (Parser g s))
+         nonTerminal = Parser{continued= continue,
+                              direct= mempty,
+                              recursive= recurse,
+                              nullable= True}
+            where continue :: [(GrammarResults g s, s)]
+                           -> (g (Parser g s) -> [(GrammarResults g s, s)] -> ResultList g s r')
                            -> (FailureInfo -> ResultList g s r')
                            -> ResultList g s r'
-                  continue (Left (FailureInfo strength pos msgs)) _ fc = fc (FailureInfo (succ strength) pos msgs)
-                  continue (Right rs) rc _ = foldMap (\(ResultInfo t r)-> rc r t) rs
+                  continue t@((gr,_):_) rc _fc = rc (Rank2.fmap resultsToParser gr) t
+                  recurse :: g (InitialResultList g s) -> s -> [(GrammarResults g s, s)]
+                          -> InitialResultList g s (g (Parser g s))
+                  recurse gr _s _t = InitialResultList (Right [StuckResultInfo $ Rank2.fmap initialResultsToParser gr])
+                  resultsToParser :: forall r. ResultList g s r -> Parser g s r
+                  resultsToParser (ResultList (Left failure)) = Parser{continued= \_ _ fc'-> fc' failure,
+                                                                       direct= \_s _t-> InitialResultList (Left failure),
+                                                                       recursive= mempty,
+                                                                       nullable= False}
+                  resultsToParser rl@(ResultList (Right rs)) =
+                     Parser{continued= \_ rc _-> foldMap (\(ResultInfo t r)-> rc r t) rs,
+                            direct= \_s _t-> uncomplete rl,
+                            recursive= mempty,
+                            nullable= True}
+                  initialResultsToParser :: forall r. InitialResultList g s r -> Parser g s r
+                  initialResultsToParser rl@(InitialResultList (Left failure)) =
+                     Parser{continued= \_ _ fc'-> fc' failure,
+                            direct= mempty,
+                            recursive= \_g _s _t-> rl,
+                            nullable= False}
+                  initialResultsToParser rl@(InitialResultList (Right rs)) =
+                     Parser{continued= \_ rc _-> foldMap (\(CompleteResultInfo t r)-> rc r t) rs,
+                            direct= mempty,
+                            recursive= \_g _s _t-> rl,
+                            nullable= True}
 
 fixGrammarInput :: forall s g. (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g) =>
                    Grammar g s -> Grammar g s -> s -> [(GrammarResults g s, s)]
