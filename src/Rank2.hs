@@ -6,8 +6,8 @@ module Rank2 (Functor(..), Apply(..), Applicative(..),
 where
 
 import qualified Control.Applicative as Rank1
+import qualified Control.Monad as Rank1
 import qualified Data.Foldable as Rank1
-import qualified Data.Functor as Rank1
 import qualified Data.Traversable as Rank1
 import Data.Monoid (Monoid(..), (<>))
 
@@ -51,7 +51,9 @@ class Apply g => Applicative g where
 
 -- | Equivalent of 'Distributive' for rank 2 data types
 class Functor g => Distributive g where
-   distribute :: Monad f => f (g f) -> g f
+   distributeWith :: Rank1.Functor f1 => (forall x. f1 (f2 x) -> f x) -> f1 (g f2) -> g f
+   distributeM :: Rank1.Monad f => f (g f) -> g f
+   distributeM = distributeWith Rank1.join
 
 data Empty (f :: * -> *) = Empty deriving (Eq, Ord, Show)
 
@@ -147,13 +149,17 @@ instance (Applicative g, Applicative h) => Applicative (Product g h) where
    pure f = Pair (pure f) (pure f)
 
 instance Distributive Empty where
-   distribute _ = Empty
+   distributeWith _ _ = Empty
+   distributeM _ = Empty
 
 instance Distributive (Singleton x) where
-   distribute f = Singleton (f >>= getSingle)
+   distributeWith w f = Singleton (w $ Rank1.fmap getSingle f)
+   distributeM f = Singleton (f >>= getSingle)
 
 instance Distributive g => Distributive (Identity g) where
-   distribute f = Identity (distribute $ Rank1.fmap runIdentity f)
+   distributeWith w f = Identity (distributeWith w $ Rank1.fmap runIdentity f)
+   distributeM f = Identity (distributeM $ Rank1.fmap runIdentity f)
 
 instance (Distributive g, Distributive h) => Distributive (Product g h) where
-   distribute f = Pair (distribute $ Rank1.fmap fst f) (distribute $ Rank1.fmap snd f)
+   distributeWith w f = Pair (distributeWith w $ Rank1.fmap fst f) (distributeWith w $ Rank1.fmap snd f)
+   distributeM f = Pair (distributeM $ Rank1.fmap fst f) (distributeM $ Rank1.fmap snd f)

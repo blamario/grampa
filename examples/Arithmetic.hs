@@ -60,9 +60,12 @@ instance Rank2.Applicative (Arithmetic e) where
    pure f = Arithmetic f f f
 
 instance Rank2.Distributive (Arithmetic e) where
-   distribute f = Arithmetic{expr= f >>= expr,
-                             term= f >>= term,
-                             factor= f >>= factor}
+   distributeM f = Arithmetic{expr= f >>= expr,
+                              term= f >>= term,
+                              factor= f >>= factor}
+   distributeWith w f = Arithmetic{expr= w (expr <$> f),
+                                   term= w (term <$> f),
+                                   factor= w (factor <$> f)}
 
 instance Rank2.Foldable (Arithmetic e) where
    foldMap f a = f (expr a) <> f (term a) <> f (factor a)

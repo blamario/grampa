@@ -43,19 +43,20 @@ fixGrammar :: forall g s. Rank2.Distributive g => (Grammar g s -> Grammar g s) -
 fixGrammar gf = gf selfReferring
 
 selfReferring :: forall g s. Rank2.Distributive g => Grammar g s
-selfReferring = Rank2.distribute nonTerminal
-   where nonTerminal :: Parser g s (g (Parser g s))
+selfReferring = Rank2.distributeWith collapse nonTerminal
+   where collapse :: Parser g s (ResultList g s r) -> Parser g s r
+         collapse (P p) = P $ \g s t rc fc-> p g s t (expandR rc fc) fc
+         expandR _rc fc (ResultInfo _ _ _ (ResultList (Left failure))) = fc failure
+         expandR rc _fc (ResultInfo _ _ _ (ResultList (Right rs))) = foldMap rc rs
+         nonTerminal :: Parser g s (g (ResultList g s))
          nonTerminal = P p
             where p :: forall r'. Maybe (GrammarResults g s) -> s -> [(GrammarResults g s, s)]
-                    -> (ResultInfo g s (g (Parser g s)) -> GrammarDerived g s (ResultList g s r'))
+                    -> (ResultInfo g s (g (ResultList g s)) -> GrammarDerived g s (ResultList g s r'))
                     -> (FailureInfo -> GrammarDerived g s (ResultList g s r'))
                     -> GrammarDerived g s (ResultList g s r')
-                  p g s t rc fc = maybe (GrammarDerived mempty start) continue g
+                  p g s t rc _fc = maybe (GrammarDerived mempty start) continue g
                      where continue :: g (ResultList g s) -> GrammarDerived g s (ResultList g s r')
-                           continue gr = rc (ResultInfo g s t (Rank2.fmap resultsToParser gr))
-                           resultsToParser :: forall r. ResultList g s r -> Parser g s r
-                           resultsToParser (ResultList (Left failure)) = P (\_ _ _ _ fc'-> fc' failure)
-                           resultsToParser (ResultList (Right rs)) = P (\_ _ _ rc' _-> foldMap rc' rs)
+                           continue gr = rc (ResultInfo g s t gr)
                            start :: g (ResultList g s) -> ResultList g s r'
                            start gr = gd2rl gr (continue gr)
 
