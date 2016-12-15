@@ -35,8 +35,6 @@ import Text.Parser.Token (TokenParsing)
 import qualified Rank2
 import Text.Grampa.Types
 
-import Debug.Trace (trace)
-
 import Prelude hiding (length, null, span, takeWhile)
 
 type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
@@ -56,8 +54,10 @@ simpleParse p = parse (Rank2.Singleton p) Rank2.getSingle
 
 fromResultList :: FactorialMonoid s => s -> ResultList g s r -> ParseResults (r, s)
 fromResultList s (ResultList (Left (FailureInfo _ pos msgs))) = Left (length s - fromIntegral pos, nub msgs)
-fromResultList _ (ResultList (Right rl)) = Right (f <$> rl)
-   where f (ResultInfo ((_, s):_) r) = (r, s)
+fromResultList input (ResultList (Right rl)) = Right (f <$> rl)
+   where f (CompleteResultInfo ((_, s):_) r) = (r, s)
+         f (CompleteResultInfo [] r) = (r, mempty)
+         f (StuckResultInfo r) = (r, input)
 
 instance MonoidNull s => Parsing (Parser g s) where
    try p = Parser{continued= \t rc fc-> continued p t rc (fc . weaken),
@@ -65,14 +65,14 @@ instance MonoidNull s => Parsing (Parser g s) where
                   recursive= \g s t-> weakenResults (recursive p g s t),
                   nullable= nullable p}
       where weaken (FailureInfo s pos msgs) = FailureInfo (pred s) pos msgs
-            weakenResults (InitialResultList (Left err)) = InitialResultList (Left $ weaken err)
+            weakenResults (ResultList (Left err)) = ResultList (Left $ weaken err)
             weakenResults rl = rl
    p <?> msg  = Parser{continued= \t rc fc-> continued p t rc (fc . strengthen),
                        direct= \s t-> strengthenResults (direct p s t),
                        recursive= \g s t-> strengthenResults (recursive p g s t),
                        nullable= nullable p}
       where strengthen (FailureInfo s pos _msgs) = FailureInfo (succ s) pos [msg]
-            strengthenResults (InitialResultList (Left err)) = InitialResultList (Left $ strengthen err)
+            strengthenResults (ResultList (Left err)) = ResultList (Left $ strengthen err)
             strengthenResults rl = rl
    notFollowedBy p = Parser{continued= \t rc fc-> either
                               (const $ rc () t)
@@ -80,17 +80,17 @@ instance MonoidNull s => Parsing (Parser g s) where
                                      else fc (FailureInfo 1 (genericLength t) ["notFollowedBy"]))
                               (resultList $ continued p t succeed concede),
                             direct= \s t-> either
-                              (const $ InitialResultList $ Right [StuckResultInfo ()])
-                              (\rs -> InitialResultList $
+                              (const $ ResultList $ Right [StuckResultInfo ()])
+                              (\rs -> ResultList $
                                       if null rs then Right [StuckResultInfo ()]
                                       else Left (FailureInfo 0 (genericLength t) ["notFollowedBy"]))
-                              (initialResultList $ direct p s t),
+                              (resultList $ direct p s t),
                             recursive= \g s t-> either
-                              (const $ InitialResultList $ Right [StuckResultInfo ()])
-                              (\rs -> InitialResultList $
+                              (const $ ResultList $ Right [StuckResultInfo ()])
+                              (\rs -> ResultList $
                                       if null rs then Right []
                                       else Left (FailureInfo 0 (genericLength t) ["notFollowedBy"]))
-                              (initialResultList $ recursive p g s t),
+                              (resultList $ recursive p g s t),
                             nullable= True}
    skipMany p = go
       where go = pure () <|> p *> go
@@ -102,8 +102,8 @@ instance MonoidNull s => LookAheadParsing (Parser g s) where
                         direct= \s t-> restoreResultInputs (direct p s t),
                         recursive= \g s t-> restoreResultInputs (recursive p g s t),
                         nullable= True}
-               where restoreResultInputs rl@(InitialResultList Left{}) = rl
-                     restoreResultInputs (InitialResultList (Right rl)) = InitialResultList (Right $ rewind <$> rl)
+               where restoreResultInputs rl@(ResultList Left{}) = rl
+                     restoreResultInputs (ResultList (Right rl)) = ResultList (Right $ rewind <$> rl)
                      rewind (CompleteResultInfo _ r) = StuckResultInfo r
                      rewind (StuckResultInfo r) = StuckResultInfo r
 
