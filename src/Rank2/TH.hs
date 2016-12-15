@@ -47,7 +47,7 @@ deriveTraversable ty = do
 deriveDistributive :: Name -> Q [Dec]
 deriveDistributive ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Distributive ty
-   sequence [instanceD (return []) instanceType [genDistribute cs]]
+   sequence [instanceD (return []) instanceType [genDistributeWith cs, genDistributeM cs]]
 
 reifyConstructors :: Name -> Name -> Q (TypeQ, [Con])
 reifyConstructors cls ty = do
@@ -80,8 +80,11 @@ genFoldMap cs = funD 'Rank2.foldMap (map genFoldMapClause cs)
 genTraverse :: [Con] -> Q Dec
 genTraverse cs = funD 'Rank2.traverse (map genTraverseClause cs)
 
-genDistribute :: [Con] -> Q Dec
-genDistribute cs = funD 'Rank2.distribute (map genDistributeClause cs)
+genDistributeM :: [Con] -> Q Dec
+genDistributeM cs = funD 'Rank2.distributeM (map genDistributeMClause cs)
+
+genDistributeWith :: [Con] -> Q Dec
+genDistributeWith cs = funD 'Rank2.distributeWith (map genDistributeWithClause cs)
 
 genFmapClause :: Con -> Q Clause
 genFmapClause (NormalC name fieldTypes) = do
@@ -203,8 +206,8 @@ genTraverseClause (RecC name fields) = do
              _ -> [| $(varE x) |]
    clause [varP f, varP x] body []
 
-genDistributeClause :: Con -> Q Clause
-genDistributeClause (RecC name fields) = do
+genDistributeMClause :: Con -> Q Clause
+genDistributeMClause (RecC name fields) = do
    argName <- newName "f"
    let body = normalB $ recConE name $ map newNamedField fields
        newNamedField :: VarBangType -> Q (Name, Exp)
@@ -213,3 +216,16 @@ genDistributeClause (RecC name fields) = do
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE argName) >>= $(varE fieldName) |]
    clause [varP argName] body []
+
+genDistributeWithClause :: Con -> Q Clause
+genDistributeWithClause (RecC name fields) = do
+   withName <- newName "w"
+   argName <- newName "f"
+   let body = normalB $ recConE name $ map newNamedField fields
+       newNamedField :: VarBangType -> Q (Name, Exp)
+       newNamedField (fieldName, _, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
+          case fieldType of
+             AppT ty _
+                | ty == VarT typeVar -> fieldExp fieldName [| $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
+   clause [varP withName, varP argName] body []

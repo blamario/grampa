@@ -35,7 +35,8 @@ instance Rank2.Applicative (Conditionals e) where
    pure = Conditionals
 
 instance Rank2.Distributive (Conditionals e) where
-   distribute f = Conditionals{expr= f >>= expr}
+   distributeM f = Conditionals{expr= f >>= expr}
+   distributeWith w f = Conditionals{expr= w (expr <$> f)}
 
 instance Rank2.Foldable (Conditionals e) where
    foldMap f a = f (expr a)
