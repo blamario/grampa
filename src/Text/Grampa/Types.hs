@@ -9,6 +9,7 @@ import Control.Monad (Monad(..), MonadPlus(..))
 import Data.Either (either)
 import Data.Functor.Classes (Show1(liftShowsPrec))
 import Data.List (genericLength)
+import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(mappend, mempty), All(..), (<>))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid(tails))
@@ -25,8 +26,7 @@ data Parser g s r = Parser {continued :: forall r'. [(GrammarResults g s, s)]
                               -> (FailureInfo -> ResultList g s r')
                               -> ResultList g s r',
                             direct :: s -> [(GrammarResults g s, s)] -> ResultList g s r,
-                            recursive :: g (ResultList g s) -> s -> [(GrammarResults g s, s)]
-                                      -> ResultList g s r,
+                            recursive :: Maybe (g (ResultList g s) -> s -> [(GrammarResults g s, s)] -> ResultList g s r),
                             nullable :: Bool}
 newtype DerivedResultList g s r = DerivedResultList {
    derivedResultList :: g (ResultList g s) -> ResultList g s r}
@@ -69,7 +69,7 @@ selfReferring = Rank2.distributeWith nonTerminal id
    where nonTerminal :: forall r. (g (ResultList g s) -> ResultList g s r) -> Parser g s r
          nonTerminal f = Parser{continued= continue . resultList . f . fst . head,
                                 direct= mempty,
-                                recursive= const . const . f,
+                                recursive= Just (const . const . f),
                                 nullable= True}
             where continue :: Either FailureInfo [ResultInfo g s r]
                            -> (r -> [(GrammarResults g s, s)] -> ResultList g s r')
@@ -87,7 +87,7 @@ fixGrammarInput final grammar input = parseTailWith input $ foldr parseTail [] (
          parseTail s parsedTail = parsed
             where parsed = (Rank2.fmap finalize $ collectGrammarResults gd gr, s):parsedTail
                   gd = Rank2.fmap (\p-> direct p s parsedTail) grammar
-                  gr = Rank2.fmap (\p-> DerivedResultList $ \g-> recursive p g s parsedTail) grammar
+                  gr = Rank2.fmap (\p-> DerivedResultList $ \g-> fromMaybe mempty (recursive p) g s parsedTail) grammar
                   finalize :: ResultList g s r -> ResultList g s r
                   finalize (ResultList (Left err)) = ResultList (Left err)
                   finalize (ResultList (Right results)) = ResultList (Right $ complete <$> results)
@@ -174,7 +174,7 @@ instance Applicative (GrammarDerived g s) where
 instance Functor (Parser g s) where
    fmap f p = Parser{continued= \t rc fc-> continued p t (rc . f) fc,
                      direct= \s t-> f <$> direct p s t,
-                     recursive= \g s t-> f <$> recursive p g s t,
+                     recursive= (\r g s t-> f <$> r g s t) <$> recursive p,
                      nullable= nullable p}
 
 instance Applicative (Parser g s) where
@@ -185,8 +185,10 @@ instance Applicative (Parser g s) where
    (<*>) :: forall a b. Parser g s (a -> b) -> Parser g s a -> Parser g s b
    p <*> q = Parser{continued= \t rc fc-> continued p t (\r t'-> continued q t' (rc . r) fc) fc,
                     direct= \s t-> directly s t $ direct p s t,
-                    recursive= \g s t-> (if nullable p then recursively' g s t (direct p s t) else mempty)
-                                        <> recursively g s t (recursive p g s t),
+                    recursive= (if nullable p
+                                then (\r g s t-> recursively' (direct p s t) r g s t) <$> recursive q
+                                else Nothing)
+                               <> ((\r g s t-> recursively g s t $ r g s t) <$> recursive p),
                     nullable= nullable p && nullable q}
       where directly :: s -> [(GrammarResults g s, s)] -> ResultList g s (a -> b) -> ResultList g s b
             directly _s _t (ResultList (Left err)) = ResultList (Left err)
@@ -198,13 +200,15 @@ instance Applicative (Parser g s) where
             recursively _g _s _t (ResultList (Left err)) = ResultList (Left err)
             recursively g s t (ResultList (Right results)) = foldMap proceedWith results
                where proceedWith (CompleteResultInfo t' r) = continued q t' (succeed . r) concede
-                     proceedWith (StuckResultInfo r) = r <$> recursive q g s t
-            recursively' :: g (ResultList g s) -> s -> [(GrammarResults g s, s)] -> ResultList g s (a -> b)
+                     proceedWith (StuckResultInfo r) = maybe mempty (\recurse-> r <$> recurse g s t) (recursive q)
+            recursively' :: ResultList g s (a -> b)
+                         -> (g (ResultList g s) -> s -> [(GrammarResults g s, s)] -> ResultList g s a)
+                         -> g (ResultList g s) -> s -> [(GrammarResults g s, s)]
                          -> ResultList g s b
-            recursively' _g _s _t (ResultList Left{}) = mempty
-            recursively' g s t (ResultList (Right results)) = foldMap proceedWith results
+            recursively' (ResultList Left{}) _qr _g _s _t = mempty
+            recursively' (ResultList (Right results)) qr g s t = foldMap proceedWith results
                where proceedWith CompleteResultInfo{} = mempty
-                     proceedWith (StuckResultInfo r) = r <$> recursive q g s t
+                     proceedWith (StuckResultInfo r) = r <$> qr g s t
 
 instance Alternative (Parser g s) where
    empty = Parser{continued= \_t _rc fc-> fc $ FailureInfo 0 maxBound [],
@@ -213,7 +217,7 @@ instance Alternative (Parser g s) where
                   nullable= False}
    p <|> q = Parser{continued= \t rc fc-> continued p t rc fc <> continued q t rc fc,
                     direct= \s t-> direct p s t <> direct q s t,
-                    recursive= \g-> recursive p g <> recursive q g,
+                    recursive= recursive p <> recursive q,
                     nullable= nullable p || nullable q}
 
    -- | One or more. Make sure `nullable` terminates.
@@ -229,8 +233,11 @@ instance Alternative (Parser g s) where
 infixl 3 <<|>
 (<<|>) :: Parser g s r -> Parser g s r -> Parser g s r
 p <<|> q = Parser{continued= \t rc fc-> continued p t rc (\f1-> continued q t rc $ \f2-> fc $ combine f1 f2),
-                  direct= \s t-> redirect s t (direct p s t),
-                  recursive= \g s t-> rerecurse g s t (recursive p g s t),
+                  direct= \s t-> choose (direct p s t) (direct q s t),
+                  recursive= case (recursive p, recursive q)
+                             of (Nothing, r) -> r
+                                (r, Nothing) -> r
+                                (Just rp, Just rq) -> Just (\g s t-> choose (rp g s t) (rq g s t)),
                   nullable= nullable p || nullable q}
    where combine f1@(FailureInfo strength1 pos1 exp1)
                  f2@(FailureInfo strength2 pos2 exp2) =
@@ -242,18 +249,18 @@ p <<|> q = Parser{continued= \t rc fc-> continued p t rc (\f1-> continued q t rc
                            in FailureInfo strength1 pos' exp'
          onFailure f (ResultList (Left err)) = ResultList (Left $ f err)
          onFailure _ rl = rl
-         redirect s t (ResultList (Left f1)) = onFailure (combine f1) (direct q s t)
-         redirect _ _ rl = rl
-         rerecurse g s t (ResultList (Left f1)) = onFailure (combine f1) (recursive q g s t)
-         rerecurse _ _ _ rl = rl
+         choose (ResultList (Left f1)) rl2 = onFailure (combine f1) rl2
+         choose rl _ = rl
 
 instance Monad (Parser g s) where
    return = pure
    (>>=) :: forall a b. Parser g s a -> (a -> Parser g s b) -> Parser g s b
    p >>= cont = Parser{continued= \t rc fc-> continued p t (\r t'-> continued (cont r) t' rc fc) fc,
                        direct= \s t-> directly s t $ direct p s t,
-                       recursive= \g s t-> (if nullable p then recursively' g s t (direct p s t) else mempty)
-                                           <> recursively g s t (recursive p g s t),
+                       recursive= if nullable p
+                                  then Just (\g s t-> (if nullable p then recursively' g s t (direct p s t) else mempty)
+                                                      <> recursively g s t (fromMaybe mempty (recursive p) g s t))
+                                  else (\r g s t-> recursively g s t $ r g s t) <$> recursive p,
                        nullable= nullable p}
       where directly :: s -> [(GrammarResults g s, s)] -> ResultList g s a -> ResultList g s b
             directly _s _t (ResultList (Left err)) = ResultList (Left err)
@@ -265,17 +272,17 @@ instance Monad (Parser g s) where
             recursively _g _s _t (ResultList (Left err)) = ResultList (Left err)
             recursively g s t (ResultList (Right results)) = foldMap proceedWith results
                where proceedWith (CompleteResultInfo t' r) = continued (cont r) t' succeed concede
-                     proceedWith (StuckResultInfo r) = recursive (cont r) g s t
+                     proceedWith (StuckResultInfo r) = fromMaybe mempty (recursive $ cont r) g s t
             recursively' :: g (ResultList g s) -> s -> [(GrammarResults g s, s)] -> ResultList g s a
                         -> ResultList g s b
             recursively' _g _s _t (ResultList Left{}) = mempty
             recursively' g s t (ResultList (Right results)) = foldMap proceedWith results
-               where proceedWith CompleteResultInfo{} = mempty
-                     proceedWith (StuckResultInfo r) = recursive (cont r) g s t
+               where proceedWith (CompleteResultInfo t' r) = continued (cont r) t' succeed concede
+                     proceedWith (StuckResultInfo r) = fromMaybe mempty (recursive $ cont r) g s t
    (>>) = (*>)
    fail msg = Parser{continued= \_ _ fc-> fc $ FailureInfo 0 maxBound [msg],
                      direct= \_s _t-> ResultList (Left $ FailureInfo 1 maxBound [msg]),
-                     recursive= \_g _s _t-> ResultList (Left $ FailureInfo 1 maxBound [msg]),
+                     recursive= Nothing,
                      nullable= False}
 
 instance MonadPlus (Parser g s) where
