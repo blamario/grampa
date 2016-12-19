@@ -63,14 +63,16 @@ instance MonoidNull s => Parsing (Parser g s) where
    try p = Parser{continued= \t rc fc-> continued p t rc (fc . weaken),
                   direct= \s t-> weakenResults (direct p s t),
                   recursive= (\r g s t-> weakenResults $ r g s t) <$> recursive p,
-                  nullable= nullable p}
+                  nullable= nullable p,
+                  recursivelyNullable= recursivelyNullable p}
       where weaken (FailureInfo s pos msgs) = FailureInfo (pred s) pos msgs
             weakenResults (ResultList (Left err)) = ResultList (Left $ weaken err)
             weakenResults rl = rl
    p <?> msg  = Parser{continued= \t rc fc-> continued p t rc (fc . strengthen),
                        direct= \s t-> strengthenResults (direct p s t),
                        recursive= (\r g s t-> strengthenResults $ r g s t) <$> recursive p,
-                       nullable= nullable p}
+                       nullable= nullable p,
+                       recursivelyNullable= recursivelyNullable p}
       where strengthen (FailureInfo s pos _msgs) = FailureInfo (succ s) pos [msg]
             strengthenResults (ResultList (Left err)) = ResultList (Left $ strengthen err)
             strengthenResults rl = rl
@@ -92,7 +94,8 @@ instance MonoidNull s => Parsing (Parser g s) where
                                              else Left (FailureInfo 0 (genericLength t) ["notFollowedBy"]))
                                           (resultList $ r g s t))
                                        <$> recursive p,
-                            nullable= True}
+                            nullable= True,
+                            recursivelyNullable= const True}
    skipMany p = go
       where go = pure () <|> p *> go
    unexpected msg = primitive False (\_s _t _ _ fc -> fc msg)
@@ -102,7 +105,8 @@ instance MonoidNull s => LookAheadParsing (Parser g s) where
    lookAhead p = Parser{continued= \t rc fc-> continued p t (\r _-> rc r t) fc,
                         direct= \s t-> restoreResultInputs (direct p s t),
                         recursive= (\r g s t-> restoreResultInputs $ r g s t) <$> recursive p,
-                        nullable= True}
+                        nullable= True,
+                        recursivelyNullable= const True}
                where restoreResultInputs rl@(ResultList Left{}) = rl
                      restoreResultInputs (ResultList (Right rl)) = ResultList (Right $ rewind <$> rl)
                      rewind (CompleteResultInfo _ r) = StuckResultInfo r
