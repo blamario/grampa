@@ -257,17 +257,23 @@ instance Alternative (Parser g s) where
                     nullable= nullable p || nullable q,
                     recursivelyNullable= \g-> recursivelyNullable p g || recursivelyNullable q g}
 
-   -- | One or more. Make sure `nullable` terminates.
-   some v = some_v{nullable= nullable v,
-                   recursivelyNullable= recursivelyNullable v}
-      where many_v = some_v <|> pure []
-            some_v = (:) <$> v <*> many_v
+   -- | One or more. The overriding ensures that static fields terminate.
+   some :: forall a. Parser g s a -> Parser g s [a]
+   some p = some_p{nullable= nullable p,
+                   recursivelyNullable= recursivelyNullable p,
+                   recursive= (\r g s t-> recursively g s t $ r g s t) <$> recursive p}
+      where many_p = some_p <|> pure []
+            some_p = (:) <$> p <*> many_p
+            recursively :: g (ResultList g s) -> s -> [(GrammarResults g s, s)] -> ResultList g s a
+                        -> ResultList g s [a]
+            recursively _g _s _t (ResultList (Left err)) = ResultList (Left err)
+            recursively g s t (ResultList (Right results)) = foldMap proceedWith results
+               where proceedWith (CompleteResultInfo t' r) = continued many_p t' (succeed . (r:)) concede
+                     proceedWith (StuckResultInfo r) =
+                        maybe mempty (\recurse-> (r:) <$> recurse g s t) (recursive many_p)
 
-   -- | Zero or more. Make sure `nullable` terminates.
-   many v = many_v{nullable= True,
-                   recursivelyNullable= const True}
-      where many_v = some_v <|> pure []
-            some_v = (:) <$> v <*> many_v
+   -- | Zero or more. The overriding ensures that static fields terminate.
+   many p = some p <|> pure []
 
 infixl 3 <<|>
 (<<|>) :: Parser g s r -> Parser g s r -> Parser g s r

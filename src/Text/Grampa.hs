@@ -9,6 +9,7 @@ module Text.Grampa (
    -- * Parser combinators
    module Text.Parser.Combinators,
    module Text.Parser.LookAhead,
+   recursiveOn,
    -- * Parsing primitives
    module Text.Parser.Char,
    module Text.Parser.Token,
@@ -58,6 +59,11 @@ fromResultList input (ResultList (Right rl)) = Right (f <$> rl)
    where f (CompleteResultInfo ((_, s):_) r) = (r, s)
          f (CompleteResultInfo [] r) = (r, mempty)
          f (StuckResultInfo r) = (r, input)
+
+recursiveOn :: Parser g s x -> Parser g s r -> Parser g s r
+recursiveOn p q = q{nullable= nullable p,
+                    recursivelyNullable= recursivelyNullable p,
+                    recursive= recursive p *> recursive q}
 
 instance MonoidNull s => Parsing (Parser g s) where
    try p = Parser{continued= \t rc fc-> continued p t rc (fc . weaken),
