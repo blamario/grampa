@@ -43,22 +43,21 @@ fixGrammar :: forall g s. Rank2.Distributive g => (Grammar g s -> Grammar g s) -
 fixGrammar gf = gf selfReferring
 
 selfReferring :: forall g s. Rank2.Distributive g => Grammar g s
-selfReferring = Rank2.distributeWith collapse nonTerminal
-   where collapse :: Parser g s (ResultList g s r) -> Parser g s r
-         collapse (P p) = P $ \g s t rc fc-> p g s t (expandR rc fc) fc
-         expandR _rc fc (ResultInfo _ _ _ (ResultList (Left failure))) = fc failure
-         expandR rc _fc (ResultInfo _ _ _ (ResultList (Right rs))) = foldMap rc rs
-         nonTerminal :: Parser g s (g (ResultList g s))
-         nonTerminal = P p
+selfReferring = Rank2.distributeWith nonTerminal id
+   where nonTerminal :: forall r. (g (ResultList g s) -> ResultList g s r) -> Parser g s r
+         nonTerminal project = P p
             where p :: forall r'. Maybe (GrammarResults g s) -> s -> [(GrammarResults g s, s)]
-                    -> (ResultInfo g s (g (ResultList g s)) -> GrammarDerived g s (ResultList g s r'))
+                    -> (ResultInfo g s r -> GrammarDerived g s (ResultList g s r'))
                     -> (FailureInfo -> GrammarDerived g s (ResultList g s r'))
                     -> GrammarDerived g s (ResultList g s r')
-                  p g s t rc _fc = maybe (GrammarDerived mempty start) continue g
-                     where continue :: g (ResultList g s) -> GrammarDerived g s (ResultList g s r')
-                           continue gr = rc (ResultInfo g s t gr)
-                           start :: g (ResultList g s) -> ResultList g s r'
-                           start gr = gd2rl gr (continue gr)
+                  p g _ _ rc fc = maybe (GrammarDerived mempty start) (continue . resultList . project) g
+                     where continue :: Either FailureInfo [ResultInfo g s r] -> GrammarDerived g s (ResultList g s r')
+                           continue (Left (FailureInfo strength pos msgs)) = fc (FailureInfo (succ strength) pos msgs)
+                           continue (Right rs) = foldMap rc rs
+                           start :: GrammarResults g s -> ResultList g s r'
+                           start gr = case resultList (project gr)
+                                      of Left err -> ResultList (Left err)
+                                         Right rs -> gd2rl gr (foldMap rc rs)
 
 fixGrammarInput :: forall s g. (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g) =>
                    Grammar g s -> Grammar g s -> s -> [(GrammarResults g s, s)]
