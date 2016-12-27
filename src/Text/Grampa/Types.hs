@@ -45,6 +45,10 @@ concede a = ResultList (Left a)
 succeed :: r -> [(GrammarResults g s, s)] -> ResultList g s r
 succeed r t = ResultList (Right [CompleteResultInfo t r])
 
+concatMapResults :: (ResultInfo g s a -> ResultList g s b) -> ResultList g s a -> ResultList g s b
+concatMapResults _f (ResultList (Left err)) = ResultList (Left err)
+concatMapResults f (ResultList (Right results)) = foldMap f results
+
 primitive :: Bool
           -> (forall x. s -> [(GrammarResults g s, s)]
                         -> (r -> x)
@@ -218,32 +222,19 @@ instance Applicative (Parser g s) where
                    recursivelyNullable= const True}
    (<*>) :: forall a b. Parser g s (a -> b) -> Parser g s a -> Parser g s b
    p <*> q = Parser{continued= \t rc fc-> continued p t (\r t'-> continued q t' (rc . r) fc) fc,
-                    direct= \s t-> directly s t $ direct p s t,
+                    direct= \s t-> concatMapResults (continueFrom s t) $ direct p s t,
                     recursive= (if nullable p
-                                then (\r g s t-> recursively' (direct p s t) r g s t) <$> recursive q
+                                then (\r g s t-> concatMapResults (recurseFrom r g s t) $ direct p s t) <$> recursive q
                                 else Nothing)
-                               <> ((\r g s t-> recursively g s t $ r g s t) <$> recursive p),
+                               <> ((\r g s t-> concatMapResults (continueOrRecurse g s t) $ r g s t) <$> recursive p),
                     nullable= nullable p && nullable q,
                     recursivelyNullable= \g-> recursivelyNullable p g && recursivelyNullable q g}
-      where directly :: s -> [(GrammarResults g s, s)] -> ResultList g s (a -> b) -> ResultList g s b
-            directly _s _t (ResultList (Left err)) = ResultList (Left err)
-            directly s t (ResultList (Right results)) = foldMap proceedWith results
-               where proceedWith (CompleteResultInfo t' r) = continued q t' (succeed . r) concede
-                     proceedWith (StuckResultInfo r) = r <$> direct q s t
-            recursively :: g (ResultList g s) -> s -> [(GrammarResults g s, s)] -> ResultList g s (a -> b)
-                        -> ResultList g s b
-            recursively _g _s _t (ResultList (Left err)) = ResultList (Left err)
-            recursively g s t (ResultList (Right results)) = foldMap proceedWith results
-               where proceedWith (CompleteResultInfo t' r) = continued q t' (succeed . r) concede
-                     proceedWith (StuckResultInfo r) = maybe mempty (\recurse-> r <$> recurse g s t) (recursive q)
-            recursively' :: ResultList g s (a -> b)
-                         -> (g (ResultList g s) -> s -> [(GrammarResults g s, s)] -> ResultList g s a)
-                         -> g (ResultList g s) -> s -> [(GrammarResults g s, s)]
-                         -> ResultList g s b
-            recursively' (ResultList Left{}) _qr _g _s _t = mempty
-            recursively' (ResultList (Right results)) qr g s t = foldMap proceedWith results
-               where proceedWith CompleteResultInfo{} = mempty
-                     proceedWith (StuckResultInfo r) = r <$> qr g s t
+      where continueFrom _s _t (CompleteResultInfo t' r) = continued q t' (succeed . r) concede
+            continueFrom s t (StuckResultInfo r) = r <$> direct q s t
+            continueOrRecurse _g _s _t (CompleteResultInfo t' r) = continued q t' (succeed . r) concede
+            continueOrRecurse g s t (StuckResultInfo r) = maybe mempty (\recurse-> r <$> recurse g s t) (recursive q)
+            recurseFrom _qr _g _s _t CompleteResultInfo{} = mempty
+            recurseFrom qr g s t (StuckResultInfo r) = r <$> qr g s t
 
 instance Alternative (Parser g s) where
    empty = Parser{continued= \_t _rc fc-> fc $ FailureInfo 0 maxBound [],
@@ -261,16 +252,12 @@ instance Alternative (Parser g s) where
    some :: forall a. Parser g s a -> Parser g s [a]
    some p = some_p{nullable= nullable p,
                    recursivelyNullable= recursivelyNullable p,
-                   recursive= (\r g s t-> recursively g s t $ r g s t) <$> recursive p}
+                   recursive= (\r g s t-> concatMapResults (proceedWith g s t) $ r g s t) <$> recursive p}
       where many_p = some_p <|> pure []
             some_p = (:) <$> p <*> many_p
-            recursively :: g (ResultList g s) -> s -> [(GrammarResults g s, s)] -> ResultList g s a
-                        -> ResultList g s [a]
-            recursively _g _s _t (ResultList (Left err)) = ResultList (Left err)
-            recursively g s t (ResultList (Right results)) = foldMap proceedWith results
-               where proceedWith (CompleteResultInfo t' r) = continued many_p t' (succeed . (r:)) concede
-                     proceedWith (StuckResultInfo r) =
-                        maybe mempty (\recurse-> (r:) <$> recurse g s t) (recursive many_p)
+            proceedWith _g _s _t (CompleteResultInfo t' r) = continued many_p t' (succeed . (r:)) concede
+            proceedWith g s t (StuckResultInfo r) =
+               maybe mempty (\recurse-> (r:) <$> recurse g s t) (recursive many_p)
 
    -- | Zero or more. The overriding ensures that static fields terminate.
    many p = some p <|> pure []
@@ -302,30 +289,21 @@ instance Monad (Parser g s) where
    return = pure
    (>>=) :: forall a b. Parser g s a -> (a -> Parser g s b) -> Parser g s b
    p >>= cont = Parser{continued= \t rc fc-> continued p t (\r t'-> continued (cont r) t' rc fc) fc,
-                       direct= \s t-> directly s t $ direct p s t,
+                       direct= \s t-> concatMapResults (continueFrom s t) $ direct p s t,
                        recursive= if nullable p
-                                  then Just (\g s t-> (if nullable p then recursively' g s t (direct p s t) else mempty)
-                                                      <> recursively g s t (fromMaybe mempty (recursive p) g s t))
-                                  else (\r g s t-> recursively g s t $ r g s t) <$> recursive p,
+                                  then Just (\g s t-> (if nullable p
+                                                       then concatMapResults (continueOrRecurse g s t) (direct p s t)
+                                                       else mempty)
+                                                      <> concatMapResults (recurseFrom g s t) (fromMaybe mempty (recursive p) g s t))
+                                  else (\r g s t-> concatMapResults (recurseFrom g s t) $ r g s t) <$> recursive p,
                        nullable= nullable p,
                        recursivelyNullable= recursivelyNullable p}
-      where directly :: s -> [(GrammarResults g s, s)] -> ResultList g s a -> ResultList g s b
-            directly _s _t (ResultList (Left err)) = ResultList (Left err)
-            directly s t (ResultList (Right results)) = foldMap proceedWith results
-               where proceedWith (CompleteResultInfo t' r) = continued (cont r) t' succeed concede
-                     proceedWith (StuckResultInfo r) = direct (cont r) s t
-            recursively :: g (ResultList g s) -> s -> [(GrammarResults g s, s)] -> ResultList g s a
-                        -> ResultList g s b
-            recursively _g _s _t (ResultList (Left err)) = ResultList (Left err)
-            recursively g s t (ResultList (Right results)) = foldMap proceedWith results
-               where proceedWith (CompleteResultInfo t' r) = continued (cont r) t' succeed concede
-                     proceedWith (StuckResultInfo r) = fromMaybe mempty (recursive $ cont r) g s t
-            recursively' :: g (ResultList g s) -> s -> [(GrammarResults g s, s)] -> ResultList g s a
-                        -> ResultList g s b
-            recursively' _g _s _t (ResultList Left{}) = mempty
-            recursively' g s t (ResultList (Right results)) = foldMap proceedWith results
-               where proceedWith (CompleteResultInfo t' r) = continued (cont r) t' succeed concede
-                     proceedWith (StuckResultInfo r) = fromMaybe mempty (recursive $ cont r) g s t
+      where continueFrom _s _t (CompleteResultInfo t' r) = continued (cont r) t' succeed concede
+            continueFrom s t (StuckResultInfo r) = direct (cont r) s t
+            continueOrRecurse _g _s _t (CompleteResultInfo t' r) = continued (cont r) t' succeed concede
+            continueOrRecurse g s t (StuckResultInfo r) = fromMaybe mempty (recursive $ cont r) g s t
+            recurseFrom _g _s _t (CompleteResultInfo t' r) = continued (cont r) t' succeed concede
+            recurseFrom g s t (StuckResultInfo r) = fromMaybe mempty (recursive $ cont r) g s t
    (>>) = (*>)
    fail msg = Parser{continued= \_ _ fc-> fc $ FailureInfo 0 maxBound [msg],
                      direct= \_s _t-> ResultList (Left $ FailureInfo 1 maxBound [msg]),
