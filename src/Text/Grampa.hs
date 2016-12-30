@@ -9,7 +9,7 @@ module Text.Grampa (
    -- * Parser combinators
    module Text.Parser.Combinators,
    module Text.Parser.LookAhead,
-   recursiveOn,
+   recursiveOn, (<<|>),
    -- * Parsing primitives
    module Text.Parser.Char,
    module Text.Parser.Token,
