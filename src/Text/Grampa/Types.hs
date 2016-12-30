@@ -68,12 +68,12 @@ primitive n parser = Parser{continued= \t@((_, s):t') rc fc ->
 -- | Tie the knot on a 'GrammarBuilder' and turn it into a 'Grammar'
 fixGrammar :: forall g s. (Rank2.Foldable g, Rank2.Apply g, Rank2.Distributive g) =>
               (Grammar g s -> Grammar g s) -> Grammar g s
-fixGrammar gf = combine `Rank2.fmap` gf selfReferring `Rank2.ap` fixNullable (gf selfNullable)
-   where combine p1 = Rank2.Arrow (\p2-> Parser{continued= continued p1,
-                                                direct= direct p1,
-                                                recursive= recursive p1,
-                                                nullable= nullable p2,
-                                                recursivelyNullable= recursivelyNullable p2})
+fixGrammar gf = (Rank2.Arrow . combine) `Rank2.fmap` gf selfReferring `Rank2.ap` fixNullable (gf selfNullable)
+   where combine p1 p2 = Parser{continued= continued p1,
+                                direct= direct p1,
+                                recursive= recursive p1,
+                                nullable= nullable p2,
+                                recursivelyNullable= recursivelyNullable p2}
 
 fixNullable :: forall g s. (Rank2.Foldable g, Rank2.Apply g) => Grammar g s -> Grammar g s
 fixNullable g = head (iterateNullable iter g [])
@@ -232,11 +232,12 @@ instance Alternative (Parser g s) where
 
    -- | One or more. The overriding ensures that static fields terminate.
    some :: forall a. Parser g s a -> Parser g s [a]
-   some p = some_p{nullable= nullable p,
-                   recursivelyNullable= recursivelyNullable p,
-                   recursive= (\r g s t-> concatMapResults (proceedWith g s t) $ r g s t) <$> recursive p}
+   some p = some_p
       where many_p = some_p <|> pure []
-            some_p = (:) <$> p <*> many_p
+            some_p = ((:) <$> p <*> many_p){
+               nullable= nullable p,
+               recursivelyNullable= recursivelyNullable p,
+               recursive= (\r g s t-> concatMapResults (proceedWith g s t) $ r g s t) <$> recursive p}
             proceedWith _g _s _t (CompleteResultInfo t' r) = continued many_p t' (succeed . (r:)) concede
             proceedWith g s t (StuckResultInfo r) =
                maybe mempty (\recurse-> (r:) <$> recurse g s t) (recursive many_p)
