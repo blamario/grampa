@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables #-}
 module Text.Grampa.Types (FailureInfo(..), ResultInfo(..), ResultList(..),
-                          Grammar, GrammarDerived(..), Parser(..), (<<|>),
-                          concede, succeed, gd2rl, fixGrammar, fixGrammarInput, primitive, selfReferring)
+                          Grammar, Parser(..), (<<|>),
+                          concede, succeed, fixGrammar, fixGrammarInput, primitive, selfReferring)
 where
 
 import Control.Applicative
@@ -35,7 +35,6 @@ newtype ResultList g s r = ResultList {resultList :: Either FailureInfo [ResultI
 data ResultInfo g s r = CompleteResultInfo ![(GrammarResults g s, s)] !r
                       | StuckResultInfo !r
 data FailureInfo = FailureInfo !Int Word64 [String] deriving (Eq, Show)
-data GrammarDerived g s a = GrammarDerived a (GrammarResults g s -> a)
 type Grammar g s = g (Parser g s)
 type GrammarResults g s = g (ResultList g s)
 
@@ -148,9 +147,6 @@ iterate f n ns = if getAll (Rank2.foldMap (either (const mempty) (All . null) . 
                  then n':n:ns else iterate f n' (n:ns)
    where n' = f n
 
-gd2rl :: GrammarResults g s -> GrammarDerived g s (ResultList g s r) -> ResultList g s r
-gd2rl gr (GrammarDerived rl rf) = rl <> rf gr
-
 instance Functor (DerivedResultList g s) where
    fmap f (DerivedResultList gd) = DerivedResultList ((f <$>) <$> gd)
 
@@ -192,20 +188,6 @@ instance Monoid (ResultList g s r) where
    ResultList Left{} `mappend` rl = rl
    rl `mappend` ResultList Left{} = rl
    ResultList (Right a) `mappend` ResultList (Right b) = ResultList (Right $ a `mappend` b)
-
-instance Show a => Show (GrammarDerived g s a) where
-   show (GrammarDerived a _) = "GrammarDerived (" ++ show a ++ " _)"
-
-instance Monoid a => Monoid (GrammarDerived g s a) where
-   mempty = GrammarDerived mempty (const mempty)
-   mappend (GrammarDerived a fa) (GrammarDerived b fb) = GrammarDerived (a <> b) (\g-> fa g <> fb g)
-
-instance Functor (GrammarDerived g s) where
-   fmap f (GrammarDerived a g) = GrammarDerived (f a) (f . g)
-
-instance Applicative (GrammarDerived g s) where
-   pure a = GrammarDerived a (error "There's no pure GrammarDerived")
-   GrammarDerived a fa <*> GrammarDerived b fb = GrammarDerived (a b) (\g-> fa g $ fb g)
 
 instance Functor (Parser g s) where
    fmap f p = Parser{continued= \t rc fc-> continued p t (rc . f) fc,
