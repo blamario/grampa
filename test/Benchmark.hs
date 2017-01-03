@@ -1,19 +1,31 @@
 {-# LANGUAGE Haskell2010, BangPatterns, ExistentialQuantification, FlexibleContexts, OverloadedStrings,
-  ScopedTypeVariables #-}
+  RecordWildCards, ScopedTypeVariables, TemplateHaskell #-}
 
 module Benchmark where
 
-import Control.Applicative (empty)
+import Control.Applicative
 import Data.Monoid ((<>))
 
 import Control.DeepSeq (deepseq)
 import Criterion.Main (bench, bgroup, defaultMain, nf)
 
 import qualified Rank2
+import qualified Rank2.TH
 import Text.Grampa hiding (parse)
 import qualified Arithmetic
 import qualified Boolean
 import Main (arithmetic, boolean)
+
+data Recursive f = Recursive{start :: f String,
+                             rec :: f String,
+                             next :: f String}
+
+$(Rank2.TH.deriveAll ''Recursive)
+
+recursiveManyGrammar Recursive{..} = Recursive{
+   start= rec <* endOfInput,
+   rec= many (char ';') <* optional next,
+   next= string "END"}
 
 parse :: String -> [Int]
 parse s = case parseAll (fixGrammar $ arithmetic empty) Arithmetic.expr s
@@ -55,14 +67,17 @@ main = do
             groupedLeft100, groupedLeft200, groupedLeft300,
             groupedRight100, groupedRight200, groupedRight300) $
       defaultMain [
+      bgroup "many" [
+          bench "simple" $ nf (simpleParse $ many (string ";") <* endOfInput) (replicate 400 ';'),
+          bench "recursive" $ nf (parseAll (fixGrammar recursiveManyGrammar) start) (replicate 400 ';')],
       bgroup "zero sum" [
-            bench "100" $ nf parse zeroes100,
-            bench "200" $ nf parse zeroes200,
-            bench "300" $ nf parse zeroes300],
+         bench "100" $ nf parse zeroes100,
+         bench "200" $ nf parse zeroes200,
+         bench "300" $ nf parse zeroes300],
       bgroup "grouped left" [
-            bench "100" $ nf parse groupedLeft100,
-            bench "200" $ nf parse groupedLeft200,
-            bench "300" $ nf parse groupedLeft300],
+         bench "100" $ nf parse groupedLeft100,
+         bench "200" $ nf parse groupedLeft200,
+         bench "300" $ nf parse groupedLeft300],
 {-
       bgroup "grouped right" [
             bench "100" $ nf parse groupedRight100,
@@ -70,12 +85,12 @@ main = do
             bench "300" $ nf parse groupedRight300],
 -}
       bgroup "one product" [
-            bench "100" $ nf parse ones100,
-            bench "200" $ nf parse ones200,
-            bench "300" $ nf parse ones300],
+         bench "100" $ nf parse ones100,
+         bench "200" $ nf parse ones200,
+         bench "300" $ nf parse ones300],
       bgroup "false disjunction" [
-            bench "80" $ nf parseBoolean falsehoods80,
-            bench "160" $ nf parseBoolean falsehoods160,
-            bench "240" $ nf parseBoolean falsehoods240]
+         bench "80" $ nf parseBoolean falsehoods80,
+         bench "160" $ nf parseBoolean falsehoods160,
+         bench "240" $ nf parseBoolean falsehoods240]
       ]
    

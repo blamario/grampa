@@ -215,6 +215,7 @@ instance Applicative (Parser g s) where
             continueFrom s t (StuckResultInfo r) = r <$> direct q s t
             continueOrRecurse _g _s _t (CompleteResultInfo t' r) = continued q t' (succeed . r) concede
             continueOrRecurse g s t (StuckResultInfo r) = maybe mempty (\recurse-> r <$> recurse g s t) (recursive q)
+                                                          <> (r <$> direct q s t)
             recurseFrom _qr _g _s _t CompleteResultInfo{} = mempty
             recurseFrom qr g s t (StuckResultInfo r) = r <$> qr g s t
 
@@ -266,6 +267,7 @@ p <<|> q = Parser{continued= \t rc fc-> continued p t rc (\f1-> continued q t rc
          onFailure f (ResultList (Left err)) = ResultList (Left $ f err)
          onFailure _ rl = rl
          choose (ResultList (Left f1)) rl2 = onFailure (combine f1) rl2
+         choose (ResultList (Right [])) rl2 = rl2
          choose rl _ = rl
 
 instance Monad (Parser g s) where
@@ -275,16 +277,17 @@ instance Monad (Parser g s) where
                        direct= \s t-> concatMapResults (continueFrom s t) $ direct p s t,
                        recursive= if nullable p
                                   then Just (\g s t-> (if nullable p
-                                                       then concatMapResults (continueOrRecurse g s t) (direct p s t)
+                                                       then concatMapResults (recurseFrom g s t) (direct p s t)
                                                        else mempty)
-                                                      <> concatMapResults (recurseFrom g s t) (fromMaybe mempty (recursive p) g s t))
+                                                      <> concatMapResults (continueOrRecurse g s t) (fromMaybe mempty (recursive p) g s t))
                                   else (\r g s t-> concatMapResults (recurseFrom g s t) $ r g s t) <$> recursive p,
                        nullable= nullable p,
                        recursivelyNullable= recursivelyNullable p}
       where continueFrom _s _t (CompleteResultInfo t' r) = continued (cont r) t' succeed concede
             continueFrom s t (StuckResultInfo r) = direct (cont r) s t
             continueOrRecurse _g _s _t (CompleteResultInfo t' r) = continued (cont r) t' succeed concede
-            continueOrRecurse g s t (StuckResultInfo r) = fromMaybe mempty (recursive $ cont r) g s t
+            continueOrRecurse g s t (StuckResultInfo r) = fromMaybe mempty (recursive q) g s t <> direct q s t
+               where q = cont r
             recurseFrom _g _s _t (CompleteResultInfo t' r) = continued (cont r) t' succeed concede
             recurseFrom g s t (StuckResultInfo r) = fromMaybe mempty (recursive $ cont r) g s t
    (>>) = (*>)

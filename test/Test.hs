@@ -1,7 +1,8 @@
-{-# Language FlexibleContexts, FlexibleInstances, RankNTypes, ScopedTypeVariables, UndecidableInstances #-}
+{-# Language FlexibleContexts, FlexibleInstances, RankNTypes, RecordWildCards, ScopedTypeVariables, 
+             StandaloneDeriving, TemplateHaskell, UndecidableInstances #-}
 module Main where
 
-import Control.Applicative (Applicative, Alternative, pure, (<*>), (*>), empty, (<|>))
+import Control.Applicative (Applicative, Alternative, pure, empty, optional, (<*>), (*>), (<|>))
 import Control.Monad (MonadPlus(mzero, mplus), liftM, liftM2, void)
 import Data.List (find, minimumBy, nub, sort)
 import Data.Monoid (Monoid(..), Product(..), (<>))
@@ -21,16 +22,36 @@ import Test.QuickCheck.Classes (functor, monad, monoid, applicative, alternative
                                 monadFunctor, monadApplicative, monadOr, monadPlus)
 
 import qualified Rank2
+import qualified Rank2.TH
 import Text.Grampa
 
 import qualified Test.Examples
+import Debug.Trace
 
 import Prelude hiding (null, takeWhile)
 
+data Recursive f = Recursive{start :: f String,
+                             rec :: f [String],
+                             one :: f String,
+                             next :: f String}
+deriving instance (Show (f String), Show (f [String])) => Show (Recursive f)
+
+$(Rank2.TH.deriveAll ''Recursive)
+
+recursiveManyGrammar Recursive{..} = Recursive{
+   start= optional (string "[") *> (concat <$> rec) <* optional next,
+   rec= (:) <$> one <*> rec <|> pure [],
+   one = string "(" *> start <* string ")",
+   next= string "]"}
+
 main = defaultMain tests
 
-tests = testGroup "Grampa"
-          [testGroup "arithmetic"
+tests = testGroup "Grampa" [
+           let g = fixGrammar recursiveManyGrammar
+           in testGroup "recursive"
+              [testProperty "minimal" $ parseAll g start "()" == Right [""],
+               testProperty "bracketed" $ parseAll g start "[()]" == Right [""]],
+           testGroup "arithmetic"
              [testProperty "arithmetic"   $ Test.Examples.parseArithmetical,
               testProperty "comparisons"  $ Test.Examples.parseComparison,
               testProperty "boolean"      $ Test.Examples.parseBoolean,
@@ -106,7 +127,7 @@ data DescribedParser s r = DescribedParser String (forall g. (Typeable g, Rank2.
 instance Show (DescribedParser s r) where
    show (DescribedParser d _) = d
 
-instance (MonoidNull s, Monoid r) => Monoid (DescribedParser s r) where
+instance (Show s, MonoidNull s, Monoid r) => Monoid (DescribedParser s r) where
    mempty = DescribedParser "mempty" mempty
    DescribedParser d1 p1 `mappend` DescribedParser d2 p2 = DescribedParser (d1 ++ " <> " ++ d2) (mappend p1 p2)
 
@@ -122,20 +143,20 @@ instance (FactorialMonoid s, Show s, EqProp s, Arbitrary s, Ord r, Show r, EqPro
 instance Monoid s => Functor (DescribedParser s) where
    fmap f (DescribedParser d p) = DescribedParser ("fmap ? " ++ d) (fmap f p)
 
-instance Monoid s => Applicative (DescribedParser s) where
+instance (Show s, Monoid s) => Applicative (DescribedParser s) where
    pure x = DescribedParser "pure ?" (pure x)
    DescribedParser d1 p1 <*> DescribedParser d2 p2 = DescribedParser (d1 ++ " <*> " ++ d2) (p1 <*> p2)
 
-instance Monoid s => Monad (DescribedParser s) where
+instance (Show s, Monoid s) => Monad (DescribedParser s) where
    return x = DescribedParser "return ?" (return x)
    DescribedParser d1 p1 >>= f = DescribedParser (d1 ++ " >>= ?") (p1 >>= \x-> let DescribedParser _ p = f x in p)
    DescribedParser d1 p1 >> DescribedParser d2 p2 = DescribedParser (d1 ++ " >> " ++ d2) (p1 >> p2)
 
-instance Monoid s => Alternative (DescribedParser s) where
+instance (Show s, Monoid s) => Alternative (DescribedParser s) where
    empty = DescribedParser "empty" empty
    DescribedParser d1 p1 <|> DescribedParser d2 p2 = DescribedParser (d1 ++ " <|> " ++ d2) (p1 <|> p2)
 
-instance Monoid s => MonadPlus (DescribedParser s) where
+instance (Show s, Monoid s) => MonadPlus (DescribedParser s) where
    mzero = DescribedParser "mzero" mzero
    DescribedParser d1 p1 `mplus` DescribedParser d2 p2 = DescribedParser (d1 ++ " `mplus` " ++ d2) (mplus p1 p2)
 
@@ -165,7 +186,7 @@ instance forall s r. (Ord s, FactorialMonoid s, LeftReductiveMonoid s, Show s, E
                <> pay (unary $ \(DescribedParser d p :: DescribedParser s s)->
                                   DescribedParser ("(notFollowedBy " <> d <> ")") (notFollowedBy p))
 
-instance forall s r. (FactorialMonoid s, Typeable s) => Enumerable (DescribedParser s [Bool]) where
+instance forall s r. (Show s, FactorialMonoid s, Typeable s) => Enumerable (DescribedParser s [Bool]) where
    enumerate = consts (pure <$> [DescribedParser "empty" empty,
                                  DescribedParser "mempty" mempty])
                <> pay (unary $ \r-> DescribedParser ("(pure " ++ shows r ")") (pure r))
@@ -179,7 +200,7 @@ instance forall s r. (FactorialMonoid s, Typeable s) => Enumerable (DescribedPar
             binary nm op = (\(Free (DescribedParser d1 p1, DescribedParser d2 p2))-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
                            <$> pay enumerate
 
-instance forall s r. (FactorialMonoid s, Typeable s) => Enumerable (DescribedParser s ([Bool] -> [Bool])) where
+instance forall s r. (Show s, FactorialMonoid s, Typeable s) => Enumerable (DescribedParser s ([Bool] -> [Bool])) where
    enumerate = consts (pure <$> [DescribedParser "empty" empty,
                                  DescribedParser "mempty" mempty])
                <> pay (unary $ \r-> DescribedParser ("(pure " ++ shows r ")") (pure r))
