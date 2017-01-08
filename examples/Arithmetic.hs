@@ -76,7 +76,7 @@ instance Rank2.Traversable (Arithmetic e) where
                   <*> f (term a)
                   <*> f (factor a)
 
-arithmetic :: (Rank2.Functor g, ArithmeticDomain e) => Parser g String e -> GrammarBuilder (Arithmetic e) g String
+arithmetic :: ArithmeticDomain e => Parser g String e -> GrammarBuilder (Arithmetic e) g String
 arithmetic sub Arithmetic{..} = Arithmetic{
    expr= term
          <|> symbol "-" *> (negate <$> term)

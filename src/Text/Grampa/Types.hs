@@ -1,7 +1,9 @@
 {-# LANGUAGE FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables #-}
 module Text.Grampa.Types (FailureInfo(..), ResultInfo(..), ResultList(..),
                           Grammar, Parser(..), (<<|>),
-                          concede, succeed, fixGrammar, fixGrammarInput, primitive, selfReferring)
+                          concede, succeed, 
+                          fixGrammar, fixGrammarInput, primitive, selfReferring,
+                          endOfInput, satisfyChar, string)
 where
 
 import Control.Applicative
@@ -11,14 +13,23 @@ import Data.Functor.Classes (Show1(liftShowsPrec))
 import Data.List (genericLength)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(mappend, mempty), All(..), (<>))
+import Data.Monoid.Cancellative (LeftReductiveMonoid (stripPrefix))
 import Data.Monoid.Null (MonoidNull(null))
-import Data.Monoid.Factorial (FactorialMonoid(tails))
+import Data.Monoid.Factorial (FactorialMonoid(length, tails))
+import Data.Monoid.Textual (TextualMonoid)
+import qualified Data.Monoid.Textual as Textual
+import Data.String (fromString)
 import Data.Word (Word64)
+
+import qualified Text.Parser.Char as CharParsing
+import Text.Parser.Char (CharParsing(char, notChar, anyChar, text))
+import Text.Parser.Combinators (Parsing(..))
+import Text.Parser.LookAhead (LookAheadParsing(..))
+import Text.Parser.Token (TokenParsing)
 
 import qualified Rank2
 
-import Prelude hiding (iterate, null)
-
+import Prelude hiding (iterate, length, null, span, takeWhile)
 
 -- | Parser of streams of type `s`, as a part of grammar type `g`, producing a value of type `r`
 data Parser g s r = Parser {continued :: forall r'. [(GrammarResults g s, s)]
@@ -304,3 +315,90 @@ instance MonadPlus (Parser g s) where
 instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
+
+instance MonoidNull s => Parsing (Parser g s) where
+   try p = Parser{continued= \t rc fc-> continued p t rc (fc . weaken),
+                  direct= \s t-> weakenResults (direct p s t),
+                  recursive= (\r g s t-> weakenResults $ r g s t) <$> recursive p,
+                  nullable= nullable p,
+                  recursivelyNullable= recursivelyNullable p}
+      where weaken (FailureInfo s pos msgs) = FailureInfo (pred s) pos msgs
+            weakenResults (ResultList (Left err)) = ResultList (Left $ weaken err)
+            weakenResults rl = rl
+   p <?> msg  = Parser{continued= \t rc fc-> continued p t rc (fc . strengthen),
+                       direct= \s t-> strengthenResults (direct p s t),
+                       recursive= (\r g s t-> strengthenResults $ r g s t) <$> recursive p,
+                       nullable= nullable p,
+                       recursivelyNullable= recursivelyNullable p}
+      where strengthen (FailureInfo s pos _msgs) = FailureInfo (succ s) pos [msg]
+            strengthenResults (ResultList (Left err)) = ResultList (Left $ strengthen err)
+            strengthenResults rl = rl
+   notFollowedBy p = Parser{continued= \t rc fc-> either
+                              (const $ rc () t)
+                              (\rs-> if null rs then rc () t
+                                     else fc (FailureInfo 1 (genericLength t) ["notFollowedBy"]))
+                              (resultList $ continued p t succeed concede),
+                            direct= \s t-> either
+                              (const $ ResultList $ Right [StuckResultInfo ()])
+                              (\rs -> ResultList $
+                                      if null rs then Right [StuckResultInfo ()]
+                                      else Left (FailureInfo 0 (genericLength t) ["notFollowedBy"]))
+                              (resultList $ direct p s t),
+                            recursive= (\r g s t-> either
+                                          (const $ ResultList $ Right [StuckResultInfo ()])
+                                          (\rs -> ResultList $
+                                             if null rs then Right []
+                                             else Left (FailureInfo 0 (genericLength t) ["notFollowedBy"]))
+                                          (resultList $ r g s t))
+                                       <$> recursive p,
+                            nullable= True,
+                            recursivelyNullable= const True}
+   skipMany p = go
+      where go = pure () <|> p *> go
+   unexpected msg = primitive False (\_s _t _ _ fc -> fc msg)
+   eof = endOfInput
+
+instance MonoidNull s => LookAheadParsing (Parser g s) where
+   lookAhead p = Parser{continued= \t rc fc-> continued p t (\r _-> rc r t) fc,
+                        direct= \s t-> restoreResultInputs (direct p s t),
+                        recursive= (\r g s t-> restoreResultInputs $ r g s t) <$> recursive p,
+                        nullable= True,
+                        recursivelyNullable= const True}
+               where restoreResultInputs rl@(ResultList Left{}) = rl
+                     restoreResultInputs (ResultList (Right rl)) = ResultList (Right $ rewind <$> rl)
+                     rewind (CompleteResultInfo _ r) = StuckResultInfo r
+                     rewind (StuckResultInfo r) = StuckResultInfo r
+
+instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
+   satisfy = satisfyChar
+   string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
+   char = satisfyChar . (==)
+   notChar = satisfyChar . (/=)
+   anyChar = satisfyChar (const True)
+   text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
+
+instance (Show s, TextualMonoid s) => TokenParsing (Parser g s)
+
+-- | A parser that fails on any input and succeeds at its end
+endOfInput :: (MonoidNull s) => Parser g s ()
+endOfInput = primitive True f
+   where f s _t rc0 _rc fc
+            | null s = rc0 ()
+            | otherwise = fc "endOfInput"
+
+-- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the given
+-- predicate.
+satisfyChar :: (TextualMonoid s) => (Char -> Bool) -> Parser g s Char
+satisfyChar predicate = primitive False f
+   where f s t _rc0 rc fc =
+            case Textual.splitCharacterPrefix s
+            of Just (first, _) | predicate first -> rc first t
+               _ -> fc "satisfyChar"
+
+-- | A parser that consumes and returns the given prefix of the input.
+string :: (Show s, LeftReductiveMonoid s, FactorialMonoid s) => s -> Parser g s s
+string x | null x = pure x
+string x = primitive False $ \y t _rc0 rc fc-> 
+   case stripPrefix x y
+   of Just{} -> rc x (drop (length x - 1) t)
+      _ -> fc ("string " ++ show x)

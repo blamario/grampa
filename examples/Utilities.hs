@@ -10,7 +10,7 @@ import Text.Grampa
 infixJoin :: String -> String -> String -> String
 infixJoin op a b = "(" <> a <> op <> b <> ")"
 
-keyword :: (Show s, TextualMonoid s, Rank2.Functor g) => s -> Parser g s s
+keyword :: (Show s, TextualMonoid s) => s -> Parser g s s
 keyword kwd = spaces *> string kwd <* notFollowedBy (satisfyChar isAlphaNum)
 
 symbol :: (Show s, TextualMonoid s) => s -> Parser g s s

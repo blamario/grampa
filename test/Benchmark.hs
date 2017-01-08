@@ -22,6 +22,7 @@ data Recursive f = Recursive{start :: f String,
 
 $(Rank2.TH.deriveAll ''Recursive)
 
+recursiveManyGrammar :: Recursive (Parser g String) -> Recursive (Parser g String)
 recursiveManyGrammar Recursive{..} = Recursive{
    start= rec <* endOfInput,
    rec= many (char ';') <* optional next,
