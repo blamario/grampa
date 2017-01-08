@@ -1,9 +1,7 @@
 {-# LANGUAGE FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables #-}
 module Text.Grampa.Types (FailureInfo(..), ResultInfo(..), ResultList(..),
-                          Grammar, Parser(..), (<<|>),
-                          concede, succeed, 
-                          fixGrammar, fixGrammarInput, primitive, selfReferring,
-                          endOfInput, satisfyChar, string)
+                          Grammar, Parser(..), GrammarResults,
+                          (<<|>), concede, succeed, primitive, endOfInput, satisfyChar, string)
 where
 
 import Control.Applicative
@@ -12,10 +10,10 @@ import Data.Either (either)
 import Data.Functor.Classes (Show1(liftShowsPrec))
 import Data.List (genericLength)
 import Data.Maybe (fromMaybe)
-import Data.Monoid (Monoid(mappend, mempty), All(..), (<>))
+import Data.Monoid (Monoid(mappend, mempty), (<>))
 import Data.Monoid.Cancellative (LeftReductiveMonoid (stripPrefix))
 import Data.Monoid.Null (MonoidNull(null))
-import Data.Monoid.Factorial (FactorialMonoid(length, tails))
+import Data.Monoid.Factorial (FactorialMonoid(length))
 import Data.Monoid.Textual (TextualMonoid)
 import qualified Data.Monoid.Textual as Textual
 import Data.String (fromString)
@@ -26,8 +24,6 @@ import Text.Parser.Char (CharParsing(char, notChar, anyChar, text))
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing)
-
-import qualified Rank2
 
 import Prelude hiding (iterate, length, null, span, takeWhile)
 
@@ -40,8 +36,6 @@ data Parser g s r = Parser {continued :: forall r'. [(GrammarResults g s, s)]
                             recursive :: Maybe (g (ResultList g s) -> s -> [(GrammarResults g s, s)] -> ResultList g s r),
                             nullable :: Bool,
                             recursivelyNullable :: g (Parser g s) -> Bool}
-newtype DerivedResultList g s r = DerivedResultList {
-   derivedResultList :: g (ResultList g s) -> ResultList g s r}
 newtype ResultList g s r = ResultList {resultList :: Either FailureInfo [ResultInfo g s r]}
 data ResultInfo g s r = CompleteResultInfo ![(GrammarResults g s, s)] !r
                       | StuckResultInfo !r
@@ -75,91 +69,6 @@ primitive n parser = Parser{continued= \t@((_, s):t') rc fc ->
    where rc0 r = ResultList (Right [StuckResultInfo r])
          rc r t' = ResultList (Right [CompleteResultInfo t' r])
          failAt t msg = ResultList (Left $ FailureInfo 0 (genericLength t) [msg])
-
--- | Tie the knot on a 'GrammarBuilder' and turn it into a 'Grammar'
-fixGrammar :: forall g s. (Rank2.Foldable g, Rank2.Apply g, Rank2.Distributive g) =>
-              (Grammar g s -> Grammar g s) -> Grammar g s
-fixGrammar gf = (Rank2.Arrow . combine) `Rank2.fmap` gf selfReferring `Rank2.ap` fixNullable (gf selfNullable)
-   where combine p1 p2 = Parser{continued= continued p1,
-                                direct= direct p1,
-                                recursive= recursive p1,
-                                nullable= nullable p2,
-                                recursivelyNullable= recursivelyNullable p2}
-
-fixNullable :: forall g s. (Rank2.Foldable g, Rank2.Apply g) => Grammar g s -> Grammar g s
-fixNullable g = head (iterateNullable iter g [])
-   where iter g' = Rank2.fmap (iterP g') g'
-         iterP g' p = p{nullable= recursivelyNullable p g'}
-
-iterateNullable :: forall g s. (Rank2.Foldable g, Rank2.Apply g) =>
-                   (g (Parser g s) -> g (Parser g s)) -> g (Parser g s)
-                -> [g (Parser g s)]
-                -> [g (Parser g s)]
-iterateNullable f n ns = if getAll (Rank2.foldMap (All . getConst) $ equallyNullable `Rank2.fmap` n `Rank2.ap` n')
-                         then n':n:ns else iterateNullable f n' (n:ns)
-   where n' = f n
-         equallyNullable :: forall x. Parser g s x -> Rank2.Arrow (Parser g s) (Const Bool) x
-         equallyNullable p1 = Rank2.Arrow (\p2-> Const $ nullable p1 == nullable p2)
-
-selfNullable :: forall g s. Rank2.Distributive g => Grammar g s
-selfNullable = Rank2.distributeWith nonTerminal id
-   where nonTerminal :: forall r. (g (Parser g s) -> Parser g s r) -> Parser g s r
-         nonTerminal f = Parser{continued= undefined,
-                                direct= undefined,
-                                recursive= undefined,
-                                nullable= True,
-                                recursivelyNullable= nullable . f}
-
-selfReferring :: forall g s. Rank2.Distributive g => Grammar g s
-selfReferring = Rank2.distributeWith nonTerminal id
-   where nonTerminal :: forall r. (g (ResultList g s) -> ResultList g s r) -> Parser g s r
-         nonTerminal f = Parser{continued= continue . resultList . f . fst . head,
-                                direct= mempty,
-                                recursive= Just (const . const . f),
-                                nullable= True,
-                                recursivelyNullable= error "recursivelyNullable will be initialized by selfNullable"}
-            where continue :: Either FailureInfo [ResultInfo g s r]
-                           -> (r -> [(GrammarResults g s, s)] -> ResultList g s r')
-                           -> (FailureInfo -> ResultList g s r')
-                           -> ResultList g s r'
-                  continue (Left (FailureInfo strength pos msgs)) _ fc = fc (FailureInfo (succ strength) pos msgs)
-                  continue (Right rs) rc _ = foldMap continueFrom rs
-                     where continueFrom (CompleteResultInfo t r) = rc r t
-                           continueFrom StuckResultInfo{} = error "Can't continue, I'm Stuck."
-
-fixGrammarInput :: forall s g. (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g) =>
-                   Grammar g s -> Grammar g s -> s -> [(GrammarResults g s, s)]
-fixGrammarInput final grammar input = parseTailWith input $ foldr parseTail [] (tails input)
-   where parseTail :: s -> [(GrammarResults g s, s)] -> [(GrammarResults g s, s)]
-         parseTail s parsedTail = parsed
-            where parsed = (Rank2.fmap finalize $ collectGrammarResults gd gr, s):parsedTail
-                  gd = Rank2.fmap (\p-> direct p s parsedTail) grammar
-                  gr = Rank2.fmap (\p-> DerivedResultList $ \g-> fromMaybe mempty (recursive p) g s parsedTail) grammar
-                  finalize :: ResultList g s r -> ResultList g s r
-                  finalize (ResultList (Left err)) = ResultList (Left err)
-                  finalize (ResultList (Right results)) = ResultList (Right $ complete <$> results)
-                  complete :: ResultInfo g s r -> ResultInfo g s r
-                  complete r@CompleteResultInfo{} = r
-                  complete (StuckResultInfo r) = CompleteResultInfo parsed r
-         parseTailWith :: s -> [(GrammarResults g s, s)] -> [(GrammarResults g s, s)]
-         parseTailWith s parsed = (gd, s):parsed
-            where gd = Rank2.fmap (\p-> continued p parsed succeed concede) final
-
-collectGrammarResults :: (Rank2.Apply g, Rank2.Traversable g) =>
-                         g (ResultList g s) -> g (DerivedResultList g s) -> g (ResultList g s)
-collectGrammarResults gd gdr = foldr1 (Rank2.liftA2 (<>)) (iterate rf gd [])
-   where rf = Rank2.traverse derivedResultList gdr
-
-iterate :: Rank2.Foldable g =>
-           (g (ResultList g s) -> g (ResultList g s)) -> g (ResultList g s)
-        -> [g (ResultList g s)]
-        -> [g (ResultList g s)]
-iterate f n ns = if getAll (Rank2.foldMap (either (const mempty) (All . null) . resultList) n')
-                 then n':n:ns else iterate f n' (n:ns)
-   where n' = f n
-
-instance Functor (DerivedResultList g s) where
-   fmap f (DerivedResultList gd) = DerivedResultList ((f <$>) <$> gd)
 
 instance (Show s, Show r) => Show (ResultList g s r) where
    show (ResultList l) = "ResultList (" ++ shows l ")"
