@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, RankNTypes, ScopedTypeVariables #-}
 module Text.Grampa (
    -- * Classes
-   MonoidNull, FactorialMonoid, TextualMonoid,
+   MonoidNull, FactorialMonoid, LeftReductiveMonoid, TextualMonoid,
    -- * Types
    Grammar, GrammarBuilder, Parser, ParseResults,
    -- * Grammar and parser manipulation
@@ -13,20 +13,18 @@ module Text.Grampa (
    module Text.Parser.Token,
    recursiveOn, (<<|>),
    -- * Parsing primitives
-   endOfInput, getInput, anyToken, token, satisfy, satisfyChar, spaces, string,
-   scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1, skipCharsWhile)
+   endOfInput, getInput, anyToken, token, satisfy, satisfyChar, string,
+   scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1)
 where
 
 import Control.Applicative
-import Data.Char (isSpace)
 import Data.List (nub)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(mempty), All(..), (<>))
+import Data.Monoid.Cancellative (LeftReductiveMonoid)
 import Data.Monoid.Null (MonoidNull(null))
-import Data.Monoid.Factorial (FactorialMonoid(length, spanMaybe', splitPrimePrefix, tails))
+import Data.Monoid.Factorial (FactorialMonoid(length, tails))
 import Data.Monoid.Textual (TextualMonoid)
-import qualified Data.Monoid.Factorial as Factorial
-import qualified Data.Monoid.Textual as Textual
 
 import Text.Parser.Char (CharParsing(char, notChar, anyChar))
 import Text.Parser.Combinators (Parsing((<?>), notFollowedBy, skipMany, skipSome, unexpected))
@@ -36,7 +34,7 @@ import Text.Parser.Token (whiteSpace)
 import qualified Rank2
 import Text.Grampa.Types
 
-import Prelude hiding (iterate, length, null, span, takeWhile)
+import Prelude hiding (iterate, length, null, takeWhile)
 
 type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
 type ParseResults r = Either (Int, [String]) [r]
@@ -153,104 +151,3 @@ recursiveOn :: Parser g s x -> Parser g s r -> Parser g s r
 recursiveOn p q = q{nullable= nullable p,
                     recursivelyNullable= recursivelyNullable p,
                     recursive= recursive p *> recursive q}
-
-spaces :: (TextualMonoid t) => Parser g t ()
-spaces = skipCharsWhile isSpace
-
--- | Always sucessful parser that returns the remaining input without consuming it.
-getInput :: (MonoidNull s) => Parser g s s
-getInput = primitive True f
-   where f s t rc0 rc _fc
-            | null s = rc0 s
-            | otherwise = rc s [last t]
-
--- | A parser accepting the longest sequence of input atoms that match the given predicate; an optimized version of
--- 'concatMany . satisfy'.
---
--- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers loop
--- until a failure occurs.  Careless use will thus result in an infinite loop.
-takeWhile :: (FactorialMonoid s) => (s -> Bool) -> Parser g s s
-takeWhile predicate = primitive True f
-   where f s t rc0 rc _fc = if null prefix then rc0 prefix else rc prefix (drop (length prefix - 1) t)
-            where prefix = Factorial.takeWhile predicate s
-
--- | A parser accepting the longest non-empty sequence of input atoms that match the given predicate; an optimized
--- version of 'concatSome . satisfy'.
-takeWhile1 :: (FactorialMonoid s) => (s -> Bool) -> Parser g s s
-takeWhile1 predicate = primitive False f
-   where f s t _rc0 rc fc
-            | null prefix = fc "takeCharsWhile1"
-            | otherwise = rc prefix (drop (length prefix - 1) t)
-            where prefix = Factorial.takeWhile predicate s
-
--- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
--- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
---
--- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers loop
--- until a failure occurs.  Careless use will thus result in an infinite loop.
-takeCharsWhile :: (TextualMonoid s) => (Char -> Bool) -> Parser g s s
-takeCharsWhile predicate = primitive True f
-   where f s t rc0 rc _fc = if null prefix then rc0 prefix else rc prefix (drop (length prefix - 1) t)
-            where prefix = Textual.takeWhile_ False predicate s
-
--- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
--- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
-takeCharsWhile1 :: (TextualMonoid s) => (Char -> Bool) -> Parser g s s
-takeCharsWhile1 predicate = primitive False f
-   where f s t _rc0 rc fc
-            | null prefix = fc "takeCharsWhile1"
-            | otherwise = rc prefix (drop (length prefix - 1) t)
-            where prefix = Textual.takeWhile_ False predicate s
-
--- | A stateful scanner.  The predicate consumes and transforms a state argument, and each transformed state is passed
--- to successive invocations of the predicate on each token of the input until one returns 'Nothing' or the input ends.
---
--- This parser does not fail.  It will return an empty string if the predicate returns 'Nothing' on the first prime
--- input factor.
---
--- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers loop
--- until a failure occurs.  Careless use will thus result in an infinite loop.
-scan :: (FactorialMonoid t) => s -> (s -> t -> Maybe s) -> Parser g t t
-scan s0 f = primitive True (go s0)
- where go s i t rc0 rc _fc = if null prefix then rc0 prefix else rc prefix (drop (length prefix - 1) t)
-          where (prefix, _, _) = spanMaybe' s f i
-
--- | A stateful scanner.  The predicate consumes and transforms a
--- state argument, and each transformed state is passed to successive invocations of the predicate on each token of the
--- input until one returns 'Nothing' or the input ends.
---
--- This parser does not fail.  It will return an empty string if the predicate returns 'Nothing' on the first character.
---
--- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers loop
--- until a failure occurs.  Careless use will thus result in an infinite loop.
-scanChars :: (TextualMonoid t) => s -> (s -> Char -> Maybe s) -> Parser g t t
-scanChars s0 f = primitive True (go s0)
- where go s i t rc0 rc _fc = if null prefix then rc0 prefix else rc prefix (drop (length prefix - 1) t)
-          where (prefix, _, _) = Textual.spanMaybe_' s f i
-
--- | A parser that accepts any single input atom.
-anyToken :: (FactorialMonoid s) => Parser g s s
-anyToken = primitive False f
-   where f s t _rc0 rc fc =
-            case splitPrimePrefix s
-            of Just (first, _) -> rc first t
-               _ -> fc "anyToken"
-
--- | A parser that accepts a specific input atom.
-token :: (Eq s, FactorialMonoid s) => s -> Parser g s s
-token x = satisfy (== x)
-
--- | A parser that accepts an input atom only if it satisfies the given predicate.
-satisfy :: (FactorialMonoid s) => (s -> Bool) -> Parser g s s
-satisfy predicate = primitive False f
-   where f s t _rc0 rc fc =
-            case splitPrimePrefix s
-            of Just (first, _) | predicate first -> rc first t
-               _ -> fc "satisfy"
-
--- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
--- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
-skipCharsWhile :: (TextualMonoid s) => (Char -> Bool) -> Parser g s ()
-skipCharsWhile predicate = primitive True f
-   where f s t rc0 rc _fc = if null prefix then rc0 () else rc () (drop (length prefix - 1) t)
-            where prefix = Textual.takeWhile_ False predicate s

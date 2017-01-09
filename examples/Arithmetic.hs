@@ -85,6 +85,6 @@ arithmetic sub Arithmetic{..} = Arithmetic{
    term= factor
          <|> multiply <$> term <* symbol "*" <*> factor
          <|> divide <$> term <* symbol "/" <*> factor,
-   factor= skipCharsWhile isSpace *> ((number . read) <$> takeCharsWhile1 isDigit <?> "digits")
+   factor= whiteSpace *> ((number . read) <$> takeCharsWhile1 isDigit <?> "digits")
            <|> sub
            <|> symbol "(" *> expr <* symbol ")"}
