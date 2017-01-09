@@ -30,12 +30,16 @@ instance Boolean.BooleanDomain Tagged where
    true = BoolExpression True
    false = BoolExpression False
    BoolExpression x `and` BoolExpression y = BoolExpression (x && y)
+   _ `and` _ = error "type error: and expects booleans"
    BoolExpression x `or` BoolExpression y = BoolExpression (x || y)
+   _ `or` _ = error "type error: or expects booleans"
    not (BoolExpression x) = BoolExpression (Data.Bool.not x)
+   not _ = error "type error: not expects a boolean"
 
 instance Conditionals.ConditionalDomain Tagged e where
    ifThenElse (BoolExpression True) t _ = t
    ifThenElse (BoolExpression False) _ f = f
+   ifThenElse _ _ _ = error "type error: if expects a boolean"
 
 instance (Show (f Tagged), Show (f Int), Show (f Bool)) => Show (Expression f) where
    showsPrec prec g rest = "Expression{expr=" ++ showsPrec prec (expr g)
@@ -89,8 +93,7 @@ instance Rank2.Traversable Expression where
                   <*> Rank2.traverse f (comparisonGrammar g)
                   <*> Rank2.traverse f (conditionalGrammar g)
 
-expression :: forall g. (Rank2.Functor g) =>
-              (Grammar g String -> Expression (Parser g String)) -> GrammarBuilder Expression g String
+expression :: (Grammar g String -> Expression (Parser g String)) -> GrammarBuilder Expression g String
 expression sub g =
    let arithmetic = Arithmetic.arithmetic empty
        -- arithmetic = Arithmetic.arithmetic (production sub ((intFromExpression <$>) . recursive . expr) g)

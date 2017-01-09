@@ -44,7 +44,7 @@ data Boolean e f =
 
 $(Rank2.TH.deriveAll ''Boolean)
 
-boolean :: (BooleanDomain e, Rank2.Functor g) => Parser g String e -> GrammarBuilder (Boolean e) g String
+boolean :: BooleanDomain e => Parser g String e -> GrammarBuilder (Boolean e) g String
 boolean p Boolean{..} = Boolean{
    expr= term
          <|> or <$> expr <* symbol "||" <*> term,

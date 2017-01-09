@@ -29,10 +29,10 @@ comparisons :: GrammarBuilder ArithmeticComparisons g String
 comparisons (Rank2.Pair a c) =
    Rank2.Pair (Arithmetic.arithmetic empty a) (Comparisons.comparisons (Arithmetic.expr a) c)
 
-boolean :: Rank2.Functor g => GrammarBuilder ArithmeticComparisonsBoolean g String
+boolean :: GrammarBuilder ArithmeticComparisonsBoolean g String
 boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Comparisons.expr $ Rank2.snd ac) b)
 
-conditionals :: Rank2.Functor g => GrammarBuilder ACBC g String
+conditionals :: GrammarBuilder ACBC g String
 conditionals (Rank2.Pair acb c) =
    Rank2.Pair
       (boolean acb)

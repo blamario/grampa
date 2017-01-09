@@ -2,7 +2,7 @@
 module Arithmetic where
 
 import Control.Applicative
-import Data.Char (isDigit, isSpace)
+import Data.Char (isDigit)
 import Data.Monoid ((<>))
 
 import Text.Grampa

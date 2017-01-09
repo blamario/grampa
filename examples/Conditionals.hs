@@ -44,7 +44,7 @@ instance Rank2.Foldable (Conditionals e) where
 instance Rank2.Traversable (Conditionals e) where
    traverse f a = Conditionals <$> f (expr a)
 
-conditionals :: (ConditionalDomain t e, Rank2.Functor g) =>
+conditionals :: ConditionalDomain t e =>
                 Parser g String t -> Parser g String e -> GrammarBuilder (Conditionals e) g String
 conditionals test term Conditionals{..} =
    Conditionals{expr= ifThenElse <$> (keyword "if" *> test) <*> (keyword "then" *> term) <*> (keyword "else" *> term)}

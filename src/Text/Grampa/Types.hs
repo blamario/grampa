@@ -10,7 +10,6 @@ import Control.Applicative
 import Control.Monad (Monad(..), MonadPlus(..), void)
 import Data.Char (isSpace)
 import Data.Either (either)
-import Data.Functor.Classes (Show1(liftShowsPrec))
 import Data.List (genericLength)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(mappend, mempty), (<>))
@@ -65,12 +64,12 @@ primitive :: Bool
           -> Parser g s r
 primitive n parser = Parser{continued= \t@((_, s):t') rc fc ->
                                  parser s t' (`rc` t) rc (fc . FailureInfo 0 (genericLength t) . (:[])),
-                            direct= \s t-> parser s t rc0 rc (failAt t),
+                            direct= \s t-> parser s t rc0 rc1 (failAt t),
                             recursive= mempty,
                             nullable= n,
                             recursivelyNullable= const n}
    where rc0 r = ResultList (Right [StuckResultInfo r])
-         rc r t' = ResultList (Right [CompleteResultInfo t' r])
+         rc1 r t' = ResultList (Right [CompleteResultInfo t' r])
          failAt t msg = ResultList (Left $ FailureInfo 0 (genericLength t) [msg])
 
 instance (Show s, Show r) => Show (ResultList g s r) where
@@ -79,15 +78,6 @@ instance (Show s, Show r) => Show (ResultList g s r) where
 instance (Show s, Show r) => Show (ResultInfo g s r) where
    show (CompleteResultInfo t r) = "(CompleteResultInfo @" ++ show (snd $ head t) ++ " " ++ shows r ")"
    show (StuckResultInfo r) = "(StuckResultInfo " ++ " " ++ shows r ")"
-
-instance (Show s) => Show1 (ResultList g s) where
-   liftShowsPrec _ _ prec (ResultList (Left err)) rest =
-      "ResultList " ++ showsPrec prec err rest
-   liftShowsPrec _ sl _prec (ResultList (Right l)) rest = "ResultList (Right " ++ sl (result <$> l) (")" ++ rest)
-      where result (CompleteResultInfo _ r) = r
-            result (StuckResultInfo r) = r
---      where f (ResultInfo _ s t _) = (s, snd <$> take 1 t)
---            g (ResultInfo _ _ _ r) = r
 
 instance Functor (ResultInfo g s) where
    fmap f (CompleteResultInfo t r) = CompleteResultInfo t (f r)
