@@ -20,7 +20,7 @@ main = do args <- concat <$> getArgs
           -- let a = fixGrammar (Arithmetic.arithmetic (production id Arithmetic.expr a))
           -- let a = fixGrammar (Arithmetic.arithmetic (recursive $ Arithmetic.expr a))
           print (parseAll (fixGrammar $ arithmetic empty) Arithmetic.expr args :: ParseResults Int)
-          print (parseAll (fixGrammar comparisons) (Comparisons.expr . Rank2.snd) args :: ParseResults Bool)
+          print (parseAll (fixGrammar comparisons) (Comparisons.test . Rank2.snd) args :: ParseResults Bool)
           print (parseAll (fixGrammar boolean) (Boolean.expr . Rank2.snd) args :: ParseResults Bool)
           print (parseAll (fixGrammar conditionals) (Conditionals.expr . Rank2.snd) args :: ParseResults Int)
           print (parseAll (fixGrammar $ Combined.expression id) Combined.expr args :: ParseResults Combined.Tagged)
@@ -30,7 +30,7 @@ comparisons (Rank2.Pair a c) =
    Rank2.Pair (Arithmetic.arithmetic empty a) (Comparisons.comparisons (Arithmetic.expr a) c)
 
 boolean :: GrammarBuilder ArithmeticComparisonsBoolean g String
-boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Comparisons.expr $ Rank2.snd ac) b)
+boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Comparisons.test $ Rank2.snd ac) b)
 
 conditionals :: GrammarBuilder ACBC g String
 conditionals (Rank2.Pair acb c) =

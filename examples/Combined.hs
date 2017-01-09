@@ -99,7 +99,7 @@ expression sub g =
        -- arithmetic = Arithmetic.arithmetic (production sub ((intFromExpression <$>) . recursive . expr) g)
        -- arithmetic = Arithmetic.arithmetic ((intFromExpression <$>) $ recursive $ expr g)
        comparisons = Comparisons.comparisons ((Arithmetic.expr . arithmeticGrammar) g)
-       boolean = Boolean.boolean (((BoolExpression <$>) . Comparisons.expr . comparisonGrammar) g)
+       boolean = Boolean.boolean (((BoolExpression <$>) . Comparisons.test . comparisonGrammar) g)
        conditionals = Conditionals.conditionals (expr g) (expr g)
    in let Expression{..} = g
       in Expression{

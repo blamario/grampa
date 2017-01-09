@@ -24,7 +24,7 @@ parseArithmetical (Sum s) = f s' == s'
 
 parseComparison :: Comparison -> Bool
 parseComparison (Comparison s) = f s' == s'
-   where f = uniqueParse (fixGrammar comparisons) (Comparisons.expr . Rank2.snd)
+   where f = uniqueParse (fixGrammar comparisons) (Comparisons.test . Rank2.snd)
          s' = f s
 
 comparisons :: Rank2.Functor g => GrammarBuilder ArithmeticComparisons g String
@@ -37,7 +37,7 @@ parseBoolean (Disjunction s) = f s' == s'
          s' = f s
 
 boolean :: Rank2.Functor g => GrammarBuilder ArithmeticComparisonsBoolean g String
-boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Comparisons.expr $ Rank2.snd ac) b)
+boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Comparisons.test $ Rank2.snd ac) b)
 
 parseConditional :: Conditional -> Bool
 parseConditional (Conditional s) = f s' == s'

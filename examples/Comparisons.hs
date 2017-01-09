@@ -33,35 +33,41 @@ infixJoin :: String -> String -> String -> String
 infixJoin rel a b = a <> rel <> b
 
 data Comparisons c e f =
-   Comparisons{expr :: f e}
-
-instance (Show (f e)) => Show (Comparisons c e f) where
-   showsPrec prec g rest = "Comparisons{expr=" ++ showsPrec prec (expr g) ("}" ++ rest)
+   Comparisons{test :: f e,
+               term :: f c}
+   deriving (Show)
 
 instance Rank2.Functor (Comparisons c e) where
-   fmap f g = g{expr= f (expr g)}
+   fmap f g = g{test= f (test g),
+                term= f (term g)}
 
 instance Rank2.Apply (Comparisons c e) where
-   ap a a' = Comparisons (expr a `Rank2.apply` expr a')
+   ap g h = Comparisons{test= test g `Rank2.apply` test h,
+                        term= term g `Rank2.apply` term h}
 
 instance Rank2.Applicative (Comparisons c e) where
-   pure = Comparisons
+   pure f = Comparisons f f
 
 instance Rank2.Distributive (Comparisons c e) where
-   distributeM f = Comparisons{expr= f >>= expr}
-   distributeWith w f = Comparisons{expr= w (expr <$> f)}
+   distributeM f = Comparisons{test= f >>= test,
+                               term= f >>= term}
+   distributeWith w f = Comparisons{test= w (test <$> f),
+                                    term= w (term <$> f)}
 
 instance Rank2.Foldable (Comparisons c e) where
-   foldMap f a = f (expr a)
+   foldMap f g = f (test g) <> f (term g)
 
 instance Rank2.Traversable (Comparisons c e) where
-   traverse f a = Comparisons <$> f (expr a)
+   traverse f g = Comparisons 
+                  <$> f (test g)
+                  <*> f (term g)
 
 comparisons :: (ComparisonDomain c e) => Parser g String c -> GrammarBuilder (Comparisons c e) g String
-comparisons comparable Comparisons{..} =
+comparisons c Comparisons{..} =
    Comparisons{
-      expr= lessThan <$> comparable <* symbol "<" <*> comparable
-            <|> lessOrEqual <$> comparable <* symbol "<=" <*> comparable
-            <|> equal <$> comparable <* symbol "==" <*> comparable
-            <|> greaterOrEqual <$> comparable <* symbol ">=" <*> comparable
-            <|> greaterThan <$> comparable <* symbol ">" <*> comparable}
+      test= lessThan <$> term <* symbol "<" <*> term
+            <|> lessOrEqual <$> term <* symbol "<=" <*> term
+            <|> equal <$> term <* symbol "==" <*> term
+            <|> greaterOrEqual <$> term <* symbol ">=" <*> term
+            <|> greaterThan <$> term <* symbol ">" <*> term,
+      term= c}
