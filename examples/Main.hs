@@ -23,7 +23,7 @@ main = do args <- concat <$> getArgs
           print (parseAll (fixGrammar comparisons) (Comparisons.test . Rank2.snd) args :: ParseResults Bool)
           print (parseAll (fixGrammar boolean) (Boolean.expr . Rank2.snd) args :: ParseResults Bool)
           print (parseAll (fixGrammar conditionals) (Conditionals.expr . Rank2.snd) args :: ParseResults Int)
-          print (parseAll (fixGrammar $ Combined.expression id) Combined.expr args :: ParseResults Combined.Tagged)
+          print (parseAll (fixGrammar Combined.expression) Combined.expr args :: ParseResults Combined.Tagged)
 
 comparisons :: GrammarBuilder ArithmeticComparisons g String
 comparisons (Rank2.Pair a c) =

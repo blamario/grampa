@@ -1,5 +1,4 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, InstanceSigs, MultiParamTypeClasses,
-             PartialTypeSignatures, RankNTypes, RecordWildCards, ScopedTypeVariables, UndecidableInstances #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, UndecidableInstances #-}
 
 module Combined where
 
@@ -7,8 +6,7 @@ import Control.Applicative
 import qualified Data.Bool
 import Data.Monoid ((<>))
 import qualified Rank2
-import Text.Grampa (Grammar, GrammarBuilder, Parser)
-import Arithmetic (Arithmetic)
+import Text.Grampa (GrammarBuilder)
 import qualified Arithmetic
 import qualified Boolean
 import qualified Comparisons
@@ -17,14 +15,27 @@ import qualified Conditionals
 data Expression f =
    Expression{
       expr :: f Tagged,
-      arithmeticGrammar :: Arithmetic.Arithmetic Int f,
+      arithmeticGrammar :: Arithmetic.Arithmetic Tagged f,
       booleanGrammar :: Boolean.Boolean Tagged f,
-      comparisonGrammar :: Comparisons.Comparisons Int Bool f,
+      comparisonGrammar :: Comparisons.Comparisons Tagged Bool f,
       conditionalGrammar :: Conditionals.Conditionals Tagged f}
 
 data Tagged = IntExpression {intFromExpression :: Int}
-             | BoolExpression {boolFromExpression :: Bool}
-               deriving Show
+            | BoolExpression {boolFromExpression :: Bool}
+            deriving (Eq, Ord, Show)
+
+instance Arithmetic.ArithmeticDomain Tagged where
+   number = IntExpression
+   IntExpression a `add` IntExpression b = IntExpression (a+b)
+   _ `add` _ = error "type error: add expects numbers"
+   IntExpression a `multiply` IntExpression b = IntExpression (a*b)
+   _ `multiply` _ = error "type error: multiply expects numbers"
+   negate (IntExpression a) = IntExpression (Prelude.negate a)
+   negate _ = error "type error: negate expects a number"
+   IntExpression a `subtract` IntExpression b = IntExpression (a-b)
+   _ `subtract` _ = error "type error: subtract expects numbers"
+   IntExpression a `divide` IntExpression b = IntExpression (div a b)
+   _ `divide` _ = error "type error: divide expects numbers"
 
 instance Boolean.BooleanDomain Tagged where
    true = BoolExpression True
@@ -93,20 +104,16 @@ instance Rank2.Traversable Expression where
                   <*> Rank2.traverse f (comparisonGrammar g)
                   <*> Rank2.traverse f (conditionalGrammar g)
 
-expression :: (Grammar g String -> Expression (Parser g String)) -> GrammarBuilder Expression g String
-expression sub g =
-   let arithmetic = Arithmetic.arithmetic empty
-       -- arithmetic = Arithmetic.arithmetic (production sub ((intFromExpression <$>) . recursive . expr) g)
-       -- arithmetic = Arithmetic.arithmetic ((intFromExpression <$>) $ recursive $ expr g)
-       comparisons = Comparisons.comparisons ((Arithmetic.expr . arithmeticGrammar) g)
-       boolean = Boolean.boolean (((BoolExpression <$>) . Comparisons.test . comparisonGrammar) g)
-       conditionals = Conditionals.conditionals (expr g) (expr g)
-   in let Expression{..} = g
-      in Expression{
-            expr= IntExpression <$> Arithmetic.expr arithmeticGrammar
-                  <|> Boolean.expr booleanGrammar
-                  <|> Conditionals.expr conditionalGrammar,
-            arithmeticGrammar= arithmetic arithmeticGrammar,
-            booleanGrammar= boolean booleanGrammar,
-            comparisonGrammar= comparisons comparisonGrammar,
-            conditionalGrammar= conditionals conditionalGrammar}
+expression :: GrammarBuilder Expression g String
+expression Expression{expr= expr,
+                      arithmeticGrammar= arithmetic@Arithmetic.Arithmetic{Arithmetic.expr= arithmeticExpr},
+                      booleanGrammar= boolean@Boolean.Boolean{Boolean.expr= booleanExpr},
+                      comparisonGrammar= comparisons@Comparisons.Comparisons{Comparisons.test= comparisonTest},
+                      conditionalGrammar= conditionals@Conditionals.Conditionals{Conditionals.expr= conditionalExpr}} =
+   Expression{expr= arithmeticExpr
+                    <|> booleanExpr
+                    <|> conditionalExpr,
+              arithmeticGrammar= Arithmetic.arithmetic conditionalExpr arithmetic,
+              booleanGrammar= Boolean.boolean (BoolExpression <$> comparisonTest) boolean,
+              comparisonGrammar= Comparisons.comparisons arithmeticExpr comparisons,
+              conditionalGrammar= Conditionals.conditionals booleanExpr expr conditionals}
