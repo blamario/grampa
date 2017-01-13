@@ -6,7 +6,6 @@ import qualified Data.Bool
 import Data.Char (isSpace)
 import Data.Monoid ((<>))
 
-import qualified Rank2
 import qualified Rank2.TH
 
 import Text.Grampa

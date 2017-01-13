@@ -52,7 +52,7 @@ instance Conditionals.ConditionalDomain Tagged e where
    ifThenElse (BoolExpression False) _ f = f
    ifThenElse _ _ _ = error "type error: if expects a boolean"
 
-instance (Show (f Tagged), Show (f Int), Show (f Bool)) => Show (Expression f) where
+instance (Show (f Tagged), Show (f Bool)) => Show (Expression f) where
    showsPrec prec g rest = "Expression{expr=" ++ showsPrec prec (expr g)
                            (", arithmeticGrammar=" ++ showsPrec prec (arithmeticGrammar g)
                            (", booleanGrammar=" ++ showsPrec prec (booleanGrammar g)
@@ -105,7 +105,7 @@ instance Rank2.Traversable Expression where
                   <*> Rank2.traverse f (conditionalGrammar g)
 
 expression :: GrammarBuilder Expression g String
-expression Expression{expr= expr,
+expression Expression{expr= taggedExpr,
                       arithmeticGrammar= arithmetic@Arithmetic.Arithmetic{Arithmetic.expr= arithmeticExpr},
                       booleanGrammar= boolean@Boolean.Boolean{Boolean.expr= booleanExpr},
                       comparisonGrammar= comparisons@Comparisons.Comparisons{Comparisons.test= comparisonTest},
@@ -116,4 +116,4 @@ expression Expression{expr= expr,
               arithmeticGrammar= Arithmetic.arithmetic conditionalExpr arithmetic,
               booleanGrammar= Boolean.boolean (BoolExpression <$> comparisonTest) boolean,
               comparisonGrammar= Comparisons.comparisons arithmeticExpr comparisons,
-              conditionalGrammar= Conditionals.conditionals booleanExpr expr conditionals}
+              conditionalGrammar= Conditionals.conditionals booleanExpr taggedExpr conditionals}

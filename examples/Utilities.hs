@@ -4,7 +4,6 @@ module Utilities where
 import Data.Char (isAlphaNum)
 import Data.Monoid ((<>))
 
-import qualified Rank2
 import Text.Grampa
 
 infixJoin :: String -> String -> String -> String
