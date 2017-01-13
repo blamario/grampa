@@ -3,11 +3,11 @@ module Text.Grampa.Types (FailureInfo(..), ResultInfo(..), ResultList(..),
                           Grammar, Parser(..), GrammarResults,
                           (<<|>), concede, succeed,
                           endOfInput, getInput, anyToken, token, satisfy, satisfyChar, string,
-                          scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1)
+                          scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1, whiteSpace)
 where
 
 import Control.Applicative
-import Control.Monad (Monad(..), MonadPlus(..), void)
+import Control.Monad (Monad(..), MonadPlus(..))
 import Data.Char (isSpace)
 import Data.Either (either)
 import Data.List (genericLength)
@@ -186,16 +186,17 @@ p <<|> q = Parser{continued= \t rc fc-> continued p t rc (\f1-> continued q t rc
 instance Monad (Parser g s) where
    return = pure
    (>>=) :: forall a b. Parser g s a -> (a -> Parser g s b) -> Parser g s b
-   p >>= cont = Parser{continued= \t rc fc-> continued p t (\r t'-> continued (cont r) t' rc fc) fc,
-                       direct= \s t-> concatMapResults (continueFrom s t) $ direct p s t,
-                       recursive= if nullable p
-                                  then Just (\g s t-> (if nullable p
-                                                       then concatMapResults (recurseFrom g s t) (direct p s t)
-                                                       else mempty)
-                                                      <> concatMapResults (continueOrRecurse g s t) (fromMaybe mempty (recursive p) g s t))
-                                  else (\r g s t-> concatMapResults (recurseFrom g s t) $ r g s t) <$> recursive p,
-                       nullable= nullable p,
-                       recursivelyNullable= recursivelyNullable p}
+   p >>= cont =
+      Parser{continued= \t rc fc-> continued p t (\r t'-> continued (cont r) t' rc fc) fc,
+             direct= \s t-> concatMapResults (continueFrom s t) $ direct p s t,
+             recursive= (if nullable p
+                         then Just (\g s t-> if nullable p
+                                             then concatMapResults (recurseFrom g s t) (direct p s t)
+                                             else mempty)
+                         else Nothing)
+                        <> ((\r g s t-> concatMapResults (continueOrRecurse g s t) $ r g s t) <$> recursive p),
+             nullable= nullable p,
+             recursivelyNullable= recursivelyNullable p}
       where continueFrom _s _t (CompleteResultInfo t' r) = continued (cont r) t' succeed concede
             continueFrom s t (StuckResultInfo r) = direct (cont r) s t
             continueOrRecurse _g _s _t (CompleteResultInfo t' r) = continued (cont r) t' succeed concede
@@ -280,8 +281,11 @@ instance (Show s, TextualMonoid s) => Text.Parser.Char.CharParsing (Parser g s) 
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
 instance (Show s, TextualMonoid s) => TokenParsing (Parser g s) where
-   someSpace = void (takeCharsWhile1 isSpace)
-   
+   someSpace = () <$ takeCharsWhile1 isSpace
+
+-- | Consume all whitespace characters.
+whiteSpace :: forall g s. TextualMonoid s => Parser g s ()
+whiteSpace = () <$ takeCharsWhile isSpace
 
 -- | A parser that fails on any input and succeeds at its end.
 endOfInput :: (MonoidNull s) => Parser g s ()

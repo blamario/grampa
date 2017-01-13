@@ -10,11 +10,10 @@ module Text.Grampa (
    module Text.Parser.Char,
    module Text.Parser.Combinators,
    module Text.Parser.LookAhead,
-   module Text.Parser.Token,
    recursiveOn, (<<|>),
    -- * Parsing primitives
    endOfInput, getInput, anyToken, token, satisfy, satisfyChar, string,
-   scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1)
+   scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1, whiteSpace)
 where
 
 import Control.Applicative
@@ -29,7 +28,6 @@ import Data.Monoid.Textual (TextualMonoid)
 import Text.Parser.Char (CharParsing(char, notChar, anyChar))
 import Text.Parser.Combinators (Parsing((<?>), notFollowedBy, skipMany, skipSome, unexpected))
 import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
-import Text.Parser.Token (whiteSpace)
 
 import qualified Rank2
 import Text.Grampa.Types
@@ -144,7 +142,7 @@ iterate :: Rank2.Foldable g =>
         -> [g (ResultList g s)]
         -> [g (ResultList g s)]
 iterate f n ns = if getAll (Rank2.foldMap (either (const mempty) (All . null) . resultList) n')
-                 then n':n:ns else iterate f n' (n:ns)
+                 then n:ns else iterate f n' (n:ns)
    where n' = f n
 
 recursiveOn :: Parser g s x -> Parser g s r -> Parser g s r

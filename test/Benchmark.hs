@@ -68,9 +68,11 @@ main = do
             groupedLeft100, groupedLeft200, groupedLeft300,
             groupedRight100, groupedRight200, groupedRight300) $
       defaultMain [
+{-
       bgroup "many" [
           bench "simple" $ nf (simpleParse $ many (string ";") <* endOfInput) (replicate 400 ';'),
           bench "recursive" $ nf (parseAll (fixGrammar recursiveManyGrammar) start) (replicate 400 ';')],
+-}
       bgroup "zero sum" [
          bench "100" $ nf parse zeroes100,
          bench "200" $ nf parse zeroes200,
