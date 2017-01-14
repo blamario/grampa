@@ -42,7 +42,7 @@ test-suite           tests
   type:              exitcode-stdio-1.0
   hs-source-dirs:    test, examples
   x-uses-tf:         true
-  build-depends:     base >=4.7 && < 5, monoid-subclasses < 0.5,
+  build-depends:     base >=4.7 && < 5, monoid-subclasses < 0.5, parsers < 0.13,
                      grampa == 0.1,
                      QuickCheck >= 2 && < 3, checkers >= 0.4.6 && < 0.5, testing-feat < 0.5,
                      tasty >= 0.7, tasty-quickcheck >= 0.7

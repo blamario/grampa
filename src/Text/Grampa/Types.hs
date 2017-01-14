@@ -102,6 +102,10 @@ instance Monoid (ResultList g s r) where
    rl `mappend` ResultList Left{} = rl
    ResultList (Right a) `mappend` ResultList (Right b) = ResultList (Right $ a `mappend` b)
 
+instance Show (Parser g s r) where
+   show p = "Parser{nullable= " ++ show (nullable p)
+            ++ ", recursive= " ++ maybe "Nothing" (const "Just undefined") (recursive p) ++ "}"
+
 instance Functor (Parser g s) where
    fmap f p = Parser{continued= \t rc fc-> continued p t (rc . f) fc,
                      direct= \s t-> f <$> direct p s t,

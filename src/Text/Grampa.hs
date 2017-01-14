@@ -74,16 +74,15 @@ fixGrammar gf = (Rank2.Arrow . combine) `Rank2.fmap` gf selfReferring `Rank2.ap`
                                 recursivelyNullable= recursivelyNullable p2}
 
 fixNullable :: forall g s. (Rank2.Foldable g, Rank2.Apply g) => Grammar g s -> Grammar g s
-fixNullable g = head (iterateNullable iter g [])
+fixNullable g = Rank2.fmap (iterP $ iterateNullable iter g) g
    where iter g' = Rank2.fmap (iterP g') g'
-         iterP g' p = p{nullable= recursivelyNullable p g'}
+         iterP g' p = p{nullable= nullable p && recursivelyNullable p g'}
 
 iterateNullable :: forall g s. (Rank2.Foldable g, Rank2.Apply g) =>
                    (g (Parser g s) -> g (Parser g s)) -> g (Parser g s)
-                -> [g (Parser g s)]
-                -> [g (Parser g s)]
-iterateNullable f n ns = if getAll (Rank2.foldMap (All . getConst) $ equallyNullable `Rank2.fmap` n `Rank2.ap` n')
-                         then n':n:ns else iterateNullable f n' (n:ns)
+                -> g (Parser g s)
+iterateNullable f n = if getAll (Rank2.foldMap (All . getConst) $ equallyNullable `Rank2.fmap` n `Rank2.ap` n')
+                      then n' else iterateNullable f n'
    where n' = f n
          equallyNullable :: forall x. Parser g s x -> Rank2.Arrow (Parser g s) (Const Bool) x
          equallyNullable p1 = Rank2.Arrow (\p2-> Const $ nullable p1 == nullable p2)
@@ -93,7 +92,7 @@ selfNullable = Rank2.distributeWith nonTerminal id
    where nonTerminal :: forall r. (g (Parser g s) -> Parser g s r) -> Parser g s r
          nonTerminal f = Parser{continued= undefined,
                                 direct= undefined,
-                                recursive= undefined,
+                                recursive= Just undefined,
                                 nullable= True,
                                 recursivelyNullable= nullable . f}
 

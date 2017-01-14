@@ -3,14 +3,17 @@
 module Main where
 
 import Control.Applicative (Applicative, Alternative, pure, empty, optional, (<*>), (*>), (<|>))
-import Control.Monad (MonadPlus(mzero, mplus), liftM, liftM2, void)
+import Control.Monad (MonadPlus(mzero, mplus), guard, liftM, liftM2, void)
+import Data.Char (isSpace, isLetter)
 import Data.List (find, minimumBy, nub, sort)
 import Data.Monoid (Monoid(..), Product(..), (<>))
 import Data.Monoid.Cancellative (LeftReductiveMonoid(..))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid(factors))
+import Data.Monoid.Textual (TextualMonoid(toString))
 import Data.Typeable (Typeable)
 import Data.Word (Word8, Word64)
+import Text.Parser.Combinators (sepBy1, skipMany)
 
 import Test.Feat (Enumerable(..), Enumerate, FreePair(Free), consts, shared, unary, uniform)
 import Test.Feat.Enumerate (pay)
@@ -44,13 +47,29 @@ recursiveManyGrammar Recursive{..} = Recursive{
    one = string "(" *> start <* string ")",
    next= string "]"}
 
+nameListGrammar = fixGrammar nameListGrammarBuilder
+nameListGrammarBuilder Recursive{..} = Recursive{
+   start= pure (const . unwords) <*> rec <*> (True <$ symbol "," <* symbol "..." <|> pure False) <|>
+          pure id <*> symbol "...",
+   rec= pure id <*> sepBy1 one (ignorable *> string "," <* whiteSpace),
+   one= do ignorable
+           identifier <- ((:) <$> satisfyChar isLetter <*> (toString (const "") <$> takeCharsWhile isLetter))
+           guard (identifier /= "reserved")
+           pure id <*> pure identifier,
+   next= string "--" *> (toString (const "") <$> takeCharsWhile (/= '\n') <* (void (char '\n') <|> endOfInput))}
+
+symbol s = ignorable *> string s <* ignorable
+ignorable = whiteSpace *> (next nameListGrammar *> ignorable <<|> pure ())
+-- ignorable = whiteSpace *> skipMany (next nameListGrammar *> whiteSpace)
+
 main = defaultMain tests
 
 tests = testGroup "Grampa" [
            let g = fixGrammar recursiveManyGrammar
            in testGroup "recursive"
               [testProperty "minimal" $ parseAll g start "()" == Right [""],
-               testProperty "bracketed" $ parseAll g start "[()]" == Right [""]],
+               testProperty "bracketed" $ parseAll g start "[()]" == Right [""],
+               testProperty "name list" $ parseAll nameListGrammar start "foo, bar" == Right ["foo bar"]],
            testGroup "arithmetic"
              [testProperty "arithmetic"   $ Test.Examples.parseArithmetical,
               testProperty "comparisons"  $ Test.Examples.parseComparison,
@@ -114,7 +133,7 @@ instance Enumerable (DescribedParser s r) => Arbitrary (DescribedParser s r) whe
    arbitrary = sized uniform
 
 testBatch :: TestBatch -> TestTree
-testBatch (label, tests) = testGroup label (uncurry testProperty <$> tests)
+testBatch (label, tests) = testGroup label (uncurry testProperty . (within 1000000 <$>) <$> tests)
 
 parser2s :: DescribedParser ([Bool], [Bool]) ([Bool], [Bool])
 parser2s = undefined
