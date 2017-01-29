@@ -35,12 +35,13 @@ newtype Arrow p q a = Arrow{apply :: p a -> q a}
 -- > (.) <$> u <*> v <*> w == u <*> (v <*> w)
 class Functor g => Apply g where
    ap :: g (Arrow p q) -> g p -> g q
+   liftA2 :: (forall a. p a -> q a -> r a) -> g p -> g q -> g r
+
+   ap = liftA2 apply
+   liftA2 f g h = (Arrow . f) <$> g <*> h
 
 (<*>) :: Apply g => g (Arrow p q) -> g p -> g q
 (<*>) = ap
-
-liftA2 :: Apply g => (forall a. p a -> q a -> r a) -> g p -> g q -> g r
-liftA2 f g h = (Arrow . f) <$> g <*> h
 
 liftA3 :: Apply g => (forall a. p a -> q a -> r a -> s a) -> g p -> g q -> g r -> g s
 liftA3 f g h i = (\x-> Arrow (Arrow . f x)) <$> g <*> h <*> i
