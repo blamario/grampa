@@ -1,4 +1,5 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RecordWildCards, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, KindSignatures, MultiParamTypeClasses, RecordWildCards,
+             ScopedTypeVariables #-}
 module Comparisons where
 
 import Control.Applicative
@@ -62,7 +63,9 @@ instance Rank2.Traversable (Comparisons c e) where
                   <$> f (test g)
                   <*> f (term g)
 
-comparisons :: (ComparisonDomain c e) => Parser g String c -> GrammarBuilder (Comparisons c e) g String
+comparisons :: forall c e p (g :: (* -> *) -> *).
+               (ComparisonDomain c e, Alternative (p g String), MonoidParsing (p g)) =>
+               p g String c -> Comparisons c e (p g String) -> Comparisons c e (p g String)
 comparisons c Comparisons{..} =
    Comparisons{
       test= lessThan <$> term <* symbol "<" <*> term

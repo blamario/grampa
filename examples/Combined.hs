@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, UndecidableInstances #-}
+{-# LANGUAGE FlexibleInstances, KindSignatures, MultiParamTypeClasses, ScopedTypeVariables, UndecidableInstances #-}
 
 module Combined where
 
@@ -6,7 +6,7 @@ import Control.Applicative
 import qualified Data.Bool
 import Data.Monoid ((<>))
 import qualified Rank2
-import Text.Grampa (GrammarBuilder)
+import Text.Grampa (GrammarBuilder, Analysis, Parsing, MonoidParsing)
 import qualified Arithmetic
 import qualified Boolean
 import qualified Comparisons
@@ -104,7 +104,9 @@ instance Rank2.Traversable Expression where
                   <*> Rank2.traverse f (comparisonGrammar g)
                   <*> Rank2.traverse f (conditionalGrammar g)
 
-expression :: GrammarBuilder Expression g String
+expression :: forall p (g :: (* -> *) -> *).
+              (Alternative (p g String), Parsing (p g String), MonoidParsing (p g)) =>
+              Expression (p g String) -> Expression (p g String)
 expression Expression{expr= taggedExpr,
                       arithmeticGrammar= arithmetic@Arithmetic.Arithmetic{Arithmetic.expr= arithmeticExpr},
                       booleanGrammar= boolean@Boolean.Boolean{Boolean.expr= booleanExpr},

@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, RecordWildCards, ScopedTypeVariables, TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, KindSignatures, RecordWildCards, ScopedTypeVariables, TemplateHaskell #-}
 module Boolean where
 
 import Control.Applicative
@@ -43,7 +43,9 @@ data Boolean e f =
 
 $(Rank2.TH.deriveAll ''Boolean)
 
-boolean :: BooleanDomain e => Parser g String e -> GrammarBuilder (Boolean e) g String
+boolean :: forall e p (g :: (* -> *) -> *).
+           (BooleanDomain e, Alternative (p g String), Parsing (p g String), MonoidParsing (p g)) =>
+           p g String e -> Boolean e (p g String) -> Boolean e (p g String)
 boolean p Boolean{..} = Boolean{
    expr= term
          <|> or <$> expr <* symbol "||" <*> term,

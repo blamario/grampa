@@ -1,4 +1,5 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RecordWildCards, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, KindSignatures, MultiParamTypeClasses, RecordWildCards,
+             ScopedTypeVariables #-}
 module Conditionals where
 
 import Control.Applicative
@@ -44,7 +45,8 @@ instance Rank2.Foldable (Conditionals e) where
 instance Rank2.Traversable (Conditionals e) where
    traverse f a = Conditionals <$> f (expr a)
 
-conditionals :: ConditionalDomain t e =>
-                Parser g String t -> Parser g String e -> GrammarBuilder (Conditionals e) g String
+conditionals :: forall t e p (g :: (* -> *) -> *).
+                (ConditionalDomain t e, Alternative (p g String), Parsing (p g String), MonoidParsing (p g)) =>
+                p g String t -> p g String e -> Conditionals e (p g String) -> Conditionals e (p g String)
 conditionals test term Conditionals{..} =
    Conditionals{expr= ifThenElse <$> (keyword "if" *> test) <*> (keyword "then" *> term) <*> (keyword "else" *> term)}

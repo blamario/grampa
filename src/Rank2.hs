@@ -2,7 +2,7 @@
 module Rank2 (Functor(..), Apply(..), Applicative(..),
               Foldable(..), Traversable(..), Distributive(..),
               Empty(..), Singleton(..), Identity(..), Product(..), Arrow(..),
-             (<$>), (<*>), liftA2, liftA3)
+             (<$>), (<*>), liftA3)
 where
 
 import qualified Control.Applicative as Rank1

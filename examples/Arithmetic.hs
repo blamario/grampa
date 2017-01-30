@@ -1,9 +1,10 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, RecordWildCards, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, KindSignatures, OverloadedStrings, RecordWildCards, ScopedTypeVariables #-}
 module Arithmetic where
 
 import Control.Applicative
 import Data.Char (isDigit)
 import Data.Monoid ((<>))
+import Data.Monoid.Textual (TextualMonoid, toString)
 
 import Text.Grampa
 import Utilities (infixJoin, symbol)
@@ -27,7 +28,7 @@ instance ArithmeticDomain Int where
    subtract = (-)
    divide = div
 
-instance ArithmeticDomain [Char] where
+instance ArithmeticDomain String where
    number = show
    add = infixJoin "+"
    multiply = infixJoin "*"
@@ -76,15 +77,18 @@ instance Rank2.Traversable (Arithmetic e) where
                   <*> f (term a)
                   <*> f (factor a)
 
-arithmetic :: ArithmeticDomain e => Parser g String e -> GrammarBuilder (Arithmetic e) g String
+arithmetic :: forall e p (g :: (* -> *) -> *) s.
+              (ArithmeticDomain e, Alternative (p g s), Parsing (p g s), MonoidParsing (p g),
+               Show s, TextualMonoid s) =>
+              p g s e -> GrammarBuilder (Arithmetic e) g p s
 arithmetic sub Arithmetic{..} = Arithmetic{
-   expr= term
+   expr= (term :: p g s e)
          <|> symbol "-" *> (negate <$> term)
          <|> add <$> expr <* symbol "+" <*> term
          <|> subtract <$> expr <* symbol "-" <*> term,
    term= factor
          <|> multiply <$> term <* symbol "*" <*> factor
          <|> divide <$> term <* symbol "/" <*> factor,
-   factor= whiteSpace *> ((number . read) <$> takeCharsWhile1 isDigit <?> "digits")
+   factor= whiteSpace *> ((number . read . toString (const "")) <$> takeCharsWhile1 isDigit <?> "digits")
            <|> sub
            <|> symbol "(" *> expr <* symbol ")"}
