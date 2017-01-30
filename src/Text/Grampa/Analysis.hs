@@ -39,6 +39,7 @@ direct a = nullDirect a <|> positiveDirect a
 instance Show (Analysis g i a) where
    show a = "Analysis{index= " ++ show (index a)
             ++ ", leftRecursiveOn= " ++ show (leftRecursiveOn a)
+            ++ ", maxCycleDepth= " ++ show (maxCycleDepth a)
             ++ ", nullable= " ++ show (nullable a) ++ "}"
 
 instance Functor (Analysis g i) where

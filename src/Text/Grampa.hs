@@ -46,7 +46,7 @@ import qualified Text.Grampa.Analysis as Analysis
 
 import Prelude hiding (takeWhile)
 
-type Grammar g p s = g (p g s)
+type Grammar (g  :: (* -> *) -> *) p s = g (p g s)
 type GrammarBuilder (g  :: (* -> *) -> *)
                     (g' :: (* -> *) -> *)
                     (p  :: ((* -> *) -> *) -> * -> * -> *)
@@ -195,7 +195,7 @@ calcMaxCycleDepth :: IntMap IntSet -> IntMap Int
 calcMaxCycleDepth successors = cycleDepth <$> expandPaths initialDepths
    where expandPaths :: IntMap AdvanceFront -> IntMap AdvanceFront
          expandPaths paths
-            | all (IntSet.null . front) paths' = paths
+            | all (IntSet.null . front) paths' = paths'
             | otherwise = expandPaths paths'
             where paths' = expandReachables <$> paths
                   expandReachables :: AdvanceFront -> AdvanceFront

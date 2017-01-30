@@ -82,7 +82,7 @@ arithmetic :: forall e p (g :: (* -> *) -> *) s.
                Show s, TextualMonoid s) =>
               p g s e -> GrammarBuilder (Arithmetic e) g p s
 arithmetic sub Arithmetic{..} = Arithmetic{
-   expr= (term :: p g s e)
+   expr= term
          <|> symbol "-" *> (negate <$> term)
          <|> add <$> expr <* symbol "+" <*> term
          <|> subtract <$> expr <* symbol "-" <*> term,

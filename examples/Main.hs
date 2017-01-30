@@ -4,7 +4,7 @@ module Main (main, arithmetic, comparisons, boolean, conditionals) where
 import Control.Applicative (empty)
 import System.Environment (getArgs)
 import qualified Rank2
-import Text.Grampa (GrammarBuilder, Analysis, ParseResults, Parsing, MonoidParsing, fixGrammarAnalysis, parseAll)
+import Text.Grampa (Grammar, GrammarBuilder, Analysis, ParseResults, Parsing, MonoidParsing, fixGrammarAnalysis, parseAll)
 import Arithmetic (Arithmetic, arithmetic)
 import qualified Arithmetic
 import qualified Boolean
