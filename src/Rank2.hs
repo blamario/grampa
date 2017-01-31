@@ -100,6 +100,7 @@ instance Functor g => Functor (Identity g) where
 
 instance (Functor g, Functor h) => Functor (Product g h) where
    fmap f (Pair g h) = Pair (fmap f g) (fmap f h)
+--   fmap f p = Pair (f <$> fst p) (f <$> snd p)
 
 instance Foldable Empty where
    foldMap _ Empty = mempty
@@ -126,16 +127,20 @@ instance (Traversable g, Traversable h) => Traversable (Product g h) where
    traverse f (Pair g h) = Pair Rank1.<$> traverse f g Rank1.<*> traverse f h
 
 instance Apply Empty where
-   ap Empty Empty = Empty
+   ap _ _ = Empty
+   liftA2 _ _ _ = Empty
 
 instance Apply (Singleton x) where
-   ap (Singleton f) (Singleton x) = Singleton (apply f x)
+   ap ~(Singleton f) ~(Singleton x) = Singleton (apply f x)
+   liftA2 f ~(Singleton x) ~(Singleton y) = Singleton (f x y)
 
 instance Apply g => Apply (Identity g) where
-   ap (Identity g) (Identity h) = Identity (ap g h)
+   ap i1 i2 = Identity (runIdentity i1 <*> runIdentity i2)
+   liftA2 f ~(Identity g) ~(Identity h) = Identity (liftA2 f g h)
 
 instance (Apply g, Apply h) => Apply (Product g h) where
-   ap (Pair gf hf) (Pair g h) = Pair (ap gf g) (ap hf h)
+   ap p1 p2 = Pair (fst p1 <*> fst p2) (snd p1 <*> snd p2)
+   liftA2 f ~(Pair g1 g2) ~(Pair h1 h2) = Pair (liftA2 f g1 h1) (liftA2 f g2 h2)
 
 instance Applicative Empty where
    pure = const Empty
