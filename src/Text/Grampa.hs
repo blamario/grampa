@@ -5,7 +5,7 @@ module Text.Grampa (
    -- * Types
    Grammar, GrammarBuilder, Analysis, Parser, ParseResults,
    -- * Grammar and parser manipulation
-   fixGrammar, fixGrammarAnalysis, parsePrefix, parseAll, simpleParse,
+   fixGrammar, fixGrammarAnalysis, parsePrefix, parseAll, simpleParse, nullableRecursive,
    -- * Parser combinators
    module Text.Parser.Char,
    module Text.Parser.Combinators,
@@ -155,6 +155,9 @@ nt f = Parser.Parser p where
    p ((_, d) : _) = f d
    p _ = NoParse (Parser.FailureInfo 1 0 ["NonTerminal at endOfInput"])
 
+nullableRecursive :: Analysis g i a -> Analysis g i a
+nullableRecursive a = a{nullable= True,
+                        recursivelyNullable= const True}
 
 fixGrammarAnalysis :: forall g i. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
                       (g (Analysis g i) -> g (Analysis g i)) -> g (Analysis g i)

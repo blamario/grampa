@@ -19,32 +19,32 @@ import qualified Conditionals
 
 parseArithmetical :: Sum -> Bool
 parseArithmetical (Sum s) = f s' == s'
-   where f = uniqueParse (fixGrammar $ Arithmetic.arithmetic empty) Arithmetic.expr
+   where f = uniqueParse (fixGrammarAnalysis $ Arithmetic.arithmetic empty) Arithmetic.expr
          s' = f s
 
 parseComparison :: Comparison -> Bool
 parseComparison (Comparison s) = f s' == s'
-   where f = uniqueParse (fixGrammar comparisons) (Comparisons.test . Rank2.snd)
+   where f = uniqueParse (fixGrammarAnalysis comparisons) (Comparisons.test . Rank2.snd)
          s' = f s
 
-comparisons :: Rank2.Functor g => GrammarBuilder ArithmeticComparisons g String
+comparisons :: Rank2.Functor g => GrammarBuilder ArithmeticComparisons g Analysis String
 comparisons (Rank2.Pair a c) =
    Rank2.Pair (Arithmetic.arithmetic empty a) (Comparisons.comparisons (Arithmetic.expr a) c)
 
 parseBoolean :: Disjunction -> Bool
 parseBoolean (Disjunction s) = f s' == s'
-   where f = uniqueParse (fixGrammar boolean) (Boolean.expr . Rank2.snd)
+   where f = uniqueParse (fixGrammarAnalysis boolean) (Boolean.expr . Rank2.snd)
          s' = f s
 
-boolean :: Rank2.Functor g => GrammarBuilder ArithmeticComparisonsBoolean g String
+boolean :: Rank2.Functor g => GrammarBuilder ArithmeticComparisonsBoolean g Analysis String
 boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Comparisons.test $ Rank2.snd ac) b)
 
 parseConditional :: Conditional -> Bool
 parseConditional (Conditional s) = f s' == s'
-   where f = uniqueParse (fixGrammar conditionals) (Conditionals.expr . Rank2.snd)
+   where f = uniqueParse (fixGrammarAnalysis conditionals) (Conditionals.expr . Rank2.snd)
          s' = f s
 
-conditionals :: Rank2.Functor g => GrammarBuilder ACBC g String
+conditionals :: Rank2.Functor g => GrammarBuilder ACBC g Analysis String
 conditionals (Rank2.Pair acb c) =
    boolean acb `Rank2.Pair`
    Conditionals.conditionals (Boolean.expr $ Rank2.snd acb) (Arithmetic.expr $ Rank2.fst $ Rank2.fst acb) c
@@ -119,7 +119,7 @@ instance Enumerable Conditional where
                <$> pay enumerate
 
 uniqueParse :: (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g) =>
-               Grammar g s -> (forall f. g f -> f r) -> s -> r
+               Grammar g Analysis s -> (forall f. g f -> f r) -> s -> r
 uniqueParse g p s = case parseAll g p s
                     of Right [r] -> r
                        Right [] -> error "Unparseable"

@@ -47,7 +47,7 @@ recursiveManyGrammar Recursive{..} = Recursive{
    one = string "(" *> start <* string ")",
    next= string "]"}
 
-nameListGrammar = fixGrammar nameListGrammarBuilder
+nameListGrammar = fixGrammarAnalysis nameListGrammarBuilder
 nameListGrammarBuilder Recursive{..} = Recursive{
    start= pure (const . unwords) <*> rec <*> (True <$ symbol "," <* symbol "..." <|> pure False) <|>
           pure id <*> symbol "...",
@@ -65,7 +65,7 @@ ignorable = whiteSpace *> (next nameListGrammar *> ignorable <<|> pure ())
 main = defaultMain tests
 
 tests = testGroup "Grampa" [
-           let g = fixGrammar recursiveManyGrammar
+           let g = fixGrammarAnalysis recursiveManyGrammar
            in testGroup "recursive"
               [testProperty "minimal" $ parseAll g start "()" == Right [""],
                testProperty "bracketed" $ parseAll g start "[()]" == Right [""],

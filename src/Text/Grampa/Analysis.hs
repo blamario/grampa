@@ -84,6 +84,22 @@ instance Alternative (Analysis g i) where
                       maxCycleDepth= error "undefined maxCycleDepth",
                       nullable= nullable a || nullable b,
                       recursivelyNullable= \g-> recursivelyNullable a g || recursivelyNullable b g}
+   many a = Analysis{index= Nothing,
+                     nullDirect= many (direct a),
+                     positiveDirect= empty,
+                     recursive= many (recursive a),
+                     leftRecursiveOn= leftRecursiveOn a,
+                     maxCycleDepth= maxCycleDepth a,
+                     nullable= True,
+                     recursivelyNullable= const True}
+   some a = Analysis{index= Nothing,
+                     nullDirect= some (nullDirect a),
+                     positiveDirect= some (positiveDirect a),
+                     recursive= some (recursive a),
+                     leftRecursiveOn= leftRecursiveOn a,
+                     maxCycleDepth= maxCycleDepth a,
+                     nullable= nullable a,
+                     recursivelyNullable= recursivelyNullable a}
 
 (<<|>) :: Analysis g s r -> Analysis g s r -> Analysis g s r
 a <<|> b = Analysis{index= Nothing,
