@@ -157,7 +157,7 @@ endOfInput :: (MonoidNull s) => Parser g s ()
 endOfInput = Parser f
    where f input@((s, _):t)
             | null s = Parsed [ResultInfo input ()]
-            | otherwise = NoParse (FailureInfo 1 (genericLength t) ["notFollowedBy"])
+            | otherwise = NoParse (FailureInfo 1 (genericLength t) ["endOfInput"])
          f [] = Parsed [ResultInfo [] ()]
 
 -- | Always sucessful parser that returns the remaining input without consuming it.
