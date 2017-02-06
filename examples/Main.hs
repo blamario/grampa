@@ -2,6 +2,7 @@ module Main (main, arithmetic, comparisons, boolean, conditionals) where
 
 import Control.Applicative (empty)
 import System.Environment (getArgs)
+import Data.Map (Map)
 import qualified Rank2
 import Text.Grampa (GrammarBuilder, ParseResults, fixGrammar, parseAll)
 import Arithmetic (Arithmetic, arithmetic)
@@ -10,6 +11,8 @@ import qualified Boolean
 import qualified Comparisons
 import qualified Conditionals
 import qualified Combined
+import qualified Lambda
+import Utilities (parseUnique)
 
 type ArithmeticComparisons = Rank2.Product (Arithmetic.Arithmetic Int) (Comparisons.Comparisons Int Bool)
 type ArithmeticComparisonsBoolean = Rank2.Product ArithmeticComparisons (Boolean.Boolean Bool)
@@ -19,6 +22,8 @@ main :: IO ()
 main = do args <- concat <$> getArgs
           -- let a = fixGrammar (Arithmetic.arithmetic (production id Arithmetic.expr a))
           -- let a = fixGrammar (Arithmetic.arithmetic (recursive $ Arithmetic.expr a))
+          print (parseAll (fixGrammar Lambda.lambdaCalculus) Lambda.expr args :: ParseResults Lambda.LambdaInitial)
+          print (parseUnique (fixGrammar Lambda.lambdaCalculus) Lambda.expr args (mempty :: Map String Int) [1 :: Int] :: Int)
           print (parseAll (fixGrammar $ arithmetic empty) Arithmetic.expr args :: ParseResults Int)
           print (parseAll (fixGrammar comparisons) (Comparisons.test . Rank2.snd) args :: ParseResults Bool)
           print (parseAll (fixGrammar boolean) (Boolean.expr . Rank2.snd) args :: ParseResults Bool)
