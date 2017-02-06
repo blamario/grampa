@@ -1,8 +1,9 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, RecordWildCards, ScopedTypeVariables, TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, UndecidableInstances #-}
+{-# LANGUAGE RecordWildCards, ScopedTypeVariables, TemplateHaskell #-}
 module Lambda where
 
 import Control.Applicative
-import Data.Char (isSpace, isLetter)
+import Data.Char (isAlphaNum, isSpace, isLetter)
 import Data.Map (Map, insert, (!))
 import Data.Monoid ((<>))
 
@@ -82,14 +83,20 @@ data Lambda e f =
       primary :: f e,
       varName :: f String}
 
+instance (Show (f e), Show (f String)) => Show (Lambda e f) where
+   showsPrec prec g rest = "Lambda{expr=" ++ showsPrec prec (expr g)
+                           (", term=" ++ showsPrec prec (term g)
+                            (", primary=" ++ showsPrec prec (primary g)
+                             (", varName=" ++ showsPrec prec (varName g) ("}" ++ rest))))
+
 $(Rank2.TH.deriveAll ''Lambda)
 
 lambdaCalculus :: LambdaDomain e => GrammarBuilder (Lambda e) g String
 lambdaCalculus Lambda{..} = Lambda{
    expr= lambda <$> (symbol "\\" *> varName <* symbol "->") <*> expr
          <|> term,
-   term= apply <$> term <* takeCharsWhile1 isSpace <*> primary
+   term= apply <$> term <*> primary
          <|> primary,
    primary= var <$> varName
             <|> symbol "(" *> expr <* symbol ")",
-   varName= takeCharsWhile1 isLetter}
+   varName= whiteSpace *> takeCharsWhile1 isLetter <> takeCharsWhile isAlphaNum}

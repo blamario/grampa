@@ -23,12 +23,12 @@ main = do args <- concat <$> getArgs
           -- let a = fixGrammar (Arithmetic.arithmetic (production id Arithmetic.expr a))
           -- let a = fixGrammar (Arithmetic.arithmetic (recursive $ Arithmetic.expr a))
           print (parseAll (fixGrammar Lambda.lambdaCalculus) Lambda.expr args :: ParseResults Lambda.LambdaInitial)
-          print (parseUnique (fixGrammar Lambda.lambdaCalculus) Lambda.expr args (mempty :: Map String Int) [1 :: Int] :: Int)
+          -- print (((\f-> f (mempty :: Map String Int) [1 :: Int]) <$>) <$> parseAll (fixGrammar Lambda.lambdaCalculus) Lambda.expr args :: ParseResults Int)
           print (parseAll (fixGrammar $ arithmetic empty) Arithmetic.expr args :: ParseResults Int)
           print (parseAll (fixGrammar comparisons) (Comparisons.test . Rank2.snd) args :: ParseResults Bool)
           print (parseAll (fixGrammar boolean) (Boolean.expr . Rank2.snd) args :: ParseResults Bool)
           print (parseAll (fixGrammar conditionals) (Conditionals.expr . Rank2.snd) args :: ParseResults Int)
-          print (parseAll (fixGrammar Combined.expression) Combined.expr args :: ParseResults Combined.Tagged)
+          print (((\f-> f (mempty :: Map String Combined.Tagged)) <$>) <$> parseAll (fixGrammar Combined.expression) Combined.expr args :: ParseResults Combined.Tagged)
 
 comparisons :: GrammarBuilder ArithmeticComparisons g String
 comparisons (Rank2.Pair a c) =
