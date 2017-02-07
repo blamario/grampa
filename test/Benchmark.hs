@@ -29,7 +29,7 @@ recursiveManyGrammar Recursive{..} = Recursive{
    next= string "END"}
 
 parse :: String -> [Int]
-parse s = case parseAll (fixGrammar $ arithmetic empty) Arithmetic.expr s
+parse s = case parseAll (fixGrammar arithmetic) Arithmetic.expr s
           of Right [r] -> [r]
              r -> error ("Unexpected " <> show r)
 

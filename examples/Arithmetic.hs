@@ -9,7 +9,7 @@ import Text.Grampa
 import Utilities (infixJoin, symbol)
 
 import qualified Rank2
-import Prelude hiding (negate, subtract)
+import Prelude hiding (negate, product, subtract, sum)
 
 class ArithmeticDomain e where
    number :: Int -> e
@@ -35,56 +35,69 @@ instance ArithmeticDomain [Char] where
    subtract = infixJoin "-"
    divide = infixJoin "/"
 
-data Arithmetic e f =
-   Arithmetic{
-      expr :: f e,
-      term :: f e,
-      factor :: f e}
+data Arithmetic e f = Arithmetic{expr    :: f e,
+                                 sum     :: f e,
+                                 product :: f e,
+                                 factor  :: f e,
+                                 primary :: f e}
 
 instance Show (f e) => Show (Arithmetic e f) where
    showsPrec prec a rest = "Arithmetic{expr=" ++ showsPrec prec (expr a)
-                           (", term=" ++ showsPrec prec (term a)
-                            (", factor=" ++ showsPrec prec (factor a) ("}" ++ rest)))
+                           (", sum=" ++ showsPrec prec (sum a)
+                            (", product=" ++ showsPrec prec (product a)
+                             (", factor=" ++ showsPrec prec (factor a)
+                              (", primary=" ++ showsPrec prec (primary a) ("}" ++ rest)))))
 
 instance Rank2.Functor (Arithmetic e) where
    fmap f a = a{expr= f (expr a),
-                term= f (term a),
-                factor= f (factor a)}
+                sum= f (sum a),
+                product= f (product a),
+                factor= f (factor a),
+                primary= f (primary a)}
 
 instance Rank2.Apply (Arithmetic e) where
    ap a a' = Arithmetic (expr a `Rank2.apply` expr a')
-                        (term a `Rank2.apply` term a')
+                        (sum a `Rank2.apply` sum a')
+                        (product a `Rank2.apply` product a')
                         (factor a `Rank2.apply` factor a')
+                        (primary a `Rank2.apply` primary a')
 
 instance Rank2.Applicative (Arithmetic e) where
-   pure f = Arithmetic f f f
+   pure f = Arithmetic f f f f f
 
 instance Rank2.Distributive (Arithmetic e) where
    distributeM f = Arithmetic{expr= f >>= expr,
-                              term= f >>= term,
-                              factor= f >>= factor}
+                              sum= f >>= sum,
+                              product= f >>= product,
+                              factor= f >>= factor,
+                              primary= f >>= primary}
    distributeWith w f = Arithmetic{expr= w (expr <$> f),
-                                   term= w (term <$> f),
-                                   factor= w (factor <$> f)}
+                                   sum= w (sum <$> f),
+                                   product= w (product <$> f),
+                                   factor= w (factor <$> f),
+                                   primary= w (primary <$> f)}
 
 instance Rank2.Foldable (Arithmetic e) where
-   foldMap f a = f (expr a) <> f (term a) <> f (factor a)
+   foldMap f a = f (expr a) <> f (sum a) <> f (product a) <> f (factor a) <> f (primary a)
 
 instance Rank2.Traversable (Arithmetic e) where
    traverse f a = Arithmetic
                   <$> f (expr a)
-                  <*> f (term a)
+                  <*> f (sum a)
+                  <*> f (product a)
                   <*> f (factor a)
+                  <*> f (primary a)
 
-arithmetic :: ArithmeticDomain e => Parser g String e -> GrammarBuilder (Arithmetic e) g String
-arithmetic sub Arithmetic{..} = Arithmetic{
-   expr= term
-         <|> symbol "-" *> (negate <$> term)
-         <|> add <$> expr <* symbol "+" <*> term
-         <|> subtract <$> expr <* symbol "-" <*> term,
-   term= factor
-         <|> multiply <$> term <* symbol "*" <*> factor
-         <|> divide <$> term <* symbol "/" <*> factor,
-   factor= whiteSpace *> ((number . read) <$> takeCharsWhile1 isDigit <?> "digits")
-           <|> sub
-           <|> symbol "(" *> expr <* symbol ")"}
+arithmetic :: ArithmeticDomain e => GrammarBuilder (Arithmetic e) g String
+arithmetic Arithmetic{..} = Arithmetic{
+   expr= sum,
+   sum= product
+         <|> symbol "-" *> (negate <$> product)
+         <|> add <$> sum <* symbol "+" <*> product
+         <|> subtract <$> sum <* symbol "-" <*> product,
+   product= factor
+         <|> multiply <$> product <* symbol "*" <*> factor
+         <|> divide <$> product <* symbol "/" <*> factor,
+   factor= primary
+           <|> symbol "(" *> expr <* symbol ")",
+   primary= whiteSpace *> ((number . read) <$> takeCharsWhile1 isDigit <?> "digits")}

@@ -79,24 +79,30 @@ instance LambdaDomain String where
 data Lambda e f =
    Lambda{
       expr :: f e,
-      term :: f e,
+      abstraction :: f e,
+      application :: f e,
+      argument :: f e,
       primary :: f e,
       varName :: f String}
 
 instance (Show (f e), Show (f String)) => Show (Lambda e f) where
    showsPrec prec g rest = "Lambda{expr=" ++ showsPrec prec (expr g)
-                           (", term=" ++ showsPrec prec (term g)
-                            (", primary=" ++ showsPrec prec (primary g)
-                             (", varName=" ++ showsPrec prec (varName g) ("}" ++ rest))))
+                           (", abstraction=" ++ showsPrec prec (abstraction g)
+                            (", application=" ++ showsPrec prec (application g)
+                             (", argument=" ++ showsPrec prec (application g)
+                              (", primary=" ++ showsPrec prec (primary g)
+                               (", varName=" ++ showsPrec prec (varName g) ("}" ++ rest))))))
 
 $(Rank2.TH.deriveAll ''Lambda)
 
 lambdaCalculus :: LambdaDomain e => GrammarBuilder (Lambda e) g String
 lambdaCalculus Lambda{..} = Lambda{
-   expr= lambda <$> (symbol "\\" *> varName <* symbol "->") <*> expr
-         <|> term,
-   term= apply <$> term <*> primary
-         <|> primary,
-   primary= var <$> varName
-            <|> symbol "(" *> expr <* symbol ")",
+   expr= abstraction,
+   abstraction= lambda <$> (symbol "\\" *> varName <* symbol "->") <*> abstraction
+                <|> application,
+   application= apply <$> application <*> argument
+                <|> argument,
+   argument= symbol "(" *> expr <* symbol ")"
+             <|> primary,
+   primary= var <$> varName,
    varName= whiteSpace *> takeCharsWhile1 isLetter <> takeCharsWhile isAlphaNum}

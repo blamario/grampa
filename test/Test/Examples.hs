@@ -19,7 +19,7 @@ import qualified Conditionals
 
 parseArithmetical :: Sum -> Bool
 parseArithmetical (Sum s) = f s' == s'
-   where f = uniqueParse (fixGrammar $ Arithmetic.arithmetic empty) Arithmetic.expr
+   where f = uniqueParse (fixGrammar Arithmetic.arithmetic) Arithmetic.expr
          s' = f s
 
 parseComparison :: Comparison -> Bool
@@ -29,7 +29,7 @@ parseComparison (Comparison s) = f s' == s'
 
 comparisons :: Rank2.Functor g => GrammarBuilder ArithmeticComparisons g String
 comparisons (Rank2.Pair a c) =
-   Rank2.Pair (Arithmetic.arithmetic empty a) (Comparisons.comparisons (Arithmetic.expr a) c)
+   Rank2.Pair (Arithmetic.arithmetic a) (Comparisons.comparisons (Arithmetic.expr a) c)
 
 parseBoolean :: Disjunction -> Bool
 parseBoolean (Disjunction s) = f s' == s'

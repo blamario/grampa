@@ -24,7 +24,7 @@ main = do args <- concat <$> getArgs
           -- let a = fixGrammar (Arithmetic.arithmetic (recursive $ Arithmetic.expr a))
           print (parseAll (fixGrammar Lambda.lambdaCalculus) Lambda.expr args :: ParseResults Lambda.LambdaInitial)
           -- print (((\f-> f (mempty :: Map String Int) [1 :: Int]) <$>) <$> parseAll (fixGrammar Lambda.lambdaCalculus) Lambda.expr args :: ParseResults Int)
-          print (parseAll (fixGrammar $ arithmetic empty) Arithmetic.expr args :: ParseResults Int)
+          print (parseAll (fixGrammar arithmetic) Arithmetic.expr args :: ParseResults Int)
           print (parseAll (fixGrammar comparisons) (Comparisons.test . Rank2.snd) args :: ParseResults Bool)
           print (parseAll (fixGrammar boolean) (Boolean.expr . Rank2.snd) args :: ParseResults Bool)
           print (parseAll (fixGrammar conditionals) (Conditionals.expr . Rank2.snd) args :: ParseResults Int)
@@ -32,7 +32,7 @@ main = do args <- concat <$> getArgs
 
 comparisons :: GrammarBuilder ArithmeticComparisons g String
 comparisons (Rank2.Pair a c) =
-   Rank2.Pair (Arithmetic.arithmetic empty a) (Comparisons.comparisons (Arithmetic.expr a) c)
+   Rank2.Pair (Arithmetic.arithmetic a) (Comparisons.comparisons (Arithmetic.expr a) c)
 
 boolean :: GrammarBuilder ArithmeticComparisonsBoolean g String
 boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Comparisons.test $ Rank2.snd ac) b)

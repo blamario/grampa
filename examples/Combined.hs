@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, UndecidableInstances #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, RecordWildCards, UndecidableInstances #-}
 
 module Combined where
 
@@ -18,6 +18,8 @@ import qualified Lambda
 data Expression f =
    Expression{
       expr :: f Domain,
+      term :: f Domain,
+      primary :: f Domain,
       arithmeticGrammar :: Arithmetic.Arithmetic Domain f,
       booleanGrammar :: Boolean.Boolean Domain f,
       comparisonGrammar :: Comparisons.Comparisons Domain Domain f,
@@ -117,6 +119,8 @@ instance (Show (f Domain), Show (f Bool), Show (f String)) => Show (Expression f
 
 instance Rank2.Functor Expression where
    fmap f g = g{expr= f (expr g),
+                term= f (term g),
+                primary= f (primary g),
                 arithmeticGrammar= Rank2.fmap f (arithmeticGrammar g),
                 booleanGrammar= Rank2.fmap f (booleanGrammar g),
                 comparisonGrammar= Rank2.fmap f (comparisonGrammar g),
@@ -125,6 +129,8 @@ instance Rank2.Functor Expression where
 
 instance Rank2.Apply Expression where
    ap a b = Expression{expr= expr a `Rank2.apply` expr b,
+                       term= term a `Rank2.apply` term b,
+                       primary= primary a `Rank2.apply` primary b,
                        arithmeticGrammar= arithmeticGrammar a `Rank2.ap` arithmeticGrammar b,
                        booleanGrammar= booleanGrammar a `Rank2.ap` booleanGrammar b,
                        comparisonGrammar= comparisonGrammar a `Rank2.ap` comparisonGrammar b,
@@ -133,6 +139,8 @@ instance Rank2.Apply Expression where
 
 instance Rank2.Applicative Expression where
    pure f = Expression{expr= f,
+                       term= f,
+                       primary= f,
                        arithmeticGrammar= Rank2.pure f,
                        booleanGrammar= Rank2.pure f,
                        comparisonGrammar= Rank2.pure f,
@@ -141,12 +149,16 @@ instance Rank2.Applicative Expression where
 
 instance Rank2.Distributive Expression where
    distributeM f = Expression{expr= f >>= expr,
+                              term= f >>= term,
+                              primary= f >>= primary,
                               arithmeticGrammar= Rank2.distributeM (arithmeticGrammar <$> f),
                               booleanGrammar= Rank2.distributeM (booleanGrammar <$> f),
                               comparisonGrammar= Rank2.distributeM (comparisonGrammar <$> f),
                               conditionalGrammar= Rank2.distributeM (conditionalGrammar <$> f),
                               lambdaGrammar= Rank2.distributeM (lambdaGrammar <$> f)}
    distributeWith w f = Expression{expr= w (expr <$> f),
+                                   term= w (term <$> f),
+                                   primary= w (primary <$> f),
                                    arithmeticGrammar= Rank2.distributeWith w (arithmeticGrammar <$> f),
                                    booleanGrammar= Rank2.distributeWith w (booleanGrammar <$> f),
                                    comparisonGrammar= Rank2.distributeWith w (comparisonGrammar <$> f),
@@ -154,13 +166,16 @@ instance Rank2.Distributive Expression where
                                    lambdaGrammar= Rank2.distributeWith w (lambdaGrammar <$> f)}
 
 instance Rank2.Foldable Expression where
-   foldMap f g = f (expr g) <> Rank2.foldMap f (arithmeticGrammar g) <> Rank2.foldMap f (booleanGrammar g)
+   foldMap f g = f (expr g) <> f (term g) <> f (primary g)
+                 <> Rank2.foldMap f (arithmeticGrammar g) <> Rank2.foldMap f (booleanGrammar g)
                  <> Rank2.foldMap f (comparisonGrammar g) <> Rank2.foldMap f (conditionalGrammar g)
-                  <> Rank2.foldMap f (lambdaGrammar g)
+                 <> Rank2.foldMap f (lambdaGrammar g)
 
 instance Rank2.Traversable Expression where
    traverse f g = Expression
                   <$> f (expr g)
+                  <*> f (term g)
+                  <*> f (primary g)
                   <*> Rank2.traverse f (arithmeticGrammar g)
                   <*> Rank2.traverse f (booleanGrammar g)
                   <*> Rank2.traverse f (comparisonGrammar g)
@@ -169,6 +184,8 @@ instance Rank2.Traversable Expression where
 
 expression :: GrammarBuilder Expression g String
 expression Expression{expr= taggedExpr,
+                      term= taggedTerm,
+                      primary= taggedPrimary,
                       arithmeticGrammar= arithmetic@Arithmetic.Arithmetic{Arithmetic.expr= arithmeticExpr},
                       booleanGrammar= boolean@Boolean.Boolean{Boolean.expr= booleanExpr},
                       comparisonGrammar= comparisons@Comparisons.Comparisons{Comparisons.test= comparisonTest},
@@ -178,13 +195,19 @@ expression Expression{expr= taggedExpr,
                       <|> booleanExpr
                       <|> conditionalExpr
                       <|> lambdaExpr
-       combinedPrimary = Arithmetic.factor arithmetic
+       combinedTerm = Lambda.application lambdas
+                      <|> Arithmetic.sum arithmetic
+       combinedPrimary = Arithmetic.primary arithmetic
                          <|> Boolean.factor boolean
                          <|> Lambda.primary lambdas
    in Expression{expr= combinedExpr,
-                 arithmeticGrammar= Arithmetic.arithmetic conditionalExpr arithmetic,
+                 term= combinedTerm,
+                 primary= combinedPrimary,
+                 arithmeticGrammar= Arithmetic.arithmetic arithmetic{Arithmetic.expr= taggedExpr,
+                                                                     Arithmetic.primary= taggedPrimary},
                  booleanGrammar= Boolean.boolean comparisonTest boolean,
                  comparisonGrammar= Comparisons.comparisons arithmeticExpr comparisons,
                  conditionalGrammar= Conditionals.conditionals booleanExpr taggedExpr conditionals,
-                 lambdaGrammar= Lambda.lambdaCalculus lambdas{Lambda.expr= combinedExpr,
-                                                              Lambda.primary= combinedPrimary}}
+                 lambdaGrammar= Lambda.lambdaCalculus lambdas{Lambda.expr= taggedExpr,
+                                                              Lambda.application= taggedTerm,
+                                                              Lambda.primary= taggedPrimary}}
