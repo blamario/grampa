@@ -23,7 +23,7 @@ data Expression f =
       arithmeticGrammar :: Arithmetic.Arithmetic Domain f,
       booleanGrammar :: Boolean.Boolean Domain f,
       comparisonGrammar :: Comparisons.Comparisons Domain Domain f,
-      conditionalGrammar :: Conditionals.Conditionals Domain f,
+      conditionalGrammar :: Conditionals.Conditionals Domain Domain f,
       lambdaGrammar :: Lambda.Lambda Domain f}
 
 data Tagged = IntExpression {intFromExpression :: Int}
@@ -109,7 +109,7 @@ instance Lambda.LambdaDomain (Env -> Tagged) where
    lambda v body env = FunctionExpression (\arg-> body (Map.insert v arg env))
    var v env = Map.findWithDefault (TypeError $ "Free variable " ++ show v) v env
 
-instance (Show (f Domain), Show (f Bool), Show (f String)) => Show (Expression f) where
+instance (Show (f Domain), Show (f String)) => Show (Expression f) where
    showsPrec prec g rest = "Expression{expr=" ++ showsPrec prec (expr g)
                            (", arithmeticGrammar=" ++ showsPrec prec (arithmeticGrammar g)
                            (", booleanGrammar=" ++ showsPrec prec (booleanGrammar g)
@@ -183,31 +183,25 @@ instance Rank2.Traversable Expression where
                   <*> Rank2.traverse f (lambdaGrammar g)
 
 expression :: GrammarBuilder Expression g String
-expression Expression{expr= taggedExpr,
-                      term= taggedTerm,
-                      primary= taggedPrimary,
-                      arithmeticGrammar= arithmetic@Arithmetic.Arithmetic{Arithmetic.expr= arithmeticExpr},
-                      booleanGrammar= boolean@Boolean.Boolean{Boolean.expr= booleanExpr},
-                      comparisonGrammar= comparisons@Comparisons.Comparisons{Comparisons.test= comparisonTest},
-                      conditionalGrammar= conditionals@Conditionals.Conditionals{Conditionals.expr= conditionalExpr},
-                      lambdaGrammar= lambdas@Lambda.Lambda{Lambda.expr= lambdaExpr}} =
-   let combinedExpr = arithmeticExpr
-                      <|> booleanExpr
-                      <|> conditionalExpr
-                      <|> lambdaExpr
-       combinedTerm = Lambda.application lambdas
-                      <|> Arithmetic.sum arithmetic
-       combinedPrimary = Arithmetic.primary arithmetic
-                         <|> Boolean.factor boolean
-                         <|> Lambda.primary lambdas
+expression Expression{..} =
+   let combinedExpr = Arithmetic.expr arithmeticGrammar
+                      <|> Boolean.expr booleanGrammar
+                      <|> Conditionals.expr conditionalGrammar
+                      <|> Lambda.expr lambdaGrammar
+       combinedTerm = Lambda.application lambdaGrammar
+                      <|> Arithmetic.sum arithmeticGrammar
+       combinedPrimary = Arithmetic.primary arithmeticGrammar
+                         <|> Boolean.factor booleanGrammar
+                         <|> Lambda.primary lambdaGrammar
    in Expression{expr= combinedExpr,
                  term= combinedTerm,
                  primary= combinedPrimary,
-                 arithmeticGrammar= Arithmetic.arithmetic arithmetic{Arithmetic.expr= taggedExpr,
-                                                                     Arithmetic.primary= taggedPrimary},
-                 booleanGrammar= Boolean.boolean comparisonTest boolean,
-                 comparisonGrammar= Comparisons.comparisons arithmeticExpr comparisons,
-                 conditionalGrammar= Conditionals.conditionals booleanExpr taggedExpr conditionals,
-                 lambdaGrammar= Lambda.lambdaCalculus lambdas{Lambda.expr= taggedExpr,
-                                                              Lambda.application= taggedTerm,
-                                                              Lambda.primary= taggedPrimary}}
+                 arithmeticGrammar= Arithmetic.arithmetic arithmeticGrammar{Arithmetic.expr= expr,
+                                                                            Arithmetic.primary= primary},
+                 booleanGrammar= Boolean.boolean (Comparisons.test comparisonGrammar) booleanGrammar,
+                 comparisonGrammar= Comparisons.comparisons comparisonGrammar{Comparisons.term= Arithmetic.expr arithmeticGrammar},
+                 conditionalGrammar= Conditionals.conditionals conditionalGrammar{Conditionals.test= Boolean.expr booleanGrammar,
+                                                                                  Conditionals.term= expr},
+                 lambdaGrammar= Lambda.lambdaCalculus lambdaGrammar{Lambda.expr= expr,
+                                                                    Lambda.application= term,
+                                                                    Lambda.primary= primary}}

@@ -29,7 +29,7 @@ parseComparison (Comparison s) = f s' == s'
 
 comparisons :: Rank2.Functor g => GrammarBuilder ArithmeticComparisons g String
 comparisons (Rank2.Pair a c) =
-   Rank2.Pair (Arithmetic.arithmetic a) (Comparisons.comparisons (Arithmetic.expr a) c)
+   Rank2.Pair (Arithmetic.arithmetic a) (Comparisons.comparisons c{Comparisons.term= Arithmetic.expr a})
 
 parseBoolean :: Disjunction -> Bool
 parseBoolean (Disjunction s) = f s' == s'
@@ -47,11 +47,12 @@ parseConditional (Conditional s) = f s' == s'
 conditionals :: Rank2.Functor g => GrammarBuilder ACBC g String
 conditionals (Rank2.Pair acb c) =
    boolean acb `Rank2.Pair`
-   Conditionals.conditionals (Boolean.expr $ Rank2.snd acb) (Arithmetic.expr $ Rank2.fst $ Rank2.fst acb) c
+   Conditionals.conditionals c{Conditionals.test= Boolean.expr (Rank2.snd acb),
+                               Conditionals.term= Arithmetic.expr (Rank2.fst $ Rank2.fst acb)}
 
 type ArithmeticComparisons = Rank2.Product (Arithmetic.Arithmetic String) (Comparisons.Comparisons String String)
 type ArithmeticComparisonsBoolean = Rank2.Product ArithmeticComparisons (Boolean.Boolean String)
-type ACBC = Rank2.Product ArithmeticComparisonsBoolean (Conditionals.Conditionals String)
+type ACBC = Rank2.Product ArithmeticComparisonsBoolean (Conditionals.Conditionals String String)
 
 newtype Factor      = Factor {factorString :: String}           deriving (Show)
 newtype Product     = Product {productString :: String}         deriving (Show)

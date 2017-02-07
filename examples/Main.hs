@@ -16,7 +16,7 @@ import Utilities (parseUnique)
 
 type ArithmeticComparisons = Rank2.Product (Arithmetic.Arithmetic Int) (Comparisons.Comparisons Int Bool)
 type ArithmeticComparisonsBoolean = Rank2.Product ArithmeticComparisons (Boolean.Boolean Bool)
-type ACBC = Rank2.Product ArithmeticComparisonsBoolean (Conditionals.Conditionals Int)
+type ACBC = Rank2.Product ArithmeticComparisonsBoolean (Conditionals.Conditionals Bool Int)
    
 main :: IO ()
 main = do args <- concat <$> getArgs
@@ -32,7 +32,7 @@ main = do args <- concat <$> getArgs
 
 comparisons :: GrammarBuilder ArithmeticComparisons g String
 comparisons (Rank2.Pair a c) =
-   Rank2.Pair (Arithmetic.arithmetic a) (Comparisons.comparisons (Arithmetic.expr a) c)
+   Rank2.Pair (Arithmetic.arithmetic a) (Comparisons.comparisons c{Comparisons.term= Arithmetic.expr a})
 
 boolean :: GrammarBuilder ArithmeticComparisonsBoolean g String
 boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Comparisons.test $ Rank2.snd ac) b)
@@ -41,4 +41,5 @@ conditionals :: GrammarBuilder ACBC g String
 conditionals (Rank2.Pair acb c) =
    Rank2.Pair
       (boolean acb)
-      (Conditionals.conditionals (Boolean.expr $ Rank2.snd acb) (Arithmetic.expr $ Rank2.fst $ Rank2.fst acb) c)
+      (Conditionals.conditionals c{Conditionals.test= Boolean.expr (Rank2.snd acb),
+                                   Conditionals.term= Arithmetic.expr (Rank2.fst $ Rank2.fst acb)})
