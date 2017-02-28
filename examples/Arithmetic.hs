@@ -49,18 +49,18 @@ instance Show (f e) => Show (Arithmetic e f) where
                               (", primary=" ++ showsPrec prec (primary a) ("}" ++ rest)))))
 
 instance Rank2.Functor (Arithmetic e) where
-   fmap f a = a{expr= f (expr a),
-                sum= f (sum a),
-                product= f (product a),
-                factor= f (factor a),
-                primary= f (primary a)}
+   f <$> a = a{expr= f (expr a),
+               sum= f (sum a),
+               product= f (product a),
+               factor= f (factor a),
+               primary= f (primary a)}
 
 instance Rank2.Apply (Arithmetic e) where
-   ap a a' = Arithmetic (expr a `Rank2.apply` expr a')
-                        (sum a `Rank2.apply` sum a')
-                        (product a `Rank2.apply` product a')
-                        (factor a `Rank2.apply` factor a')
-                        (primary a `Rank2.apply` primary a')
+   a <*> a' = Arithmetic (expr a `Rank2.apply` expr a')
+                         (sum a `Rank2.apply` sum a')
+                         (product a `Rank2.apply` product a')
+                         (factor a `Rank2.apply` factor a')
+                         (primary a `Rank2.apply` primary a')
 
 instance Rank2.Applicative (Arithmetic e) where
    pure f = Arithmetic f f f f f

@@ -1,6 +1,5 @@
 module Main (main, arithmetic, comparisons, boolean, conditionals) where
 
-import Control.Applicative (empty)
 import System.Environment (getArgs)
 import Data.Map (Map)
 import qualified Rank2
@@ -12,7 +11,6 @@ import qualified Comparisons
 import qualified Conditionals
 import qualified Combined
 import qualified Lambda
-import Utilities (parseUnique)
 
 type ArithmeticComparisons = Rank2.Product (Arithmetic.Arithmetic Int) (Comparisons.Comparisons Int Bool)
 type ArithmeticComparisonsBoolean = Rank2.Product ArithmeticComparisons (Boolean.Boolean Bool)

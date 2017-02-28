@@ -2,7 +2,7 @@
 module Rank2 (Functor(..), Apply(..), Applicative(..),
               Foldable(..), Traversable(..), Distributive(..),
               Empty(..), Singleton(..), Identity(..), Product(..), Arrow(..),
-             (<$>), (<*>), liftA2, liftA3)
+              ap, fmap, liftA3)
 where
 
 import qualified Control.Applicative as Rank1
@@ -15,10 +15,10 @@ import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(.
 
 -- | Equivalent of 'Functor' for rank 2 data types
 class Functor g where
-   fmap :: (forall a. p a -> q a) -> g p -> g q
+   (<$>) :: (forall a. p a -> q a) -> g p -> g q
 
-(<$>) :: Functor g => (forall a. p a -> q a) -> g p -> g q
-(<$>) = fmap
+fmap :: Functor g => (forall a. p a -> q a) -> g p -> g q
+fmap = (<$>)
 
 -- | Equivalent of 'Foldable' for rank 2 data types
 class Foldable g where
@@ -34,14 +34,14 @@ newtype Arrow p q a = Arrow{apply :: p a -> q a}
 --
 -- > (.) <$> u <*> v <*> w == u <*> (v <*> w)
 class Functor g => Apply g where
-   ap :: g (Arrow p q) -> g p -> g q
+   (<*>) :: g (Arrow p q) -> g p -> g q
    liftA2 :: (forall a. p a -> q a -> r a) -> g p -> g q -> g r
 
-   ap = liftA2 apply
+   (<*>) = liftA2 apply
    liftA2 f g h = (Arrow . f) <$> g <*> h
 
-(<*>) :: Apply g => g (Arrow p q) -> g p -> g q
-(<*>) = ap
+ap :: Apply g => g (Arrow p q) -> g p -> g q
+ap = (<*>)
 
 liftA3 :: Apply g => (forall a. p a -> q a -> r a -> s a) -> g p -> g q -> g r -> g s
 liftA3 f g h i = (\x-> Arrow (Arrow . f x)) <$> g <*> h <*> i
@@ -75,10 +75,10 @@ instance Monoid (g (f a)) => Monoid (Flip g a f) where
    Flip x `mappend` Flip y = Flip (x `mappend` y)
 
 instance Rank1.Functor g => Rank2.Functor (Flip g a) where
-   fmap f (Flip g) = Flip (Rank1.fmap f g)
+   f <$> Flip g = Flip (f Rank1.<$> g)
 
 instance Rank1.Applicative g => Rank2.Apply (Flip g a) where
-   Flip g `ap` Flip h = Flip (apply Rank1.<$> g Rank1.<*> h)
+   Flip g <*> Flip h = Flip (apply Rank1.<$> g Rank1.<*> h)
 
 instance Rank1.Applicative g => Rank2.Applicative (Flip g a) where
    pure f = Flip (Rank1.pure f)
@@ -90,16 +90,16 @@ instance Rank1.Traversable g => Rank2.Traversable (Flip g a) where
    traverse f (Flip g) = Flip Rank1.<$> Rank1.traverse f g
 
 instance Functor Empty where
-   fmap _ Empty = Empty
+   _ <$> Empty = Empty
 
 instance Functor (Singleton a) where
-   fmap f (Singleton a) = Singleton (f a)
+   f <$> Singleton a = Singleton (f a)
 
 instance Functor g => Functor (Identity g) where
-   fmap f (Identity g) = Identity (fmap f g)
+   f <$> Identity g = Identity (f <$> g)
 
 instance (Functor g, Functor h) => Functor (Product g h) where
-   fmap f (Pair g h) = Pair (fmap f g) (fmap f h)
+   f <$> Pair g h = Pair (f <$> g) (f <$> h)
 
 instance Foldable Empty where
    foldMap _ Empty = mempty
@@ -126,16 +126,16 @@ instance (Traversable g, Traversable h) => Traversable (Product g h) where
    traverse f (Pair g h) = Pair Rank1.<$> traverse f g Rank1.<*> traverse f h
 
 instance Apply Empty where
-   ap Empty Empty = Empty
+   Empty <*> Empty = Empty
 
 instance Apply (Singleton x) where
-   ap (Singleton f) (Singleton x) = Singleton (apply f x)
+   Singleton f <*> Singleton x = Singleton (apply f x)
 
 instance Apply g => Apply (Identity g) where
-   ap (Identity g) (Identity h) = Identity (ap g h)
+   Identity g <*> Identity h = Identity (g <*> h)
 
 instance (Apply g, Apply h) => Apply (Product g h) where
-   ap (Pair gf hf) (Pair g h) = Pair (ap gf g) (ap hf h)
+   Pair gf hf <*> Pair g h = Pair (gf <*> g) (hf <*> h)
 
 instance Applicative Empty where
    pure = const Empty

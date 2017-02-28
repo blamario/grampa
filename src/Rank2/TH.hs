@@ -66,10 +66,10 @@ reifyConstructors cls ty = do
    return (instanceType, cs)
 
 genFmap :: [Con] -> Q Dec
-genFmap cs = funD 'Rank2.fmap (map genFmapClause cs)
+genFmap cs = funD '(Rank2.<$>) (map genFmapClause cs)
 
 genAp :: [Con] -> Q Dec
-genAp cs = funD 'Rank2.ap (map genApClause cs)
+genAp cs = funD '(Rank2.<*>) (map genApClause cs)
 
 genPure :: [Con] -> Q Dec
 genPure cs = funD 'Rank2.pure (map genPureClause cs)

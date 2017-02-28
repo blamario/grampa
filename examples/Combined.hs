@@ -118,24 +118,24 @@ instance (Show (f Domain), Show (f String)) => Show (Expression f) where
                            (", lambdaGrammar=" ++ showsPrec prec (lambdaGrammar g) ("}" ++ rest))))))
 
 instance Rank2.Functor Expression where
-   fmap f g = g{expr= f (expr g),
-                term= f (term g),
-                primary= f (primary g),
-                arithmeticGrammar= Rank2.fmap f (arithmeticGrammar g),
-                booleanGrammar= Rank2.fmap f (booleanGrammar g),
-                comparisonGrammar= Rank2.fmap f (comparisonGrammar g),
-                conditionalGrammar= Rank2.fmap f (conditionalGrammar g),
-                lambdaGrammar= Rank2.fmap f (lambdaGrammar g)}
+   f <$> g = g{expr= f (expr g),
+               term= f (term g),
+               primary= f (primary g),
+               arithmeticGrammar= Rank2.fmap f (arithmeticGrammar g),
+               booleanGrammar= Rank2.fmap f (booleanGrammar g),
+               comparisonGrammar= Rank2.fmap f (comparisonGrammar g),
+               conditionalGrammar= Rank2.fmap f (conditionalGrammar g),
+               lambdaGrammar= Rank2.fmap f (lambdaGrammar g)}
 
 instance Rank2.Apply Expression where
-   ap a b = Expression{expr= expr a `Rank2.apply` expr b,
-                       term= term a `Rank2.apply` term b,
-                       primary= primary a `Rank2.apply` primary b,
-                       arithmeticGrammar= arithmeticGrammar a `Rank2.ap` arithmeticGrammar b,
-                       booleanGrammar= booleanGrammar a `Rank2.ap` booleanGrammar b,
-                       comparisonGrammar= comparisonGrammar a `Rank2.ap` comparisonGrammar b,
-                       conditionalGrammar= conditionalGrammar a `Rank2.ap` conditionalGrammar b,
-                       lambdaGrammar= lambdaGrammar a `Rank2.ap` lambdaGrammar b}
+   a <*> b = Expression{expr= expr a `Rank2.apply` expr b,
+                        term= term a `Rank2.apply` term b,
+                        primary= primary a `Rank2.apply` primary b,
+                        arithmeticGrammar= arithmeticGrammar a `Rank2.ap` arithmeticGrammar b,
+                        booleanGrammar= booleanGrammar a `Rank2.ap` booleanGrammar b,
+                        comparisonGrammar= comparisonGrammar a `Rank2.ap` comparisonGrammar b,
+                        conditionalGrammar= conditionalGrammar a `Rank2.ap` conditionalGrammar b,
+                        lambdaGrammar= lambdaGrammar a `Rank2.ap` lambdaGrammar b}
 
 instance Rank2.Applicative Expression where
    pure f = Expression{expr= f,

@@ -38,12 +38,12 @@ data Comparisons c e f =
    deriving (Show)
 
 instance Rank2.Functor (Comparisons c e) where
-   fmap f g = g{test= f (test g),
-                term= f (term g)}
+   f <$> g = g{test= f (test g),
+               term= f (term g)}
 
 instance Rank2.Apply (Comparisons c e) where
-   ap g h = Comparisons{test= test g `Rank2.apply` test h,
-                        term= term g `Rank2.apply` term h}
+   g <*> h = Comparisons{test= test g `Rank2.apply` test h,
+                         term= term g `Rank2.apply` term h}
 
 instance Rank2.Applicative (Comparisons c e) where
    pure f = Comparisons f f
