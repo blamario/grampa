@@ -17,14 +17,13 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Text.Grampa, Rank2, Rank2.TH
+  exposed-modules:     Text.Grampa
   other-modules:       Text.Grampa.Types
   default-language:    Haskell2010
   -- other-modules:
   ghc-options:         -Wall
   build-depends:       base >=4.7 && <5,
-                       template-haskell >= 2.11 && < 2.12,
-                       transformers >= 0.5 && < 0.6,
+                       rank2 < 1.0,
                        monoid-subclasses >=0.4 && <0.5,
                        parsers < 0.13
   -- hs-source-dirs:      
@@ -36,14 +35,14 @@ executable             arithmetic
   other-modules:       Arithmetic, Boolean, Combined, Comparisons, Conditionals, Lambda, Utilities
   default-language:    Haskell2010
   build-depends:       base >=4.7 && <5, containers >= 0.5.7.0 && < 0.6,
-                       grampa == 0.1
+                       rank2 < 1.0, grampa == 0.1
 
 test-suite           tests
   type:              exitcode-stdio-1.0
   hs-source-dirs:    test, examples
   x-uses-tf:         true
   build-depends:     base >=4.7 && < 5, monoid-subclasses < 0.5, parsers < 0.13,
-                     grampa == 0.1,
+                     rank2 < 1.0, grampa == 0.1,
                      QuickCheck >= 2 && < 3, checkers >= 0.4.6 && < 0.5, testing-feat < 0.5,
                      tasty >= 0.7, tasty-quickcheck >= 0.7
   main-is:           Test.hs
@@ -54,7 +53,7 @@ benchmark            benchmarks
   type:              exitcode-stdio-1.0
   hs-source-dirs:    test, examples
   ghc-options:       -O2 -Wall -rtsopts -main-is Benchmark.main
-  Build-Depends:     base >=4.7 && < 5, grampa == 0.1,
+  Build-Depends:     base >=4.7 && < 5, rank2 < 1.0, grampa == 0.1,
                      criterion >= 1.0, deepseq >= 1.1, containers >= 0.5.7.0 && < 0.6, text >= 1.1
   main-is:           Benchmark.hs
   other-modules:     Arithmetic
