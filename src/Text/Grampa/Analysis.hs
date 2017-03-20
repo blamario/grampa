@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables #-}
-module Text.Grampa.Analysis (Analysis(..), Grammar, direct,
+{-# OPTIONS -fno-full-laziness #-}
+module Text.Grampa.Analysis (Analysis(..), Grammar, direct, leftRecursive,
                              (<<|>), endOfInput, getInput, anyToken, token, satisfy, satisfyChar, string,
                              scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1, whiteSpace)
 where
@@ -9,7 +10,7 @@ import Control.Monad (Monad(..), MonadPlus(..))
 import Data.Monoid (Monoid(mappend, mempty), (<>))
 import Data.Monoid.Cancellative (LeftReductiveMonoid)
 import Data.Monoid.Null (MonoidNull(null))
-import Data.Monoid.Factorial (FactorialMonoid)
+import Data.Monoid.Factorial (FactorialMonoid(factors))
 import Data.Monoid.Textual (TextualMonoid)
 import qualified Data.Monoid.Textual as Textual
 import Data.String (fromString)
@@ -29,31 +30,44 @@ data Analysis g i a = Analysis{index               :: Maybe Int,
                                positiveDirect      :: Parser g i a,
                                recursive           :: Parser g i a,
                                leftRecursiveOn     :: [Int],
-                               maxCycleDepth       :: Int,
+                               hasCycle            :: Bool,
+                               leftDescendants     :: g (Const Bool),
                                nullable            :: Bool,
                                recursivelyNullable :: g (Analysis g i) -> Bool}
 
 direct :: Analysis g i a -> Parser g i a
 direct a = nullDirect a <|> positiveDirect a
 
+leftRecursive :: Bool -> Analysis g i a -> Analysis g i a
+leftRecursive z a = Analysis{index= Nothing,
+                             nullDirect= nullDirect a,
+                             positiveDirect= positiveDirect a,
+                             recursive= recursive a,
+                             hasCycle= False,
+                             leftDescendants= leftDescendants a,
+                             leftRecursiveOn= [],
+                             nullable= z,
+                             recursivelyNullable= const z}
+
 instance Show (Analysis g i a) where
    show a = "Analysis{index= " ++ show (index a)
             ++ ", leftRecursiveOn= " ++ show (leftRecursiveOn a)
-            ++ ", maxCycleDepth= " ++ show (maxCycleDepth a)
             ++ ", nullable= " ++ show (nullable a) ++ "}"
 
 instance Functor (Analysis g i) where
    fmap f a = a{nullDirect= f <$> nullDirect a,
                 positiveDirect= f <$> positiveDirect a,
-                recursive= f <$> recursive a}
+                recursive= f <$> recursive a,
+                nullable= nullable a}
 
 instance Applicative (Analysis g i) where
    pure x = Analysis{index= Nothing,
                      nullDirect= pure x,
                      positiveDirect= empty,
                      recursive= empty,
+                     hasCycle= False,
+                     leftDescendants= error "leftDescendants on pure",
                      leftRecursiveOn= [],
-                     maxCycleDepth= 0,
                      nullable= True,
                      recursivelyNullable= const True}
    a <*> b = Analysis{index= Nothing,
@@ -62,8 +76,9 @@ instance Applicative (Analysis g i) where
                                       <|> nullDirect a <*> positiveDirect b,
                       recursive= nullDirect a <*> recursive b
                                  <|> recursive a <*> (direct b <|> recursive b),
-                      leftRecursiveOn= leftRecursiveOn a <> if nullable a then leftRecursiveOn b else [],
-                      maxCycleDepth= error "undefined maxCycleDepth",
+                      hasCycle= hasCycle a || nullable a && hasCycle b,
+                      leftDescendants= error "leftDescendants on <*>",
+                      leftRecursiveOn= if nullable a then leftRecursiveOn a <> leftRecursiveOn b else leftRecursiveOn a,
                       nullable= nullable a && nullable b,
                       recursivelyNullable= \g-> recursivelyNullable a g && recursivelyNullable b g}
 
@@ -72,42 +87,48 @@ instance Alternative (Analysis g i) where
                     nullDirect= empty,
                     positiveDirect= empty,
                     recursive= empty,
+                    hasCycle= False,
+                    leftDescendants= error "leftDescendants on empty",
                     leftRecursiveOn= [],
-                    maxCycleDepth= 0,
                     nullable= False,
                     recursivelyNullable= const False}
    a <|> b = Analysis{index= Nothing,
                       nullDirect= nullDirect a <|> nullDirect b,
                       positiveDirect= positiveDirect a <|> positiveDirect b,
                       recursive= recursive a <|> recursive b,
+                      hasCycle= hasCycle a || hasCycle b,
+                      leftDescendants= error "leftDescendants on <|>",
                       leftRecursiveOn= leftRecursiveOn a <> leftRecursiveOn b,
-                      maxCycleDepth= error "undefined maxCycleDepth",
                       nullable= nullable a || nullable b,
                       recursivelyNullable= \g-> recursivelyNullable a g || recursivelyNullable b g}
    many a = Analysis{index= Nothing,
-                     nullDirect= many (direct a),
-                     positiveDirect= empty,
-                     recursive= many (recursive a),
+                     nullDirect= pure [] <|> nullDirect (some a),
+                     positiveDirect= positiveDirect (some a),
+                     recursive= recursive (some a),
+                     hasCycle= hasCycle a,
+                     leftDescendants= leftDescendants a,
                      leftRecursiveOn= leftRecursiveOn a,
-                     maxCycleDepth= maxCycleDepth a,
                      nullable= True,
                      recursivelyNullable= const True}
    some a = Analysis{index= Nothing,
-                     nullDirect= some (nullDirect a),
-                     positiveDirect= some (positiveDirect a),
-                     recursive= some (recursive a),
+                     nullDirect= (:[]) <$> nullDirect a,
+                     positiveDirect= (:) <$> positiveDirect a <*> many (direct a <|> recursive a),
+                     recursive= (:) <$> recursive a <*> many (direct a <|> recursive a),
+                     hasCycle= hasCycle a,
+                     leftDescendants= leftDescendants a,
                      leftRecursiveOn= leftRecursiveOn a,
-                     maxCycleDepth= maxCycleDepth a,
                      nullable= nullable a,
                      recursivelyNullable= recursivelyNullable a}
 
+infixl 3 <<|>
 (<<|>) :: Analysis g s r -> Analysis g s r -> Analysis g s r
 a <<|> b = Analysis{index= Nothing,
                     nullDirect= nullDirect a Parser.<<|> nullDirect b,
                     positiveDirect= positiveDirect a Parser.<<|> positiveDirect b,
                     recursive= recursive a Parser.<<|> recursive b,
+                    hasCycle= hasCycle a || hasCycle b,
+                    leftDescendants= error "leftDescendants on <<|>",
                     leftRecursiveOn= leftRecursiveOn a <> leftRecursiveOn b,
-                    maxCycleDepth= error "undefined maxCycleDepth",
                     nullable= nullable a || nullable b,
                     recursivelyNullable= \g-> recursivelyNullable a g || recursivelyNullable b g}
 
@@ -119,10 +140,12 @@ instance Monad (Analysis g i) where
                                          <|> (nullDirect a >>= positiveDirect . cont),
                          recursive= (nullDirect a >>= recursive . cont)
                                     <|> (recursive a >>= (\b-> direct b <|> recursive b) . cont),
+                         hasCycle= hasCycle a || nullable a,
+                         leftDescendants= error "leftDescendants on >>=",
                          leftRecursiveOn= leftRecursiveOn a,
-                         maxCycleDepth= error "undefined maxCycleDepth",
                          nullable= nullable a,
                          recursivelyNullable= \g-> recursivelyNullable a g}
+   (>>) = (*>)
 
 instance MonadPlus (Analysis g i) where
    mzero = empty
@@ -139,12 +162,28 @@ instance MonoidNull i => Parsing (Analysis g i) where
    a <?> msg = a{nullDirect= nullDirect a <?> msg,
                  positiveDirect= positiveDirect a <?> msg,
                  recursive= recursive a <?> msg}
+{-
+                                                {
+      leftRecursiveOn= trace ("leftRecursiveOn " <> msg) $ (\r-> trace ("leftRecursiveOn " <> msg <> " = " <> show r) r) $ leftRecursiveOn a,
+      nullable= trace ("nullable " <> msg) $ (\r-> trace ("nullable " <> msg <> " = " <> show r) r) $ nullable a,
+      recursivelyNullable= trace ("recursivelyNullable " <> msg) (\g-> trace ("recursivelyNullableG " <> msg) $ (\r-> trace ("recursivelyNullable " <> msg <> " = " <> show r) r) $ recursivelyNullable a g),
+      hasCycle= trace ("hasCycle " <> msg) (hasCycle a),
+      leftDescendants= error ("leftDescendants on " <> msg),
+      recursive= trace ("recursive " <> msg) (recursive a),
+      nullDirect= trace ("nullDirect " <> msg) (nullDirect a),
+      positiveDirect= trace ("positiveDirect " <> msg) (positiveDirect a)}
+-}
    notFollowedBy a = a{nullDirect= notFollowedBy (direct a),
                        positiveDirect= empty,
-                       recursive= notFollowedBy (recursive a)}
-   skipMany a = a{nullDirect= skipMany (nullDirect a),
-                  positiveDirect= skipMany (positiveDirect a),
-                  recursive= skipMany (recursive a)}
+                       recursive= empty} -- notFollowedBy (recursive a)}
+   skipMany a = a{positiveDirect= positiveDirect a *> skipMany (direct a <|> recursive a),
+                  nullDirect= pure () <|> () <$ nullDirect a,
+                  nullable= True,
+                  recursivelyNullable= const True,
+                  hasCycle= hasCycle a,
+                  leftDescendants= error "leftDescendants on skipMany",
+                  leftRecursiveOn= leftRecursiveOn a,
+                  recursive= recursive a *> skipMany (direct a <|> recursive a)}
    unexpected msg = primitive False empty (unexpected msg)
    eof = endOfInput
 
@@ -167,7 +206,7 @@ primitive z n p = Analysis{index= Nothing,
                            positiveDirect= p,
                            recursive= empty,
                            leftRecursiveOn= [],
-                           maxCycleDepth= 0,
+                           leftDescendants= error "leftDescendants on primitive",
                            nullable= z,
                            recursivelyNullable= const z}
 

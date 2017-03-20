@@ -11,16 +11,18 @@ module Text.Grampa (
    module Text.Parser.Combinators,
    module Text.Parser.LookAhead,
    (<<|>),
+   leftRecursive,
    -- * Parsing primitives
    endOfInput, getInput, anyToken, token, satisfy, satisfyChar, string,
    scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1, whiteSpace)
 where
 
 import Control.Applicative
+import Control.Arrow((&&&))
 import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
 
 import Data.Maybe (maybe)
-import Data.Monoid (All(..), (<>))
+import Data.Monoid (All(..), Any(..), (<>))
 import Data.IntMap (IntMap)
 import Data.IntSet (IntSet)
 
@@ -39,8 +41,8 @@ import Text.Parser.Combinators (Parsing((<?>), notFollowedBy, skipMany, skipSome
 import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 
 import qualified Rank2
-import Text.Grampa.Parser (Parser(applyParser), ParseResults, ResultList(NoParse))
-import Text.Grampa.Analysis (Analysis(..))
+import Text.Grampa.Parser (Parser(applyParser), ParseResults, ResultList(..))
+import Text.Grampa.Analysis (Analysis(..), leftRecursive)
 import qualified Text.Grampa.Parser as Parser
 import qualified Text.Grampa.Analysis as Analysis
 
@@ -54,6 +56,7 @@ type GrammarBuilder (g  :: (* -> *) -> *)
    = g (p g' s) -> g (p g' s)
 
 class MonoidParsing (m :: * -> * -> *) where
+   infixl 3 <<|>
    (<<|>) :: m s r -> m s r -> m s r
    endOfInput :: MonoidNull s => m s ()
    getInput :: Monoid s => m s s
@@ -104,7 +107,7 @@ instance MonoidParsing (Analysis g) where
    takeCharsWhile1 = Analysis.takeCharsWhile1
    whiteSpace = Analysis.whiteSpace
 
-parsePrefix :: (Rank2.Apply g, FactorialMonoid s) =>
+parsePrefix :: (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) =>
                g (Analysis g s) -> (forall f. g f -> f r) -> s -> ParseResults (r, s)
 parsePrefix g prod input = Parser.fromResultList input (prod $ snd $ head $ parseRecursive g input)
 
@@ -123,9 +126,10 @@ reparse _ [] = []
 reparse final parsed@((s, _):_) = (s, gd):parsed
    where gd = Rank2.fmap (`applyParser` parsed) final
 
-parseRecursive :: (Rank2.Apply g, FactorialMonoid s) => g (Analysis g s) -> s -> [(s, g (ResultList g s))]
+parseRecursive :: (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) => 
+                  g (Analysis g s) -> s -> [(s, g (ResultList g s))]
 parseRecursive analysis = parseSeparated
-                             (Rank2.fmap (Const . succ . maxCycleDepth) analysis)
+                             (Rank2.fmap (Const . leftDescendants) analysis)
                              (Rank2.fmap recursive analysis)
                              (Rank2.fmap Analysis.direct analysis)
 
@@ -135,13 +139,13 @@ parseNonRecursive g input = foldr parseTail [] (Factorial.tails input) where
     parsed = (s,d):parsedTail
     d      = Rank2.fmap (($ parsed) . applyParser) g
 
-parseSeparated :: (Rank2.Apply g, FactorialMonoid i) =>
-                  g (Const Int) -> g (Parser g i) -> g (Parser g i) -> i -> [(i, g (ResultList g i))]
-parseSeparated maxCycleDepths recursive direct input = foldr parseTail [] (Factorial.tails input) where
+parseSeparated :: (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) =>
+                  g (Const (g (Const Bool))) -> g (Parser g s) -> g (Parser g s) -> s -> [(s, g (ResultList g s))]
+parseSeparated dependencies recursive direct input = foldr parseTail [] (Factorial.tails input) where
    parseTail s parsedTail = parsed where
       parsed = (s,d'):parsedTail
       d      = Rank2.fmap (($ (s,d):parsedTail) . applyParser) direct
-      d'     = fixRecursive maxCycleDepths recursive s parsedTail d
+      d'     = fixRecursive dependencies recursive s parsedTail d
 
 -- | Produce a 'Grammar' from its recursive definition
 fixGrammar :: Rank2.Distributive g => (g (Parser g i) -> g (Parser g i)) -> g (Parser g i)
@@ -161,7 +165,7 @@ nullableRecursive a = a{nullable= True,
 
 fixGrammarAnalysis :: forall g i. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
                       (g (Analysis g i) -> g (Analysis g i)) -> g (Analysis g i)
-fixGrammarAnalysis gf = Rank2.fmap collapsed (cycled $ ordered $ gf $ 
+fixGrammarAnalysis gf = Rank2.fmap collapsed (cycled $ ordered $ fixNullable $ gf $
                                               Rank2.liftA2 setRecursive selfReferring selfAnalysis)
    where selfAnalysis = Rank2.distributeWith separated id
          setRecursive :: Parser g i a -> Analysis g i a -> Analysis g i a
@@ -178,24 +182,31 @@ fixGrammarAnalysis gf = Rank2.fmap collapsed (cycled $ ordered $ gf $
                           leftRecursiveOn= maybe [] (:[]) (index $ f orderedNullable)}
             where an = f orderedNullable
          collapsed a
-            | maxCycleDepth a == 0 = a{nullDirect= nullDirect a <|> recursive a,
-                                       recursive= empty}
-            | otherwise = a
+            | hasCycle a = a
+            | otherwise = a{nullDirect= nullDirect a <|> recursive a,
+                            recursive= empty}
          cycled :: g (Analysis g i) -> g (Analysis g i)
          cycled g = evalState (Rank2.traverse addDepth g) $
-                    IntMap.elems $ calcMaxCycleDepth $ IntMap.fromList $ zip [0..] $ Rank2.foldMap successorSet g
-         addDepth :: Analysis g i a -> State [Int] (Analysis g i a)
-         addDepth a = do {depth:rest <- get; put rest; return a{maxCycleDepth= depth}}
+                    IntMap.elems $ calcLeftSets $ IntMap.fromList $ zip [0..] $ Rank2.foldMap successorSet g
+         addDepth :: Analysis g i a -> State [(Bool, IntSet)] (Analysis g i a)
+         addDepth a = do (cyclic, descendants):rest <- get
+                         put rest
+                         return a{hasCycle= cyclic,
+                                  leftDescendants= setToBools descendants}
+         setToBools :: IntSet -> g (Const Bool)
+         setToBools = Rank2.traverse isElem orderedNullable
+         isElem :: Analysis g i a -> IntSet -> Const Bool a
+         isElem Analysis{index= Just i} s = Const (IntSet.member i s)
          successorSet :: Analysis g i a -> [IntSet]
          successorSet a = [IntSet.fromList $ leftRecursiveOn a]
 
 data AdvanceFront = AdvanceFront{visited       :: IntSet,
-                                 cycleDepth    :: Int,
-                                 frontDistance :: Int,
+                                 cyclic        :: Bool,
                                  front         :: IntSet}
+                  deriving Show
 
-calcMaxCycleDepth :: IntMap IntSet -> IntMap Int
-calcMaxCycleDepth successors = cycleDepth <$> expandPaths initialDepths
+calcLeftSets :: IntMap IntSet -> IntMap (Bool, IntSet)
+calcLeftSets successors = (cyclic &&& visited) <$> expandPaths initialDepths
    where expandPaths :: IntMap AdvanceFront -> IntMap AdvanceFront
          expandPaths paths
             | all (IntSet.null . front) paths' = paths'
@@ -204,17 +215,13 @@ calcMaxCycleDepth successors = cycleDepth <$> expandPaths initialDepths
                   expandReachables :: AdvanceFront -> AdvanceFront
                   expandReachables AdvanceFront{..} = 
                      AdvanceFront{visited= visited <> front,
-                                  cycleDepth= max cycleDepth $
-                                              if IntSet.null (IntSet.intersection front visited) then 0 
-                                              else frontDistance,
-                                  frontDistance= frontDistance + 1,
+                                  cyclic= cyclic || not (IntSet.null $ IntSet.intersection front visited),
                                   front= IntSet.foldr' advance mempty (IntSet.difference front visited)}
          advance :: Int -> IntSet -> IntSet
          advance node front = front <> successors IntMap.! node
          initialDepths = IntMap.mapWithKey setToFront successors
          setToFront root set = AdvanceFront{visited= IntSet.singleton root,
-                                            cycleDepth= 0,
-                                            frontDistance= 1,
+                                            cyclic= IntSet.member root set,
                                             front= set}
 
 selfNullable :: forall g i. Rank2.Distributive g => g (Analysis g i)
@@ -225,7 +232,7 @@ selfNullable = Rank2.distributeWith nonTerminal id
                                   positiveDirect = error "direct is still undefined",
                                   recursive= error "recursive is still undefined",
                                   leftRecursiveOn= error "leftRecursiveOn is still undefined",
-                                  maxCycleDepth= error "undefined maxCycleDepth",
+                                  leftDescendants= error "undefined leftDescendants",
                                   nullable= True,
                                   recursivelyNullable= nullable . f}
 
@@ -239,14 +246,24 @@ fixNullable g
 
 newtype CountedResult g i a = CountedResult (Int -> Maybe (ResultList g i a))
 
-fixRecursive :: forall g i. Rank2.Apply g =>
-                g (Const Int) -> g (Parser g i) -> i -> [(i, g (ResultList g i))] -> g (ResultList g i) -> g (ResultList g i)
-fixRecursive maxCycleDepths recursive s parsedTail initial =
-   (Rank2.liftA2 (dropCount . getConst) maxCycleDepths) <$>
-   foldr1 (countedChoice maxCycleDepths) $ 
-   Rank2.fmap addCount <$>
+fixRecursive :: forall g i. (Rank2.Apply g, Rank2.Foldable g) =>
+                g (Const (g (Const Bool))) -> g (Parser g i) -> i -> [(i, g (ResultList g i))] -> g (ResultList g i)
+             -> g (ResultList g i)
+fixRecursive dependencies recursive s parsedTail initial =
+   foldr1 (whileAnyContinues dependencies) $ 
    iterate (recurseOnce s parsedTail recursive) initial
 
+whileAnyContinues :: forall g i. (Rank2.Apply g, Rank2.Foldable g) => 
+                     g (Const (g (Const Bool))) -> g (ResultList g i) -> g (ResultList g i) -> g (ResultList g i)
+whileAnyContinues dependencies g1 g2 = Rank2.liftA3 choiceWhile dependencies g1 g2
+   where choiceWhile :: Const (g (Const Bool)) x -> ResultList g i x -> ResultList g i x -> ResultList g i x
+         combine :: Const Bool x -> ResultList g i x -> Const Bool x
+         choiceWhile (Const deps) r1 r2
+            | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps g1)) = r1 <> r2
+            | otherwise = r1
+         combine (Const False) _ = Const False
+         combine (Const True) (Parsed (_:_)) = Const True
+         combine (Const True) _ = Const False
 
 addCount :: ResultList g i a -> CountedResult g i a
 addCount r = CountedResult (const $ Just r)

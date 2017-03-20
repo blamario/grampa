@@ -2,7 +2,7 @@
              StandaloneDeriving, TemplateHaskell, UndecidableInstances #-}
 module Main where
 
-import Control.Applicative (Applicative, Alternative, pure, empty, optional, (<*>), (*>), (<|>))
+import Control.Applicative (Applicative, Alternative, pure, empty, many, optional, (<*>), (*>), (<|>))
 import Control.Monad (MonadPlus(mzero, mplus), guard, liftM, liftM2, void)
 import Data.Char (isSpace, isLetter)
 import Data.List (find, minimumBy, nub, sort)
@@ -29,7 +29,6 @@ import qualified Rank2.TH
 import Text.Grampa
 
 import qualified Test.Examples
-import Debug.Trace
 
 import Prelude hiding (null, takeWhile)
 
@@ -48,19 +47,21 @@ recursiveManyGrammar Recursive{..} = Recursive{
    next= string "]"}
 
 nameListGrammar = fixGrammarAnalysis nameListGrammarBuilder
-nameListGrammarBuilder Recursive{..} = Recursive{
+nameListGrammarBuilder g@Recursive{..} = Recursive{
    start= pure (const . unwords) <*> rec <*> (True <$ symbol "," <* symbol "..." <|> pure False) <|>
-          pure id <*> symbol "...",
-   rec= pure id <*> sepBy1 one (ignorable *> string "," <* whiteSpace),
+          pure id <*> symbol "..." <?> "start",
+   rec= pure id <*> (sepBy1 one (ignorable *> string "," <* whiteSpace <?> "comma") <?> "rec sepBy1") <?> "rec",
    one= do ignorable
            identifier <- ((:) <$> satisfyChar isLetter <*> (toString (const "") <$> takeCharsWhile isLetter))
            guard (identifier /= "reserved")
-           pure id <*> pure identifier,
-   next= string "--" *> (toString (const "") <$> takeCharsWhile (/= '\n') <* (void (char '\n') <|> endOfInput))}
+           pure id <*> pure identifier
+        <?> "one",
+   next= string "--" *> (toString (const "") <$> takeCharsWhile (/= '\n') <* (void (char '\n') <|> endOfInput)) <?> "next"
+   }
 
 symbol s = ignorable *> string s <* ignorable
-ignorable = whiteSpace *> (next nameListGrammar *> ignorable <<|> pure ())
--- ignorable = whiteSpace *> skipMany (next nameListGrammar *> whiteSpace)
+-- ignorable g = whiteSpace *> skipMany (next g *> whiteSpace <?> "ignorable1") <?> "ignorable"
+ignorable = whiteSpace *> (leftRecursive False (next nameListGrammar) *> ignorable <<|> pure ())
 
 main = defaultMain tests
 

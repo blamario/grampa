@@ -89,6 +89,7 @@ Parser p <<|> Parser q = Parser r
    where r rest = case (p rest, q rest)
                   of (r1@NoParse{}, r2@NoParse{}) -> r1 <> r2
                      (NoParse{}, r2) -> r2
+                     (Parsed [], r2) -> r2
                      (r1, _) -> r1
 
 instance Monad (Parser g i) where
@@ -162,7 +163,7 @@ endOfInput = Parser f
 -- | Always sucessful parser that returns the remaining input without consuming it.
 getInput :: Monoid s => Parser g s s
 getInput = Parser p
-   where p ((s, _):t) = Parsed [ResultInfo [last t] s]
+   where p rest@((s, _):_) = Parsed [ResultInfo [last rest] s]
          p [] = Parsed [ResultInfo [] mempty]
 
 -- | A parser accepting the longest sequence of input atoms that match the given predicate; an optimized version of
