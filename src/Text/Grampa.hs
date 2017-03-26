@@ -11,7 +11,7 @@ module Text.Grampa (
    module Text.Parser.Combinators,
    module Text.Parser.LookAhead,
    (<<|>),
-   leftRecursive,
+   leftRecursive, recursiveOn,
    -- * Parsing primitives
    endOfInput, getInput, anyToken, token, satisfy, satisfyChar, string,
    scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1, whiteSpace)
@@ -21,7 +21,7 @@ import Control.Applicative
 import Control.Arrow((&&&))
 import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
 
-import Data.Maybe (maybe)
+import Data.Maybe (fromMaybe, maybe)
 import Data.Monoid (All(..), Any(..), (<>))
 import Data.IntMap (IntMap)
 import Data.IntSet (IntSet)
@@ -163,6 +163,17 @@ nullableRecursive :: Analysis g i a -> Analysis g i a
 nullableRecursive a = a{nullable= True,
                         recursivelyNullable= const True}
 
+recursiveOn :: (Rank2.Applicative g, Rank2.Traversable g) =>
+               [g (Analysis g i) -> Analysis g i x] -> Analysis g i a -> Analysis g i a
+recursiveOn accessors a = a{leftRecursiveOn= accessorIndex <$> accessors}
+   where accessorIndex accessor =
+            fromMaybe (error "should been ordered") (index $ accessor $ ordered $ Rank2.pure empty)
+
+ordered :: Rank2.Traversable g => g (Analysis g i) -> g (Analysis g i)
+ordered g = evalState (Rank2.traverse f g) 0
+   where f :: Analysis g i a -> State Int (Analysis g i a)
+         f a = do {n <- get; put (n+1); return a{index= Just n}}
+
 fixGrammarAnalysis :: forall g i. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
                       (g (Analysis g i) -> g (Analysis g i)) -> g (Analysis g i)
 fixGrammarAnalysis gf = Rank2.fmap collapsed (cycled $ ordered $ fixNullable $ gf $
@@ -171,10 +182,6 @@ fixGrammarAnalysis gf = Rank2.fmap collapsed (cycled $ ordered $ fixNullable $ g
          setRecursive :: Parser g i a -> Analysis g i a -> Analysis g i a
          setRecursive p a = a{recursive= p}
          orderedNullable = ordered (fixNullable $ gf selfNullable)
-         ordered :: g (Analysis g i) -> g (Analysis g i)
-         ordered g = evalState (Rank2.traverse f g) 0
-            where f :: Analysis g i a -> State Int (Analysis g i a)
-                  f a = do {n <- get; put (n+1); return a{index= Just n}}
          separated :: (g (Analysis g i) -> Analysis g i a) -> Analysis g i a
          separated f = an{nullDirect = empty,
                           positiveDirect = empty,
