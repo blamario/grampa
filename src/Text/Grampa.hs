@@ -220,7 +220,7 @@ calcLeftSets successors = (cyclic &&& visited) <$> expandPaths initialDepths
          advance :: Int -> IntSet -> IntSet
          advance node front = front <> successors IntMap.! node
          initialDepths = IntMap.mapWithKey setToFront successors
-         setToFront root set = AdvanceFront{visited= IntSet.singleton root,
+         setToFront root set = AdvanceFront{visited= mempty,
                                             cyclic= IntSet.member root set,
                                             front= set}
 
