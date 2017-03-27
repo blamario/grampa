@@ -1,8 +1,6 @@
 {-# LANGUAGE FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables #-}
 {-# OPTIONS -fno-full-laziness #-}
-module Text.Grampa.Analysis (Analysis(..), Grammar, direct, leftRecursive,
-                             (<<|>), endOfInput, getInput, anyToken, token, satisfy, satisfyChar, string,
-                             scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1, whiteSpace)
+module Text.Grampa.Analysis (Analysis(..), Grammar, direct, leftRecursive)
 where
 
 import Control.Applicative
@@ -19,6 +17,7 @@ import qualified Text.Parser.Char
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 
+import Text.Grampa.Class (MonoidParsing(..))
 import Text.Grampa.Parser (Parser(..))
 import qualified Text.Grampa.Parser as Parser
 
@@ -120,18 +119,6 @@ instance Alternative (Analysis g i) where
                      nullable= nullable a,
                      recursivelyNullable= recursivelyNullable a}
 
-infixl 3 <<|>
-(<<|>) :: Analysis g s r -> Analysis g s r -> Analysis g s r
-a <<|> b = Analysis{index= Nothing,
-                    nullDirect= nullDirect a Parser.<<|> nullDirect b,
-                    positiveDirect= positiveDirect a Parser.<<|> positiveDirect b,
-                    recursive= recursive a Parser.<<|> recursive b,
-                    hasCycle= hasCycle a || hasCycle b,
-                    leftDescendants= error "leftDescendants on <<|>",
-                    leftRecursiveOn= leftRecursiveOn a <> leftRecursiveOn b,
-                    nullable= nullable a || nullable b,
-                    recursivelyNullable= \g-> recursivelyNullable a g || recursivelyNullable b g}
-
 instance Monad (Analysis g i) where
    return = pure
    a >>= cont = Analysis{index= Nothing,
@@ -154,6 +141,33 @@ instance MonadPlus (Analysis g i) where
 instance Monoid x => Monoid (Analysis g i x) where
    mempty = pure mempty
    mappend = liftA2 mappend
+
+instance MonoidParsing (Analysis g) where
+   a <<|> b = Analysis{index= Nothing,
+                       nullDirect= nullDirect a <<|> nullDirect b,
+                       positiveDirect= positiveDirect a <<|> positiveDirect b,
+                       recursive= recursive a <<|> recursive b,
+                       hasCycle= hasCycle a || hasCycle b,
+                       leftDescendants= error "leftDescendants on <<|>",
+                       leftRecursiveOn= leftRecursiveOn a <> leftRecursiveOn b,
+                       nullable= nullable a || nullable b,
+                       recursivelyNullable= \g-> recursivelyNullable a g || recursivelyNullable b g}
+   endOfInput = primitive True endOfInput empty
+   getInput = primitive True getInput empty
+   anyToken = primitive False empty anyToken
+   token x = primitive False empty (token x)
+   satisfy predicate = primitive False empty (satisfy predicate)
+   satisfyChar predicate = primitive False empty (satisfyChar predicate)
+   scan s0 f = primitive True (scan s0 f) empty
+   scanChars s0 f = primitive True (scanChars s0 f) empty
+   string s
+      | null s = primitive True (string s) empty
+      | otherwise = primitive False empty (string s)
+   takeWhile predicate = primitive True (takeWhile predicate) empty
+   takeWhile1 predicate = primitive False empty (takeWhile1 predicate)
+   takeCharsWhile predicate = primitive True (takeCharsWhile predicate) empty
+   takeCharsWhile1 predicate = primitive False empty (takeCharsWhile1 predicate)
+   whiteSpace = primitive True whiteSpace empty
 
 instance MonoidNull i => Parsing (Analysis g i) where
    try a = a{nullDirect= try (nullDirect a),
@@ -209,47 +223,3 @@ primitive z n p = Analysis{index= Nothing,
                            leftDescendants= error "leftDescendants on primitive",
                            nullable= z,
                            recursivelyNullable= const z}
-
-whiteSpace :: forall g s. TextualMonoid s => Analysis g s ()
-whiteSpace = primitive True Parser.whiteSpace empty
-
-endOfInput :: MonoidNull s => Analysis g s ()
-endOfInput = primitive True Parser.endOfInput empty
-
-getInput :: Monoid s => Analysis g s s
-getInput = primitive True Parser.getInput empty
-
-takeWhile :: FactorialMonoid s => (s -> Bool) -> Analysis g s s
-takeWhile predicate = primitive True (Parser.takeWhile predicate) empty
-
-takeWhile1 :: FactorialMonoid s => (s -> Bool) -> Analysis g s s
-takeWhile1 predicate = primitive False empty (Parser.takeWhile1 predicate)
-
-takeCharsWhile :: TextualMonoid s => (Char -> Bool) -> Analysis g s s
-takeCharsWhile predicate = primitive True (Parser.takeCharsWhile predicate) empty
-
-takeCharsWhile1 :: TextualMonoid s => (Char -> Bool) -> Analysis g s s
-takeCharsWhile1 predicate = primitive False empty (Parser.takeCharsWhile1 predicate)
-
-scan :: FactorialMonoid t => s -> (s -> t -> Maybe s) -> Analysis g t t
-scan s0 f = primitive True (Parser.scan s0 f) empty
-
-scanChars :: TextualMonoid t => s -> (s -> Char -> Maybe s) -> Analysis g t t
-scanChars s0 f = primitive True (Parser.scanChars s0 f) empty
-
-anyToken :: FactorialMonoid s => Analysis g s s
-anyToken = primitive False empty Parser.anyToken
-
-token :: (Eq s, FactorialMonoid s) => s -> Analysis g s s
-token x = primitive False empty (Parser.token x)
-
-satisfy :: FactorialMonoid s => (s -> Bool) -> Analysis g s s
-satisfy predicate = primitive False empty (Parser.satisfy predicate)
-
-satisfyChar :: TextualMonoid s => (Char -> Bool) -> Analysis g s Char
-satisfyChar predicate = primitive False empty (Parser.satisfyChar predicate)
-
-string :: (Show s, LeftReductiveMonoid s, FactorialMonoid s) => s -> Analysis g s s
-string s
-   | null s = primitive True (Parser.string s) empty
-   | otherwise = primitive False empty (Parser.string s)

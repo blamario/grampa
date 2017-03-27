@@ -18,7 +18,7 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Text.Grampa, Rank2, Rank2.TH
-  other-modules:       Text.Grampa.Analysis, Text.Grampa.Parser
+  other-modules:       Text.Grampa.Class, Text.Grampa.Analysis, Text.Grampa.Parser
   default-language:    Haskell2010
   -- other-modules:
   ghc-options:         -Wall

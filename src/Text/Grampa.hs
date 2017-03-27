@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, KindSignatures, RankNTypes, RecordWildCards, ScopedTypeVariables #-}
 module Text.Grampa (
    -- * Classes
-   MonoidNull, FactorialMonoid, LeftReductiveMonoid, TextualMonoid, MonoidParsing,
+   MonoidNull, FactorialMonoid, LeftReductiveMonoid, TextualMonoid, MonoidParsing(..),
    -- * Types
    Grammar, GrammarBuilder, Analysis, Parser, ParseResults,
    -- * Grammar and parser manipulation
@@ -41,6 +41,7 @@ import Text.Parser.Combinators (Parsing((<?>), notFollowedBy, skipMany, skipSome
 import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 
 import qualified Rank2
+import Text.Grampa.Class (MonoidParsing(..))
 import Text.Grampa.Parser (Parser(applyParser), ParseResults, ResultList(..))
 import Text.Grampa.Analysis (Analysis(..), leftRecursive)
 import qualified Text.Grampa.Parser as Parser
@@ -54,58 +55,6 @@ type GrammarBuilder (g  :: (* -> *) -> *)
                     (p  :: ((* -> *) -> *) -> * -> * -> *)
                     (s  :: *)
    = g (p g' s) -> g (p g' s)
-
-class MonoidParsing (m :: * -> * -> *) where
-   infixl 3 <<|>
-   (<<|>) :: m s r -> m s r -> m s r
-   endOfInput :: MonoidNull s => m s ()
-   getInput :: Monoid s => m s s
-   anyToken :: FactorialMonoid s => m s s
-   token :: (Eq s, FactorialMonoid s) => s -> m s s
-   satisfy :: FactorialMonoid s => (s -> Bool) -> m s s
-   satisfyChar :: TextualMonoid s => (Char -> Bool) -> m s Char
-   scan :: FactorialMonoid t => s -> (s -> t -> Maybe s) -> m t t
-   scanChars :: TextualMonoid t => s -> (s -> Char -> Maybe s) -> m t t
-   string :: (FactorialMonoid s, LeftReductiveMonoid s, Show s) => s -> m s s
-   takeWhile :: FactorialMonoid s => (s -> Bool) -> m s s
-   takeWhile1 :: FactorialMonoid s => (s -> Bool) -> m s s
-   takeCharsWhile :: TextualMonoid s => (Char -> Bool) -> m s s
-   takeCharsWhile1 :: TextualMonoid s => (Char -> Bool) -> m s s
-   whiteSpace :: TextualMonoid s => m s ()
-
-instance MonoidParsing (Parser g) where
-   (<<|>) = (Parser.<<|>)
-   endOfInput = Parser.endOfInput
-   getInput = Parser.getInput
-   anyToken = Parser.anyToken
-   token = Parser.token
-   satisfy = Parser.satisfy
-   satisfyChar = Parser.satisfyChar
-   scan = Parser.scan
-   scanChars = Parser.scanChars
-   string = Parser.string
-   takeWhile = Parser.takeWhile
-   takeWhile1 = Parser.takeWhile1
-   takeCharsWhile = Parser.takeCharsWhile
-   takeCharsWhile1 = Parser.takeCharsWhile1
-   whiteSpace = Parser.whiteSpace
-
-instance MonoidParsing (Analysis g) where
-   (<<|>) = (Analysis.<<|>)
-   endOfInput = Analysis.endOfInput
-   getInput = Analysis.getInput
-   anyToken = Analysis.anyToken
-   token = Analysis.token
-   satisfy = Analysis.satisfy
-   satisfyChar = Analysis.satisfyChar
-   scan = Analysis.scan
-   scanChars = Analysis.scanChars
-   string = Analysis.string
-   takeWhile = Analysis.takeWhile
-   takeWhile1 = Analysis.takeWhile1
-   takeCharsWhile = Analysis.takeCharsWhile
-   takeCharsWhile1 = Analysis.takeCharsWhile1
-   whiteSpace = Analysis.whiteSpace
 
 parsePrefix :: (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) =>
                g (Analysis g s) -> (forall f. g f -> f r) -> s -> ParseResults (r, s)

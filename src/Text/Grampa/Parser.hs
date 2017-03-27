@@ -1,8 +1,6 @@
 {-# LANGUAGE FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables #-}
 module Text.Grampa.Parser (FailureInfo(..), ResultInfo(..), ResultList(..),
-                           Grammar, Parser(..), ParseResults, fromResultList,
-                           (<<|>), endOfInput, getInput, anyToken, token, satisfy, satisfyChar, string,
-                           scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1, whiteSpace)
+                           Grammar, Parser(..), ParseResults, fromResultList)
 where
 
 import Control.Applicative
@@ -23,6 +21,8 @@ import qualified Text.Parser.Char
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing(someSpace))
+
+import Text.Grampa.Class (MonoidParsing(..))
 
 import Prelude hiding (iterate, length, null, span, takeWhile)
 
@@ -83,15 +83,6 @@ instance Alternative (Parser g i) where
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
 
-infixl 3 <<|>
-(<<|>) :: Parser g s r -> Parser g s r -> Parser g s r
-Parser p <<|> Parser q = Parser r
-   where r rest = case (p rest, q rest)
-                  of (r1@NoParse{}, r2@NoParse{}) -> r1 <> r2
-                     (NoParse{}, r2) -> r2
-                     (Parsed [], r2) -> r2
-                     (r1, _) -> r1
-
 instance Monad (Parser g i) where
    return = pure
    Parser p >>= f = Parser q where
@@ -107,6 +98,71 @@ instance MonadPlus (Parser g s) where
 instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
+
+instance MonoidParsing (Parser g) where
+   Parser p <<|> Parser q = Parser r
+      where r rest = case (p rest, q rest)
+                     of (r1@NoParse{}, r2@NoParse{}) -> r1 <> r2
+                        (NoParse{}, r2) -> r2
+                        (Parsed [], r2) -> r2
+                        (r1, _) -> r1
+   endOfInput = Parser f
+      where f input@((s, _):t)
+               | null s = Parsed [ResultInfo input ()]
+               | otherwise = NoParse (FailureInfo 1 (genericLength t) ["endOfInput"])
+            f [] = Parsed [ResultInfo [] ()]
+   getInput = Parser p
+      where p rest@((s, _):_) = Parsed [ResultInfo [last rest] s]
+            p [] = Parsed [ResultInfo [] mempty]
+   anyToken = Parser p
+      where p rest@((s, _):t) = case splitPrimePrefix s
+                                of Just (first, _) -> Parsed [ResultInfo t first]
+                                   _ -> NoParse (FailureInfo 1 (genericLength rest) ["anyToken"])
+            p [] = NoParse (FailureInfo 1 0 ["anyToken"])
+   satisfy predicate = Parser p
+      where p rest@((s, _):t) =
+               case splitPrimePrefix s
+               of Just (first, _) | predicate first -> Parsed [ResultInfo t first]
+                  _ -> NoParse (FailureInfo 1 (genericLength rest) ["satisfy"])
+            p [] = NoParse (FailureInfo 1 0 ["satisfy"])
+   satisfyChar predicate = Parser p
+      where p rest@((s, _):t) =
+               case Textual.splitCharacterPrefix s
+               of Just (first, _) | predicate first -> Parsed [ResultInfo t first]
+                  _ -> NoParse (FailureInfo 1 (genericLength rest) ["satisfy"])
+            p [] = NoParse (FailureInfo 1 0 ["satisfyChar"])
+   scan s0 f = Parser (p s0)
+      where p s ((i, _):t) = Parsed [ResultInfo (drop (length prefix - 1) t) prefix]
+               where (prefix, _, _) = Factorial.spanMaybe' s f i
+            p _ [] = Parsed [ResultInfo [] mempty]
+   scanChars s0 f = Parser (p s0)
+      where p s ((i, _):t) = Parsed [ResultInfo (drop (length prefix - 1) t) prefix]
+               where (prefix, _, _) = Textual.spanMaybe_' s f i
+            p _ [] = Parsed [ResultInfo [] mempty]
+   takeWhile predicate = Parser p
+      where p rest@((s, _) : _)
+               | x <- Factorial.takeWhile predicate s = Parsed [ResultInfo (Factorial.drop (Factorial.length x) rest) x]
+            p [] = Parsed [ResultInfo [] mempty]
+   takeWhile1 predicate = Parser p
+      where p rest@((s, _) : _)
+               | x <- Factorial.takeWhile predicate s, not (null x) =
+                    Parsed [ResultInfo (Factorial.drop (Factorial.length x) rest) x]
+            p rest = NoParse (FailureInfo 1 (genericLength rest) ["takeWhile1"])
+   takeCharsWhile predicate = Parser p
+      where p rest@((s, _) : _)
+               | x <- Textual.takeWhile_ False predicate s =
+                    Parsed [ResultInfo (Factorial.drop (Factorial.length x) rest) x]
+            p [] = Parsed [ResultInfo [] mempty]
+   takeCharsWhile1 predicate = Parser p
+      where p rest@((s, _) : _)
+               | x <- Textual.takeWhile_ False predicate s, not (null x) =
+                    Parsed [ResultInfo (Factorial.drop (Factorial.length x) rest) x]
+            p rest = NoParse (FailureInfo 1 (genericLength rest) ["takeCharsWhile1"])
+   string s = Parser p where
+      p rest@((s', _) : _)
+         | s `isPrefixOf` s' = Parsed [ResultInfo (Factorial.drop (Factorial.length s) rest) s]
+      p rest = NoParse (FailureInfo 1 (genericLength rest) ["string " ++ show s])
+   whiteSpace = () <$ takeCharsWhile isSpace
 
 instance MonoidNull s => Parsing (Parser g s) where
    try (Parser p) = Parser (weakenResults . p)
@@ -147,128 +203,3 @@ fromResultList s (NoParse (FailureInfo _ pos msgs)) = Left (length s - fromInteg
 fromResultList _ (Parsed rl) = Right (f <$> rl)
    where f (ResultInfo ((s, _):_) r) = (r, s)
          f (ResultInfo [] r) = (r, mempty)
-
--- | Consume all whitespace characters.
-whiteSpace :: forall g s. TextualMonoid s => Parser g s ()
-whiteSpace = () <$ takeCharsWhile isSpace
-
--- | A parser that fails on any input and succeeds at its end.
-endOfInput :: (MonoidNull s) => Parser g s ()
-endOfInput = Parser f
-   where f input@((s, _):t)
-            | null s = Parsed [ResultInfo input ()]
-            | otherwise = NoParse (FailureInfo 1 (genericLength t) ["endOfInput"])
-         f [] = Parsed [ResultInfo [] ()]
-
--- | Always sucessful parser that returns the remaining input without consuming it.
-getInput :: Monoid s => Parser g s s
-getInput = Parser p
-   where p rest@((s, _):_) = Parsed [ResultInfo [last rest] s]
-         p [] = Parsed [ResultInfo [] mempty]
-
--- | A parser accepting the longest sequence of input atoms that match the given predicate; an optimized version of
--- 'concatMany . satisfy'.
---
--- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers loop
--- until a failure occurs.  Careless use will thus result in an infinite loop.
-takeWhile :: (FactorialMonoid s) => (s -> Bool) -> Parser g s s
-takeWhile predicate = Parser p
-   where p rest@((s, _) : _)
-            | x <- Factorial.takeWhile predicate s = Parsed [ResultInfo (Factorial.drop (Factorial.length x) rest) x]
-         p [] = Parsed [ResultInfo [] mempty]
-
--- | A parser accepting the longest non-empty sequence of input atoms that match the given predicate; an optimized
--- version of 'concatSome . satisfy'.
-takeWhile1 :: (FactorialMonoid s) => (s -> Bool) -> Parser g s s
-takeWhile1 predicate = Parser p
-   where p rest@((s, _) : _)
-            | x <- Factorial.takeWhile predicate s, not (null x) =
-                 Parsed [ResultInfo (Factorial.drop (Factorial.length x) rest) x]
-         p rest = NoParse (FailureInfo 1 (genericLength rest) ["takeWhile1"])
-
--- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
--- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
---
--- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers loop
--- until a failure occurs.  Careless use will thus result in an infinite loop.
-takeCharsWhile :: (TextualMonoid s) => (Char -> Bool) -> Parser g s s
-takeCharsWhile predicate = Parser p
-   where p rest@((s, _) : _)
-            | x <- Textual.takeWhile_ False predicate s =
-                 Parsed [ResultInfo (Factorial.drop (Factorial.length x) rest) x]
-         p [] = Parsed [ResultInfo [] mempty]
-
--- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
--- match the given predicate; an optimized version of 'concatMany . satisfyChar'.
-takeCharsWhile1 :: (TextualMonoid s) => (Char -> Bool) -> Parser g s s
-takeCharsWhile1 predicate = Parser p
-   where p rest@((s, _) : _)
-            | x <- Textual.takeWhile_ False predicate s, not (null x) =
-                 Parsed [ResultInfo (Factorial.drop (Factorial.length x) rest) x]
-         p rest = NoParse (FailureInfo 1 (genericLength rest) ["takeCharsWhile1"])
-
--- | A stateful scanner.  The predicate consumes and transforms a state argument, and each transformed state is passed
--- to successive invocations of the predicate on each token of the input until one returns 'Nothing' or the input ends.
---
--- This parser does not fail.  It will return an empty string if the predicate returns 'Nothing' on the first prime
--- input factor.
---
--- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers loop
--- until a failure occurs.  Careless use will thus result in an infinite loop.
-scan :: (FactorialMonoid t) => s -> (s -> t -> Maybe s) -> Parser g t t
-scan s0 f = Parser (p s0)
-   where p s ((i, _):t) = Parsed [ResultInfo (drop (length prefix - 1) t) prefix]
-            where (prefix, _, _) = Factorial.spanMaybe' s f i
-         p _ [] = Parsed [ResultInfo [] mempty]
-
--- | A stateful scanner.  The predicate consumes and transforms a
--- state argument, and each transformed state is passed to successive invocations of the predicate on each token of the
--- input until one returns 'Nothing' or the input ends.
---
--- This parser does not fail.  It will return an empty string if the predicate returns 'Nothing' on the first character.
---
--- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers loop
--- until a failure occurs.  Careless use will thus result in an infinite loop.
-scanChars :: (TextualMonoid t) => s -> (s -> Char -> Maybe s) -> Parser g t t
-scanChars s0 f = Parser (p s0)
-   where p s ((i, _):t) = Parsed [ResultInfo (drop (length prefix - 1) t) prefix]
-            where (prefix, _, _) = Textual.spanMaybe_' s f i
-         p _ [] = Parsed [ResultInfo [] mempty]
-
--- | A parser that accepts any single input atom.
-anyToken :: (FactorialMonoid s) => Parser g s s
-anyToken = Parser p
-   where p rest@((s, _):t) = case splitPrimePrefix s
-                             of Just (first, _) -> Parsed [ResultInfo t first]
-                                _ -> NoParse (FailureInfo 1 (genericLength rest) ["anyToken"])
-         p [] = NoParse (FailureInfo 1 0 ["anyToken"])
-
--- | A parser that accepts a specific input atom.
-token :: (Eq s, FactorialMonoid s) => s -> Parser g s s
-token x = satisfy (== x)
-
--- | A parser that accepts an input atom only if it satisfies the given predicate.
-satisfy :: (FactorialMonoid s) => (s -> Bool) -> Parser g s s
-satisfy predicate = Parser p
-   where p rest@((s, _):t) =
-            case splitPrimePrefix s
-            of Just (first, _) | predicate first -> Parsed [ResultInfo t first]
-               _ -> NoParse (FailureInfo 1 (genericLength rest) ["satisfy"])
-         p [] = NoParse (FailureInfo 1 0 ["satisfy"])
-
--- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the given
--- predicate.
-satisfyChar :: (TextualMonoid s) => (Char -> Bool) -> Parser g s Char
-satisfyChar predicate = Parser p
-   where p rest@((s, _):t) =
-            case Textual.splitCharacterPrefix s
-            of Just (first, _) | predicate first -> Parsed [ResultInfo t first]
-               _ -> NoParse (FailureInfo 1 (genericLength rest) ["satisfy"])
-         p [] = NoParse (FailureInfo 1 0 ["satisfyChar"])
-
--- | A parser that consumes and returns the given prefix of the input.
-string :: (Show s, LeftReductiveMonoid s, FactorialMonoid s) => s -> Parser g s s
-string s = Parser p where
-   p rest@((s', _) : _)
-      | s `isPrefixOf` s' = Parsed [ResultInfo (Factorial.drop (Factorial.length s) rest) s]
-   p rest = NoParse (FailureInfo 1 (genericLength rest) ["string " ++ show s])
