@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables #-}
 module Text.Grampa.Parser (FailureInfo(..), ResultInfo(..), ResultList(..),
-                           Grammar, Parser(..), ParseResults, fromResultList)
+                           Grammar, Parser(..), ParseResults, fromResultList, nt)
 where
 
 import Control.Applicative
@@ -163,6 +163,8 @@ instance MonoidParsing (Parser g) where
          | s `isPrefixOf` s' = Parsed [ResultInfo (Factorial.drop (Factorial.length s) rest) s]
       p rest = NoParse (FailureInfo 1 (genericLength rest) ["string " ++ show s])
    whiteSpace = () <$ takeCharsWhile isSpace
+   concatMany p = go
+      where go = mempty <|> (<>) <$> p <*> go
 
 instance MonoidNull s => Parsing (Parser g s) where
    try (Parser p) = Parser (weakenResults . p)
@@ -197,6 +199,11 @@ instance (Show s, TextualMonoid s) => Text.Parser.Char.CharParsing (Parser g s) 
 
 instance (Show s, TextualMonoid s) => TokenParsing (Parser g s) where
    someSpace = () <$ takeCharsWhile1 isSpace
+
+nt :: (g (ResultList g i) -> ResultList g i a) -> Parser g i a
+nt f = Parser p where
+   p ((_, d) : _) = f d
+   p _ = NoParse (FailureInfo 1 0 ["NonTerminal at endOfInput"])
 
 fromResultList :: FactorialMonoid s => s -> ResultList g s r -> ParseResults (r, s)
 fromResultList s (NoParse (FailureInfo _ pos msgs)) = Left (length s - fromIntegral pos, nub msgs)

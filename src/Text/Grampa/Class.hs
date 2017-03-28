@@ -1,6 +1,6 @@
 module Text.Grampa.Class (MonoidParsing(..)) where
 
-import Control.Applicative (Alternative)
+import Control.Applicative (Alternative(many))
 import Data.Char (isSpace)
 import Data.Monoid (Monoid)
 import Data.Monoid.Cancellative (LeftReductiveMonoid)
@@ -61,5 +61,7 @@ class MonoidParsing m where
    takeCharsWhile1 :: TextualMonoid s => (Char -> Bool) -> m s s
    -- | Consume all whitespace characters.
    whiteSpace :: TextualMonoid s => m s ()
+   -- | Zero or more argument occurrences like 'many', with concatenated monoidal results.
+   concatMany :: Monoid a => m s a -> m s a
 
    token x = satisfy (== x)

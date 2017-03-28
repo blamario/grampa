@@ -168,6 +168,11 @@ instance MonoidParsing (Analysis g) where
    takeCharsWhile predicate = primitive True (takeCharsWhile predicate) empty
    takeCharsWhile1 predicate = primitive False empty (takeCharsWhile1 predicate)
    whiteSpace = primitive True whiteSpace empty
+   concatMany a = go{leftRecursiveOn= leftRecursiveOn a,
+                     nullable= True,
+                     recursivelyNullable= const True,
+                     hasCycle= hasCycle a}
+      where go = mempty <|> (<>) <$> a <*> go
 
 instance MonoidNull i => Parsing (Analysis g i) where
    try a = a{nullDirect= try (nullDirect a),
