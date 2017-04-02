@@ -29,12 +29,12 @@ recursiveManyGrammar Recursive{..} = Recursive{
    next= string "END"}
 
 parse :: String -> [Int]
-parse s = case parseAll (fixGrammarAnalysis $ arithmetic empty) Arithmetic.expr s
+parse s = case parseAll (fixGrammarAST $ arithmetic empty) Arithmetic.expr s
           of Right [r] -> [r]
              r -> error ("Unexpected " <> show r)
 
 parseBoolean :: String -> [Bool]
-parseBoolean s = case parseAll (fixGrammarAnalysis boolean) (Boolean.expr . Rank2.snd) s
+parseBoolean s = case parseAll (fixGrammarAST boolean) (Boolean.expr . Rank2.snd) s
                  of Right [r] -> [r]
                     r -> error ("Unexpected " <> show r)
 

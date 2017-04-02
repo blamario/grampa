@@ -3,9 +3,10 @@ module Text.Grampa (
    -- * Classes
    MonoidNull, FactorialMonoid, LeftReductiveMonoid, TextualMonoid, MonoidParsing(..),
    -- * Types
-   Grammar, GrammarBuilder, Analysis, Parser, ParseResults,
+   Grammar, GrammarBuilder, Analysis, AST, Parser, ParseResults,
    -- * Grammar and parser manipulation
    fixGrammar, fixGrammarAnalysis, parsePrefix, parseAll, simpleParse, nullableRecursive,
+   fixGrammarAST, AST(NonTerminal),
    -- * Parser combinators
    module Text.Parser.Char,
    module Text.Parser.Combinators,
@@ -44,8 +45,10 @@ import qualified Rank2
 import Text.Grampa.Class (MonoidParsing(..))
 import Text.Grampa.Parser (Parser(applyParser), ParseResults, ResultList(..))
 import Text.Grampa.Analysis (Analysis(..), leftRecursive)
+import Text.Grampa.AST (AST, fixGrammarAST)
 import qualified Text.Grampa.Parser as Parser
 import qualified Text.Grampa.Analysis as Analysis
+import qualified Text.Grampa.AST as AST
 
 import Prelude hiding (takeWhile)
 
@@ -56,12 +59,12 @@ type GrammarBuilder (g  :: (* -> *) -> *)
                     (s  :: *)
    = g (p g' s) -> g (p g' s)
 
-parsePrefix :: (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) =>
-               g (Analysis g s) -> (forall f. g f -> f r) -> s -> ParseResults (r, s)
+parsePrefix :: (Rank2.Apply g, Rank2.Traversable g, FactorialMonoid s) =>
+               g (AST g s) -> (forall f. g f -> f r) -> s -> ParseResults (r, s)
 parsePrefix g prod input = Parser.fromResultList input (prod $ snd $ head $ parseRecursive g input)
 
 parseAll :: (FactorialMonoid s, Rank2.Traversable g, Rank2.Distributive g, Rank2.Apply g) =>
-            g (Analysis g s) -> (forall f. g f -> f r) -> s -> ParseResults r
+            g (AST g s) -> (forall f. g f -> f r) -> s -> ParseResults r
 parseAll g prod input = (fst <$>) <$>
                         Parser.fromResultList input (prod $ snd $ head $ reparse close $ parseRecursive g input)
    where close = Rank2.fmap (<* endOfInput) selfReferring
@@ -75,12 +78,23 @@ reparse _ [] = []
 reparse final parsed@((s, _):_) = (s, gd):parsed
    where gd = Rank2.fmap (`applyParser` parsed) final
 
-parseRecursive :: (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) => 
-                  g (Analysis g s) -> s -> [(s, g (ResultList g s))]
-parseRecursive analysis = parseSeparated
-                             (Rank2.fmap (Const . leftDescendants) analysis)
-                             (Rank2.fmap recursive analysis)
-                             (Rank2.fmap Analysis.direct analysis)
+newtype Couple f a = Couple{unCouple :: (f a, f a)} deriving Show
+
+parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Traversable g, FactorialMonoid s) =>
+                  g (AST g s) -> s -> [(s, g (ResultList g s))]
+parseRecursive ast = parseSeparated descendants (Rank2.fmap AST.toParser recursive) (Rank2.fmap AST.toParser direct)
+   where directRecursive = Rank2.fmap (Couple . AST.splitDirect) ast
+         cyclicDescendants = AST.leftDescendants ast
+         cyclic = Rank2.fmap (mapConst fst) cyclicDescendants
+         descendants = Rank2.liftA3 cond cyclic (Rank2.fmap (mapConst snd) cyclicDescendants) noDescendants
+         direct = Rank2.liftA3 cond cyclic (Rank2.fmap (fst . unCouple) directRecursive) ast
+         recursive = Rank2.liftA3 cond cyclic (Rank2.fmap (snd . unCouple) directRecursive) emptyGrammar
+         emptyGrammar :: g (AST g s)
+         emptyGrammar = Rank2.fmap (const empty) ast
+         noDescendants = Rank2.fmap (const $ Const $ Rank2.fmap (const $ Const False) ast) ast
+         cond (Const False) _t f = f
+         cond (Const True) t _f = t
+         mapConst f (Const c) = Const (f c)
 
 parseNonRecursive :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> [(s, g (ResultList g s))]
 parseNonRecursive g input = foldr parseTail [] (Factorial.tails input) where
@@ -101,12 +115,7 @@ fixGrammar :: Rank2.Distributive g => (g (Parser g i) -> g (Parser g i)) -> g (P
 fixGrammar gf = gf selfReferring
 
 selfReferring :: Rank2.Distributive g => g (Parser g i)
-selfReferring = Rank2.distributeWith nt id
-
-nt :: (g (ResultList g i) -> ResultList g i a) -> Parser g i a
-nt f = Parser.Parser p where
-   p ((_, d) : _) = f d
-   p _ = NoParse (Parser.FailureInfo 1 0 ["NonTerminal at endOfInput"])
+selfReferring = Rank2.distributeWith Parser.nt id
 
 nullableRecursive :: Analysis g i a -> Analysis g i a
 nullableRecursive a = a{nullable= True,

@@ -14,7 +14,7 @@ class MonoidParsing m where
    -- | A parser that fails on any input and succeeds at its end.
    endOfInput :: MonoidNull s => m s ()
    -- | Always sucessful parser that returns the remaining input without consuming it.
-   getInput :: Monoid s => m s s
+   getInput :: MonoidNull s => m s s
 
    -- | A parser that accepts any single input atom.
    anyToken :: FactorialMonoid s => m s s

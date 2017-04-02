@@ -2,7 +2,7 @@
              StandaloneDeriving, TemplateHaskell, UndecidableInstances #-}
 module Main where
 
-import Control.Applicative (Applicative, Alternative, pure, empty, many, optional, (<*>), (*>), (<|>))
+import Control.Applicative (Applicative, Alternative, Const(..), pure, empty, many, optional, (<*>), (*>), (<|>))
 import Control.Monad (MonadPlus(mzero, mplus), guard, liftM, liftM2, void)
 import Data.Char (isSpace, isLetter)
 import Data.List (find, minimumBy, nub, sort)
@@ -46,11 +46,11 @@ recursiveManyGrammar Recursive{..} = Recursive{
    one = string "(" *> start <* string ")",
    next= string "]"}
 
-nameListGrammar = fixGrammarAnalysis nameListGrammarBuilder
+nameListGrammar = fixGrammarAST nameListGrammarBuilder
 nameListGrammarBuilder g@Recursive{..} = Recursive{
    start= pure (const . unwords) <*> rec <*> (True <$ symbol "," <* symbol "..." <|> pure False) <|>
           pure id <*> symbol "..." <?> "start",
-   rec= pure id <*> (sepBy1 one (ignorable *> string "," <* whiteSpace <?> "comma") <?> "rec sepBy1") <?> "rec",
+   rec= sepBy1 one (ignorable *> string "," <* whiteSpace <?> "comma") <?> "rec",
    one= do ignorable
            identifier <- ((:) <$> satisfyChar isLetter <*> (toString (const "") <$> takeCharsWhile isLetter))
            guard (identifier /= "reserved")
@@ -60,13 +60,14 @@ nameListGrammarBuilder g@Recursive{..} = Recursive{
    }
 
 symbol s = ignorable *> string s <* ignorable
--- ignorable g = whiteSpace *> skipMany (next g *> whiteSpace <?> "ignorable1") <?> "ignorable"
-ignorable = whiteSpace *> (leftRecursive False (next nameListGrammar) *> ignorable <<|> pure ())
+ignorable = whiteSpace *> skipMany (NonTerminal next *> whiteSpace <?> "ignorable1") <?> "ignorable"
+--ignorable = recursiveOn [next] $ whiteSpace *> skipMany (next nameListGrammar *> whiteSpace <?> "ignorable1") <?> "ignorable"
+--ignorable = whiteSpace *> (AST.NonTerminal next *> ignorable <<|> pure ())
 
 main = defaultMain tests
 
 tests = testGroup "Grampa" [
-           let g = fixGrammarAnalysis recursiveManyGrammar
+           let g = fixGrammarAST recursiveManyGrammar
            in testGroup "recursive"
               [testProperty "minimal" $ parseAll g start "()" == Right [""],
                testProperty "bracketed" $ parseAll g start "[()]" == Right [""],
