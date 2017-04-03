@@ -1,6 +1,6 @@
-{-# LANGUAGE FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables, TypeFamilies #-}
 module Text.Grampa.Parser (FailureInfo(..), ResultInfo(..), ResultList(..),
-                           Grammar, Parser(..), ParseResults, fromResultList, nt)
+                           Grammar, Parser(..), ParseResults, fromResultList)
 where
 
 import Control.Applicative
@@ -22,7 +22,7 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing(someSpace))
 
-import Text.Grampa.Class (MonoidParsing(..))
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..))
 
 import Prelude hiding (iterate, length, null, span, takeWhile)
 
@@ -98,6 +98,12 @@ instance MonadPlus (Parser g s) where
 instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
+
+instance GrammarParsing Parser where
+   type GrammarFunctor Parser = ResultList
+   nonTerminal f = Parser p where
+      p ((_, d) : _) = f d
+      p _ = NoParse (FailureInfo 1 0 ["NonTerminal at endOfInput"])
 
 instance MonoidParsing (Parser g) where
    Parser p <<|> Parser q = Parser r
@@ -199,11 +205,6 @@ instance (Show s, TextualMonoid s) => Text.Parser.Char.CharParsing (Parser g s) 
 
 instance (Show s, TextualMonoid s) => TokenParsing (Parser g s) where
    someSpace = () <$ takeCharsWhile1 isSpace
-
-nt :: (g (ResultList g i) -> ResultList g i a) -> Parser g i a
-nt f = Parser p where
-   p ((_, d) : _) = f d
-   p _ = NoParse (FailureInfo 1 0 ["NonTerminal at endOfInput"])
 
 fromResultList :: FactorialMonoid s => s -> ResultList g s r -> ParseResults (r, s)
 fromResultList s (NoParse (FailureInfo _ pos msgs)) = Left (length s - fromIntegral pos, nub msgs)

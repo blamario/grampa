@@ -1,6 +1,7 @@
-{-# LANGUAGE FlexibleContexts, GADTs, InstanceSigs, RankNTypes, ScopedTypeVariables, StandaloneDeriving #-}
+{-# LANGUAGE FlexibleContexts, GADTs, InstanceSigs, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
 {-# OPTIONS -fno-full-laziness #-}
-module Text.Grampa.AST (AST(..), Grammar, fixGrammarAST, fixNullable, leftDescendants, splitDirect, splitNullable, toParser)
+module Text.Grampa.AST (AST(..), Grammar, 
+                        fixGrammarAST, fixNullable, leftDescendants, splitDirect, splitNullable, toParser)
 where
 
 import Control.Applicative
@@ -28,8 +29,8 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 
 import qualified Rank2
-import Text.Grampa.Class (MonoidParsing(..))
-import Text.Grampa.Parser (Parser(..), ResultList, nt)
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..))
+import Text.Grampa.Parser (Parser(..), ResultList)
 
 import Prelude hiding (iterate, null, span, takeWhile)
 
@@ -106,6 +107,10 @@ instance MonadPlus (AST g s) where
    mzero = empty
    mplus = (<|>)
 
+instance Monoid x => Monoid (AST g s x) where
+   mempty = pure mempty
+   mappend = liftA2 mappend
+
 instance MonoidNull s => Parsing (AST g s) where
    eof = endOfInput
    try Empty = Empty
@@ -126,6 +131,10 @@ instance (Show s, TextualMonoid s) => Text.Parser.Char.CharParsing (AST g s) whe
    notChar = satisfyChar . (/=)
    anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
+
+instance GrammarParsing AST where
+   type GrammarFunctor AST = AST
+   nonTerminal = NonTerminal
 
 instance MonoidParsing (AST g) where
    (<<|>) = BiasedChoice
@@ -161,7 +170,7 @@ selfReferring :: Rank2.Distributive g => g (AST g s)
 selfReferring = Rank2.distributeWith NonTerminal id
 
 toParser :: (Rank2.Functor g, FactorialMonoid s) => AST g s a -> Parser g s a
-toParser (NonTerminal accessor) = nt (unwrap . accessor . Rank2.fmap ResultsWrap)
+toParser (NonTerminal accessor) = nonTerminal (unwrap . accessor . Rank2.fmap ResultsWrap)
    where unwrap (ResultsWrap x) = x
          unwrap _ = error "should have been wrapped"
 toParser (Primitive _ _ _ p) = p
@@ -182,7 +191,7 @@ toParser (ConcatMany ast) = concatMany (toParser ast)
 toParser (ResultsWrap _) = error "ResultsWrap should be temporary only"
 
 directParser :: (Rank2.Functor g, FactorialMonoid s) => AST g s a -> Parser g s a
-directParser (NonTerminal _) = empty
+directParser NonTerminal{} = empty
 directParser (Map f ast) = f <$> directParser ast
 directParser (Ap f a) = directParser f0 <*> directParser a <|> directParser f1 <*> toParser a
    where (f0, f1) = splitNullable f
@@ -203,7 +212,7 @@ directParser (ConcatMany ast) = pure mempty <|> (<>) <$> directParser ast <*> co
 directParser (ResultsWrap _) = error "ResultsWrap should be temporary only"
 
 splitDirect :: (Rank2.Functor g, FactorialMonoid s) => AST g s a -> (AST g s a, AST g s a)
-splitDirect ast@(NonTerminal _) = (empty, ast)
+splitDirect ast@NonTerminal{} = (empty, ast)
 splitDirect ast@Primitive{} = (ast, empty)
 splitDirect (Map f ast) = both (f <$>) (splitDirect ast)
 splitDirect (Ap f a)
@@ -239,7 +248,7 @@ splitDirect (ResultsWrap _) = error "ResultsWrap should be temporary only"
 
 splitNullable :: MonoidNull s => AST g s a -> (AST g s a, AST g s a)
 splitNullable ast@NonTerminal{} = (ast, empty)
-splitNullable (NonTerminal _) = error "Can't tell if a nonterminal is nullable"
+splitNullable NonTerminal{} = error "Can't tell if a nonterminal is nullable"
 splitNullable ast@(Primitive name p0 p1 _) = (maybe empty (\p-> Primitive name (Just p) Nothing p) p0,
                                               maybe empty (\p-> Primitive name Nothing (Just p) p) p1)
 splitNullable (Map f ast) = both (f <$>) (splitNullable ast)

@@ -5,8 +5,7 @@ module Text.Grampa (
    -- * Types
    Grammar, GrammarBuilder, Analysis, AST, Parser, ParseResults,
    -- * Grammar and parser manipulation
-   fixGrammar, fixGrammarAnalysis, parsePrefix, parseAll, simpleParse, nullableRecursive,
-   fixGrammarAST, AST(NonTerminal),
+   fixGrammar, fixGrammarAnalysis, parsePrefix, parseAll, simpleParse, nullableRecursive, fixGrammarAST, nonTerminal,
    -- * Parser combinators
    module Text.Parser.Char,
    module Text.Parser.Combinators,
@@ -42,7 +41,7 @@ import Text.Parser.Combinators (Parsing((<?>), notFollowedBy, skipMany, skipSome
 import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 
 import qualified Rank2
-import Text.Grampa.Class (MonoidParsing(..))
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..))
 import Text.Grampa.Parser (Parser(applyParser), ParseResults, ResultList(..))
 import Text.Grampa.Analysis (Analysis(..), leftRecursive)
 import Text.Grampa.AST (AST, fixGrammarAST)
@@ -115,7 +114,7 @@ fixGrammar :: Rank2.Distributive g => (g (Parser g i) -> g (Parser g i)) -> g (P
 fixGrammar gf = gf selfReferring
 
 selfReferring :: Rank2.Distributive g => g (Parser g i)
-selfReferring = Rank2.distributeWith Parser.nt id
+selfReferring = Rank2.distributeWith nonTerminal id
 
 nullableRecursive :: Analysis g i a -> Analysis g i a
 nullableRecursive a = a{nullable= True,

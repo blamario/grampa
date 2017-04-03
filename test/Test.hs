@@ -60,7 +60,7 @@ nameListGrammarBuilder g@Recursive{..} = Recursive{
    }
 
 symbol s = ignorable *> string s <* ignorable
-ignorable = whiteSpace *> skipMany (NonTerminal next *> whiteSpace <?> "ignorable1") <?> "ignorable"
+ignorable = whiteSpace *> skipMany (nonTerminal next *> whiteSpace <?> "ignorable1") <?> "ignorable"
 --ignorable = recursiveOn [next] $ whiteSpace *> skipMany (next nameListGrammar *> whiteSpace <?> "ignorable1") <?> "ignorable"
 --ignorable = whiteSpace *> (AST.NonTerminal next *> ignorable <<|> pure ())
 
