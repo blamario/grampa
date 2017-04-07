@@ -1,11 +1,12 @@
 {-# LANGUAGE FlexibleContexts, KindSignatures, RankNTypes, RecordWildCards, ScopedTypeVariables #-}
 module Text.Grampa (
    -- * Classes
-   MonoidNull, FactorialMonoid, LeftReductiveMonoid, TextualMonoid, MonoidParsing(..),
+   MonoidNull, FactorialMonoid, LeftReductiveMonoid, TextualMonoid,
+   GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
    -- * Types
    Grammar, GrammarBuilder, Analysis, AST, Parser, ParseResults,
    -- * Grammar and parser manipulation
-   fixGrammar, fixGrammarAnalysis, parsePrefix, parseAll, simpleParse, nullableRecursive, fixGrammarAST, nonTerminal,
+   fixGrammar, parsePrefix, parseAll, simpleParse, nullableRecursive, fixGrammarAST, nonTerminal,
    -- * Parser combinators
    module Text.Parser.Char,
    module Text.Parser.Combinators,
@@ -41,7 +42,7 @@ import Text.Parser.Combinators (Parsing((<?>), notFollowedBy, skipMany, skipSome
 import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 
 import qualified Rank2
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..))
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..))
 import Text.Grampa.Parser (Parser(applyParser), ParseResults, ResultList(..))
 import Text.Grampa.Analysis (Analysis(..), leftRecursive)
 import Text.Grampa.AST (AST, fixGrammarAST)
@@ -103,11 +104,11 @@ parseNonRecursive g input = foldr parseTail [] (Factorial.tails input) where
 
 parseSeparated :: (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) =>
                   g (Const (g (Const Bool))) -> g (Parser g s) -> g (Parser g s) -> s -> [(s, g (ResultList g s))]
-parseSeparated dependencies recursive direct input = foldr parseTail [] (Factorial.tails input) where
-   parseTail s parsedTail = parsed where
-      parsed = (s,d'):parsedTail
-      d      = Rank2.fmap (($ (s,d):parsedTail) . applyParser) direct
-      d'     = fixRecursive dependencies recursive s parsedTail d
+parseSeparated dependencies recursive direct input = foldr parseTail [] (Factorial.tails input)
+   where parseTail s parsedTail = parsed
+            where parsed = (s,d'):parsedTail
+                  d      = Rank2.fmap (($ (s,d):parsedTail) . applyParser) direct
+                  d'     = fixRecursive dependencies recursive s parsedTail d
 
 -- | Produce a 'Grammar' from its recursive definition
 fixGrammar :: Rank2.Distributive g => (g (Parser g i) -> g (Parser g i)) -> g (Parser g i)
@@ -130,83 +131,6 @@ ordered :: Rank2.Traversable g => g (Analysis g i) -> g (Analysis g i)
 ordered g = evalState (Rank2.traverse f g) 0
    where f :: Analysis g i a -> State Int (Analysis g i a)
          f a = do {n <- get; put (n+1); return a{index= Just n}}
-
-fixGrammarAnalysis :: forall g i. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
-                      (g (Analysis g i) -> g (Analysis g i)) -> g (Analysis g i)
-fixGrammarAnalysis gf = Rank2.fmap collapsed (cycled $ ordered $ fixNullable $ gf $
-                                              Rank2.liftA2 setRecursive selfReferring selfAnalysis)
-   where selfAnalysis = Rank2.distributeWith separated id
-         setRecursive :: Parser g i a -> Analysis g i a -> Analysis g i a
-         setRecursive p a = a{recursive= p}
-         orderedNullable = ordered (fixNullable $ gf selfNullable)
-         separated :: (g (Analysis g i) -> Analysis g i a) -> Analysis g i a
-         separated f = an{nullDirect = empty,
-                          positiveDirect = empty,
-                          recursive= error "recursive is still undefined",
-                          leftRecursiveOn= maybe [] (:[]) (index $ f orderedNullable)}
-            where an = f orderedNullable
-         collapsed a
-            | hasCycle a = a
-            | otherwise = a{nullDirect= nullDirect a <|> recursive a,
-                            recursive= empty}
-         cycled :: g (Analysis g i) -> g (Analysis g i)
-         cycled g = evalState (Rank2.traverse addDepth g) $
-                    IntMap.elems $ calcLeftSets $ IntMap.fromList $ zip [0..] $ Rank2.foldMap successorSet g
-         addDepth :: Analysis g i a -> State [(Bool, IntSet)] (Analysis g i a)
-         addDepth a = do (cyclic, descendants):rest <- get
-                         put rest
-                         return a{hasCycle= cyclic,
-                                  leftDescendants= setToBools descendants}
-         setToBools :: IntSet -> g (Const Bool)
-         setToBools = Rank2.traverse isElem orderedNullable
-         isElem :: Analysis g i a -> IntSet -> Const Bool a
-         isElem Analysis{index= Just i} s = Const (IntSet.member i s)
-         successorSet :: Analysis g i a -> [IntSet]
-         successorSet a = [IntSet.fromList $ leftRecursiveOn a]
-
-data AdvanceFront = AdvanceFront{visited       :: IntSet,
-                                 cyclic        :: Bool,
-                                 front         :: IntSet}
-                  deriving Show
-
-calcLeftSets :: IntMap IntSet -> IntMap (Bool, IntSet)
-calcLeftSets successors = (cyclic &&& visited) <$> expandPaths initialDepths
-   where expandPaths :: IntMap AdvanceFront -> IntMap AdvanceFront
-         expandPaths paths
-            | all (IntSet.null . front) paths' = paths'
-            | otherwise = expandPaths paths'
-            where paths' = expandReachables <$> paths
-                  expandReachables :: AdvanceFront -> AdvanceFront
-                  expandReachables AdvanceFront{..} = 
-                     AdvanceFront{visited= visited <> front,
-                                  cyclic= cyclic || not (IntSet.null $ IntSet.intersection front visited),
-                                  front= IntSet.foldr' advance mempty (IntSet.difference front visited)}
-         advance :: Int -> IntSet -> IntSet
-         advance node front = front <> successors IntMap.! node
-         initialDepths = IntMap.mapWithKey setToFront successors
-         setToFront root set = AdvanceFront{visited= mempty,
-                                            cyclic= IntSet.member root set,
-                                            front= set}
-
-selfNullable :: forall g i. Rank2.Distributive g => g (Analysis g i)
-selfNullable = Rank2.distributeWith nonTerminal id
-   where nonTerminal :: forall a. (g (Analysis g i) -> Analysis g i a) -> Analysis g i a
-         nonTerminal f = Analysis{index= error "direct is still undefined",
-                                  nullDirect = error "direct is still undefined",
-                                  positiveDirect = error "direct is still undefined",
-                                  recursive= error "recursive is still undefined",
-                                  leftRecursiveOn= error "leftRecursiveOn is still undefined",
-                                  leftDescendants= error "undefined leftDescendants",
-                                  nullable= True,
-                                  recursivelyNullable= nullable . f}
-
-fixNullable :: (Rank2.Apply g, Rank2.Foldable g) => g (Analysis g i) -> g (Analysis g i)
-fixNullable g
-   | getAll (Rank2.foldMap (All . getConst) $ Rank2.liftA2 equallyNullable g g') = g
-   | otherwise = fixNullable g'
-   where g' = Rank2.fmap recurseNullable g
-         recurseNullable a = a{nullable= nullable a && recursivelyNullable a g}
-         equallyNullable a1 a2 = Const $ nullable a1 == nullable a2
 
 newtype CountedResult g i a = CountedResult (Int -> Maybe (ResultList g i a))
 

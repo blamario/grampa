@@ -6,6 +6,7 @@ where
 import Control.Applicative
 import Control.Monad (Monad(..), MonadPlus(..))
 import Data.Char (isSpace)
+import Data.Functor.Classes (Show1(..))
 import Data.List (genericLength, nub)
 import Data.Monoid (Monoid(mappend, mempty), (<>))
 import Data.Monoid.Cancellative (LeftReductiveMonoid (isPrefixOf))
@@ -24,7 +25,7 @@ import Text.Parser.Token (TokenParsing(someSpace))
 
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..))
 
-import Prelude hiding (iterate, length, null, span, takeWhile)
+import Prelude hiding (iterate, length, null, showList, span, takeWhile)
 
 -- | Parser of streams of type `s`, as a part of grammar type `g`, producing a value of type `r`
 newtype Parser g i r = Parser{applyParser :: [(i, g (ResultList g i))] -> ResultList g i r}
@@ -39,6 +40,12 @@ type Grammar g s = g (Parser g s)
 instance (Show s, Show r) => Show (ResultList g s r) where
    show (Parsed l) = "Parsed (" ++ shows l ")"
    show (NoParse l) = "NoParse (" ++ shows l ")"
+
+instance Show1 (ResultList g s) where
+   liftShowsPrec _showsPres showList _prec (Parsed l) rest = "Parsed " ++ showList (simplify <$> l) rest
+      where simplify (ResultInfo _ r) = r
+            -- simplify (ResultInfo ((s, _):_) r) = (s, r)
+   liftShowsPrec _showsPres _showList _prec (NoParse f) rest = "NoParse " ++ shows f rest
 
 instance (Show s, Show r) => Show (ResultInfo g s r) where
    show (ResultInfo t r) = "(ResultInfo @" ++ show (fst $ head t) ++ " " ++ shows r ")"
@@ -135,7 +142,7 @@ instance MonoidParsing (Parser g) where
       where p rest@((s, _):t) =
                case Textual.splitCharacterPrefix s
                of Just (first, _) | predicate first -> Parsed [ResultInfo t first]
-                  _ -> NoParse (FailureInfo 1 (genericLength rest) ["satisfy"])
+                  _ -> NoParse (FailureInfo 1 (genericLength rest) ["satisfyChar"])
             p [] = NoParse (FailureInfo 1 0 ["satisfyChar"])
    scan s0 f = Parser (p s0)
       where p s ((i, _):t) = Parsed [ResultInfo (drop (length prefix - 1) t) prefix]
@@ -207,7 +214,7 @@ instance (Show s, TextualMonoid s) => TokenParsing (Parser g s) where
    someSpace = () <$ takeCharsWhile1 isSpace
 
 fromResultList :: FactorialMonoid s => s -> ResultList g s r -> ParseResults (r, s)
-fromResultList s (NoParse (FailureInfo _ pos msgs)) = Left (length s - fromIntegral pos, nub msgs)
+fromResultList s (NoParse (FailureInfo _ pos msgs)) = Left (length s - fromIntegral pos + 1, nub msgs)
 fromResultList _ (Parsed rl) = Right (f <$> rl)
    where f (ResultInfo ((s, _):_) r) = (r, s)
          f (ResultInfo [] r) = (r, mempty)

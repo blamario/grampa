@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, GADTs, InstanceSigs, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
 {-# OPTIONS -fno-full-laziness #-}
 module Text.Grampa.AST (AST(..), Grammar, 
-                        fixGrammarAST, fixNullable, leftDescendants, splitDirect, splitNullable, toParser)
+                        fixGrammarAST, fixNullable, leftDescendants, nullable, splitDirect, splitNullable, toParser)
 where
 
 import Control.Applicative
@@ -9,6 +9,7 @@ import Control.Arrow((&&&))
 import Control.Monad (Monad(..), MonadPlus(..))
 import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
 
+import Data.Functor.Classes (Show1(..))
 import Data.Maybe (fromMaybe, isJust, maybe)
 import Data.Monoid (All(..), Any(..), (<>))
 import Data.IntMap (IntMap)
@@ -29,16 +30,17 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 
 import qualified Rank2
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..))
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..))
 import Text.Grampa.Parser (Parser(..), ResultList)
 
-import Prelude hiding (iterate, null, span, takeWhile)
+import Prelude hiding (iterate, null, showsPrec, span, takeWhile)
 
 type Grammar g s = g (AST g s)
 
 data AST g s a where
    NonTerminal   :: (g (AST g s) -> AST g s a) -> AST g s a
    Primitive     :: String -> Maybe (Parser g s a) -> Maybe (Parser g s a) -> Parser g s a -> AST g s a
+   Recursive     :: AST g s a -> AST g s a
    Map           :: (a -> b) -> AST g s a -> AST g s b
    Ap            :: AST g s (a -> b) -> AST g s a -> AST g s b
    Pure          :: a -> AST g s a
@@ -60,6 +62,7 @@ instance (Rank2.Distributive g, Rank2.Traversable g) => Show (AST g s a) where
    show (NonTerminal accessor) = "nt" ++ show i
       where Index i = accessor (ordered selfReferring)
    show (Primitive name _ _ _) = name
+   show Recursive{} = "recursive"
    show (Map _ ast) = "(f <$> " ++ shows ast ")"
    show (Ap f p) = "(" ++ show f ++ " <*> " ++ shows p ")"
    show (Pure _) = "pure x"
@@ -77,6 +80,28 @@ instance (Rank2.Distributive g, Rank2.Traversable g) => Show (AST g s a) where
    show Index{} = error "Index should be temporary only"
    show ResultsWrap{} = error "ResultsWrap should be temporary only"
 
+instance (Rank2.Distributive g, Rank2.Traversable g) => Show1 (AST g s) where
+   liftShowsPrec _showsPrec _showList _prec (NonTerminal accessor) rest = "nt" ++ show i
+      where Index i = accessor (ordered selfReferring)
+   liftShowsPrec _showsPrec _showL _prec (Primitive name _ _ _) rest = name ++ rest
+   liftShowsPrec _showsPrec _showL _prec Recursive{} rest = "recursive" ++ rest
+   liftShowsPrec _showsPrec _showL _prec (Map _ ast) rest = "(f <$> " ++ shows ast (")" ++ rest)
+   liftShowsPrec _showsPrec _showL _prec (Ap f p) rest = "(" ++ show f ++ " <*> " ++ shows p (")" ++ rest)
+   liftShowsPrec  showsPrec _showL  prec (Pure x) rest = "pure " ++ showsPrec prec x rest
+   liftShowsPrec _showsPrec _showL _prec Empty rest = "empty"
+   liftShowsPrec _showsPrec _showL _prec (Bind ast _) rest = "(" ++ shows ast (" >>= " ++ ")" ++ rest)
+   liftShowsPrec _showsPrec _showL _prec (Choice l r) rest = "(" ++ show l ++ " <|> " ++ shows r (")" ++ rest)
+   liftShowsPrec _showsPrec _showL _prec (BiasedChoice l r) rest = "(" ++ show l ++ " <<|> " ++ shows r (")" ++ rest)
+   liftShowsPrec _showsPrec _showL _prec (Try ast) rest = "(try " ++ shows ast (")" ++ rest)
+   liftShowsPrec _showsPrec _showL _prec (Describe ast msg) rest = "(" ++ shows ast (" <?> " ++ shows msg (")" ++ rest))
+   liftShowsPrec _showsPrec _showL _prec (NotFollowedBy ast) rest = "(notFollowedBy " ++ shows ast (")" ++ rest)
+   liftShowsPrec _showsPrec _showL _prec (Lookahead ast) rest = "(lookAhead " ++ shows ast (")" ++ rest)
+   liftShowsPrec _showsPrec _showL _prec (Many ast) rest = "(many " ++ shows ast (")" ++ rest)
+   liftShowsPrec _showsPrec _showL _prec (Some ast) rest = "(some " ++ shows ast (")" ++ rest)
+   liftShowsPrec _showsPrec _showL _prec (ConcatMany ast) rest = "(concatMany " ++ shows ast (")" ++ rest)
+   liftShowsPrec _showsPrec _showL _prec Index{} _rest = error "Index should be temporary only"
+   liftShowsPrec _showsPrec _showL _prec ResultsWrap{} _rest = error "ResultsWrap should be temporary only"
+
 instance Functor (AST g s) where
    fmap _ Empty = Empty
    fmap f ast = Map f ast
@@ -92,7 +117,7 @@ instance Alternative (AST g s) where
    Empty <|> ast = ast
    ast <|> Empty = ast
    p <|> q = Choice p q
-   many Empty = Empty
+   many Empty = pure []
    many ast = Many ast
    some Empty = Empty
    some ast = Some ast
@@ -136,6 +161,9 @@ instance GrammarParsing AST where
    type GrammarFunctor AST = AST
    nonTerminal = NonTerminal
 
+instance MonoidNull s => RecursiveParsing (AST g s) where
+   recursive = Recursive
+
 instance MonoidParsing (AST g) where
    (<<|>) = BiasedChoice
    endOfInput = Primitive "endOfInput" (Just endOfInput) Nothing endOfInput
@@ -174,6 +202,7 @@ toParser (NonTerminal accessor) = nonTerminal (unwrap . accessor . Rank2.fmap Re
    where unwrap (ResultsWrap x) = x
          unwrap _ = error "should have been wrapped"
 toParser (Primitive _ _ _ p) = p
+toParser (Recursive ast) = toParser ast
 toParser (Map f ast) = f <$> toParser ast
 toParser (Ap f a) = toParser f <*> toParser a
 toParser (Pure x) = pure x
@@ -202,6 +231,7 @@ directParser (BiasedChoice l r) = directParser l <<|> directParser r
 directParser (Try ast) = try (directParser ast)
 directParser (Describe ast msg) = directParser ast <?> msg
 directParser (Primitive _ _ _ p) = p
+directParser (Recursive ast) = directParser ast
 directParser (Pure x) = pure x
 directParser Empty = empty
 directParser (NotFollowedBy ast) = notFollowedBy (directParser ast)
@@ -214,6 +244,7 @@ directParser (ResultsWrap _) = error "ResultsWrap should be temporary only"
 splitDirect :: (Rank2.Functor g, FactorialMonoid s) => AST g s a -> (AST g s a, AST g s a)
 splitDirect ast@NonTerminal{} = (empty, ast)
 splitDirect ast@Primitive{} = (ast, empty)
+splitDirect (Recursive ast) = both Recursive (splitDirect ast)
 splitDirect (Map f ast) = both (f <$>) (splitDirect ast)
 splitDirect (Ap f a)
    | Empty <- an = (fd <*> a, fn <*> a)
@@ -251,6 +282,7 @@ splitNullable ast@NonTerminal{} = (ast, empty)
 splitNullable NonTerminal{} = error "Can't tell if a nonterminal is nullable"
 splitNullable ast@(Primitive name p0 p1 _) = (maybe empty (\p-> Primitive name (Just p) Nothing p) p0,
                                               maybe empty (\p-> Primitive name Nothing (Just p) p) p1)
+splitNullable (Recursive ast) = both Recursive (splitNullable ast)
 splitNullable (Map f ast) = both (f <$>) (splitNullable ast)
 splitNullable (Ap f a)
    | Empty <- f0 = (empty, f <*> a)
@@ -305,6 +337,7 @@ leftDescendants g = evalState (Rank2.traverse addDepth g) $
          leftRecursiveOn (NonTerminal accessor) = IntSet.singleton i
             where Index i = accessor enumeration
          leftRecursiveOn Primitive{} = mempty
+         leftRecursiveOn (Recursive ast) = leftRecursiveOn ast
          leftRecursiveOn (Map f ast) = leftRecursiveOn ast
          leftRecursiveOn (Ap f p) = leftRecursiveOn f <> if nullable g0 f then leftRecursiveOn p else mempty
          leftRecursiveOn (Pure a) = mempty
@@ -324,6 +357,7 @@ nullable :: Rank2.Functor g => g (Const Bool) -> AST g s a -> Bool
 nullable gn (NonTerminal accessor) = n == 1
    where Index n = accessor (Rank2.fmap (\(Const z)-> Index $ if z then 1 else 0) gn)
 nullable _  (Primitive _name z _ _) = isJust z
+nullable gn (Recursive ast) = nullable gn ast
 nullable gn (Map _ ast) = nullable gn ast
 nullable gn (Ap f p) = nullable gn f && nullable gn p
 nullable _  (Pure a) = True

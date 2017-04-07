@@ -1,5 +1,5 @@
 {-# LANGUAGE RankNTypes, TypeFamilies #-}
-module Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..)) where
+module Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..)) where
 
 import Control.Applicative (Alternative(many))
 import Data.Char (isSpace)
@@ -8,10 +8,15 @@ import Data.Monoid.Cancellative (LeftReductiveMonoid)
 import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid(singleton))
+import Text.Parser.Combinators (Parsing)
 
 class GrammarParsing m where
    type GrammarFunctor m :: ((* -> *) -> *) -> * -> * -> *
    nonTerminal :: (g (GrammarFunctor m g s) -> GrammarFunctor m g s a) -> m g s a
+
+class Parsing m => RecursiveParsing m where
+   recursive :: m a -> m a
+   recursive = id
 
 class MonoidParsing m where
    infixl 3 <<|>
