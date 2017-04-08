@@ -19,16 +19,10 @@ module Text.Grampa (
 where
 
 import Control.Applicative
-import Control.Arrow((&&&))
 import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
 
-import Data.Maybe (fromMaybe, maybe)
-import Data.Monoid (All(..), Any(..), (<>))
-import Data.IntMap (IntMap)
-import Data.IntSet (IntSet)
-
-import qualified Data.IntMap as IntMap
-import qualified Data.IntSet as IntSet
+import Data.Maybe (fromMaybe)
+import Data.Monoid (Any(..), (<>))
 
 import Data.Monoid.Cancellative (LeftReductiveMonoid)
 import Data.Monoid.Null (MonoidNull)
@@ -47,7 +41,6 @@ import Text.Grampa.Parser (Parser(applyParser), ParseResults, ResultList(..))
 import Text.Grampa.Analysis (Analysis(..), leftRecursive)
 import Text.Grampa.AST (AST, fixGrammarAST)
 import qualified Text.Grampa.Parser as Parser
-import qualified Text.Grampa.Analysis as Analysis
 import qualified Text.Grampa.AST as AST
 
 import Prelude hiding (takeWhile)
@@ -132,8 +125,6 @@ ordered g = evalState (Rank2.traverse f g) 0
    where f :: Analysis g i a -> State Int (Analysis g i a)
          f a = do {n <- get; put (n+1); return a{index= Just n}}
 
-newtype CountedResult g i a = CountedResult (Int -> Maybe (ResultList g i a))
-
 fixRecursive :: forall g i. (Rank2.Apply g, Rank2.Foldable g) =>
                 g (Const (g (Const Bool))) -> g (Parser g i) -> i -> [(i, g (ResultList g i))] -> g (ResultList g i)
              -> g (ResultList g i)
@@ -152,24 +143,6 @@ whileAnyContinues dependencies g1 g2 = Rank2.liftA3 choiceWhile dependencies g1 
          combine (Const False) _ = Const False
          combine (Const True) (Parsed (_:_)) = Const True
          combine (Const True) _ = Const False
-
-addCount :: ResultList g i a -> CountedResult g i a
-addCount r = CountedResult (const $ Just r)
-
-dropCount :: Int -> CountedResult g i a -> ResultList g i a
-dropCount limit (CountedResult f) = case f limit
-                                    of Nothing -> NoParse (Parser.FailureInfo 1 maxBound ["dropCount"])
-                                       Just r -> r
-
-countedChoice :: Rank2.Apply g =>
-                 g (Const Int) -> g (CountedResult g i) -> g (CountedResult g i) -> g (CountedResult g i)
-countedChoice limits g1 g2 = Rank2.liftA3 (choiceTill . getConst) limits g1 g2
-   where choiceTill limit (CountedResult cr1) (CountedResult cr2) = CountedResult cr'
-            where cr' 0 = Nothing
-                  cr' n = case cr1 n
-                          of Nothing -> Nothing
-                             Just NoParse{} -> cr2 (pred n)
-                             r -> r <> cr2 limit
 
 recurseOnce :: Rank2.Apply g =>
                i -> [(i, g (ResultList g i))] -> g (Parser g i) -> g (ResultList g i) -> g (ResultList g i)

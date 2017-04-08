@@ -6,7 +6,7 @@ import Control.Applicative
 import qualified Data.Bool
 import Data.Monoid ((<>))
 import qualified Rank2
-import Text.Grampa (GrammarBuilder, Analysis, Parsing, MonoidParsing)
+import Text.Grampa (Parsing, MonoidParsing)
 import qualified Arithmetic
 import qualified Boolean
 import qualified Comparisons

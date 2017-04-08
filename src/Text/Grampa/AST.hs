@@ -219,28 +219,6 @@ toParser (Some ast) = some (toParser ast)
 toParser (ConcatMany ast) = concatMany (toParser ast)
 toParser (ResultsWrap _) = error "ResultsWrap should be temporary only"
 
-directParser :: (Rank2.Functor g, FactorialMonoid s) => AST g s a -> Parser g s a
-directParser NonTerminal{} = empty
-directParser (Map f ast) = f <$> directParser ast
-directParser (Ap f a) = directParser f0 <*> directParser a <|> directParser f1 <*> toParser a
-   where (f0, f1) = splitNullable f
-directParser (Bind ast cont) = (directParser ast0 >>= directParser . cont) <|> (directParser ast1 >>= toParser . cont)
-   where (ast0, ast1) = splitNullable ast
-directParser (Choice l r) = directParser l <|> directParser r
-directParser (BiasedChoice l r) = directParser l <<|> directParser r
-directParser (Try ast) = try (directParser ast)
-directParser (Describe ast msg) = directParser ast <?> msg
-directParser (Primitive _ _ _ p) = p
-directParser (Recursive ast) = directParser ast
-directParser (Pure x) = pure x
-directParser Empty = empty
-directParser (NotFollowedBy ast) = notFollowedBy (directParser ast)
-directParser (Lookahead ast) = lookAhead (directParser ast)
-directParser (Many ast) = pure [] <|> directParser (Some ast)
-directParser (Some ast) = (:) <$> directParser ast <*> some (toParser ast)
-directParser (ConcatMany ast) = pure mempty <|> (<>) <$> directParser ast <*> concatMany (toParser ast)
-directParser (ResultsWrap _) = error "ResultsWrap should be temporary only"
-
 splitDirect :: (Rank2.Functor g, FactorialMonoid s) => AST g s a -> (AST g s a, AST g s a)
 splitDirect ast@NonTerminal{} = (empty, ast)
 splitDirect ast@Primitive{} = (ast, empty)
