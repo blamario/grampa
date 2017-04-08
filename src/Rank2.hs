@@ -1,7 +1,7 @@
 {-# LANGUAGE InstanceSigs, KindSignatures, Rank2Types, ScopedTypeVariables #-}
 module Rank2 (Functor(..), Apply(..), Applicative(..),
               Foldable(..), Traversable(..), Distributive(..),
-              Empty(..), Singleton(..), Identity(..), Product(..), Arrow(..),
+              Compose(..), Empty(..), Singleton(..), Identity(..), Product(..), Arrow(..),
              (<$>), (<*>), liftA3)
 where
 
@@ -10,6 +10,7 @@ import qualified Control.Monad as Rank1
 import qualified Data.Foldable as Rank1
 import qualified Data.Traversable as Rank1
 import Data.Monoid (Monoid(..), (<>))
+import Data.Functor.Compose (Compose(..))
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
@@ -52,8 +53,11 @@ class Apply g => Applicative g where
 
 -- | Equivalent of 'Distributive' for rank 2 data types
 class Functor g => Distributive g where
+   collect :: Rank1.Functor f1 => (a -> g f2) -> f1 a -> g (Compose f1 f2)
    distributeWith :: Rank1.Functor f1 => (forall x. f1 (f2 x) -> f x) -> f1 (g f2) -> g f
    distributeM :: Rank1.Monad f => f (g f) -> g f
+
+   collect f = distributeWith Compose . Rank1.fmap f
    distributeM = distributeWith Rank1.join
 
 data Empty (f :: * -> *) = Empty deriving (Eq, Ord, Show)
