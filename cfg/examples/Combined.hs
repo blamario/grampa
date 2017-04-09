@@ -8,7 +8,7 @@ import Data.Monoid ((<>))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Rank2
-import Text.Grampa (GrammarBuilder)
+import Text.Grampa (AST, GrammarBuilder)
 import qualified Arithmetic
 import qualified Boolean
 import qualified Comparisons
@@ -182,7 +182,7 @@ instance Rank2.Traversable Expression where
                   <*> Rank2.traverse f (conditionalGrammar g)
                   <*> Rank2.traverse f (lambdaGrammar g)
 
-expression :: GrammarBuilder Expression g String
+expression :: GrammarBuilder Expression g AST String
 expression Expression{..} =
    let combinedExpr = Arithmetic.expr arithmeticGrammar
                       <|> Boolean.expr booleanGrammar

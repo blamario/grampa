@@ -88,7 +88,7 @@ instance Rank2.Traversable (Arithmetic e) where
                   <*> f (factor a)
                   <*> f (primary a)
 
-arithmetic :: ArithmeticDomain e => GrammarBuilder (Arithmetic e) g String
+arithmetic :: ArithmeticDomain e => GrammarBuilder (Arithmetic e) g AST String
 arithmetic Arithmetic{..} = Arithmetic{
    expr= sum,
    sum= product

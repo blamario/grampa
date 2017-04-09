@@ -2,7 +2,7 @@
              StandaloneDeriving, TemplateHaskell, UndecidableInstances #-}
 module Main where
 
-import Control.Applicative (Applicative, Alternative, pure, empty, optional, (<*>), (*>), (<|>))
+import Control.Applicative (Applicative, Alternative, Const(..), pure, empty, many, optional, (<*>), (*>), (<|>))
 import Control.Monad (MonadPlus(mzero, mplus), guard, liftM, liftM2, void)
 import Data.Char (isSpace, isLetter)
 import Data.List (find, minimumBy, nub, sort)
@@ -29,7 +29,6 @@ import qualified Rank2.TH
 import Text.Grampa
 
 import qualified Test.Examples
-import Debug.Trace
 
 import Prelude hiding (null, takeWhile)
 
@@ -47,25 +46,28 @@ recursiveManyGrammar Recursive{..} = Recursive{
    one = string "(" *> start <* string ")",
    next= string "]"}
 
-nameListGrammar = fixGrammar nameListGrammarBuilder
-nameListGrammarBuilder Recursive{..} = Recursive{
+nameListGrammar = fixGrammarAST nameListGrammarBuilder
+nameListGrammarBuilder g@Recursive{..} = Recursive{
    start= pure (const . unwords) <*> rec <*> (True <$ symbol "," <* symbol "..." <|> pure False) <|>
-          pure id <*> symbol "...",
-   rec= pure id <*> sepBy1 one (ignorable *> string "," <* whiteSpace),
+          pure id <*> symbol "..." <?> "start",
+   rec= sepBy1 one (ignorable *> string "," <* whiteSpace <?> "comma") <?> "rec",
    one= do ignorable
            identifier <- ((:) <$> satisfyChar isLetter <*> (toString (const "") <$> takeCharsWhile isLetter))
            guard (identifier /= "reserved")
-           pure id <*> pure identifier,
-   next= string "--" *> (toString (const "") <$> takeCharsWhile (/= '\n') <* (void (char '\n') <|> endOfInput))}
+           pure id <*> pure identifier
+        <?> "one",
+   next= string "--" *> (toString (const "") <$> takeCharsWhile (/= '\n') <* (void (char '\n') <|> endOfInput)) <?> "next"
+   }
 
 symbol s = ignorable *> string s <* ignorable
-ignorable = whiteSpace *> (next nameListGrammar *> ignorable <<|> pure ())
--- ignorable = whiteSpace *> skipMany (next nameListGrammar *> whiteSpace)
+ignorable = whiteSpace *> skipMany (nonTerminal next *> whiteSpace <?> "ignorable1") <?> "ignorable"
+--ignorable = recursiveOn [next] $ whiteSpace *> skipMany (next nameListGrammar *> whiteSpace <?> "ignorable1") <?> "ignorable"
+--ignorable = whiteSpace *> (AST.NonTerminal next *> ignorable <<|> pure ())
 
 main = defaultMain tests
 
 tests = testGroup "Grampa" [
-           let g = fixGrammar recursiveManyGrammar
+           let g = fixGrammarAST recursiveManyGrammar
            in testGroup "recursive"
               [testProperty "minimal" $ parseAll g start "()" == Right [""],
                testProperty "bracketed" $ parseAll g start "[()]" == Right [""],

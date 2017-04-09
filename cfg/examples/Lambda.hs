@@ -95,7 +95,7 @@ instance (Show (f e), Show (f String)) => Show (Lambda e f) where
 
 $(Rank2.TH.deriveAll ''Lambda)
 
-lambdaCalculus :: LambdaDomain e => GrammarBuilder (Lambda e) g String
+lambdaCalculus :: LambdaDomain e => GrammarBuilder (Lambda e) g AST String
 lambdaCalculus Lambda{..} = Lambda{
    expr= abstraction,
    abstraction= lambda <$> (symbol "\\" *> varName <* symbol "->") <*> abstraction

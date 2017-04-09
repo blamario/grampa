@@ -19,32 +19,32 @@ import qualified Conditionals
 
 parseArithmetical :: Sum -> Bool
 parseArithmetical (Sum s) = f s' == s'
-   where f = uniqueParse (fixGrammar Arithmetic.arithmetic) Arithmetic.expr
+   where f = uniqueParse (fixGrammarAST Arithmetic.arithmetic) Arithmetic.expr
          s' = f s
 
 parseComparison :: Comparison -> Bool
 parseComparison (Comparison s) = f s' == s'
-   where f = uniqueParse (fixGrammar comparisons) (Comparisons.test . Rank2.snd)
+   where f = uniqueParse (fixGrammarAST comparisons) (Comparisons.test . Rank2.snd)
          s' = f s
 
-comparisons :: Rank2.Functor g => GrammarBuilder ArithmeticComparisons g String
+comparisons :: Rank2.Functor g => GrammarBuilder ArithmeticComparisons g AST String
 comparisons (Rank2.Pair a c) =
-   Rank2.Pair (Arithmetic.arithmetic a) (Comparisons.comparisons c{Comparisons.term= Arithmetic.expr a})
+   Rank2.Pair (Arithmetic.arithmetic a) (Comparisons.comparisons c){Comparisons.term= Arithmetic.expr a}
 
 parseBoolean :: Disjunction -> Bool
 parseBoolean (Disjunction s) = f s' == s'
-   where f = uniqueParse (fixGrammar boolean) (Boolean.expr . Rank2.snd)
+   where f = uniqueParse (fixGrammarAST boolean) (Boolean.expr . Rank2.snd)
          s' = f s
 
-boolean :: Rank2.Functor g => GrammarBuilder ArithmeticComparisonsBoolean g String
+boolean :: Rank2.Functor g => GrammarBuilder ArithmeticComparisonsBoolean g AST String
 boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Comparisons.test $ Rank2.snd ac) b)
 
 parseConditional :: Conditional -> Bool
 parseConditional (Conditional s) = f s' == s'
-   where f = uniqueParse (fixGrammar conditionals) (Conditionals.expr . Rank2.snd)
+   where f = uniqueParse (fixGrammarAST conditionals) (Conditionals.expr . Rank2.snd)
          s' = f s
 
-conditionals :: Rank2.Functor g => GrammarBuilder ACBC g String
+conditionals :: Rank2.Functor g => GrammarBuilder ACBC g AST String
 conditionals (Rank2.Pair acb c) =
    boolean acb `Rank2.Pair`
    Conditionals.conditionals c{Conditionals.test= Boolean.expr (Rank2.snd acb),
@@ -119,8 +119,8 @@ instance Enumerable Conditional where
                <$> (\(Free (Disjunction a, Free (Sum b, Sum c)))-> "if " <> a <> " then " <> b <> " else " <> c)
                <$> pay enumerate
 
-uniqueParse :: (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g) =>
-               Grammar g s -> (forall f. g f -> f r) -> s -> r
+uniqueParse :: (Eq s, FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g) =>
+               Grammar g AST s -> (forall f. g f -> f r) -> s -> r
 uniqueParse g p s = case parseAll g p s
                     of Right [r] -> r
                        Right [] -> error "Unparseable"

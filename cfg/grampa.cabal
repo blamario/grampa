@@ -18,12 +18,14 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Text.Grampa
-  other-modules:       Text.Grampa.Types
+  other-modules:       Text.Grampa.Types, Text.Grampa.Class, Text.Grampa.Analysis, Text.Grampa.Parser, Text.Grampa.AST
   default-language:    Haskell2010
   -- other-modules:
   ghc-options:         -Wall
   build-depends:       base >=4.7 && <5,
                        rank2 < 1.0,
+                       containers >= 0.4 && < 0.6,
+                       transformers >= 0.5 && < 0.6,
                        monoid-subclasses >=0.4 && <0.5,
                        parsers < 0.13
   -- hs-source-dirs:      
@@ -35,7 +37,8 @@ executable             arithmetic
   other-modules:       Arithmetic, Boolean, Combined, Comparisons, Conditionals, Lambda, Utilities
   default-language:    Haskell2010
   build-depends:       base >=4.7 && <5, containers >= 0.5.7.0 && < 0.6,
-                       rank2 < 1.0, grampa == 0.1
+                       rank2 < 1.0, grampa == 0.1,
+                       monoid-subclasses >=0.4 && <0.5
 
 test-suite           tests
   type:              exitcode-stdio-1.0

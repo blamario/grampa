@@ -1,7 +1,7 @@
 {-# LANGUAGE InstanceSigs, KindSignatures, Rank2Types, ScopedTypeVariables #-}
 module Rank2 (Functor(..), Apply(..), Applicative(..),
               Foldable(..), Traversable(..), Distributive(..),
-              Empty(..), Singleton(..), Identity(..), Product(..), Arrow(..),
+              Compose(..), Empty(..), Singleton(..), Identity(..), Product(..), Arrow(..),
               ap, fmap, liftA3)
 where
 
@@ -10,6 +10,7 @@ import qualified Control.Monad as Rank1
 import qualified Data.Foldable as Rank1
 import qualified Data.Traversable as Rank1
 import Data.Monoid (Monoid(..), (<>))
+import Data.Functor.Compose (Compose(..))
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
@@ -52,8 +53,11 @@ class Apply g => Applicative g where
 
 -- | Equivalent of 'Distributive' for rank 2 data types
 class Functor g => Distributive g where
+   collect :: Rank1.Functor f1 => (a -> g f2) -> f1 a -> g (Compose f1 f2)
    distributeWith :: Rank1.Functor f1 => (forall x. f1 (f2 x) -> f x) -> f1 (g f2) -> g f
    distributeM :: Rank1.Monad f => f (g f) -> g f
+
+   collect f = distributeWith Compose . Rank1.fmap f
    distributeM = distributeWith Rank1.join
 
 data Empty (f :: * -> *) = Empty deriving (Eq, Ord, Show)
@@ -127,15 +131,19 @@ instance (Traversable g, Traversable h) => Traversable (Product g h) where
 
 instance Apply Empty where
    Empty <*> Empty = Empty
+   liftA2 _ _ _ = Empty
 
 instance Apply (Singleton x) where
    Singleton f <*> Singleton x = Singleton (apply f x)
+   liftA2 f ~(Singleton x) ~(Singleton y) = Singleton (f x y)
 
 instance Apply g => Apply (Identity g) where
    Identity g <*> Identity h = Identity (g <*> h)
+   liftA2 f ~(Identity g) ~(Identity h) = Identity (liftA2 f g h)
 
 instance (Apply g, Apply h) => Apply (Product g h) where
-   Pair gf hf <*> Pair g h = Pair (gf <*> g) (hf <*> h)
+   gf <*> gx = Pair (fst gf <*> fst gx) (snd gf <*> snd gx)
+   liftA2 f ~(Pair g1 g2) ~(Pair h1 h2) = Pair (liftA2 f g1 h1) (liftA2 f g2 h2)
 
 instance Applicative Empty where
    pure = const Empty

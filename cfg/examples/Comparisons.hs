@@ -62,7 +62,8 @@ instance Rank2.Traversable (Comparisons c e) where
                   <$> f (test g)
                   <*> f (term g)
 
-comparisons :: (ComparisonDomain c e) => GrammarBuilder (Comparisons c e) g String
+comparisons :: (ComparisonDomain c e, Alternative (p g String), MonoidParsing (p g)) =>
+               GrammarBuilder (Comparisons c e) g p String
 comparisons Comparisons{..} =
    Comparisons{
       test= lessThan <$> term <* symbol "<" <*> term

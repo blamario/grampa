@@ -1,150 +1,151 @@
-{-# LANGUAGE FlexibleContexts, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, KindSignatures, RankNTypes, RecordWildCards, ScopedTypeVariables #-}
 module Text.Grampa (
    -- * Classes
    MonoidNull, FactorialMonoid, LeftReductiveMonoid, TextualMonoid,
+   GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
    -- * Types
-   Grammar, GrammarBuilder, Parser, ParseResults,
+   Grammar, GrammarBuilder, Analysis, AST, Parser, ParseResults,
    -- * Grammar and parser manipulation
-   fixGrammar, fixGrammarInput, parse, parseAll, simpleParse,
+   fixGrammar, parsePrefix, parseAll, parseNonRecursive, parseSeparated, simpleParse,
+   nullableRecursive, fixGrammarAST, nonTerminal,
    -- * Parser combinators
    module Text.Parser.Char,
    module Text.Parser.Combinators,
    module Text.Parser.LookAhead,
-   recursiveOn, (<<|>),
+   (<<|>),
+   leftRecursive, recursiveOn,
    -- * Parsing primitives
    endOfInput, getInput, anyToken, token, satisfy, satisfyChar, string,
    scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1, whiteSpace)
 where
 
 import Control.Applicative
-import Data.List (nub)
+import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
+
 import Data.Maybe (fromMaybe)
-import Data.Monoid (Monoid(mempty), All(..), (<>))
+import Data.Monoid (Any(..), (<>))
+
 import Data.Monoid.Cancellative (LeftReductiveMonoid)
-import Data.Monoid.Null (MonoidNull(null))
-import Data.Monoid.Factorial (FactorialMonoid(length, tails))
+import Data.Monoid.Null (MonoidNull)
+import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
+
+import qualified Data.Monoid.Factorial as Factorial
 
 import Text.Parser.Char (CharParsing(char, notChar, anyChar))
 import Text.Parser.Combinators (Parsing((<?>), notFollowedBy, skipMany, skipSome, unexpected))
 import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 
 import qualified Rank2
-import Text.Grampa.Types
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..))
+import Text.Grampa.Parser (Parser(applyParser), ParseResults, ResultList(..))
+import Text.Grampa.Analysis (Analysis(..), leftRecursive)
+import Text.Grampa.AST (AST, fixGrammarAST)
+import qualified Text.Grampa.Parser as Parser
+import qualified Text.Grampa.AST as AST
 
-import Prelude hiding (iterate, length, null, takeWhile)
+import Prelude hiding (takeWhile)
 
-type GrammarBuilder g g' s = g (Parser g' s) -> g (Parser g' s)
-type ParseResults r = Either (Int, [String]) [r]
+type Grammar (g  :: (* -> *) -> *) p s = g (p g s)
+type GrammarBuilder (g  :: (* -> *) -> *)
+                    (g' :: (* -> *) -> *)
+                    (p  :: ((* -> *) -> *) -> * -> * -> *)
+                    (s  :: *)
+   = g (p g' s) -> g (p g' s)
 
-newtype DerivedResultList g s r = DerivedResultList {
-   derivedResultList :: g (ResultList g s) -> ResultList g s r}
-
-instance Functor (DerivedResultList g s) where
-   fmap f (DerivedResultList gd) = DerivedResultList ((f <$>) <$> gd)
-
-parse :: (FactorialMonoid s, Rank2.Traversable g, Rank2.Distributive g, Rank2.Apply g) =>
-         Grammar g s -> (forall f. g f -> f r) -> s -> ParseResults (r, s)
-parse g prod input = fromResultList input (prod $ fst $ head $ fixGrammarInput selfReferring g input)
+parsePrefix :: (Rank2.Apply g, Rank2.Traversable g, FactorialMonoid s) =>
+               g (AST g s) -> (forall f. g f -> f r) -> s -> ParseResults (r, s)
+parsePrefix g prod input = Parser.fromResultList input (prod $ snd $ head $ parseRecursive g input)
 
 parseAll :: (FactorialMonoid s, Rank2.Traversable g, Rank2.Distributive g, Rank2.Apply g) =>
-         Grammar g s -> (forall f. g f -> f r) -> s -> ParseResults r
-parseAll g prod input = (fst <$>) <$> fromResultList input (prod $ fst $ head $ fixGrammarInput close g input)
+            g (AST g s) -> (forall f. g f -> f r) -> s -> ParseResults r
+parseAll g prod input = (fst <$>) <$>
+                        Parser.fromResultList input (prod $ snd $ head $ reparse close $ parseRecursive g input)
    where close = Rank2.fmap (<* endOfInput) selfReferring
 
 simpleParse :: FactorialMonoid s => Parser (Rank2.Singleton r) s r -> s -> ParseResults (r, s)
-simpleParse p = parse (Rank2.Singleton p) Rank2.getSingle
+simpleParse p input =
+   Parser.fromResultList input (Rank2.getSingle $ snd $ head $ parseNonRecursive (Rank2.Singleton p) input)
 
-fromResultList :: FactorialMonoid s => s -> ResultList g s r -> ParseResults (r, s)
-fromResultList s (ResultList (Left (FailureInfo _ pos msgs))) = Left (length s - fromIntegral pos, nub msgs)
-fromResultList input (ResultList (Right rl)) = Right (f <$> rl)
-   where f (CompleteResultInfo ((_, s):_) r) = (r, s)
-         f (CompleteResultInfo [] r) = (r, mempty)
-         f (StuckResultInfo r) = (r, input)
+reparse :: Rank2.Functor g => g (Parser g s) -> [(s, g (ResultList g s))] -> [(s, g (ResultList g s))]
+reparse _ [] = []
+reparse final parsed@((s, _):_) = (s, gd):parsed
+   where gd = Rank2.fmap (`applyParser` parsed) final
 
+newtype Couple f a = Couple{unCouple :: (f a, f a)} deriving Show
 
--- | Tie the knot on a 'GrammarBuilder' and turn it into a 'Grammar'
-fixGrammar :: forall g s. (Rank2.Foldable g, Rank2.Apply g, Rank2.Distributive g) =>
-              (Grammar g s -> Grammar g s) -> Grammar g s
-fixGrammar gf = (Rank2.Arrow . combine) `Rank2.fmap` gf selfReferring `Rank2.ap` fixNullable (gf selfNullable)
-   where combine p1 p2 = Parser{continued= continued p1,
-                                direct= direct p1,
-                                recursive= recursive p1,
-                                nullable= nullable p2,
-                                recursivelyNullable= recursivelyNullable p2}
+parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Traversable g, FactorialMonoid s) =>
+                  g (AST g s) -> s -> [(s, g (ResultList g s))]
+parseRecursive ast = parseSeparated descendants (Rank2.fmap AST.toParser recursive) (Rank2.fmap AST.toParser direct)
+   where directRecursive = Rank2.fmap (Couple . AST.splitDirect) ast
+         cyclicDescendants = AST.leftDescendants ast
+         cyclic = Rank2.fmap (mapConst fst) cyclicDescendants
+         descendants = Rank2.liftA3 cond cyclic (Rank2.fmap (mapConst snd) cyclicDescendants) noDescendants
+         direct = Rank2.liftA3 cond cyclic (Rank2.fmap (fst . unCouple) directRecursive) ast
+         recursive = Rank2.liftA3 cond cyclic (Rank2.fmap (snd . unCouple) directRecursive) emptyGrammar
+         emptyGrammar :: g (AST g s)
+         emptyGrammar = Rank2.fmap (const empty) ast
+         noDescendants = Rank2.fmap (const $ Const $ Rank2.fmap (const $ Const False) ast) ast
+         cond (Const False) _t f = f
+         cond (Const True) t _f = t
+         mapConst f (Const c) = Const (f c)
 
-fixNullable :: forall g s. (Rank2.Foldable g, Rank2.Apply g) => Grammar g s -> Grammar g s
-fixNullable g = Rank2.fmap (iterP $ iterateNullable iter g) g
-   where iter g' = Rank2.fmap (iterP g') g'
-         iterP g' p = p{nullable= nullable p && recursivelyNullable p g'}
+parseNonRecursive :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> [(s, g (ResultList g s))]
+parseNonRecursive g input = foldr parseTail [] (Factorial.tails input) where
+  parseTail s parsedTail = parsed where
+    parsed = (s,d):parsedTail
+    d      = Rank2.fmap (($ parsed) . applyParser) g
 
-iterateNullable :: forall g s. (Rank2.Foldable g, Rank2.Apply g) =>
-                   (g (Parser g s) -> g (Parser g s)) -> g (Parser g s)
-                -> g (Parser g s)
-iterateNullable f n = if getAll (Rank2.foldMap (All . getConst) $ equallyNullable `Rank2.fmap` n `Rank2.ap` n')
-                      then n' else iterateNullable f n'
-   where n' = f n
-         equallyNullable :: forall x. Parser g s x -> Rank2.Arrow (Parser g s) (Const Bool) x
-         equallyNullable p1 = Rank2.Arrow (\p2-> Const $ nullable p1 == nullable p2)
+parseSeparated :: (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) =>
+                  g (Const (g (Const Bool))) -> g (Parser g s) -> g (Parser g s) -> s -> [(s, g (ResultList g s))]
+parseSeparated dependencies recursive direct input = foldr parseTail [] (Factorial.tails input)
+   where parseTail s parsedTail = parsed
+            where parsed = (s,d'):parsedTail
+                  d      = Rank2.fmap (($ (s,d):parsedTail) . applyParser) direct
+                  d'     = fixRecursive dependencies recursive s parsedTail d
 
-selfNullable :: forall g s. Rank2.Distributive g => Grammar g s
-selfNullable = Rank2.distributeWith nonTerminal id
-   where nonTerminal :: forall r. (g (Parser g s) -> Parser g s r) -> Parser g s r
-         nonTerminal f = Parser{continued= undefined,
-                                direct= undefined,
-                                recursive= Just undefined,
-                                nullable= True,
-                                recursivelyNullable= nullable . f}
+-- | Produce a 'Grammar' from its recursive definition
+fixGrammar :: Rank2.Distributive g => (g (Parser g i) -> g (Parser g i)) -> g (Parser g i)
+fixGrammar gf = gf selfReferring
 
-selfReferring :: forall g s. Rank2.Distributive g => Grammar g s
+selfReferring :: Rank2.Distributive g => g (Parser g i)
 selfReferring = Rank2.distributeWith nonTerminal id
-   where nonTerminal :: forall r. (g (ResultList g s) -> ResultList g s r) -> Parser g s r
-         nonTerminal f = Parser{continued= continue . resultList . f . fst . head,
-                                direct= mempty,
-                                recursive= Just (const . const . f),
-                                nullable= True,
-                                recursivelyNullable= error "recursivelyNullable will be initialized by selfNullable"}
-            where continue :: Either FailureInfo [ResultInfo g s r]
-                           -> (r -> [(GrammarResults g s, s)] -> ResultList g s r')
-                           -> (FailureInfo -> ResultList g s r')
-                           -> ResultList g s r'
-                  continue (Left (FailureInfo strength pos msgs)) _ fc = fc (FailureInfo (succ strength) pos msgs)
-                  continue (Right rs) rc _ = foldMap continueFrom rs
-                     where continueFrom (CompleteResultInfo t r) = rc r t
-                           continueFrom StuckResultInfo{} = error "Can't continue, I'm Stuck."
 
-fixGrammarInput :: forall s g. (FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g) =>
-                   Grammar g s -> Grammar g s -> s -> [(GrammarResults g s, s)]
-fixGrammarInput final grammar input = parseTailWith input $ foldr parseTail [] (tails input)
-   where parseTail :: s -> [(GrammarResults g s, s)] -> [(GrammarResults g s, s)]
-         parseTail s parsedTail = parsed
-            where parsed = (Rank2.fmap finalize $ collectGrammarResults gd gr, s):parsedTail
-                  gd = Rank2.fmap (\p-> direct p s parsedTail) grammar
-                  gr = Rank2.fmap (\p-> DerivedResultList $ \g-> fromMaybe mempty (recursive p) g s parsedTail) grammar
-                  finalize :: ResultList g s r -> ResultList g s r
-                  finalize (ResultList (Left err)) = ResultList (Left err)
-                  finalize (ResultList (Right results)) = ResultList (Right $ complete <$> results)
-                  complete :: ResultInfo g s r -> ResultInfo g s r
-                  complete r@CompleteResultInfo{} = r
-                  complete (StuckResultInfo r) = CompleteResultInfo parsed r
-         parseTailWith :: s -> [(GrammarResults g s, s)] -> [(GrammarResults g s, s)]
-         parseTailWith s parsed = (gd, s):parsed
-            where gd = Rank2.fmap (\p-> continued p parsed succeed concede) final
+nullableRecursive :: Analysis g i a -> Analysis g i a
+nullableRecursive a = a{nullable= True,
+                        recursivelyNullable= const True}
 
-collectGrammarResults :: (Rank2.Apply g, Rank2.Traversable g) =>
-                         g (ResultList g s) -> g (DerivedResultList g s) -> g (ResultList g s)
-collectGrammarResults gd gdr = foldr1 (Rank2.liftA2 (<>)) (iterate rf gd [])
-   where rf = Rank2.traverse derivedResultList gdr
+recursiveOn :: (Rank2.Applicative g, Rank2.Traversable g) =>
+               [g (Analysis g i) -> Analysis g i x] -> Analysis g i a -> Analysis g i a
+recursiveOn accessors a = a{leftRecursiveOn= accessorIndex <$> accessors}
+   where accessorIndex accessor =
+            fromMaybe (error "should been ordered") (index $ accessor $ ordered $ Rank2.pure empty)
 
-iterate :: Rank2.Foldable g =>
-           (g (ResultList g s) -> g (ResultList g s)) -> g (ResultList g s)
-        -> [g (ResultList g s)]
-        -> [g (ResultList g s)]
-iterate f n ns = if getAll (Rank2.foldMap (either (const mempty) (All . null) . resultList) n')
-                 then n:ns else iterate f n' (n:ns)
-   where n' = f n
+ordered :: Rank2.Traversable g => g (Analysis g i) -> g (Analysis g i)
+ordered g = evalState (Rank2.traverse f g) 0
+   where f :: Analysis g i a -> State Int (Analysis g i a)
+         f a = do {n <- get; put (n+1); return a{index= Just n}}
 
-recursiveOn :: Parser g s x -> Parser g s r -> Parser g s r
-recursiveOn p q = q{nullable= nullable p,
-                    recursivelyNullable= recursivelyNullable p,
-                    recursive= recursive p *> recursive q}
+fixRecursive :: forall g i. (Rank2.Apply g, Rank2.Foldable g) =>
+                g (Const (g (Const Bool))) -> g (Parser g i) -> i -> [(i, g (ResultList g i))] -> g (ResultList g i)
+             -> g (ResultList g i)
+fixRecursive dependencies recursive s parsedTail initial =
+   foldr1 (whileAnyContinues dependencies) $ 
+   iterate (recurseOnce s parsedTail recursive) initial
+
+whileAnyContinues :: forall g i. (Rank2.Apply g, Rank2.Foldable g) => 
+                     g (Const (g (Const Bool))) -> g (ResultList g i) -> g (ResultList g i) -> g (ResultList g i)
+whileAnyContinues dependencies g1 g2 = Rank2.liftA3 choiceWhile dependencies g1 g2
+   where choiceWhile :: Const (g (Const Bool)) x -> ResultList g i x -> ResultList g i x -> ResultList g i x
+         combine :: Const Bool x -> ResultList g i x -> Const Bool x
+         choiceWhile (Const deps) r1 r2
+            | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps g1)) = r1 <> r2
+            | otherwise = r1
+         combine (Const False) _ = Const False
+         combine (Const True) (Parsed (_:_)) = Const True
+         combine (Const True) _ = Const False
+
+recurseOnce :: Rank2.Apply g =>
+               i -> [(i, g (ResultList g i))] -> g (Parser g i) -> g (ResultList g i) -> g (ResultList g i)
+recurseOnce s parsedTail recursive initial = Rank2.fmap (($ parsed). applyParser) recursive
+   where parsed = (s, initial):parsedTail

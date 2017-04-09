@@ -30,7 +30,7 @@ instance (Show (f t), Show (f e)) => Show (Conditionals t e f) where
 
 $(Rank2.TH.deriveAll ''Conditionals)
 
-conditionals :: ConditionalDomain t e => GrammarBuilder (Conditionals t e) g String
+conditionals :: ConditionalDomain t e => GrammarBuilder (Conditionals t e) g AST String
 conditionals Conditionals{..} =
    Conditionals{expr= ifThenElse <$> (keyword "if" *> test) <*> (keyword "then" *> term) <*> (keyword "else" *> term),
                 test= empty,
