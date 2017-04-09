@@ -4,16 +4,15 @@ module Text.Grampa (
    MonoidNull, FactorialMonoid, LeftReductiveMonoid, TextualMonoid,
    GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
    -- * Types
-   Grammar, GrammarBuilder, Analysis, AST, Parser, ParseResults,
+   Grammar, GrammarBuilder, AST, Parser, ParseResults,
    -- * Grammar and parser manipulation
    fixGrammar, parsePrefix, parseAll, parseNonRecursive, parseSeparated, simpleParse,
-   nullableRecursive, fixGrammarAST, nonTerminal,
+   fixGrammarAST, nonTerminal,
    -- * Parser combinators
    module Text.Parser.Char,
    module Text.Parser.Combinators,
    module Text.Parser.LookAhead,
    (<<|>),
-   leftRecursive, recursiveOn,
    -- * Parsing primitives
    endOfInput, getInput, anyToken, token, satisfy, satisfyChar, string,
    scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1, whiteSpace)
@@ -39,7 +38,6 @@ import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..))
 import Text.Grampa.Parser (Parser(applyParser), ParseResults, ResultList(..))
-import Text.Grampa.Analysis (Analysis(..), leftRecursive)
 import Text.Grampa.AST (AST, fixGrammarAST)
 import qualified Text.Grampa.Parser as Parser
 import qualified Text.Grampa.AST as AST
@@ -110,21 +108,6 @@ fixGrammar gf = gf selfReferring
 
 selfReferring :: Rank2.Distributive g => g (Parser g i)
 selfReferring = Rank2.distributeWith nonTerminal id
-
-nullableRecursive :: Analysis g i a -> Analysis g i a
-nullableRecursive a = a{nullable= True,
-                        recursivelyNullable= const True}
-
-recursiveOn :: (Rank2.Applicative g, Rank2.Traversable g) =>
-               [g (Analysis g i) -> Analysis g i x] -> Analysis g i a -> Analysis g i a
-recursiveOn accessors a = a{leftRecursiveOn= accessorIndex <$> accessors}
-   where accessorIndex accessor =
-            fromMaybe (error "should been ordered") (index $ accessor $ ordered $ Rank2.pure empty)
-
-ordered :: Rank2.Traversable g => g (Analysis g i) -> g (Analysis g i)
-ordered g = evalState (Rank2.traverse f g) 0
-   where f :: Analysis g i a -> State Int (Analysis g i a)
-         f a = do {n <- get; put (n+1); return a{index= Just n}}
 
 fixRecursive :: forall g i. (Rank2.Apply g, Rank2.Foldable g) =>
                 g (Const (g (Const Bool))) -> g (Parser g i) -> i -> [(i, g (ResultList g i))] -> g (ResultList g i)
