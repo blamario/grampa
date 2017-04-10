@@ -1,13 +1,11 @@
 {-# LANGUAGE RankNTypes, TypeFamilies #-}
 module Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..)) where
 
-import Control.Applicative (Alternative(many))
-import Data.Char (isSpace)
 import Data.Monoid (Monoid)
 import Data.Monoid.Cancellative (LeftReductiveMonoid)
 import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
-import Data.Monoid.Textual (TextualMonoid(singleton))
+import Data.Monoid.Textual (TextualMonoid)
 import Text.Parser.Combinators (Parsing)
 
 class GrammarParsing m where

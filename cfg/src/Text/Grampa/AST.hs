@@ -10,15 +10,14 @@ import Control.Monad (Monad(..), MonadPlus(..))
 import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
 
 import Data.Functor.Classes (Show1(..))
-import Data.Maybe (fromMaybe, isJust, maybe)
-import Data.Monoid (All(..), Any(..), (<>))
 import Data.IntMap (IntMap)
 import Data.IntSet (IntSet)
+import Data.Maybe (isJust, maybe)
 
 import qualified Data.IntMap as IntMap
 import qualified Data.IntSet as IntSet
 
-import Data.Monoid (Monoid(mempty), (<>))
+import Data.Monoid (Monoid(mempty), All(..), (<>))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
@@ -81,14 +80,14 @@ instance (Rank2.Distributive g, Rank2.Traversable g) => Show (AST g s a) where
    show ResultsWrap{} = error "ResultsWrap should be temporary only"
 
 instance (Rank2.Distributive g, Rank2.Traversable g) => Show1 (AST g s) where
-   liftShowsPrec _showsPrec _showList _prec (NonTerminal accessor) rest = "nt" ++ show i
+   liftShowsPrec _showsPrec _showList _prec (NonTerminal accessor) _rest = "nt" ++ show i
       where Index i = accessor (ordered selfReferring)
    liftShowsPrec _showsPrec _showL _prec (Primitive name _ _ _) rest = name ++ rest
    liftShowsPrec _showsPrec _showL _prec Recursive{} rest = "recursive" ++ rest
    liftShowsPrec _showsPrec _showL _prec (Map _ ast) rest = "(f <$> " ++ shows ast (")" ++ rest)
    liftShowsPrec _showsPrec _showL _prec (Ap f p) rest = "(" ++ show f ++ " <*> " ++ shows p (")" ++ rest)
    liftShowsPrec  showsPrec _showL  prec (Pure x) rest = "pure " ++ showsPrec prec x rest
-   liftShowsPrec _showsPrec _showL _prec Empty rest = "empty"
+   liftShowsPrec _showsPrec _showL _prec Empty _rest = "empty"
    liftShowsPrec _showsPrec _showL _prec (Bind ast _) rest = "(" ++ shows ast (" >>= " ++ ")" ++ rest)
    liftShowsPrec _showsPrec _showL _prec (Choice l r) rest = "(" ++ show l ++ " <|> " ++ shows r (")" ++ rest)
    liftShowsPrec _showsPrec _showL _prec (BiasedChoice l r) rest = "(" ++ show l ++ " <<|> " ++ shows r (")" ++ rest)
@@ -217,7 +216,8 @@ toParser (Lookahead ast) = lookAhead (toParser ast)
 toParser (Many ast) = many (toParser ast)
 toParser (Some ast) = some (toParser ast)
 toParser (ConcatMany ast) = concatMany (toParser ast)
-toParser (ResultsWrap _) = error "ResultsWrap should be temporary only"
+toParser Index{} = error "Index should be temporary only"
+toParser ResultsWrap{} = error "ResultsWrap should be temporary only"
 
 splitDirect :: (Rank2.Functor g, FactorialMonoid s) => AST g s a -> (AST g s a, AST g s a)
 splitDirect ast@NonTerminal{} = (empty, ast)
@@ -253,13 +253,13 @@ splitDirect (Some ast) = ((:) <$> d <*> ast', (:) <$> n <*> ast')
          ast' = Many ast
 splitDirect ast@(ConcatMany ast1) = (pure mempty <|> (<>) <$> d <*> ast, (<>) <$> n <*> ast)
    where (d, n) = splitDirect ast1
-splitDirect (ResultsWrap _) = error "ResultsWrap should be temporary only"
+splitDirect Index{} = error "Index should be temporary only"
+splitDirect ResultsWrap{} = error "ResultsWrap should be temporary only"
 
 splitNullable :: MonoidNull s => AST g s a -> (AST g s a, AST g s a)
 splitNullable ast@NonTerminal{} = (ast, empty)
-splitNullable NonTerminal{} = error "Can't tell if a nonterminal is nullable"
-splitNullable ast@(Primitive name p0 p1 _) = (maybe empty (\p-> Primitive name (Just p) Nothing p) p0,
-                                              maybe empty (\p-> Primitive name Nothing (Just p) p) p1)
+splitNullable (Primitive name p0 p1 _) = (maybe empty (\p-> Primitive name (Just p) Nothing p) p0,
+                                          maybe empty (\p-> Primitive name Nothing (Just p) p) p1)
 splitNullable (Recursive ast) = both Recursive (splitNullable ast)
 splitNullable (Map f ast) = both (f <$>) (splitNullable ast)
 splitNullable (Ap f a)
@@ -296,12 +296,12 @@ both :: (a -> b) -> (a, a) -> (b, b)
 both f (x, y) = (f x, f y)
 
 leftDescendants :: forall g s. (Rank2.Apply g, Rank2.Traversable g) => g (AST g s) -> g (Const (Bool, g (Const Bool)))
-leftDescendants g = evalState (Rank2.traverse addDepth g) $
+leftDescendants g = evalState (Rank2.traverse (const replaceFromList) g) $ map (setToBools <$>) $
                     IntMap.elems $ calcLeftSets $ IntMap.fromList $ zip [0..] $ Rank2.foldMap successorSet g
-   where addDepth :: AST g s a -> State [(Bool, IntSet)] (Const (Bool, g (Const Bool)) a)
-         addDepth a = do (cyclic, descendants):rest <- get
-                         put rest
-                         return (Const (cyclic, setToBools descendants))
+   where replaceFromList :: State [x] (Const x y)
+         replaceFromList = do next:rest <- get
+                              put rest
+                              return (Const next)
          setToBools :: IntSet -> g (Const Bool)
          setToBools = Rank2.traverse isElem enumeration
          isElem :: AST g s a -> IntSet -> Const Bool a
@@ -316,11 +316,11 @@ leftDescendants g = evalState (Rank2.traverse addDepth g) $
             where Index i = accessor enumeration
          leftRecursiveOn Primitive{} = mempty
          leftRecursiveOn (Recursive ast) = leftRecursiveOn ast
-         leftRecursiveOn (Map f ast) = leftRecursiveOn ast
+         leftRecursiveOn (Map _ ast) = leftRecursiveOn ast
          leftRecursiveOn (Ap f p) = leftRecursiveOn f <> if nullable g0 f then leftRecursiveOn p else mempty
-         leftRecursiveOn (Pure a) = mempty
+         leftRecursiveOn Pure{} = mempty
          leftRecursiveOn Empty = mempty
-         leftRecursiveOn (Bind ast cont) = if nullable g0 ast then universe else leftRecursiveOn ast
+         leftRecursiveOn (Bind ast _cont) = if nullable g0 ast then universe else leftRecursiveOn ast
          leftRecursiveOn (Choice l r) = leftRecursiveOn l <> leftRecursiveOn r
          leftRecursiveOn (BiasedChoice l r) = leftRecursiveOn l <> leftRecursiveOn r
          leftRecursiveOn (Try ast) = leftRecursiveOn ast
@@ -338,18 +338,18 @@ nullable _  (Primitive _name z _ _) = isJust z
 nullable gn (Recursive ast) = nullable gn ast
 nullable gn (Map _ ast) = nullable gn ast
 nullable gn (Ap f p) = nullable gn f && nullable gn p
-nullable _  (Pure a) = True
+nullable _  Pure{} = True
 nullable _  Empty = False
-nullable gn (Bind ast cont) = nullable gn ast
+nullable gn (Bind ast _cont) = nullable gn ast
 nullable gn (Choice l r) = nullable gn l || nullable gn r
 nullable gn (BiasedChoice l r) = nullable gn l || nullable gn r
 nullable gn (Try ast) = nullable gn ast
 nullable gn (Describe ast _) = nullable gn ast
-nullable _  (NotFollowedBy ast) = True
-nullable _  (Lookahead ast) = True
-nullable _  (Many ast) = True
+nullable _  NotFollowedBy{} = True
+nullable _  Lookahead{} = True
+nullable _  Many{} = True
 nullable gn (Some ast) = nullable gn ast
-nullable _  (ConcatMany ast) = True
+nullable _  ConcatMany{} = True
 
 fixNullable :: (Rank2.Apply g, Rank2.Foldable g) => g (AST g s) -> g (Const Bool)
 fixNullable g = go (Rank2.fmap (const $ Const True) g)
@@ -360,9 +360,9 @@ fixNullable g = go (Rank2.fmap (const $ Const True) g)
          agree x y = Const (x == y)
 
 ordered :: Rank2.Traversable g => g (AST g s) -> g (AST g s)
-ordered g = evalState (Rank2.traverse f g) 0
-   where f :: AST g s a -> State Int (AST g s a)
-         f a = do {n <- get; put (n+1); return (Index n)}
+ordered g = evalState (Rank2.traverse (const increment) g) 0
+   where increment :: State Int (AST g s a)
+         increment = do {n <- get; put (n+1); return (Index n)}
 
 data AdvanceFront = AdvanceFront{visited       :: IntSet,
                                  cyclic        :: Bool,
@@ -380,9 +380,9 @@ calcLeftSets successors = (cyclic &&& visited) <$> expandPaths initialDepths
                   expandReachables x = 
                      AdvanceFront{visited= visited x <> front x,
                                   cyclic= cyclic x || not (IntSet.null $ IntSet.intersection (front x) (visited x)),
-                                  front= IntSet.foldr' advance mempty (IntSet.difference (front x) (visited x))}
-         advance :: Int -> IntSet -> IntSet
-         advance node front = front <> successors IntMap.! node
+                                  front= IntSet.foldr' addSuccessors mempty (IntSet.difference (front x) (visited x))}
+         addSuccessors :: Int -> IntSet -> IntSet
+         addSuccessors node set = set <> successors IntMap.! node
          initialDepths = IntMap.mapWithKey setToFront successors
          setToFront root set = AdvanceFront{visited= mempty,
                                             cyclic= IntSet.member root set,

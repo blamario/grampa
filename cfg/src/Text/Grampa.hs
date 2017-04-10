@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, KindSignatures, RankNTypes, RecordWildCards, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, KindSignatures, RankNTypes, ScopedTypeVariables #-}
 module Text.Grampa (
    -- * Classes
    MonoidNull, FactorialMonoid, LeftReductiveMonoid, TextualMonoid,
@@ -7,23 +7,16 @@ module Text.Grampa (
    Grammar, GrammarBuilder, AST, Parser, ParseResults,
    -- * Grammar and parser manipulation
    fixGrammar, parsePrefix, parseAll, parseNonRecursive, parseSeparated, simpleParse,
-   fixGrammarAST, nonTerminal,
+   fixGrammarAST,
    -- * Parser combinators
    module Text.Parser.Char,
    module Text.Parser.Combinators,
-   module Text.Parser.LookAhead,
-   (<<|>),
-   -- * Parsing primitives
-   endOfInput, getInput, anyToken, token, satisfy, satisfyChar, string,
-   scan, scanChars, takeWhile, takeWhile1, takeCharsWhile, takeCharsWhile1, whiteSpace)
+   module Text.Parser.LookAhead)
 where
 
 import Control.Applicative
-import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
 
-import Data.Maybe (fromMaybe)
 import Data.Monoid (Any(..), (<>))
-
 import Data.Monoid.Cancellative (LeftReductiveMonoid)
 import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
@@ -74,13 +67,13 @@ newtype Couple f a = Couple{unCouple :: (f a, f a)} deriving Show
 
 parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Traversable g, FactorialMonoid s) =>
                   g (AST g s) -> s -> [(s, g (ResultList g s))]
-parseRecursive ast = parseSeparated descendants (Rank2.fmap AST.toParser recursive) (Rank2.fmap AST.toParser direct)
+parseRecursive ast = parseSeparated descendants (Rank2.fmap AST.toParser indirect) (Rank2.fmap AST.toParser direct)
    where directRecursive = Rank2.fmap (Couple . AST.splitDirect) ast
          cyclicDescendants = AST.leftDescendants ast
          cyclic = Rank2.fmap (mapConst fst) cyclicDescendants
          descendants = Rank2.liftA3 cond cyclic (Rank2.fmap (mapConst snd) cyclicDescendants) noDescendants
          direct = Rank2.liftA3 cond cyclic (Rank2.fmap (fst . unCouple) directRecursive) ast
-         recursive = Rank2.liftA3 cond cyclic (Rank2.fmap (snd . unCouple) directRecursive) emptyGrammar
+         indirect = Rank2.liftA3 cond cyclic (Rank2.fmap (snd . unCouple) directRecursive) emptyGrammar
          emptyGrammar :: g (AST g s)
          emptyGrammar = Rank2.fmap (const empty) ast
          noDescendants = Rank2.fmap (const $ Const $ Rank2.fmap (const $ Const False) ast) ast
@@ -94,13 +87,33 @@ parseNonRecursive g input = foldr parseTail [] (Factorial.tails input) where
     parsed = (s,d):parsedTail
     d      = Rank2.fmap (($ parsed) . applyParser) g
 
-parseSeparated :: (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) =>
+parseSeparated :: forall g s. (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) =>
                   g (Const (g (Const Bool))) -> g (Parser g s) -> g (Parser g s) -> s -> [(s, g (ResultList g s))]
-parseSeparated dependencies recursive direct input = foldr parseTail [] (Factorial.tails input)
+parseSeparated dependencies indirect direct input = foldr parseTail [] (Factorial.tails input)
    where parseTail s parsedTail = parsed
             where parsed = (s,d'):parsedTail
                   d      = Rank2.fmap (($ (s,d):parsedTail) . applyParser) direct
-                  d'     = fixRecursive dependencies recursive s parsedTail d
+                  d'     = fixRecursive s parsedTail d
+
+         fixRecursive :: s -> [(s, g (ResultList g s))] -> g (ResultList g s) -> g (ResultList g s)
+         whileAnyContinues :: g (ResultList g s) -> g (ResultList g s) -> g (ResultList g s)
+         recurseOnce :: s -> [(s, g (ResultList g s))] -> g (ResultList g s) -> g (ResultList g s)
+
+         fixRecursive s parsedTail initial =
+            foldr1 whileAnyContinues (iterate (recurseOnce s parsedTail) initial)
+
+         whileAnyContinues g1 g2 = Rank2.liftA3 choiceWhile dependencies g1 g2
+            where choiceWhile :: Const (g (Const Bool)) x -> ResultList g i x -> ResultList g i x -> ResultList g i x
+                  combine :: Const Bool x -> ResultList g i x -> Const Bool x
+                  choiceWhile (Const deps) r1 r2
+                     | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps g1)) = r1 <> r2
+                     | otherwise = r1
+                  combine (Const False) _ = Const False
+                  combine (Const True) (Parsed (_:_)) = Const True
+                  combine (Const True) _ = Const False
+
+         recurseOnce s parsedTail initial = Rank2.fmap (($ parsed). applyParser) indirect
+            where parsed = (s, initial):parsedTail
 
 -- | Produce a 'Grammar' from its recursive definition
 fixGrammar :: Rank2.Distributive g => (g (Parser g i) -> g (Parser g i)) -> g (Parser g i)
@@ -108,27 +121,3 @@ fixGrammar gf = gf selfReferring
 
 selfReferring :: Rank2.Distributive g => g (Parser g i)
 selfReferring = Rank2.distributeWith nonTerminal id
-
-fixRecursive :: forall g i. (Rank2.Apply g, Rank2.Foldable g) =>
-                g (Const (g (Const Bool))) -> g (Parser g i) -> i -> [(i, g (ResultList g i))] -> g (ResultList g i)
-             -> g (ResultList g i)
-fixRecursive dependencies recursive s parsedTail initial =
-   foldr1 (whileAnyContinues dependencies) $ 
-   iterate (recurseOnce s parsedTail recursive) initial
-
-whileAnyContinues :: forall g i. (Rank2.Apply g, Rank2.Foldable g) => 
-                     g (Const (g (Const Bool))) -> g (ResultList g i) -> g (ResultList g i) -> g (ResultList g i)
-whileAnyContinues dependencies g1 g2 = Rank2.liftA3 choiceWhile dependencies g1 g2
-   where choiceWhile :: Const (g (Const Bool)) x -> ResultList g i x -> ResultList g i x -> ResultList g i x
-         combine :: Const Bool x -> ResultList g i x -> Const Bool x
-         choiceWhile (Const deps) r1 r2
-            | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps g1)) = r1 <> r2
-            | otherwise = r1
-         combine (Const False) _ = Const False
-         combine (Const True) (Parsed (_:_)) = Const True
-         combine (Const True) _ = Const False
-
-recurseOnce :: Rank2.Apply g =>
-               i -> [(i, g (ResultList g i))] -> g (Parser g i) -> g (ResultList g i) -> g (ResultList g i)
-recurseOnce s parsedTail recursive initial = Rank2.fmap (($ parsed). applyParser) recursive
-   where parsed = (s, initial):parsedTail
