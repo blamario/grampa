@@ -18,6 +18,7 @@ import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(.
 class Functor g where
    (<$>) :: (forall a. p a -> q a) -> g p -> g q
 
+-- | Alphabetical synonym for '<$>'
 fmap :: Functor g => (forall a. p a -> q a) -> g p -> g q
 fmap = (<$>)
 
@@ -29,21 +30,26 @@ class Foldable g where
 class (Functor g, Foldable g) => Traversable g where
    traverse :: Rank1.Applicative m => (forall a. p a -> m (q a)) -> g p -> m (g q)
 
+-- | Wrapper for functions that map the argument constructor type
 newtype Arrow p q a = Arrow{apply :: p a -> q a}
 
 -- | Subclass of 'Functor' halfway to 'Applicative'
 --
 -- > (.) <$> u <*> v <*> w == u <*> (v <*> w)
 class Functor g => Apply g where
+   -- | Equivalent of 'Rank1.<*>' for rank 2 data types
    (<*>) :: g (Arrow p q) -> g p -> g q
+   -- | Equivalent of 'Rank1.liftA2' for rank 2 data types
    liftA2 :: (forall a. p a -> q a -> r a) -> g p -> g q -> g r
 
    (<*>) = liftA2 apply
    liftA2 f g h = (Arrow . f) <$> g <*> h
 
+-- | Alphabetical synonym for '<*>'
 ap :: Apply g => g (Arrow p q) -> g p -> g q
 ap = (<*>)
 
+-- | Equivalent of 'Rank1.liftA3' for rank 2 data types
 liftA3 :: Apply g => (forall a. p a -> q a -> r a -> s a) -> g p -> g q -> g r -> g s
 liftA3 f g h i = (\x-> Arrow (Arrow . f x)) <$> g <*> h <*> i
 
@@ -54,10 +60,12 @@ class Apply g => Applicative g where
 -- | Equivalent of 'Distributive' for rank 2 data types
 class Functor g => Distributive g where
    collect :: Rank1.Functor f1 => (a -> g f2) -> f1 a -> g (Compose f1 f2)
+   distribute :: Rank1.Functor f1 => f1 (g f2) -> g (Compose f1 f2)
    distributeWith :: Rank1.Functor f1 => (forall x. f1 (f2 x) -> f x) -> f1 (g f2) -> g f
    distributeM :: Rank1.Monad f => f (g f) -> g f
 
-   collect f = distributeWith Compose . Rank1.fmap f
+   collect f = distribute . Rank1.fmap f
+   distribute = distributeWith Compose
    distributeM = distributeWith Rank1.join
 
 data Empty (f :: * -> *) = Empty deriving (Eq, Ord, Show)
