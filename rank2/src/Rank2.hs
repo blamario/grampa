@@ -104,7 +104,7 @@ instance Rank1.Traversable g => Rank2.Traversable (Flip g a) where
    traverse f (Flip g) = Flip Rank1.<$> Rank1.traverse f g
 
 instance Functor Empty where
-   _ <$> Empty = Empty
+   _ <$> _ = Empty
 
 instance Functor (Only a) where
    f <$> Only a = Only (f a)
@@ -113,10 +113,10 @@ instance Functor g => Functor (Identity g) where
    f <$> Identity g = Identity (f <$> g)
 
 instance (Functor g, Functor h) => Functor (Product g h) where
-   f <$> Pair g h = Pair (f <$> g) (f <$> h)
+   f <$> g = Pair (f <$> fst g) (f <$> snd g)
 
 instance Foldable Empty where
-   foldMap _ Empty = mempty
+   foldMap _ _ = mempty
 
 instance Foldable (Only x) where
    foldMap f (Only x) = f x
@@ -125,10 +125,10 @@ instance Foldable g => Foldable (Identity g) where
    foldMap f (Identity g) = foldMap f g
 
 instance (Foldable g, Foldable h) => Foldable (Product g h) where
-   foldMap f (Pair g h) = foldMap f g <> foldMap f h
+   foldMap f ~(Pair g h) = foldMap f g <> foldMap f h
 
 instance Traversable Empty where
-   traverse _ Empty = Rank1.pure Empty
+   traverse _ _ = Rank1.pure Empty
 
 instance Traversable (Only x) where
    traverse f (Only x) = Only Rank1.<$> f x
@@ -137,19 +137,19 @@ instance Traversable g => Traversable (Identity g) where
    traverse f (Identity g) = Identity Rank1.<$> traverse f g
 
 instance (Traversable g, Traversable h) => Traversable (Product g h) where
-   traverse f (Pair g h) = Pair Rank1.<$> traverse f g Rank1.<*> traverse f h
+   traverse f ~(Pair g h) = Rank1.liftA2 Pair (traverse f g) (traverse f h)
 
 instance Apply Empty where
-   Empty <*> Empty = Empty
+   _ <*> _ = Empty
    liftA2 _ _ _ = Empty
 
 instance Apply (Only x) where
    Only f <*> Only x = Only (apply f x)
-   liftA2 f ~(Only x) ~(Only y) = Only (f x y)
+   liftA2 f (Only x) (Only y) = Only (f x y)
 
 instance Apply g => Apply (Identity g) where
    Identity g <*> Identity h = Identity (g <*> h)
-   liftA2 f ~(Identity g) ~(Identity h) = Identity (liftA2 f g h)
+   liftA2 f (Identity g) (Identity h) = Identity (liftA2 f g h)
 
 instance (Apply g, Apply h) => Apply (Product g h) where
    gf <*> gx = Pair (fst gf <*> fst gx) (snd gf <*> snd gx)

@@ -90,7 +90,7 @@ genFmapClause :: Con -> Q Clause
 genFmapClause (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
-   let pats = [varP f, conP name (map varP fieldNames)]
+   let pats = [varP f, tildeP (conP name $ map varP fieldNames)]
        body = normalB $ appsE $ conE name : zipWith newField fieldNames fieldTypes
        newField :: Name -> BangType -> Q Exp
        newField x (_, fieldType) = do
@@ -115,7 +115,7 @@ genApClause :: Con -> Q Clause
 genApClause (NormalC name fieldTypes) = do
    fieldNames1 <- replicateM (length fieldTypes) (newName "x")
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
-   let pats = [conP name (map varP fieldNames1), conP name (map varP fieldNames2)]
+   let pats = [tildeP (conP name $ map varP fieldNames1), tildeP (conP name $ map varP fieldNames2)]
        body = normalB $ appsE $ conE name : zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
        newField :: (Name, Name) -> BangType -> Q Exp
        newField (x, y) (_, fieldType) = do
@@ -154,7 +154,7 @@ genFoldMapClause :: Con -> Q Clause
 genFoldMapClause (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
-   let pats = [varP f, conP name (map varP fieldNames)]
+   let pats = [varP f, tildeP (conP name $ map varP fieldNames)]
        body = normalB $ foldr1 append $ zipWith newField fieldNames fieldTypes
        append a b = [| $(a) <> $(b) |]
        newField :: Name -> BangType -> Q Exp
@@ -181,7 +181,7 @@ genTraverseClause :: Con -> Q Clause
 genTraverseClause (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
-   let pats = [varP f, conP name (map varP fieldNames)]
+   let pats = [varP f, tildeP (conP name $ map varP fieldNames)]
        body = normalB $ fst $ foldl apply (conE name, False) $ zipWith newField fieldNames fieldTypes
        apply (a, False) b = ([| $(a) <$> $(b) |], True)
        apply (a, True) b = ([| $(a) <*> $(b) |], True)
