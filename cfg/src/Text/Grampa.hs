@@ -54,9 +54,9 @@ parseAll g prod input = (fst <$>) <$>
                         Parser.fromResultList input (prod $ snd $ head $ reparse close $ parseRecursive g input)
    where close = Rank2.fmap (<* endOfInput) selfReferring
 
-simpleParse :: FactorialMonoid s => Parser (Rank2.Singleton r) s r -> s -> ParseResults (r, s)
+simpleParse :: FactorialMonoid s => Parser (Rank2.Only r) s r -> s -> ParseResults (r, s)
 simpleParse p input =
-   Parser.fromResultList input (Rank2.getSingle $ snd $ head $ parseNonRecursive (Rank2.Singleton p) input)
+   Parser.fromResultList input (Rank2.fromOnly $ snd $ head $ parseNonRecursive (Rank2.Only p) input)
 
 reparse :: Rank2.Functor g => g (Parser g s) -> [(s, g (ResultList g s))] -> [(s, g (ResultList g s))]
 reparse _ [] = []

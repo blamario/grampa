@@ -121,14 +121,14 @@ tests = testGroup "Grampa" [
          
          lookAheadP xs (DescribedParser _ p) =
             simpleParse (lookAhead p) xs == (map (const xs <$>) <$> (simpleParse p xs))
-         lookAheadConsumeP (DescribedParser _ p) = (lookAhead p *> p :: Parser (Rank2.Singleton [Bool]) String [Bool])
+         lookAheadConsumeP (DescribedParser _ p) = (lookAhead p *> p :: Parser (Rank2.Only [Bool]) String [Bool])
                                                    =-= p
          lookAheadOrNotP (DescribedParser _ p) = within 2000000 $
-            (notFollowedBy p <|> lookAhead p) =-= (mempty :: Parser (Rank2.Singleton ()) String ())
+            (notFollowedBy p <|> lookAhead p) =-= (mempty :: Parser (Rank2.Only ()) String ())
          lookAheadNotAndP (DescribedParser _ p) = within 2000000 $
-            (notFollowedBy p *> p) =-= (empty :: Parser (Rank2.Singleton [Bool]) String [Bool])
+            (notFollowedBy p *> p) =-= (empty :: Parser (Rank2.Only [Bool]) String [Bool])
          lookAheadNotNotP (DescribedParser d p) =
-            notFollowedBy (notFollowedBy p) =-= (void (lookAhead p) :: Parser (Rank2.Singleton ()) String ())
+            notFollowedBy (notFollowedBy p) =-= (void (lookAhead p) :: Parser (Rank2.Only ()) String ())
          lookAheadTokenP x xs = simpleParse (lookAhead anyToken) (x:xs) == Right [([x], x:xs)]
 
 instance Enumerable (DescribedParser s r) => Arbitrary (DescribedParser s r) where
@@ -153,7 +153,7 @@ instance (Show s, MonoidNull s, Monoid r) => Monoid (DescribedParser s r) where
    DescribedParser d1 p1 `mappend` DescribedParser d2 p2 = DescribedParser (d1 ++ " <> " ++ d2) (mappend p1 p2)
 
 instance (Ord r, Show r, EqProp r, Eq s, EqProp s, Show s, FactorialMonoid s, Arbitrary s) =>
-         EqProp (Parser (Rank2.Singleton r) s r) where
+         EqProp (Parser (Rank2.Only r) s r) where
    p1 =-= p2 = forAll arbitrary (\s-> nub (results $ simpleParse p1 s) =-= nub (results $ simpleParse p2 s))
 
 instance (FactorialMonoid s, Show s, EqProp s, Arbitrary s, Ord r, Show r, EqProp r, Typeable r) =>

@@ -1,7 +1,7 @@
 {-# LANGUAGE InstanceSigs, KindSignatures, Rank2Types, ScopedTypeVariables #-}
 module Rank2 (Functor(..), Apply(..), Applicative(..),
               Foldable(..), Traversable(..), Distributive(..),
-              Compose(..), Empty(..), Singleton(..), Identity(..), Product(..), Arrow(..),
+              Compose(..), Empty(..), Only(..), Identity(..), Product(..), Arrow(..),
               ap, fmap, liftA3)
 where
 
@@ -68,9 +68,11 @@ class Functor g => Distributive g where
    distribute = distributeWith Compose
    distributeM = distributeWith Rank1.join
 
+-- | A rank-2 equivalent of '()', a zero-element tuple
 data Empty (f :: * -> *) = Empty deriving (Eq, Ord, Show)
 
-newtype Singleton a (f :: * -> *) = Singleton {getSingle :: f a} deriving (Eq, Ord, Show)
+-- | A rank-2 tuple of only one element
+newtype Only a (f :: * -> *) = Only {fromOnly :: f a} deriving (Eq, Ord, Show)
 
 -- | Equivalent of 'Data.Functor.Identity' for rank 2 data types
 newtype Identity g (f :: * -> *) = Identity {runIdentity :: g f} deriving (Eq, Ord, Show)
@@ -104,8 +106,8 @@ instance Rank1.Traversable g => Rank2.Traversable (Flip g a) where
 instance Functor Empty where
    _ <$> Empty = Empty
 
-instance Functor (Singleton a) where
-   f <$> Singleton a = Singleton (f a)
+instance Functor (Only a) where
+   f <$> Only a = Only (f a)
 
 instance Functor g => Functor (Identity g) where
    f <$> Identity g = Identity (f <$> g)
@@ -116,8 +118,8 @@ instance (Functor g, Functor h) => Functor (Product g h) where
 instance Foldable Empty where
    foldMap _ Empty = mempty
 
-instance Foldable (Singleton x) where
-   foldMap f (Singleton x) = f x
+instance Foldable (Only x) where
+   foldMap f (Only x) = f x
 
 instance Foldable g => Foldable (Identity g) where
    foldMap f (Identity g) = foldMap f g
@@ -128,8 +130,8 @@ instance (Foldable g, Foldable h) => Foldable (Product g h) where
 instance Traversable Empty where
    traverse _ Empty = Rank1.pure Empty
 
-instance Traversable (Singleton x) where
-   traverse f (Singleton x) = Singleton Rank1.<$> f x
+instance Traversable (Only x) where
+   traverse f (Only x) = Only Rank1.<$> f x
 
 instance Traversable g => Traversable (Identity g) where
    traverse f (Identity g) = Identity Rank1.<$> traverse f g
@@ -141,9 +143,9 @@ instance Apply Empty where
    Empty <*> Empty = Empty
    liftA2 _ _ _ = Empty
 
-instance Apply (Singleton x) where
-   Singleton f <*> Singleton x = Singleton (apply f x)
-   liftA2 f ~(Singleton x) ~(Singleton y) = Singleton (f x y)
+instance Apply (Only x) where
+   Only f <*> Only x = Only (apply f x)
+   liftA2 f ~(Only x) ~(Only y) = Only (f x y)
 
 instance Apply g => Apply (Identity g) where
    Identity g <*> Identity h = Identity (g <*> h)
@@ -156,8 +158,8 @@ instance (Apply g, Apply h) => Apply (Product g h) where
 instance Applicative Empty where
    pure = const Empty
 
-instance Applicative (Singleton x) where
-   pure = Singleton
+instance Applicative (Only x) where
+   pure = Only
 
 instance Applicative g => Applicative (Identity g) where
    pure f = Identity (pure f)
@@ -169,9 +171,9 @@ instance Distributive Empty where
    distributeWith _ _ = Empty
    distributeM _ = Empty
 
-instance Distributive (Singleton x) where
-   distributeWith w f = Singleton (w $ Rank1.fmap getSingle f)
-   distributeM f = Singleton (f >>= getSingle)
+instance Distributive (Only x) where
+   distributeWith w f = Only (w $ Rank1.fmap fromOnly f)
+   distributeM f = Only (f >>= fromOnly)
 
 instance Distributive g => Distributive (Identity g) where
    distributeWith w f = Identity (distributeWith w $ Rank1.fmap runIdentity f)
