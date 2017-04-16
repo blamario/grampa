@@ -97,6 +97,7 @@ genFmapClause (NormalC name fieldTypes) = do
           Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> [| $(varE f) $(varE x) |]
+             AppT _ ty | ty == VarT typeVar -> [| Rank2.fmap $(varE f) $(varE x) |]
              _ -> [| $(varE x) |]
    clause pats body []
 genFmapClause (RecC name fields) = do
@@ -107,7 +108,10 @@ genFmapClause (RecC name fields) = do
        newNamedField (fieldName, _, fieldType) = do
           Just (Deriving _ typeVar) <- getQ
           case fieldType of
-             AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE f) ($(varE fieldName) $(varE x)) |]
+             AppT ty _
+                | ty == VarT typeVar -> fieldExp fieldName [| $(varE f) ($(varE fieldName) $(varE x)) |]
+             AppT _ ty
+                | ty == VarT typeVar -> fieldExp fieldName [| Rank2.fmap $(varE f) ($(varE fieldName) $(varE x)) |]
              _ -> fieldExp fieldName [| $(varE x) |]
    clause [varP f, varP x] body []
  
@@ -122,6 +126,7 @@ genApClause (NormalC name fieldTypes) = do
           Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> [| Rank2.apply $(varE x) $(varE y) |]
+             AppT _ ty | ty == VarT typeVar -> [| Rank2.ap $(varE x) $(varE y) |]
    clause pats body []
 genApClause (RecC name fields) = do
    x <- newName "x"
@@ -133,12 +138,20 @@ genApClause (RecC name fields) = do
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE fieldName) $(varE x) `Rank2.apply`
                                                                        $(varE fieldName) $(varE y) |]
+             AppT _ ty | ty == VarT typeVar -> fieldExp fieldName [| $(varE fieldName) $(varE x) `Rank2.ap`
+                                                                       $(varE fieldName) $(varE y) |]
    clause [varP x, varP y] body []
 
 genPureClause :: Con -> Q Clause
 genPureClause (NormalC name fieldTypes) = do
    argName <- newName "f"
-   let body = normalB $ appsE $ conE name : replicate (length fieldTypes) (varE argName)
+   let body = normalB $ appsE $ conE name : map newField fieldTypes
+       newField :: BangType -> Q Exp
+       newField (_, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
+          case fieldType of
+             AppT ty _ | ty == VarT typeVar -> varE argName
+             AppT _ ty | ty == VarT typeVar -> appE (varE 'Rank2.pure) (varE argName)
    clause [varP argName] body []
 genPureClause (RecC name fields) = do
    argName <- newName "f"
@@ -148,6 +161,7 @@ genPureClause (RecC name fields) = do
           Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> fieldExp fieldName (varE argName)
+             AppT _ ty | ty == VarT typeVar -> fieldExp fieldName (appE (varE 'Rank2.pure) $ varE argName)
    clause [varP argName] body []
 
 genFoldMapClause :: Con -> Q Clause
@@ -162,6 +176,7 @@ genFoldMapClause (NormalC name fieldTypes) = do
           Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> [| $(varE f) $(varE x) |]
+             AppT _ ty | ty == VarT typeVar -> [| Rank2.foldMap $(varE f) $(varE x) |]
              _ -> [| $(varE x) |]
    clause pats body []
 genFoldMapClause (RecC _name fields) = do
@@ -174,6 +189,7 @@ genFoldMapClause (RecC _name fields) = do
           Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> [| $(varE f) ($(varE fieldName) $(varE x)) |]
+             AppT _ ty | ty == VarT typeVar -> [| Rank2.foldMap $(varE f) ($(varE fieldName) $(varE x)) |]
              _ -> [| $(varE x) |]
    clause [varP f, varP x] body []
 
@@ -190,6 +206,7 @@ genTraverseClause (NormalC name fieldTypes) = do
           Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> [| $(varE f) $(varE x) |]
+             AppT _ ty | ty == VarT typeVar -> [| Rank2.traverse $(varE f) $(varE x) |]
              _ -> [| $(varE x) |]
    clause pats body []
 genTraverseClause (RecC name fields) = do
@@ -203,6 +220,7 @@ genTraverseClause (RecC name fields) = do
           Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> [| $(varE f) ($(varE fieldName) $(varE x)) |]
+             AppT _ ty | ty == VarT typeVar -> [| Rank2.traverse $(varE f) ($(varE fieldName) $(varE x)) |]
              _ -> [| $(varE x) |]
    clause [varP f, varP x] body []
 
@@ -215,6 +233,8 @@ genDistributeMClause (RecC name fields) = do
           Just (Deriving _ typeVar) <- getQ
           case fieldType of
              AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE argName) >>= $(varE fieldName) |]
+             AppT _ ty | ty == VarT typeVar ->
+                         fieldExp fieldName [| Rank2.distributeM ($(varE fieldName) <$> $(varE argName)) |]
    clause [varP argName] body []
 
 genDistributeWithClause :: Con -> Q Clause
@@ -228,4 +248,7 @@ genDistributeWithClause (RecC name fields) = do
           case fieldType of
              AppT ty _
                 | ty == VarT typeVar -> fieldExp fieldName [| $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
+             AppT _ ty
+                | ty == VarT typeVar ->
+                  fieldExp fieldName [| Rank2.distributeWith $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
    clause [varP withName, varP argName] body []

@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, RecordWildCards, UndecidableInstances #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, RecordWildCards, TemplateHaskell, UndecidableInstances #-}
 
 module Combined where
 
@@ -8,6 +8,7 @@ import Data.Monoid ((<>))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Rank2
+import qualified Rank2.TH
 import Text.Grampa (AST, GrammarBuilder)
 import qualified Arithmetic
 import qualified Boolean
@@ -117,6 +118,9 @@ instance (Show (f Domain), Show (f String)) => Show (Expression f) where
                            (", conditionalGrammar=" ++ showsPrec prec (conditionalGrammar g)
                            (", lambdaGrammar=" ++ showsPrec prec (lambdaGrammar g) ("}" ++ rest))))))
 
+$(Rank2.TH.deriveAll ''Expression)
+
+{-
 instance Rank2.Functor Expression where
    f <$> g = g{expr= f (expr g),
                term= f (term g),
@@ -181,6 +185,7 @@ instance Rank2.Traversable Expression where
                   <*> Rank2.traverse f (comparisonGrammar g)
                   <*> Rank2.traverse f (conditionalGrammar g)
                   <*> Rank2.traverse f (lambdaGrammar g)
+-}
 
 expression :: GrammarBuilder Expression g AST String
 expression Expression{..} =
