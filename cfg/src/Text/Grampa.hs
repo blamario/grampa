@@ -4,9 +4,9 @@ module Text.Grampa (
    MonoidNull, FactorialMonoid, LeftReductiveMonoid, TextualMonoid,
    GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
    -- * Types
-   Grammar, GrammarBuilder, AST, Parser, ParseResults,
+   Grammar, GrammarBuilder, AST, Parser, ParseResults(..),
    -- * Grammar and parser manipulation
-   fixGrammar, parsePrefix, parseAll, parseNonRecursive, parseSeparated, simpleParse,
+   fixGrammar, parsePrefix, parseAll, parseSeparated, simpleParse,
    fixGrammarAST,
    -- * Parser combinators
    module Text.Parser.Char,
@@ -28,9 +28,10 @@ import Text.Parser.Char (CharParsing(char, notChar, anyChar))
 import Text.Parser.Combinators (Parsing((<?>), notFollowedBy, skipMany, skipSome, unexpected))
 import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 
+import Data.Functor.Compose (Compose(..))
 import qualified Rank2
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..))
-import Text.Grampa.Parser (Parser(applyParser), ParseResults, ResultList(..))
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..), ParseResults(..))
+import Text.Grampa.Parser (Parser(applyParser), ResultList(..))
 import Text.Grampa.AST (AST, fixGrammarAST)
 import qualified Text.Grampa.Parser as Parser
 import qualified Text.Grampa.AST as AST
@@ -45,18 +46,17 @@ type GrammarBuilder (g  :: (* -> *) -> *)
    = g (p g' s) -> g (p g' s)
 
 parsePrefix :: (Rank2.Apply g, Rank2.Traversable g, FactorialMonoid s) =>
-               g (AST g s) -> (forall f. g f -> f r) -> s -> ParseResults (r, s)
-parsePrefix g prod input = Parser.fromResultList input (prod $ snd $ head $ parseRecursive g input)
+               g (AST g s) -> s -> g (Compose ParseResults (Compose [] ((,) s)))
+parsePrefix g input = Rank2.fmap (Compose . Parser.fromResultList input) (snd $ head $ parseRecursive g input)
 
 parseAll :: (FactorialMonoid s, Rank2.Traversable g, Rank2.Distributive g, Rank2.Apply g) =>
-            g (AST g s) -> (forall f. g f -> f r) -> s -> ParseResults r
-parseAll g prod input = (fst <$>) <$>
-                        Parser.fromResultList input (prod $ snd $ head $ reparse close $ parseRecursive g input)
+            g (AST g s) -> s -> g (Compose ParseResults [])
+parseAll g input = Rank2.fmap ((snd <$>) . Compose . (getCompose <$>) . Parser.fromResultList input)
+                              (snd $ head $ reparse close $ parseRecursive g input)
    where close = Rank2.fmap (<* endOfInput) selfReferring
 
-simpleParse :: FactorialMonoid s => Parser (Rank2.Only r) s r -> s -> ParseResults (r, s)
-simpleParse p input =
-   Parser.fromResultList input (Rank2.fromOnly $ snd $ head $ parseNonRecursive (Rank2.Only p) input)
+simpleParse :: FactorialMonoid s => Parser (Rank2.Only r) s r -> s -> ParseResults [(s, r)]
+simpleParse p input = getCompose <$> getCompose (Rank2.fromOnly $ Parser.parse (Rank2.Only p) input)
 
 reparse :: Rank2.Functor g => g (Parser g s) -> [(s, g (ResultList g s))] -> [(s, g (ResultList g s))]
 reparse _ [] = []
@@ -80,12 +80,6 @@ parseRecursive ast = parseSeparated descendants (Rank2.fmap AST.toParser indirec
          cond (Const False) _t f = f
          cond (Const True) t _f = t
          mapConst f (Const c) = Const (f c)
-
-parseNonRecursive :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> [(s, g (ResultList g s))]
-parseNonRecursive g input = foldr parseTail [] (Factorial.tails input) where
-  parseTail s parsedTail = parsed where
-    parsed = (s,d):parsedTail
-    d      = Rank2.fmap (($ parsed) . applyParser) g
 
 parseSeparated :: forall g s. (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) =>
                   g (Const (g (Const Bool))) -> g (Parser g s) -> g (Parser g s) -> s -> [(s, g (ResultList g s))]

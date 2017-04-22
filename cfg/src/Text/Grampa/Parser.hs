@@ -1,12 +1,13 @@
 {-# LANGUAGE FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables, TypeFamilies #-}
 module Text.Grampa.Parser (FailureInfo(..), ResultInfo(..), ResultList(..),
-                           Grammar, Parser(..), ParseResults, fromResultList)
+                           Grammar, Parser(..), fromResultList, parse)
 where
 
 import Control.Applicative
 import Control.Monad (Monad(..), MonadPlus(..))
 import Data.Char (isSpace)
 import Data.Functor.Classes (Show1(..))
+import Data.Functor.Compose (Compose(..))
 import Data.List (genericLength, nub)
 import Data.Monoid (Monoid(mappend, mempty), (<>))
 import Data.Monoid.Cancellative (LeftReductiveMonoid (isPrefixOf))
@@ -23,7 +24,9 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing(someSpace))
 
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..))
+import qualified Rank2
+
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), ParseResults(..))
 
 import Prelude hiding (iterate, length, null, showList, span, takeWhile)
 
@@ -33,7 +36,6 @@ data ResultList g s r = Parsed [ResultInfo g s r]
                       | NoParse FailureInfo
 data ResultInfo g s r = ResultInfo ![(s, g (ResultList g s))] !r
 data FailureInfo = FailureInfo !Int Word64 [String] deriving (Eq, Show)
-type ParseResults r = Either (Int, [String]) [r]
 
 type Grammar g s = g (Parser g s)
 
@@ -112,6 +114,13 @@ instance GrammarParsing Parser where
       p ((_, d) : _) = f d
       p _ = NoParse (FailureInfo 1 0 ["NonTerminal at endOfInput"])
 
+-- | Given a rank-2 record of packrat parsers and input, produce a record of their parsings
+parse :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> g (Compose ParseResults (Compose [] ((,) s)))
+parse g input = Rank2.fmap (Compose . fromResultList input) (snd $ head $ foldr parseTail [] $ Factorial.tails input)
+   where parseTail s parsedTail = parsed
+            where parsed = (s,d):parsedTail
+                  d      = Rank2.fmap (($ parsed) . applyParser) g
+
 instance MonoidParsing (Parser g) where
    Parser p <<|> Parser q = Parser r
       where r rest = case (p rest, q rest)
@@ -120,9 +129,9 @@ instance MonoidParsing (Parser g) where
                         (Parsed [], r2) -> r2
                         (r1, _) -> r1
    endOfInput = Parser f
-      where f input@((s, _):t)
-               | null s = Parsed [ResultInfo input ()]
-               | otherwise = NoParse (FailureInfo 1 (genericLength t) ["endOfInput"])
+      where f rest@((s, _):t)
+               | null s = Parsed [ResultInfo rest ()]
+               | otherwise = NoParse (FailureInfo 1 (genericLength rest) ["endOfInput"])
             f [] = Parsed [ResultInfo [] ()]
    getInput = Parser p
       where p rest@((s, _):_) = Parsed [ResultInfo [last rest] s]
@@ -213,8 +222,8 @@ instance (Show s, TextualMonoid s) => Text.Parser.Char.CharParsing (Parser g s) 
 instance (Show s, TextualMonoid s) => TokenParsing (Parser g s) where
    someSpace = () <$ takeCharsWhile1 isSpace
 
-fromResultList :: FactorialMonoid s => s -> ResultList g s r -> ParseResults (r, s)
-fromResultList s (NoParse (FailureInfo _ pos msgs)) = Left (length s - fromIntegral pos + 1, nub msgs)
-fromResultList _ (Parsed rl) = Right (f <$> rl)
-   where f (ResultInfo ((s, _):_) r) = (r, s)
-         f (ResultInfo [] r) = (r, mempty)
+fromResultList :: FactorialMonoid s => s -> ResultList g s r -> ParseResults (Compose [] ((,) s) r)
+fromResultList s (NoParse (FailureInfo _ pos msgs)) = ParseFailure (length s - fromIntegral pos + 1) (nub msgs)
+fromResultList _ (Parsed rl) = ParseSuccess (Compose $ f <$> rl)
+   where f (ResultInfo ((s, _):_) r) = (s, r)
+         f (ResultInfo [] r) = (mempty, r)

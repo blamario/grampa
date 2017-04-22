@@ -4,6 +4,7 @@
 module Benchmark where
 
 import Control.Applicative
+import Data.Functor.Compose (Compose(..))
 import Data.Monoid ((<>))
 
 import Control.DeepSeq (deepseq)
@@ -29,13 +30,13 @@ recursiveManyGrammar Recursive{..} = Recursive{
    next= string "END"}
 
 parse :: String -> [Int]
-parse s = case parseAll (fixGrammarAST arithmetic) Arithmetic.expr s
-          of Right [r] -> [r]
+parse s = case Arithmetic.expr (parseAll (fixGrammarAST arithmetic) s)
+          of Compose (ParseSuccess [r]) -> [r]
              r -> error ("Unexpected " <> show r)
 
 parseBoolean :: String -> [Bool]
-parseBoolean s = case parseAll (fixGrammarAST boolean) (Boolean.expr . Rank2.snd) s
-                 of Right [r] -> [r]
+parseBoolean s = case (Boolean.expr . Rank2.snd) (parseAll (fixGrammarAST boolean) s)
+                 of Compose (ParseSuccess [r]) -> [r]
                     r -> error ("Unexpected " <> show r)
 
 zeroes, ones, falsehoods, truths, groupedLeft, groupedRight :: Int -> String

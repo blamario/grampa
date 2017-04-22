@@ -4,6 +4,7 @@ module Test.Examples where
 import Control.Applicative (empty, (<|>))
 import Data.Monoid (Monoid(..), (<>))
 import Data.Word (Word8)
+import Data.Functor.Compose (Compose(..))
 
 import Test.Feat (Enumerable(..), Enumerate, FreePair(Free), consts, shared, unary, uniform)
 import Test.Feat.Enumerate (pay)
@@ -121,8 +122,8 @@ instance Enumerable Conditional where
 
 uniqueParse :: (Eq s, FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g) =>
                Grammar g AST s -> (forall f. g f -> f r) -> s -> r
-uniqueParse g p s = case parseAll g p s
-                    of Right [r] -> r
-                       Right [] -> error "Unparseable"
-                       Right _ -> error "Ambiguous"
-                       Left (pos, exp) -> error ("At " <> show pos <> " expected one of " <> show exp)
+uniqueParse g p s = case getCompose (p $ parseAll g s)
+                    of ParseSuccess [r] -> r
+                       ParseSuccess [] -> error "Unparseable"
+                       ParseSuccess _ -> error "Ambiguous"
+                       ParseFailure pos exp -> error ("At " <> show pos <> " expected one of " <> show exp)

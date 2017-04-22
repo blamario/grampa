@@ -2,6 +2,7 @@
 module Main (main, arithmetic, comparisons, boolean, conditionals) where
 
 import System.Environment (getArgs)
+import Data.Functor.Compose (Compose(..))
 import Data.Map (Map)
 import qualified Rank2
 import Text.Grampa (GrammarBuilder, AST, ParseResults, fixGrammarAST, parseAll)
@@ -21,13 +22,13 @@ main :: IO ()
 main = do args <- concat <$> getArgs
           -- let a = fixGrammar (Arithmetic.arithmetic (production id Arithmetic.expr a))
           -- let a = fixGrammar (Arithmetic.arithmetic (recursive $ Arithmetic.expr a))
-          print (parseAll (fixGrammarAST Lambda.lambdaCalculus) Lambda.expr args :: ParseResults Lambda.LambdaInitial)
+          print (getCompose . Lambda.expr $ parseAll (fixGrammarAST Lambda.lambdaCalculus) args :: ParseResults [Lambda.LambdaInitial])
           -- print (((\f-> f (mempty :: Map String Int) [1 :: Int]) <$>) <$> parseAll (fixGrammarAST Lambda.lambdaCalculus) Lambda.expr args :: ParseResults Int)
-          print (parseAll (fixGrammarAST arithmetic) Arithmetic.expr args :: ParseResults Int)
-          print (parseAll (fixGrammarAST comparisons) (Comparisons.test . Rank2.snd) args :: ParseResults Bool)
-          print (parseAll (fixGrammarAST boolean) (Boolean.expr . Rank2.snd) args :: ParseResults Bool)
-          print (parseAll (fixGrammarAST conditionals) (Conditionals.expr . Rank2.snd) args :: ParseResults Int)
-          print (((\f-> f (mempty :: Map String Combined.Tagged)) <$>) <$> parseAll (fixGrammarAST Combined.expression) Combined.expr args :: ParseResults Combined.Tagged)
+          print (getCompose . Arithmetic.expr $ parseAll (fixGrammarAST arithmetic) args :: ParseResults [Int])
+          print (getCompose . Comparisons.test . Rank2.snd $ parseAll (fixGrammarAST comparisons) args :: ParseResults [Bool])
+          print (getCompose . Boolean.expr . Rank2.snd $ parseAll (fixGrammarAST boolean) args :: ParseResults [Bool])
+          print (getCompose . Conditionals.expr . Rank2.snd $ parseAll (fixGrammarAST conditionals) args :: ParseResults [Int])
+          print (((\f-> f (mempty :: Map String Combined.Tagged)) <$>) <$> (getCompose . Combined.expr $ parseAll (fixGrammarAST Combined.expression) args) :: ParseResults [Combined.Tagged])
 
 comparisons :: GrammarBuilder (Rank2.Product (Arithmetic.Arithmetic Int) (Comparisons.Comparisons Int Bool)) g AST String
 comparisons (Rank2.Pair a c) =

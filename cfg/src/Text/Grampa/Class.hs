@@ -1,6 +1,7 @@
 {-# LANGUAGE RankNTypes, TypeFamilies #-}
-module Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..)) where
+module Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..), ParseResults(..)) where
 
+import Data.Functor.Classes (Eq1(..), Show1(..))
 import Data.Monoid (Monoid)
 import Data.Monoid.Cancellative (LeftReductiveMonoid)
 import Data.Monoid.Null (MonoidNull)
@@ -8,9 +9,28 @@ import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 import Text.Parser.Combinators (Parsing)
 
+data ParseResults r = ParseSuccess r
+                    | ParseFailure Int [String]
+                    deriving (Eq, Show)
+
+instance Eq1 ParseResults where
+   liftEq eq (ParseSuccess a) (ParseSuccess b) = eq a b
+   liftEq _ (ParseFailure pos1 expected1) (ParseFailure pos2 expected2) = pos1 == pos2 && expected1 == expected2
+   liftEq _ _ _ = False
+
+instance Show1 ParseResults where
+   liftShowsPrec sp _sl prec (ParseSuccess a) rest = "ParseSuccess " ++ sp prec a rest
+   liftShowsPrec _ _ _ f@ParseFailure{} rest = shows (() <$ f) rest
+
+instance Functor ParseResults where
+   fmap _ (ParseFailure pos expected) = ParseFailure pos expected
+   fmap f (ParseSuccess success) = ParseSuccess (f success)
+
 class GrammarParsing m where
+--   type GrammarConstraint m :: ((* -> *) -> *) -> Constraint
    type GrammarFunctor m :: ((* -> *) -> *) -> * -> * -> *
    nonTerminal :: (g (GrammarFunctor m g s) -> GrammarFunctor m g s a) -> m g s a
+--   parse :: GrammarConstraint m g => g (m g s) -> s -> g (ParseResults s)
 
 class Parsing m => RecursiveParsing m where
    recursive :: m a -> m a

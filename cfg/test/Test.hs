@@ -3,6 +3,7 @@
 module Main where
 
 import Control.Applicative (Applicative, Alternative, Const(..), pure, empty, many, optional, (<*>), (*>), (<|>))
+import Control.Arrow (first)
 import Control.Monad (MonadPlus(mzero, mplus), guard, liftM, liftM2, void)
 import Data.Char (isSpace, isLetter)
 import Data.List (find, minimumBy, nub, sort)
@@ -13,6 +14,8 @@ import Data.Monoid.Factorial (FactorialMonoid(factors))
 import Data.Monoid.Textual (TextualMonoid(toString))
 import Data.Typeable (Typeable)
 import Data.Word (Word8, Word64)
+
+import Data.Functor.Compose (Compose(..))
 import Text.Parser.Combinators (sepBy1, skipMany)
 
 import Test.Feat (Enumerable(..), Enumerate, FreePair(Free), consts, shared, unary, uniform)
@@ -69,31 +72,34 @@ main = defaultMain tests
 tests = testGroup "Grampa" [
            let g = fixGrammarAST recursiveManyGrammar
            in testGroup "recursive"
-              [testProperty "minimal" $ parseAll g start "()" == Right [""],
-               testProperty "bracketed" $ parseAll g start "[()]" == Right [""],
-               testProperty "name list" $ parseAll nameListGrammar start "foo, bar" == Right ["foo bar"]],
+              [testProperty "minimal" $ start (parseAll g "()") == Compose (ParseSuccess [""]),
+               testProperty "bracketed" $ start (parseAll g "[()]") == Compose (ParseSuccess [""]),
+               testProperty "name list" $ start (parseAll nameListGrammar "foo, bar") == Compose (ParseSuccess ["foo bar"])],
            testGroup "arithmetic"
              [testProperty "arithmetic"   $ Test.Examples.parseArithmetical,
               testProperty "comparisons"  $ Test.Examples.parseComparison,
               testProperty "boolean"      $ Test.Examples.parseBoolean,
               testProperty "conditionals" $ Test.Examples.parseConditional],
            testGroup "primitives"
-             [testProperty "anyToken mempty" $ results (simpleParse anyToken "") == [],
-              testProperty "anyToken list" $ \(x::Word8) xs-> simpleParse anyToken (x:xs) == Right [([x],xs)],
-              testProperty "token success" $ \(x::Word8) xs-> simpleParse (token [x]) (x:xs) == Right [([x],xs)],
+             [testProperty "anyToken mempty" $ simpleParse anyToken "" == ParseFailure 0 ["anyToken"],
+              testProperty "anyToken list" $
+                \(x::Word8) xs-> simpleParse anyToken (x:xs) == ParseSuccess [(xs, [x])],
+              testProperty "token success" $
+                \(x::Word8) xs-> simpleParse (token [x]) (x:xs) == ParseSuccess [(xs, [x])],
               testProperty "token failure" $ \(x::Word8) y xs->
                    x /= y ==> results (simpleParse (token [y]) (x:xs)) == [],
               testProperty "token mempty" $ \x-> results (simpleParse (token [x]) "") == [],
               testProperty "satisfy success" $ \bools->
-                   simpleParse (satisfy head) (True:bools) == Right [([True], bools)],
+                   simpleParse (satisfy head) (True:bools) == ParseSuccess [(bools, [True])],
               testProperty "satisfy failure" $ \bools-> results (simpleParse (satisfy head) (False:bools)) == [],
               testProperty "satisfy mempty" $ results (simpleParse (satisfy (undefined :: [Char] -> Bool)) []) == [],
               testProperty "string success" $ \(xs::[Word8]) ys->
-                   simpleParse (string xs) (xs <> ys) == Right [(xs, ys)],
+                   simpleParse (string xs) (xs <> ys) == ParseSuccess [(ys, xs)],
               testProperty "string" $ \(xs::[Word8]) ys->
-                   not (xs `isPrefixOf` ys) ==> results (simpleParse (string xs) ys) == [],
-              testProperty "endOfInput mempty" $ simpleParse endOfInput "" == Right [((),"")],
-              testProperty "endOfInput failure" $ \s-> s /= "" ==> results (simpleParse endOfInput s) == []],
+                   not (xs `isPrefixOf` ys) ==> simpleParse (string xs) ys == ParseFailure 0 ["string " ++ show xs],
+              testProperty "endOfInput mempty" $ simpleParse endOfInput "" == ParseSuccess [("", ())],
+              testProperty "endOfInput failure" $ \s->
+                   s /= "" ==> simpleParse endOfInput s == ParseFailure 0 ["endOfInput"]],
            testGroup "lookAhead"
              [testProperty "lookAhead" lookAheadP,
               testProperty "lookAhead p *> p" lookAheadConsumeP,
@@ -119,8 +125,8 @@ tests = testGroup "Grampa" [
          lookAheadNotNotP :: DescribedParser String [Bool] -> Property
          lookAheadTokenP :: Char -> String -> Bool
          
-         lookAheadP xs (DescribedParser _ p) =
-            simpleParse (lookAhead p) xs == (map (const xs <$>) <$> (simpleParse p xs))
+         lookAheadP xs (DescribedParser _ p) = simpleParse (lookAhead p) xs
+                                               == (map (first $ const xs) <$> simpleParse p xs)
          lookAheadConsumeP (DescribedParser _ p) = (lookAhead p *> p :: Parser (Rank2.Only [Bool]) String [Bool])
                                                    =-= p
          lookAheadOrNotP (DescribedParser _ p) = within 2000000 $
@@ -129,7 +135,7 @@ tests = testGroup "Grampa" [
             (notFollowedBy p *> p) =-= (empty :: Parser (Rank2.Only [Bool]) String [Bool])
          lookAheadNotNotP (DescribedParser d p) =
             notFollowedBy (notFollowedBy p) =-= (void (lookAhead p) :: Parser (Rank2.Only ()) String ())
-         lookAheadTokenP x xs = simpleParse (lookAhead anyToken) (x:xs) == Right [([x], x:xs)]
+         lookAheadTokenP x xs = simpleParse (lookAhead anyToken) (x:xs) == ParseSuccess [(x:xs, [x])]
 
 instance Enumerable (DescribedParser s r) => Arbitrary (DescribedParser s r) where
    arbitrary = sized uniform
@@ -152,14 +158,18 @@ instance (Show s, MonoidNull s, Monoid r) => Monoid (DescribedParser s r) where
    mempty = DescribedParser "mempty" mempty
    DescribedParser d1 p1 `mappend` DescribedParser d2 p2 = DescribedParser (d1 ++ " <> " ++ d2) (mappend p1 p2)
 
+instance EqProp r => EqProp (ParseResults r) where
+   ParseSuccess r1 =-= ParseSuccess r2 = r1 =-= r2
+   ParseFailure pos1 msg1 =-= ParseFailure pos2 msg2 = property (pos1 == pos2)
+
 instance (Ord r, Show r, EqProp r, Eq s, EqProp s, Show s, FactorialMonoid s, Arbitrary s) =>
          EqProp (Parser (Rank2.Only r) s r) where
-   p1 =-= p2 = forAll arbitrary (\s-> nub (results $ simpleParse p1 s) =-= nub (results $ simpleParse p2 s))
+   p1 =-= p2 = forAll arbitrary (\s-> (nub <$> simpleParse p1 s) =-= (nub <$> simpleParse p2 s))
 
 instance (FactorialMonoid s, Show s, EqProp s, Arbitrary s, Ord r, Show r, EqProp r, Typeable r) =>
          EqProp (DescribedParser s r) where
    DescribedParser _ p1 =-= DescribedParser _ p2 = forAll arbitrary $ \s->
-      results (simpleParse p1 s) =-= results (simpleParse p2 s)
+      simpleParse p1 s =-= simpleParse p2 s
 
 instance Monoid s => Functor (DescribedParser s) where
    fmap f (DescribedParser d p) = DescribedParser ("fmap ? " ++ d) (fmap f p)
@@ -248,4 +258,5 @@ instance Enumerable ([Bool] -> [Bool]) where
 instance EqProp Word64 where
    a =-= b = property (a == b)
 
-results = either (const []) id
+results (ParseSuccess rs) = rs
+results _ = []
