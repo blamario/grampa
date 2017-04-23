@@ -31,12 +31,12 @@ recursiveManyGrammar Recursive{..} = Recursive{
 
 parse :: String -> [Int]
 parse s = case Arithmetic.expr (parseAll (fixGrammarAST arithmetic) s)
-          of Compose (ParseSuccess [r]) -> [r]
+          of Compose (Right [r]) -> [r]
              r -> error ("Unexpected " <> show r)
 
 parseBoolean :: String -> [Bool]
 parseBoolean s = case (Boolean.expr . Rank2.snd) (parseAll (fixGrammarAST boolean) s)
-                 of Compose (ParseSuccess [r]) -> [r]
+                 of Compose (Right [r]) -> [r]
                     r -> error ("Unexpected " <> show r)
 
 zeroes, ones, falsehoods, truths, groupedLeft, groupedRight :: Int -> String

@@ -26,7 +26,7 @@ import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
 
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), ParseResults(..))
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), ParseResults, ParseFailure(..))
 
 import Prelude hiding (iterate, length, null, showList, span, takeWhile)
 
@@ -129,7 +129,7 @@ instance MonoidParsing (Parser g) where
                         (Parsed [], r2) -> r2
                         (r1, _) -> r1
    endOfInput = Parser f
-      where f rest@((s, _):t)
+      where f rest@((s, _):_)
                | null s = Parsed [ResultInfo rest ()]
                | otherwise = NoParse (FailureInfo 1 (genericLength rest) ["endOfInput"])
             f [] = Parsed [ResultInfo [] ()]
@@ -223,7 +223,7 @@ instance (Show s, TextualMonoid s) => TokenParsing (Parser g s) where
    someSpace = () <$ takeCharsWhile1 isSpace
 
 fromResultList :: FactorialMonoid s => s -> ResultList g s r -> ParseResults (Compose [] ((,) s) r)
-fromResultList s (NoParse (FailureInfo _ pos msgs)) = ParseFailure (length s - fromIntegral pos + 1) (nub msgs)
-fromResultList _ (Parsed rl) = ParseSuccess (Compose $ f <$> rl)
+fromResultList s (NoParse (FailureInfo _ pos msgs)) = Left (ParseFailure (length s - fromIntegral pos + 1) (nub msgs))
+fromResultList _ (Parsed rl) = Right (Compose $ f <$> rl)
    where f (ResultInfo ((s, _):_) r) = (s, r)
          f (ResultInfo [] r) = (mempty, r)

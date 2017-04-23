@@ -123,7 +123,7 @@ instance Enumerable Conditional where
 uniqueParse :: (Eq s, FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g) =>
                Grammar g AST s -> (forall f. g f -> f r) -> s -> r
 uniqueParse g p s = case getCompose (p $ parseAll g s)
-                    of ParseSuccess [r] -> r
-                       ParseSuccess [] -> error "Unparseable"
-                       ParseSuccess _ -> error "Ambiguous"
-                       ParseFailure pos exp -> error ("At " <> show pos <> " expected one of " <> show exp)
+                    of Right [r] -> r
+                       Right [] -> error "Unparseable"
+                       Right _ -> error "Ambiguous"
+                       Left (ParseFailure pos exp) -> error ("At " <> show pos <> " expected one of " <> show exp)

@@ -4,7 +4,7 @@ module Text.Grampa (
    MonoidNull, FactorialMonoid, LeftReductiveMonoid, TextualMonoid,
    GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
    -- * Types
-   Grammar, GrammarBuilder, AST, Parser, ParseResults(..),
+   Grammar, GrammarBuilder, AST, Parser, ParseResults, ParseFailure(..),
    -- * Grammar and parser manipulation
    fixGrammar, parsePrefix, parseAll, parseSeparated, simpleParse,
    fixGrammarAST,
@@ -30,7 +30,7 @@ import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 
 import Data.Functor.Compose (Compose(..))
 import qualified Rank2
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..), ParseResults(..))
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..), ParseResults, ParseFailure(..))
 import Text.Grampa.Parser (Parser(applyParser), ResultList(..))
 import Text.Grampa.AST (AST, fixGrammarAST)
 import qualified Text.Grampa.Parser as Parser
