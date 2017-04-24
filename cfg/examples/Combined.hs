@@ -4,10 +4,8 @@ module Combined where
 
 import Control.Applicative
 import qualified Data.Bool
-import Data.Monoid ((<>))
 import Data.Map (Map)
 import qualified Data.Map as Map
-import qualified Rank2
 import qualified Rank2.TH
 import Text.Grampa (AST, GrammarBuilder)
 import qualified Arithmetic

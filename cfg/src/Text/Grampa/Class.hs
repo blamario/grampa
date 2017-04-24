@@ -35,7 +35,7 @@ class MonoidParsing m where
    infixl 3 <<|>
    (<<|>) :: m s r -> m s r -> m s r
    -- | A parser that fails on any input and succeeds at its end.
-   endOfInput :: MonoidNull s => m s ()
+   endOfInput :: FactorialMonoid s => m s ()
    -- | Always sucessful parser that returns the remaining input without consuming it.
    getInput :: MonoidNull s => m s s
 

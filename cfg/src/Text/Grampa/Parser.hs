@@ -128,11 +128,7 @@ instance MonoidParsing (Parser g) where
                         (NoParse{}, r2) -> r2
                         (Parsed [], r2) -> r2
                         (r1, _) -> r1
-   endOfInput = Parser f
-      where f rest@((s, _):_)
-               | null s = Parsed [ResultInfo rest ()]
-               | otherwise = NoParse (FailureInfo 1 (genericLength rest) ["endOfInput"])
-            f [] = Parsed [ResultInfo [] ()]
+   endOfInput = eof
    getInput = Parser p
       where p rest@((s, _):_) = Parsed [ResultInfo [last rest] s]
             p [] = Parsed [ResultInfo [] mempty]
@@ -203,7 +199,11 @@ instance MonoidNull s => Parsing (Parser g s) where
    skipMany p = go
       where go = pure () <|> p *> go
    unexpected msg = Parser (\t-> NoParse $ FailureInfo 0 (genericLength t) [msg])
-   eof = endOfInput
+   eof = Parser f
+      where f rest@((s, _):_)
+               | null s = Parsed [ResultInfo rest ()]
+               | otherwise = NoParse (FailureInfo 1 (genericLength rest) ["endOfInput"])
+            f [] = Parsed [ResultInfo [] ()]
 
 instance MonoidNull s => LookAheadParsing (Parser g s) where
    lookAhead (Parser p) = Parser (\input-> rewind input (p input))

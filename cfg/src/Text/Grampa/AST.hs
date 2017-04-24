@@ -136,7 +136,7 @@ instance Monoid x => Monoid (AST g s x) where
    mappend = liftA2 mappend
 
 instance MonoidNull s => Parsing (AST g s) where
-   eof = endOfInput
+   eof = Primitive "eof" (Just eof) Nothing eof
    try Empty = Empty
    try ast = Try ast
    Empty <?> _ = Empty
@@ -166,7 +166,7 @@ instance MonoidNull s => RecursiveParsing (AST g s) where
 instance MonoidParsing (AST g) where
    (<<|>) = BiasedChoice
    endOfInput = Primitive "endOfInput" (Just endOfInput) Nothing endOfInput
-   getInput = Primitive "getInput" (Just $ endOfInput *> getInput) (Just $ notFollowedBy endOfInput *> getInput) getInput
+   getInput = Primitive "getInput" (Just $ eof *> getInput) (Just $ notFollowedBy eof *> getInput) getInput
    anyToken = Primitive "anyToken" Nothing (Just anyToken) anyToken
    token x = Primitive "token" Nothing (Just $ token x) (token x)
    satisfy predicate = Primitive "satisfy" Nothing (Just $ satisfy predicate) (satisfy predicate)
