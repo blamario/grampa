@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, GADTs, InstanceSigs, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
 {-# OPTIONS -fno-full-laziness #-}
 module Text.Grampa.AST (AST(..), Grammar, 
-                        fixGrammarAST, fixNullable, leftDescendants, nullable, splitDirect, splitNullable, toParser)
+                        fixNullable, leftDescendants, nullable, splitDirect, splitNullable, toParser)
 where
 
 import Control.Applicative
@@ -189,12 +189,6 @@ instance MonoidParsing (AST g) where
                                                            (takeCharsWhile1 predicate)
    whiteSpace = Primitive "whiteSpace" (Just $ notFollowedBy whiteSpace) (Just whiteSpace) whiteSpace
    concatMany = ConcatMany
-
-fixGrammarAST :: forall g s. Rank2.Distributive g => (g (AST g s) -> g (AST g s)) -> g (AST g s)
-fixGrammarAST gf = gf selfReferring
-
-selfReferring :: Rank2.Distributive g => g (AST g s)
-selfReferring = Rank2.distributeWith NonTerminal id
 
 toParser :: (Rank2.Functor g, FactorialMonoid s) => AST g s a -> Parser g s a
 toParser (NonTerminal accessor) = nonTerminal (unwrap . accessor . Rank2.fmap ResultsWrap)

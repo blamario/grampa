@@ -6,8 +6,7 @@ module Text.Grampa (
    -- * Types
    Grammar, GrammarBuilder, AST, Parser, ParseResults, ParseFailure(..),
    -- * Grammar and parser manipulation
-   fixGrammar, parsePrefix, parseAll, parseSeparated, simpleParse,
-   fixGrammarAST,
+   parsePrefix, parseAll, parseSeparated, simpleParse,
    -- * Parser combinators
    module Text.Parser.Char,
    module Text.Parser.Combinators,
@@ -32,7 +31,7 @@ import Data.Functor.Compose (Compose(..))
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..), ParseResults, ParseFailure(..))
 import Text.Grampa.Parser (Parser(applyParser), ResultList(..))
-import Text.Grampa.AST (AST, fixGrammarAST)
+import Text.Grampa.AST (AST)
 import qualified Text.Grampa.Parser as Parser
 import qualified Text.Grampa.AST as AST
 
@@ -108,10 +107,3 @@ parseSeparated dependencies indirect direct input = foldr parseTail [] (Factoria
 
          recurseOnce s parsedTail initial = Rank2.fmap (($ parsed). applyParser) indirect
             where parsed = (s, initial):parsedTail
-
--- | Produce a 'Grammar' from its recursive definition
-fixGrammar :: Rank2.Distributive g => (g (Parser g i) -> g (Parser g i)) -> g (Parser g i)
-fixGrammar gf = gf selfReferring
-
-selfReferring :: Rank2.Distributive g => g (Parser g i)
-selfReferring = Rank2.distributeWith nonTerminal id

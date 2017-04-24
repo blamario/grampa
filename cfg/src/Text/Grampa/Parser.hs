@@ -30,8 +30,8 @@ import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), ParseResults, P
 
 import Prelude hiding (iterate, length, null, showList, span, takeWhile)
 
--- | Parser of streams of type `s`, as a part of grammar type `g`, producing a value of type `r`
-newtype Parser g i r = Parser{applyParser :: [(i, g (ResultList g i))] -> ResultList g i r}
+-- | Parser of streams of type `s`, as a part of grammar type `g`, producing values of type `r`
+newtype Parser g s r = Parser{applyParser :: [(s, g (ResultList g s))] -> ResultList g s r}
 data ResultList g s r = Parsed [ResultInfo g s r]
                       | NoParse FailureInfo
 data ResultInfo g s r = ResultInfo ![(s, g (ResultList g s))] !r

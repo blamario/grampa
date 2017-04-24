@@ -9,6 +9,8 @@ import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 import Text.Parser.Combinators (Parsing)
 
+import qualified Rank2
+
 type ParseResults = Either ParseFailure
 
 data ParseFailure = ParseFailure Int [String] deriving (Eq, Show)
@@ -18,6 +20,12 @@ class GrammarParsing m where
    type GrammarFunctor m :: ((* -> *) -> *) -> * -> * -> *
    nonTerminal :: (g (GrammarFunctor m g s) -> GrammarFunctor m g s a) -> m g s a
 --   parse :: GrammarConstraint m g => g (m g s) -> s -> g (ParseResults s)
+   selfReferring :: Rank2.Distributive g => g (m g s)
+   fixGrammar :: forall g s. Rank2.Distributive g => (g (m g s) -> g (m g s)) -> g (m g s)
+
+   selfReferring = Rank2.distributeWith nonTerminal id
+   fixGrammar = ($ selfReferring)
+
 
 class Parsing m => RecursiveParsing m where
    recursive :: m a -> m a

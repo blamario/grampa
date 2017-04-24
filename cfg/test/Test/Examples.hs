@@ -20,12 +20,12 @@ import qualified Conditionals
 
 parseArithmetical :: Sum -> Bool
 parseArithmetical (Sum s) = f s' == s'
-   where f = uniqueParse (fixGrammarAST Arithmetic.arithmetic) Arithmetic.expr
+   where f = uniqueParse (fixGrammar Arithmetic.arithmetic) Arithmetic.expr
          s' = f s
 
 parseComparison :: Comparison -> Bool
 parseComparison (Comparison s) = f s' == s'
-   where f = uniqueParse (fixGrammarAST comparisons) (Comparisons.test . Rank2.snd)
+   where f = uniqueParse (fixGrammar comparisons) (Comparisons.test . Rank2.snd)
          s' = f s
 
 comparisons :: Rank2.Functor g => GrammarBuilder ArithmeticComparisons g AST String
@@ -34,7 +34,7 @@ comparisons (Rank2.Pair a c) =
 
 parseBoolean :: Disjunction -> Bool
 parseBoolean (Disjunction s) = f s' == s'
-   where f = uniqueParse (fixGrammarAST boolean) (Boolean.expr . Rank2.snd)
+   where f = uniqueParse (fixGrammar boolean) (Boolean.expr . Rank2.snd)
          s' = f s
 
 boolean :: Rank2.Functor g => GrammarBuilder ArithmeticComparisonsBoolean g AST String
@@ -42,7 +42,7 @@ boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Compar
 
 parseConditional :: Conditional -> Bool
 parseConditional (Conditional s) = f s' == s'
-   where f = uniqueParse (fixGrammarAST conditionals) (Conditionals.expr . Rank2.snd)
+   where f = uniqueParse (fixGrammar conditionals) (Conditionals.expr . Rank2.snd)
          s' = f s
 
 conditionals :: Rank2.Functor g => GrammarBuilder ACBC g AST String
