@@ -28,7 +28,11 @@ class Foldable g where
 
 -- | Equivalent of 'Traversable' for rank 2 data types
 class (Functor g, Foldable g) => Traversable g where
+   {-# MINIMAL traverse | sequence #-}
    traverse :: Rank1.Applicative m => (forall a. p a -> m (q a)) -> g p -> m (g q)
+   sequence :: Rank1.Applicative m => g (Compose m p) -> m (g p)
+   traverse f = sequence . fmap (Compose . f)
+   sequence = traverse getCompose
 
 -- | Wrapper for functions that map the argument constructor type
 newtype Arrow p q a = Arrow{apply :: p a -> q a}
@@ -37,6 +41,7 @@ newtype Arrow p q a = Arrow{apply :: p a -> q a}
 --
 -- > (.) <$> u <*> v <*> w == u <*> (v <*> w)
 class Functor g => Apply g where
+   {-# MINIMAL liftA2 | (<*>) #-}
    -- | Equivalent of 'Rank1.<*>' for rank 2 data types
    (<*>) :: g (Arrow p q) -> g p -> g q
    -- | Equivalent of 'Rank1.liftA2' for rank 2 data types
@@ -59,6 +64,7 @@ class Apply g => Applicative g where
 
 -- | Equivalent of 'Distributive' for rank 2 data types
 class Functor g => Distributive g where
+   {-# MINIMAL distributeWith #-}
    collect :: Rank1.Functor f1 => (a -> g f2) -> f1 a -> g (Compose f1 f2)
    distribute :: Rank1.Functor f1 => f1 (g f2) -> g (Compose f1 f2)
    distributeWith :: Rank1.Functor f1 => (forall x. f1 (f2 x) -> f x) -> f1 (g f2) -> g f
