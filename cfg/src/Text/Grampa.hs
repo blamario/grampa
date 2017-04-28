@@ -102,7 +102,7 @@ parseSeparated dependencies indirect direct input = foldr parseTail [] (Factoria
                      | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps g1)) = r1 <> r2
                      | otherwise = r1
                   combine (Const False) _ = Const False
-                  combine (Const True) (Parsed (_:_)) = Const True
+                  combine (Const True) (Parsed (_:_) _) = Const True
                   combine (Const True) _ = Const False
 
          recurseOnce s parsedTail initial = Rank2.fmap (($ parsed). applyParser) indirect
