@@ -32,7 +32,7 @@ import Prelude hiding (iterate, length, null, showList, span, takeWhile)
 
 -- | Parser of streams of type `s`, as a part of grammar type `g`, producing values of type `r`
 newtype Parser g s r = Parser{applyParser :: [(s, g (ResultList g s))] -> ResultList g s r}
-data ResultList g s r = ResultList [ResultInfo g s r] {-# UNPACK #-} !FailureInfo
+data ResultList g s r = ResultList ![ResultInfo g s r] {-# UNPACK #-} !FailureInfo
 data ResultInfo g s r = ResultInfo ![(s, g (ResultList g s))] !r
 data FailureInfo = FailureInfo !Int Word64 [String] deriving (Eq, Show)
 
@@ -75,7 +75,7 @@ instance Applicative (Parser g i) where
    pure a = Parser (\rest-> ResultList [ResultInfo rest a] mempty)
    Parser p <*> Parser q = Parser r where
       r rest = case p rest
-               of ResultList results failure -> foldMap continue results <> ResultList [] failure
+               of ResultList results failure -> ResultList [] failure <> foldMap continue results
       continue (ResultInfo rest' f) = f <$> q rest'
 
 
@@ -88,7 +88,7 @@ instance Monad (Parser g i) where
    return = pure
    Parser p >>= f = Parser q where
       q rest = case p rest
-               of ResultList results failure -> foldMap continue results <> ResultList [] failure
+               of ResultList results failure -> ResultList [] failure <> foldMap continue results
       continue (ResultInfo rest' a) = applyParser (f a) rest'
 
 instance MonadPlus (Parser g s) where
