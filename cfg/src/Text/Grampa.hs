@@ -4,9 +4,9 @@ module Text.Grampa (
    MonoidNull, FactorialMonoid, LeftReductiveMonoid, TextualMonoid,
    GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
    -- * Types
-   Grammar, GrammarBuilder, AST, Parser, ParseResults, ParseFailure(..),
+   Grammar, GrammarBuilder, AST, Parallel.Parser, ParseResults, ParseFailure(..),
    -- * Grammar and parser manipulation
-   parsePrefix, parseAll, parseSeparated, simpleParse,
+   parsePEG, parsePackrat, parsePrefix, parseAll, parseSeparated, parseSimpleParallel,
    -- * Parser combinators
    module Text.Parser.Char,
    module Text.Parser.Combinators,
@@ -32,6 +32,9 @@ import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..), ParseResults, ParseFailure(..))
 import Text.Grampa.Parser (Parser(applyParser), ResultList(..))
 import Text.Grampa.AST (AST)
+import qualified Text.Grampa.PEG.Backtrack as PEG
+import qualified Text.Grampa.PEG.Packrat as Packrat
+import qualified Text.Grampa.ContextFree.Parallel as Parallel
 import qualified Text.Grampa.Parser as Parser
 import qualified Text.Grampa.AST as AST
 
@@ -44,18 +47,34 @@ type GrammarBuilder (g  :: (* -> *) -> *)
                     (s  :: *)
    = g (p g' s) -> g (p g' s)
 
+-- | Parse the given input against the given Parsing Expression Grammar using a backtracking algorithm, very fast for
+-- grammars in LL(1) class but with potentially exponential performance for longer ambiguous prefixes.
+parsePEG :: (Rank2.Functor g, FactorialMonoid s) => g (PEG.Parser g s) -> s -> g (Compose ParseResults ((,) s))
+parsePEG = PEG.parse
+
+-- | Parse the given input against the given Parsing Expression Grammar using a packrat algorithm, with O(1) performance
+-- bounds but with worse constants and more memory consumption than 'parsePEG'.
+parsePackrat :: (Rank2.Functor g, FactorialMonoid s) => g (Packrat.Parser g s) -> s -> g (Compose ParseResults ((,) s))
+parsePackrat = Packrat.parse
+
+-- | Parse the given input against the given general context-free grammar using a generalized packrat algorithm,
+-- returning a list of all possible parses of an input prefix paired with the remaining input suffix.
 parsePrefix :: (Rank2.Apply g, Rank2.Traversable g, FactorialMonoid s) =>
                g (AST g s) -> s -> g (Compose ParseResults (Compose [] ((,) s)))
 parsePrefix g input = Rank2.fmap (Compose . Parser.fromResultList input) (snd $ head $ parseRecursive g input)
 
+-- | Parse the given input against the given general context-free grammar using a generalized packrat algorithm,
+-- returning a list of all possible parses that consume the entire input.
 parseAll :: (FactorialMonoid s, Rank2.Traversable g, Rank2.Distributive g, Rank2.Apply g) =>
             g (AST g s) -> s -> g (Compose ParseResults [])
 parseAll g input = Rank2.fmap ((snd <$>) . Compose . (getCompose <$>) . Parser.fromResultList input)
                               (snd $ head $ reparse close $ parseRecursive g input)
    where close = Rank2.fmap (<* endOfInput) selfReferring
 
-simpleParse :: FactorialMonoid s => Parser (Rank2.Only r) s r -> s -> ParseResults [(s, r)]
-simpleParse p input = getCompose <$> getCompose (Rank2.fromOnly $ Parser.parse (Rank2.Only p) input)
+-- | Parse the given input against the given parser with a parallel parsing algorithm, returning a list of all possible
+-- input prefix parses paired with the remaining input suffix.
+parseSimpleParallel :: FactorialMonoid s => Parallel.Parser (Rank2.Only r) s r -> s -> ParseResults [(s, r)]
+parseSimpleParallel p input = getCompose <$> getCompose (Rank2.fromOnly $ Parallel.parse (Rank2.Only p) input)
 
 reparse :: Rank2.Functor g => g (Parser g s) -> [(s, g (ResultList g s))] -> [(s, g (ResultList g s))]
 reparse _ [] = []

@@ -69,6 +69,9 @@ ignorable = whiteSpace *> skipMany (nonTerminal next *> whiteSpace <?> "ignorabl
 
 main = defaultMain tests
 
+simpleParse :: FactorialMonoid s => Parser (Rank2.Only r) s r -> s -> ParseResults [(s, r)]
+simpleParse = parseSimpleParallel
+
 tests = testGroup "Grampa" [
            let g = fixGrammar recursiveManyGrammar
            in testGroup "recursive"
@@ -182,11 +185,11 @@ instance (Show s, Monoid s) => Monad (DescribedParser s) where
    DescribedParser d1 p1 >>= f = DescribedParser (d1 ++ " >>= ?") (p1 >>= \x-> let DescribedParser _ p = f x in p)
    DescribedParser d1 p1 >> DescribedParser d2 p2 = DescribedParser (d1 ++ " >> " ++ d2) (p1 >> p2)
 
-instance (Show s, Monoid s) => Alternative (DescribedParser s) where
+instance (Show s, FactorialMonoid s) => Alternative (DescribedParser s) where
    empty = DescribedParser "empty" empty
    DescribedParser d1 p1 <|> DescribedParser d2 p2 = DescribedParser (d1 ++ " <|> " ++ d2) (p1 <|> p2)
 
-instance (Show s, Monoid s) => MonadPlus (DescribedParser s) where
+instance (Show s, FactorialMonoid s) => MonadPlus (DescribedParser s) where
    mzero = DescribedParser "mzero" mzero
    DescribedParser d1 p1 `mplus` DescribedParser d2 p2 = DescribedParser (d1 ++ " `mplus` " ++ d2) (mplus p1 p2)
 

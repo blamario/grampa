@@ -19,7 +19,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     Text.Grampa
   other-modules:       Text.Grampa.Types, Text.Grampa.Class, Text.Grampa.PEG.Backtrack, Text.Grampa.PEG.Packrat,
-                       Text.Grampa.Parser, Text.Grampa.AST
+                       Text.Grampa.ContextFree.Parallel, Text.Grampa.Parser, Text.Grampa.AST
   default-language:    Haskell2010
   -- other-modules:
   ghc-options:         -Wall

@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables, TypeFamilies #-}
-module Text.Grampa.Parser (FailureInfo(..), ResultInfo(..), ResultList(..),
-                           Grammar, Parser(..), fromResultList, parse)
+module Text.Grampa.Parser (FailureInfo(..), ResultList(..), Grammar, Parser(..), 
+                           fromResultList, parse)
 where
 
 import Control.Applicative

@@ -115,7 +115,7 @@ instance MonoidParsing (Parser g) where
       where p rest | (prefix, suffix) <- Factorial.span predicate rest = Parsed prefix suffix
    takeWhile1 predicate = Parser p
       where p rest | (prefix, suffix) <- Factorial.span predicate rest =
-                        if Null.null rest
+                        if Null.null prefix
                         then NoParse (FailureInfo 1 (fromIntegral $ Factorial.length rest) ["takeWhile1"])
                         else Parsed prefix suffix
    takeCharsWhile predicate = Parser p
