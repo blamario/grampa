@@ -6,7 +6,7 @@ module Text.Grampa (
    -- * Types
    Grammar, GrammarBuilder, AST, Parallel.Parser, ParseResults, ParseFailure(..),
    -- * Grammar and parser manipulation
-   parsePEG, parsePackrat, parsePrefix, parseAll, parseSeparated, parseSimpleParallel,
+   parsePEG, parsePackrat, parseParallel, parsePrefix, parseAll, parseSeparated, parseSimpleParallel,
    -- * Parser combinators
    module Text.Parser.Char,
    module Text.Parser.Combinators,
@@ -57,6 +57,12 @@ parsePEG = PEG.parse
 parsePackrat :: (Rank2.Functor g, FactorialMonoid s) => g (Packrat.Parser g s) -> s -> g (Compose ParseResults ((,) s))
 parsePackrat = Packrat.parse
 
+-- | Parse the given input against the given context-free grammar with no left recursion using a parallel parsing
+-- algorithm, returning a list of all possible input prefix parses paired with the remaining input suffix.
+parseParallel :: (Rank2.Functor g, FactorialMonoid s) =>
+                 g (Parallel.Parser g s) -> s -> g (Compose ParseResults (Compose [] ((,) s)))
+parseParallel = Parallel.parse
+
 -- | Parse the given input against the given general context-free grammar using a generalized packrat algorithm,
 -- returning a list of all possible parses of an input prefix paired with the remaining input suffix.
 parsePrefix :: (Rank2.Apply g, Rank2.Traversable g, FactorialMonoid s) =>
@@ -71,10 +77,10 @@ parseAll g input = Rank2.fmap ((snd <$>) . Compose . (getCompose <$>) . Parser.f
                               (snd $ head $ reparse close $ parseRecursive g input)
    where close = Rank2.fmap (<* endOfInput) selfReferring
 
--- | Parse the given input against the given parser with a parallel parsing algorithm, returning a list of all possible
--- input prefix parses paired with the remaining input suffix.
-parseSimpleParallel :: FactorialMonoid s => Parallel.Parser (Rank2.Only r) s r -> s -> ParseResults [(s, r)]
-parseSimpleParallel p input = getCompose <$> getCompose (Rank2.fromOnly $ Parallel.parse (Rank2.Only p) input)
+-- | Apply the given parse function like 'parsePEG' or 'parseParallel' to the given grammar-free parser and its input.
+parseSimple :: (Rank2.Only r (p (Rank2.Only r) s) -> s -> Rank2.Only r (Compose ParseResults f))
+            -> p (Rank2.Only r) s r -> s -> ParseResults (f r)
+parseSimple parse p input = getCompose (Rank2.fromOnly $ parse (Rank2.Only p) input)
 
 reparse :: Rank2.Functor g => g (Parser g s) -> [(s, g (ResultList g s))] -> [(s, g (ResultList g s))]
 reparse _ [] = []
