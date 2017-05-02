@@ -70,7 +70,7 @@ ignorable = whiteSpace *> skipMany (nonTerminal next *> whiteSpace <?> "ignorabl
 main = defaultMain tests
 
 simpleParse :: FactorialMonoid s => Parser (Rank2.Only r) s r -> s -> ParseResults [(s, r)]
-simpleParse p input = getCompose <$> parseSimple Parallel.parse p input
+simpleParse p input = getCompose <$> simply parseParallel p input
 
 tests = testGroup "Grampa" [
            let g = fixGrammar recursiveManyGrammar

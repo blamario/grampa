@@ -6,7 +6,7 @@ module Text.Grampa (
    -- * Types
    Grammar, GrammarBuilder, AST, Parallel.Parser, ParseResults, ParseFailure(..),
    -- * Grammar and parser manipulation
-   parsePEG, parsePackrat, parseParallel, parsePrefix, parseAll, parseSeparated, parseSimpleParallel,
+   parsePEG, parsePackrat, parseParallel, parsePrefix, parseAll, parseSeparated, simply, parseShared,
    -- * Parser combinators
    module Text.Parser.Char,
    module Text.Parser.Combinators,
@@ -57,11 +57,19 @@ parsePEG = PEG.parse
 parsePackrat :: (Rank2.Functor g, FactorialMonoid s) => g (Packrat.Parser g s) -> s -> g (Compose ParseResults ((,) s))
 parsePackrat = Packrat.parse
 
--- | Parse the given input against the given context-free grammar with no left recursion using a parallel parsing
--- algorithm, returning a list of all possible input prefix parses paired with the remaining input suffix.
+-- | Parse the given input against the given context-free grammar using a parallel parsing algorithm with no result
+-- sharing nor left recursion support. The function returns a list of all possible input prefix parses paired with the
+-- remaining input suffix.
 parseParallel :: (Rank2.Functor g, FactorialMonoid s) =>
                  g (Parallel.Parser g s) -> s -> g (Compose ParseResults (Compose [] ((,) s)))
 parseParallel = Parallel.parse
+
+-- | Parse the given input against the given context-free grammar with packrat-like sharing of parse results. Left
+-- recursive grammars are not supported. The function returns a list of all possible input prefix parses paired with the
+-- remaining input suffix.
+parseShared :: (Rank2.Functor g, FactorialMonoid s) =>
+               g (Parser g s) -> s -> g (Compose ParseResults (Compose [] ((,) s)))
+parseShared = Parser.parse
 
 -- | Parse the given input against the given general context-free grammar using a generalized packrat algorithm,
 -- returning a list of all possible parses of an input prefix paired with the remaining input suffix.
@@ -77,10 +85,11 @@ parseAll g input = Rank2.fmap ((snd <$>) . Compose . (getCompose <$>) . Parser.f
                               (snd $ head $ reparse close $ parseRecursive g input)
    where close = Rank2.fmap (<* endOfInput) selfReferring
 
--- | Apply the given parse function like 'parsePEG' or 'parseParallel' to the given grammar-free parser and its input.
-parseSimple :: (Rank2.Only r (p (Rank2.Only r) s) -> s -> Rank2.Only r (Compose ParseResults f))
+-- | Apply the given parse function like 'parsePEG' or 'parseParallel' to the given simple grammar-free parser and its
+-- input.
+simply :: (Rank2.Only r (p (Rank2.Only r) s) -> s -> Rank2.Only r (Compose ParseResults f))
             -> p (Rank2.Only r) s r -> s -> ParseResults (f r)
-parseSimple parse p input = getCompose (Rank2.fromOnly $ parse (Rank2.Only p) input)
+simply parse p input = getCompose (Rank2.fromOnly $ parse (Rank2.Only p) input)
 
 reparse :: Rank2.Functor g => g (Parser g s) -> [(s, g (ResultList g s))] -> [(s, g (ResultList g s))]
 reparse _ [] = []
@@ -105,6 +114,9 @@ parseRecursive ast = parseSeparated descendants (Rank2.fmap AST.toParser indirec
          cond (Const True) t _f = t
          mapConst f (Const c) = Const (f c)
 
+-- | Parse the given input using a context-free grammar separated into two parts: the first specifying all the
+-- left-recursive productions, the second all others. The first function argument specifies the left-recursive
+-- dependencies among the grammar productions.
 parseSeparated :: forall g s. (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) =>
                   g (Const (g (Const Bool))) -> g (Parser g s) -> g (Parser g s) -> s -> [(s, g (ResultList g s))]
 parseSeparated dependencies indirect direct input = foldr parseTail [] (Factorial.tails input)
