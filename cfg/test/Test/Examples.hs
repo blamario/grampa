@@ -2,14 +2,15 @@
 module Test.Examples where
 
 import Control.Applicative (empty, (<|>))
-import Data.Monoid (Monoid(..), (<>))
-import Data.Word (Word8)
 import Data.Functor.Compose (Compose(..))
+import Data.Monoid (Monoid(..), (<>))
+import Data.Monoid.Factorial (FactorialMonoid)
 
 import Test.Feat (Enumerable(..), Enumerate, FreePair(Free), consts, shared, unary, uniform)
 import Test.Feat.Enumerate (pay)
 import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Positive(..), Property, testProperty, (===), (==>), (.&&.),
                               forAll, mapSize, oneof, resize, sized, whenFail)
+import Data.Word (Word8)
 
 import qualified Rank2
 import Text.Grampa

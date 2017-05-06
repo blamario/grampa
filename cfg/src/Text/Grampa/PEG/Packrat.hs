@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 -- | Packrat parser
-module Text.Grampa.PEG.Packrat (Parser, parse) where
+module Text.Grampa.PEG.Packrat (Parser) where
 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
 import Control.Monad (Monad(..), MonadPlus(..))
@@ -21,14 +21,17 @@ import qualified Data.Monoid.Textual as Textual
 import qualified Rank2
 
 import Text.Parser.Combinators (Parsing(..))
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), ParseResults, ParseFailure(..))
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
+import qualified Text.Grampa.PEG.Backtrack as Backtrack (Parser)
 
 data Result g s v = Parsed{parsedPrefix :: v, 
                            parsedSuffix :: [(s, g (Result g s))]}
                   | NoParse FailureInfo
 data FailureInfo = FailureInfo !Int Word64 [String] deriving (Eq, Show)
 
--- | Parser of streams of type `s`, as a part of grammar type `g`, producing a value of type `r`
+-- | Parser type for Parsing Expression Grammars that uses an improved packrat algorithm, with O(1) performance bounds
+-- but with worse constants and more memory consumption than 'Backtrack.Parser'. The 'parse' function returns an input
+-- prefix parse paired with the remaining input suffix.
 newtype Parser g s r = Parser{applyParser :: [(s, g (Result g s))] -> Result g s r}
 
 instance Show1 (Result g s) where
@@ -148,13 +151,13 @@ instance MonoidParsing (Parser g) where
       where go = (<>) <$> p <*> go <|> mempty
 
 
-{-# NOINLINE parse #-}
-parse :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> g (Compose ParseResults ((,) s))
---parse :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> [(s, g (Result g s))]
-parse g input = Rank2.fmap (Compose . fromResult input) (snd $ head $ foldr parseTail [] $ Factorial.tails input)
-   where parseTail s parsedTail = parsed where
-            parsed = (s,d):parsedTail
-            d      = Rank2.fmap (($ parsed) . applyParser) g
+instance MultiParsing Parser where
+   type ResultFunctor Parser s = ((,) s)
+   {-# NOINLINE parse #-}
+   parse g input = Rank2.fmap (Compose . fromResult input) (snd $ head $ foldr parseTail [] $ Factorial.tails input)
+      where parseTail s parsedTail = parsed where
+               parsed = (s,d):parsedTail
+               d      = Rank2.fmap (($ parsed) . applyParser) g
 
 fromResult :: FactorialMonoid s => s -> Result g s r -> ParseResults (s, r)
 fromResult s (NoParse (FailureInfo _ pos msgs)) =

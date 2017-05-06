@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables, TypeFamilies #-}
-module Text.Grampa.Parser (FailureInfo(..), ResultList(..), Grammar, Parser(..), 
-                           fromResultList, parse)
+module Text.Grampa.Parser (FailureInfo(..), ResultList(..), Grammar, Parser(..), fromResultList)
 where
 
 import Control.Applicative
@@ -26,12 +25,15 @@ import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
 
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), ParseResults, ParseFailure(..))
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
 
 import Prelude hiding (iterate, length, null, showList, span, takeWhile)
 
--- | Parser of streams of type `s`, as a part of grammar type `g`, producing values of type `r`
+-- | Parser for a context-free grammar with packrat-like sharing of parse results. Left-recursive grammars are not
+-- supported. The 'parse' function returns a list of all possible input prefix parses paired with the remaining input
+-- suffix.
 newtype Parser g s r = Parser{applyParser :: [(s, g (ResultList g s))] -> ResultList g s r}
+
 data ResultList g s r = ResultList ![ResultInfo g s r] {-# UNPACK #-} !FailureInfo
 data ResultInfo g s r = ResultInfo ![(s, g (ResultList g s))] !r
 data FailureInfo = FailureInfo !Int Word64 [String] deriving (Eq, Show)
@@ -105,12 +107,12 @@ instance GrammarParsing Parser where
       p ((_, d) : _) = f d
       p _ = ResultList [] (FailureInfo 1 0 ["NonTerminal at endOfInput"])
 
--- | Given a rank-2 record of packrat parsers and input, produce a record of their parsings
-parse :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> g (Compose ParseResults (Compose [] ((,) s)))
-parse g input = Rank2.fmap (Compose . fromResultList input) (snd $ head $ foldr parseTail [] $ Factorial.tails input)
-   where parseTail s parsedTail = parsed
-            where parsed = (s,d):parsedTail
-                  d      = Rank2.fmap (($ parsed) . applyParser) g
+instance MultiParsing Parser where
+   type ResultFunctor Parser s = Compose [] ((,) s)
+   parse g input = Rank2.fmap (Compose . fromResultList input) (snd $ head $ foldr parseTail [] $ Factorial.tails input)
+      where parseTail s parsedTail = parsed
+               where parsed = (s,d):parsedTail
+                     d      = Rank2.fmap (($ parsed) . applyParser) g
 
 instance MonoidParsing (Parser g) where
    Parser p <<|> Parser q = Parser r

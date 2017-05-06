@@ -26,12 +26,15 @@ import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
 
-import Text.Grampa.Class (MonoidParsing(..), ParseResults, ParseFailure(..))
+import Text.Grampa.Class (MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
 
--- | Parser of streams of type `s`, as a part of grammar type `g`, producing values of type `r`
+-- | Parser type for context-free grammars using a parallel parsing algorithm with no result sharing nor left recursion
+-- support. The 'parse' function returns a list of all possible input prefix parses paired with the remaining input
+-- suffix.
 newtype Parser (g :: (* -> *) -> *) s r = Parser{applyParser :: s -> ResultList s r}
+
 data ResultList s r = ResultList ![ResultInfo s r] {-# UNPACK #-} !FailureInfo
 data ResultInfo s r = ResultInfo !s !r
 data FailureInfo = FailureInfo !Int Int [String] deriving (Eq, Show)
@@ -97,9 +100,9 @@ instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
--- | Given a rank-2 record of packrat parsers and input, produce a record of their parsings
-parse :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> g (Compose ParseResults (Compose [] ((,) s)))
-parse g input = Rank2.fmap (Compose . fromResultList input . (`applyParser` input)) g
+instance MultiParsing Parser where
+   type ResultFunctor Parser s = Compose [] ((,) s)
+   parse g input = Rank2.fmap (Compose . fromResultList input . (`applyParser` input)) g
 
 instance MonoidParsing (Parser g) where
    Parser p <<|> Parser q = Parser r

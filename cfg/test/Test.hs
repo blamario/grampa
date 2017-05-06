@@ -30,6 +30,7 @@ import Test.QuickCheck.Classes (functor, monad, monoid, applicative, alternative
 import qualified Rank2
 import qualified Rank2.TH
 import Text.Grampa
+import Text.Grampa.ContextFree.Parallel (Parser)
 
 import qualified Test.Examples
 
@@ -70,7 +71,7 @@ ignorable = whiteSpace *> skipMany (nonTerminal next *> whiteSpace <?> "ignorabl
 main = defaultMain tests
 
 simpleParse :: FactorialMonoid s => Parser (Rank2.Only r) s r -> s -> ParseResults [(s, r)]
-simpleParse p input = getCompose <$> simply parseParallel p input
+simpleParse p input = getCompose <$> simply parse p input
 
 tests = testGroup "Grampa" [
            let g = fixGrammar recursiveManyGrammar

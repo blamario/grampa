@@ -3,7 +3,7 @@
 module Lambda where
 
 import Control.Applicative
-import Data.Char (isAlphaNum, isSpace, isLetter)
+import Data.Char (isAlphaNum, isLetter)
 import Data.Map (Map, insert, (!))
 import Data.Monoid ((<>))
 
@@ -11,7 +11,7 @@ import qualified Rank2
 import qualified Rank2.TH
 
 import Text.Grampa
-import Utilities (infixJoin, keyword, symbol)
+import Utilities (symbol)
 
 class LambdaDomain e where
    apply :: e -> e -> e

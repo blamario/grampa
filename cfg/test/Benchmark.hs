@@ -12,7 +12,9 @@ import Criterion.Main (bench, bgroup, defaultMain, nf)
 
 import qualified Rank2
 import qualified Rank2.TH
+
 import Text.Grampa
+import Text.Grampa.ContextFree.Parallel (Parser)
 import qualified Arithmetic
 import qualified Boolean
 import Main (arithmetic, boolean)
@@ -29,10 +31,10 @@ recursiveManyGrammar Recursive{..} = Recursive{
    rec= many (char ';') <* optional next,
    next= string "END"}
 
-parse :: String -> [Int]
-parse s = case Arithmetic.expr (parseAll (fixGrammar arithmetic) s)
-          of Compose (Right [r]) -> [r]
-             r -> error ("Unexpected " <> show r)
+parseInt :: String -> [Int]
+parseInt s = case Arithmetic.expr (parseAll (fixGrammar arithmetic) s)
+             of Compose (Right [r]) -> [r]
+                r -> error ("Unexpected " <> show r)
 
 parseBoolean :: String -> [Bool]
 parseBoolean s = case (Boolean.expr . Rank2.snd) (parseAll (fixGrammar boolean) s)
@@ -75,23 +77,23 @@ main = do
           bench "recursive" $ nf (parseAll (fixGrammar recursiveManyGrammar) start) (replicate 400 ';')],
 -}
       bgroup "zero sum" [
-         bench "100" $ nf parse zeroes100,
-         bench "200" $ nf parse zeroes200,
-         bench "300" $ nf parse zeroes300],
+         bench "100" $ nf parseInt zeroes100,
+         bench "200" $ nf parseInt zeroes200,
+         bench "300" $ nf parseInt zeroes300],
       bgroup "grouped left" [
-         bench "100" $ nf parse groupedLeft100,
-         bench "200" $ nf parse groupedLeft200,
-         bench "300" $ nf parse groupedLeft300],
+         bench "100" $ nf parseInt groupedLeft100,
+         bench "200" $ nf parseInt groupedLeft200,
+         bench "300" $ nf parseInt groupedLeft300],
 {-
       bgroup "grouped right" [
-            bench "100" $ nf parse groupedRight100,
-            bench "200" $ nf parse groupedRight200,
-            bench "300" $ nf parse groupedRight300],
+            bench "100" $ nf parseInt groupedRight100,
+            bench "200" $ nf parseInt groupedRight200,
+            bench "300" $ nf parseInt groupedRight300],
 -}
       bgroup "one product" [
-         bench "100" $ nf parse ones100,
-         bench "200" $ nf parse ones200,
-         bench "300" $ nf parse ones300],
+         bench "100" $ nf parseInt ones100,
+         bench "200" $ nf parseInt ones200,
+         bench "300" $ nf parseInt ones300],
       bgroup "false disjunction" [
          bench "80" $ nf parseBoolean falsehoods80,
          bench "160" $ nf parseBoolean falsehoods160,

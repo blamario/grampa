@@ -17,9 +17,8 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Text.Grampa
-  other-modules:       Text.Grampa.Types, Text.Grampa.Class, Text.Grampa.PEG.Backtrack, Text.Grampa.PEG.Packrat,
-                       Text.Grampa.ContextFree.Parallel, Text.Grampa.Parser, Text.Grampa.AST
+  exposed-modules:     Text.Grampa, Text.Grampa.PEG.Backtrack, Text.Grampa.PEG.Packrat, Text.Grampa.ContextFree.Parallel
+  other-modules:       Text.Grampa.Types, Text.Grampa.Class, Text.Grampa.Parser, Text.Grampa.AST
   default-language:    Haskell2010
   -- other-modules:
   ghc-options:         -Wall
@@ -57,7 +56,7 @@ benchmark            benchmarks
   type:              exitcode-stdio-1.0
   hs-source-dirs:    test, examples
   ghc-options:       -O2 -Wall -rtsopts -main-is Benchmark.main
-  Build-Depends:     base >=4.7 && < 5, rank2 < 1.0, grampa == 0.1,
+  Build-Depends:     base >=4.7 && < 5, rank2 < 1.0, grampa == 0.1, monoid-subclasses >=0.4 && <0.5,
                      criterion >= 1.0, deepseq >= 1.1, containers >= 0.5.7.0 && < 0.6, text >= 1.1
   main-is:           Benchmark.hs
   other-modules:     Arithmetic

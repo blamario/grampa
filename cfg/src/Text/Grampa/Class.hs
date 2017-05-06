@@ -1,7 +1,8 @@
 {-# LANGUAGE RankNTypes, TypeFamilies #-}
-module Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
+module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
                           ParseResults, ParseFailure(..)) where
 
+import Data.Functor.Compose (Compose(..))
 import Data.Monoid (Monoid)
 import Data.Monoid.Cancellative (LeftReductiveMonoid)
 import Data.Monoid.Null (MonoidNull)
@@ -15,7 +16,13 @@ type ParseResults = Either ParseFailure
 
 data ParseFailure = ParseFailure Int [String] deriving (Eq, Show)
 
-class GrammarParsing m where
+class MultiParsing m where
+   -- | Some parser types produce a single result, others a list of results.
+   type ResultFunctor m s :: * -> *
+   -- | Given a rank-2 record of parsers and input, produce a record of their parsings.
+   parse :: (Rank2.Functor g, FactorialMonoid s) => g (m g s) -> s -> g (Compose ParseResults (ResultFunctor m s))
+
+class MultiParsing m => GrammarParsing m where
 --   type GrammarConstraint m :: ((* -> *) -> *) -> Constraint
    type GrammarFunctor m :: ((* -> *) -> *) -> * -> * -> *
    nonTerminal :: (g (GrammarFunctor m g s) -> GrammarFunctor m g s a) -> m g s a
@@ -25,7 +32,6 @@ class GrammarParsing m where
 
    selfReferring = Rank2.distributeWith nonTerminal id
    fixGrammar = ($ selfReferring)
-
 
 class Parsing m => RecursiveParsing m where
    recursive :: m a -> m a
