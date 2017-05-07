@@ -41,10 +41,10 @@ newtype CompleteParser g s r = CompleteParser {prefixParser :: PrefixParser g s 
    deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Monoid,
              MonoidParsing, TokenParsing, CharParsing, LookAheadParsing, Parsing)
 
--- | The 'parse' returns a list of all possible parses of complete input.
+-- | Parallel parser. The 'parse' provides a list of all possible parses of complete input.
 --
 -- @
---   parse :: g (CompleteParser g s) -> s -> g (Compose ParseResults [])
+--   'parse' :: g ('CompleteParser' g s) -> s -> g ('Compose' 'ParseResults' [])
 -- @
 instance MultiParsing CompleteParser where
    type ResultFunctor CompleteParser s = []
@@ -118,10 +118,11 @@ instance Monoid x => Monoid (PrefixParser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
--- | The 'parse' returns a list of all possible input prefix parses paired with the remaining input suffix.
+-- | Parallel parser. The 'parse' provides a list of all possible input prefix parses paired with the remaining input
+-- suffix.
 --
 -- @
---   parse :: g (PrefixParser g s) -> s -> g (Compose ParseResults (Compose [] ((,) s)))
+--   'parse' :: g ('PrefixParser' g s) -> s -> g ('Compose' 'ParseResults' ('Compose' [] ((,) s)))
 -- @
 instance MultiParsing PrefixParser where
    type ResultFunctor PrefixParser s = Compose [] ((,) s)

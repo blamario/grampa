@@ -17,8 +17,11 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Text.Grampa, Text.Grampa.PEG.Backtrack, Text.Grampa.PEG.Packrat, Text.Grampa.ContextFree.Parallel
-  other-modules:       Text.Grampa.Types, Text.Grampa.Class, Text.Grampa.Parser, Text.Grampa.AST
+  exposed-modules:     Text.Grampa,
+                       Text.Grampa.PEG.Backtrack, Text.Grampa.PEG.Packrat,
+                       Text.Grampa.ContextFree.Parallel, Text.Grampa.ContextFree.Memoizing,
+                       Text.Grampa.ContextFree.LeftRecursive
+  other-modules:       Text.Grampa.Class
   default-language:    Haskell2010
   -- other-modules:
   ghc-options:         -Wall

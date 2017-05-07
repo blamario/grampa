@@ -24,8 +24,8 @@ import Data.Functor.Compose (Compose(..))
 import qualified Rank2
 import Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
                           ParseResults, ParseFailure(..))
-import Text.Grampa.Parser (PrefixParser(applyParser), ResultList(..), fromResultList)
-import Text.Grampa.AST (AST, parsePrefix, parseRecursive, parseSeparated)
+import Text.Grampa.ContextFree.Memoizing (PrefixParser(applyParser), ResultList(..), fromResultList)
+import Text.Grampa.ContextFree.LeftRecursive (AST, parsePrefix, parseRecursive, parseSeparated)
 
 import Prelude hiding (takeWhile)
 

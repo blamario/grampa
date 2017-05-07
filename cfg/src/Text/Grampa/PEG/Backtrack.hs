@@ -136,10 +136,10 @@ instance MonoidParsing (Parser g) where
                                                 in Parsed (prefix <> prefix') suffix'
                         NoParse{} -> Parsed mempty rest
 
--- | The 'parse' returns an input prefix parse paired with the remaining input suffix.
+-- | Backtracking PEG parser. The 'parse' returns the input prefix parse paired with the remaining input suffix.
 --
 -- @
---   parse :: g (Parser g s) -> s -> g (Compose ParseResults ((,) s))
+--   'parse' :: g ('Parser' g s) -> s -> g ('Compose' 'ParseResults' ((,) s))
 -- @
 instance MultiParsing Parser where
    type ResultFunctor Parser s = ((,) s)

@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts, GADTs, InstanceSigs, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
 {-# OPTIONS -fno-full-laziness #-}
-module Text.Grampa.AST (AST(..), Grammar, parsePrefix, parseRecursive, parseSeparated)
+module Text.Grampa.ContextFree.LeftRecursive (AST(..), Grammar, parsePrefix, parseRecursive, parseSeparated)
 where
 
 import Control.Applicative
@@ -31,7 +31,7 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), RecursiveParsing(..), ParseResults)
-import Text.Grampa.Parser (PrefixParser(..), ResultList(..), fromResultList)
+import Text.Grampa.ContextFree.Memoizing (PrefixParser(..), ResultList(..), fromResultList)
 
 import Prelude hiding (null, showsPrec, span, takeWhile)
 
@@ -39,7 +39,8 @@ type Grammar g s = g (AST g s)
 
 data AST g s a where
    NonTerminal   :: (g (AST g s) -> AST g s a) -> AST g s a
-   Primitive     :: String -> Maybe (PrefixParser g s a) -> Maybe (PrefixParser g s a) -> PrefixParser g s a -> AST g s a
+   Primitive     :: String -> Maybe (PrefixParser g s a) -> Maybe (PrefixParser g s a) -> PrefixParser g s a
+                 -> AST g s a
    Recursive     :: AST g s a -> AST g s a
    Map           :: (a -> b) -> AST g s a -> AST g s b
    Ap            :: AST g s (a -> b) -> AST g s a -> AST g s b

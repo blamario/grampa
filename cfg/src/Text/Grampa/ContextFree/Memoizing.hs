@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, TypeFamilies #-}
-module Text.Grampa.Parser (FailureInfo(..), ResultList(..), CompleteParser, PrefixParser(..), fromResultList)
+module Text.Grampa.ContextFree.Memoizing (FailureInfo(..), ResultList(..), CompleteParser, PrefixParser(..),
+                                          fromResultList)
 where
 
 import Control.Applicative
@@ -40,10 +41,10 @@ newtype CompleteParser g s r = CompleteParser {prefixParser :: PrefixParser g s 
    deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Monoid,
              MonoidParsing, TokenParsing, CharParsing, LookAheadParsing, Parsing)
 
--- | The 'parse' returns a list of all possible input prefix parses paired with the remaining input suffix.
+-- | Memoizing parser. The 'parse' returns a list of all possible parses of complete input.
 --
 -- @
---   parse :: g (CompleteParser g s) -> s -> g (Compose ParseResults (Compose [] ((,) s)))
+--   'parse' :: g ('CompleteParser' g s) -> s -> g ('Compose' 'ParseResults' ('Compose' [] ((,) s)))
 -- @
 instance MultiParsing CompleteParser where
    type ResultFunctor CompleteParser s = []
@@ -123,10 +124,11 @@ instance GrammarParsing PrefixParser where
       p ((_, d) : _) = f d
       p _ = ResultList [] (FailureInfo 1 0 ["NonTerminal at endOfInput"])
 
--- | The 'parse' returns a list of all possible input prefix parses paired with the remaining input suffix.
+-- | Memoizing parser. The 'parse' returns a list of all possible input prefix parses paired with the remaining input
+-- suffix.
 --
 -- @
---   parse :: g (PrefixParser g s) -> s -> g (Compose ParseResults (Compose [] ((,) s)))
+--   'parse' :: g ('PrefixParser' g s) -> s -> g ('Compose' 'ParseResults' ('Compose' [] ((,) s)))
 -- @
 instance MultiParsing PrefixParser where
    type ResultFunctor PrefixParser s = Compose [] ((,) s)
