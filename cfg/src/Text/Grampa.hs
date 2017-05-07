@@ -24,7 +24,7 @@ import Data.Functor.Compose (Compose(..))
 import qualified Rank2
 import Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
                           ParseResults, ParseFailure(..))
-import Text.Grampa.Parser (Parser(applyParser), ResultList(..), fromResultList)
+import Text.Grampa.Parser (PrefixParser(applyParser), ResultList(..), fromResultList)
 import Text.Grampa.AST (AST, parsePrefix, parseRecursive, parseSeparated)
 
 import Prelude hiding (takeWhile)
@@ -49,7 +49,7 @@ simply :: (Rank2.Only r (p (Rank2.Only r) s) -> s -> Rank2.Only r (Compose Parse
             -> p (Rank2.Only r) s r -> s -> ParseResults (f r)
 simply parseGrammar p input = getCompose (Rank2.fromOnly $ parseGrammar (Rank2.Only p) input)
 
-reparse :: Rank2.Functor g => g (Parser g s) -> [(s, g (ResultList g s))] -> [(s, g (ResultList g s))]
+reparse :: Rank2.Functor g => g (PrefixParser g s) -> [(s, g (ResultList g s))] -> [(s, g (ResultList g s))]
 reparse _ [] = []
 reparse final parsed@((s, _):_) = (s, gd):parsed
    where gd = Rank2.fmap (`applyParser` parsed) final

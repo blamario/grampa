@@ -30,7 +30,7 @@ import Test.QuickCheck.Classes (functor, monad, monoid, applicative, alternative
 import qualified Rank2
 import qualified Rank2.TH
 import Text.Grampa
-import Text.Grampa.ContextFree.Parallel (Parser)
+import Text.Grampa.ContextFree.Parallel (PrefixParser)
 
 import qualified Test.Examples
 
@@ -69,6 +69,8 @@ ignorable = whiteSpace *> skipMany (nonTerminal next *> whiteSpace <?> "ignorabl
 --ignorable = whiteSpace *> (AST.NonTerminal next *> ignorable <<|> pure ())
 
 main = defaultMain tests
+
+type Parser = PrefixParser
 
 simpleParse :: FactorialMonoid s => Parser (Rank2.Only r) s r -> s -> ParseResults [(s, r)]
 simpleParse p input = getCompose <$> simply parse p input

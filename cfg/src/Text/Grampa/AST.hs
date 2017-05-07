@@ -31,7 +31,7 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), RecursiveParsing(..), ParseResults)
-import Text.Grampa.Parser (Parser(..), ResultList(..), fromResultList)
+import Text.Grampa.Parser (PrefixParser(..), ResultList(..), fromResultList)
 
 import Prelude hiding (null, showsPrec, span, takeWhile)
 
@@ -39,7 +39,7 @@ type Grammar g s = g (AST g s)
 
 data AST g s a where
    NonTerminal   :: (g (AST g s) -> AST g s a) -> AST g s a
-   Primitive     :: String -> Maybe (Parser g s a) -> Maybe (Parser g s a) -> Parser g s a -> AST g s a
+   Primitive     :: String -> Maybe (PrefixParser g s a) -> Maybe (PrefixParser g s a) -> PrefixParser g s a -> AST g s a
    Recursive     :: AST g s a -> AST g s a
    Map           :: (a -> b) -> AST g s a -> AST g s b
    Ap            :: AST g s (a -> b) -> AST g s a -> AST g s b
@@ -201,7 +201,7 @@ instance MonoidParsing (AST g) where
    whiteSpace = Primitive "whiteSpace" (Just $ notFollowedBy whiteSpace) (Just whiteSpace) whiteSpace
    concatMany = ConcatMany
 
-toParser :: (Rank2.Functor g, FactorialMonoid s) => AST g s a -> Parser g s a
+toParser :: (Rank2.Functor g, FactorialMonoid s) => AST g s a -> PrefixParser g s a
 toParser (NonTerminal accessor) = nonTerminal (unwrap . accessor . Rank2.fmap ResultsWrap)
    where unwrap (ResultsWrap x) = x
          unwrap _ = error "should have been wrapped"
@@ -415,7 +415,8 @@ parseRecursive ast = parseSeparated descendants (Rank2.fmap toParser indirect) (
 -- left-recursive productions, the second all others. The first function argument specifies the left-recursive
 -- dependencies among the grammar productions.
 parseSeparated :: forall g s. (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) =>
-                  g (Const (g (Const Bool))) -> g (Parser g s) -> g (Parser g s) -> s -> [(s, g (ResultList g s))]
+                  g (Const (g (Const Bool))) -> g (PrefixParser g s) -> g (PrefixParser g s) -> s
+               -> [(s, g (ResultList g s))]
 parseSeparated dependencies indirect direct input = foldr parseTail [] (Factorial.tails input)
    where parseTail s parsedTail = parsed
             where parsed = (s,d'):parsedTail

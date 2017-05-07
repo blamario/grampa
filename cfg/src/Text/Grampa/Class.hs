@@ -1,10 +1,11 @@
 {-# LANGUAGE RankNTypes, TypeFamilies #-}
 module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
-                          ParseResults, ParseFailure(..)) where
+                          ParseResults, ParseFailure(..), completeParser) where
 
 import Data.Functor.Compose (Compose(..))
 import Data.Monoid (Monoid)
 import Data.Monoid.Cancellative (LeftReductiveMonoid)
+import qualified Data.Monoid.Null as Null
 import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
@@ -15,6 +16,13 @@ import qualified Rank2
 type ParseResults = Either ParseFailure
 
 data ParseFailure = ParseFailure Int [String] deriving (Eq, Show)
+
+completeParser :: MonoidNull s => Compose ParseResults (Compose [] ((,) s)) r -> Compose ParseResults [] r
+completeParser (Compose (Left failure)) = Compose (Left failure)
+completeParser (Compose (Right (Compose results))) =
+   case filter (Null.null . fst) results
+   of [] -> Compose (Left $ ParseFailure 0 ["complete parse"])
+      completeResults -> Compose (Right $ snd <$> completeResults)
 
 class MultiParsing m where
    -- | Some parser types produce a single result, others a list of results.

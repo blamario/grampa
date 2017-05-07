@@ -29,8 +29,7 @@ data Result (g :: (* -> *) -> *) s v = Parsed{ parsedPrefix :: v,
 data FailureInfo = FailureInfo !Int Word64 [String] deriving (Eq, Show)
 
 -- | Parser type for Parsing Expression Grammars that uses a backtracking algorithm, fast for grammars in LL(1) class
--- but with potentially exponential performance for longer ambiguous prefixes. The 'parse' function returns an input
--- prefix parse paired with the remaining input suffix.
+-- but with potentially exponential performance for longer ambiguous prefixes.
 newtype Parser g s r = Parser{applyParser :: s -> Result g s r}
 
 instance Show1 (Result g s) where
@@ -137,12 +136,15 @@ instance MonoidParsing (Parser g) where
                                                 in Parsed (prefix <> prefix') suffix'
                         NoParse{} -> Parsed mempty rest
 
--- | The 'parse' function returns an input prefix parse paired with the remaining input suffix.
+-- | The 'parse' returns an input prefix parse paired with the remaining input suffix.
 --
--- > parse :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> g (Compose ParseResults ((,) s))
+-- @
+--   parse :: g (Parser g s) -> s -> g (Compose ParseResults ((,) s))
+-- @
 instance MultiParsing Parser where
    type ResultFunctor Parser s = ((,) s)
    {-# NOINLINE parse #-}
+   -- | Returns an input prefix parse paired with the remaining input suffix.
    parse g input = Rank2.fmap (Compose . fromResult input . (`applyParser` input)) g
 
 fromResult :: FactorialMonoid s => s -> Result g s r -> ParseResults (s, r)
