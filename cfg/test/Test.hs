@@ -66,7 +66,7 @@ nameListGrammarBuilder g@Recursive{..} = Recursive{
 symbol s = ignorable *> string s <* ignorable
 ignorable = whiteSpace *> skipMany (nonTerminal next *> whiteSpace <?> "ignorable1") <?> "ignorable"
 --ignorable = recursiveOn [next] $ whiteSpace *> skipMany (next nameListGrammar *> whiteSpace <?> "ignorable1") <?> "ignorable"
---ignorable = whiteSpace *> (AST.NonTerminal next *> ignorable <<|> pure ())
+--ignorable = whiteSpace *> (Parser.NonTerminal next *> ignorable <<|> pure ())
 
 main = defaultMain tests
 
@@ -78,9 +78,10 @@ simpleParse p input = getCompose <$> simply parse p input
 tests = testGroup "Grampa" [
            let g = fixGrammar recursiveManyGrammar
            in testGroup "recursive"
-              [testProperty "minimal" $ start (parseAll g "()") == Compose (Right [""]),
-               testProperty "bracketed" $ start (parseAll g "[()]") == Compose (Right [""]),
-               testProperty "name list" $ start (parseAll nameListGrammar "foo, bar") == Compose (Right ["foo bar"])],
+              [testProperty "minimal" $ start (parseComplete g "()") == Compose (Right [""]),
+               testProperty "bracketed" $ start (parseComplete g "[()]") == Compose (Right [""]),
+               testProperty "name list" $
+                 start (parseComplete nameListGrammar "foo, bar") == Compose (Right ["foo bar"])],
            testGroup "arithmetic"
              [testProperty "arithmetic"   $ Test.Examples.parseArithmetical,
               testProperty "comparisons"  $ Test.Examples.parseComparison,

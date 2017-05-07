@@ -3,9 +3,11 @@ module Arithmetic where
 
 import Control.Applicative
 import Data.Char (isDigit)
+import Data.Functor.Compose (Compose(..))
 import Data.Monoid ((<>))
 
 import Text.Grampa
+import Text.Grampa.ContextFree.LeftRecursive (Parser, parseComplete)
 import Utilities (infixJoin, symbol)
 
 import qualified Rank2
@@ -88,7 +90,7 @@ instance Rank2.Traversable (Arithmetic e) where
                   <*> f (factor a)
                   <*> f (primary a)
 
-arithmetic :: ArithmeticDomain e => GrammarBuilder (Arithmetic e) g AST String
+arithmetic :: ArithmeticDomain e => GrammarBuilder (Arithmetic e) g Parser String
 arithmetic Arithmetic{..} = Arithmetic{
    expr= sum,
    sum= product
@@ -101,3 +103,7 @@ arithmetic Arithmetic{..} = Arithmetic{
    factor= primary
            <|> symbol "(" *> expr <* symbol ")",
    primary= whiteSpace *> ((number . read) <$> takeCharsWhile1 isDigit <?> "digits")}
+
+main :: IO ()
+main = getContents >>=
+       print . (getCompose . expr . parseComplete (fixGrammar arithmetic) :: String -> ParseResults [Int])

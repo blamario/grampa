@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts, GADTs, InstanceSigs, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
 {-# OPTIONS -fno-full-laziness #-}
-module Text.Grampa.ContextFree.LeftRecursive (AST(..), Grammar, parsePrefix, parseRecursive, parseSeparated)
+module Text.Grampa.ContextFree.LeftRecursive (Parser, parseComplete, parsePrefix)
 where
 
 import Control.Applicative
@@ -35,31 +35,48 @@ import Text.Grampa.ContextFree.Memoizing (PrefixParser(..), ResultList(..), from
 
 import Prelude hiding (null, showsPrec, span, takeWhile)
 
-type Grammar g s = g (AST g s)
-
-data AST g s a where
-   NonTerminal   :: (g (AST g s) -> AST g s a) -> AST g s a
+data Parser g s a where
+   NonTerminal   :: (g (Parser g s) -> Parser g s a) -> Parser g s a
    Primitive     :: String -> Maybe (PrefixParser g s a) -> Maybe (PrefixParser g s a) -> PrefixParser g s a
-                 -> AST g s a
-   Recursive     :: AST g s a -> AST g s a
-   Map           :: (a -> b) -> AST g s a -> AST g s b
-   Ap            :: AST g s (a -> b) -> AST g s a -> AST g s b
-   Pure          :: a -> AST g s a
-   Empty         :: AST g s a
-   Bind          :: AST g s a -> (a -> AST g s b) -> AST g s b
-   Choice        :: AST g s a -> AST g s a -> AST g s a
-   BiasedChoice  :: AST g s a -> AST g s a -> AST g s a
-   Try           :: AST g s a -> AST g s a
-   Describe      :: AST g s a -> String -> AST g s a
-   NotFollowedBy :: Show a => AST g s a -> AST g s ()
-   Lookahead     :: AST g s a -> AST g s a
-   Many          :: AST g s a -> AST g s [a]
-   Some          :: AST g s a -> AST g s [a]
-   ConcatMany    :: Monoid a => AST g s a -> AST g s a
-   ResultsWrap   :: ResultList g s a -> AST g s a
-   Index         :: Int -> AST g s a
+                 -> Parser g s a
+   Recursive     :: Parser g s a -> Parser g s a
+   Map           :: (a -> b) -> Parser g s a -> Parser g s b
+   Ap            :: Parser g s (a -> b) -> Parser g s a -> Parser g s b
+   Pure          :: a -> Parser g s a
+   Empty         :: Parser g s a
+   Bind          :: Parser g s a -> (a -> Parser g s b) -> Parser g s b
+   Choice        :: Parser g s a -> Parser g s a -> Parser g s a
+   BiasedChoice  :: Parser g s a -> Parser g s a -> Parser g s a
+   Try           :: Parser g s a -> Parser g s a
+   Describe      :: Parser g s a -> String -> Parser g s a
+   NotFollowedBy :: Show a => Parser g s a -> Parser g s ()
+   Lookahead     :: Parser g s a -> Parser g s a
+   Many          :: Parser g s a -> Parser g s [a]
+   Some          :: Parser g s a -> Parser g s [a]
+   ConcatMany    :: Monoid a => Parser g s a -> Parser g s a
+   ResultsWrap   :: ResultList g s a -> Parser g s a
+   Index         :: Int -> Parser g s a
 
-instance (Rank2.Distributive g, Rank2.Traversable g) => Show (AST g s a) where
+-- | Parse the given input against the given general context-free grammar using a generalized packrat algorithm,
+-- returning a list of all possible parses that consume the entire input.
+parseComplete :: (FactorialMonoid s, Rank2.Traversable g, Rank2.Distributive g, Rank2.Apply g) =>
+                 g (Parser g s) -> s -> g (Compose ParseResults [])
+parseComplete g input = Rank2.fmap ((snd <$>) . Compose . (getCompose <$>) . fromResultList input)
+                                   (snd $ head $ reparse close $ parseRecursive g input)
+   where close = Rank2.fmap (<* endOfInput) selfReferring
+
+-- | Parse the given input against the given general context-free grammar using a generalized packrat algorithm,
+-- returning a list of all possible parses of an input prefix paired with the remaining input suffix.
+parsePrefix :: (Rank2.Apply g, Rank2.Traversable g, FactorialMonoid s) =>
+               g (Parser g s) -> s -> g (Compose ParseResults (Compose [] ((,) s)))
+parsePrefix g input = Rank2.fmap (Compose . fromResultList input) (snd $ head $ parseRecursive g input)
+
+reparse :: Rank2.Functor g => g (PrefixParser g s) -> [(s, g (ResultList g s))] -> [(s, g (ResultList g s))]
+reparse _ [] = []
+reparse final parsed@((s, _):_) = (s, gd):parsed
+   where gd = Rank2.fmap (`applyParser` parsed) final
+
+instance (Rank2.Distributive g, Rank2.Traversable g) => Show (Parser g s a) where
    show (NonTerminal accessor) = "nt" ++ show i
       where Index i = accessor (ordered selfReferring)
    show (Primitive name _ _ _) = name
@@ -81,7 +98,7 @@ instance (Rank2.Distributive g, Rank2.Traversable g) => Show (AST g s a) where
    show Index{} = error "Index should be temporary only"
    show ResultsWrap{} = error "ResultsWrap should be temporary only"
 
-instance (Rank2.Distributive g, Rank2.Traversable g) => Show1 (AST g s) where
+instance (Rank2.Distributive g, Rank2.Traversable g) => Show1 (Parser g s) where
    liftShowsPrec _showsPrec _showList _prec (NonTerminal accessor) _rest = "nt" ++ show i
       where Index i = accessor (ordered selfReferring)
    liftShowsPrec _showsPrec _showL _prec (Primitive name _ _ _) rest = name ++ rest
@@ -103,17 +120,17 @@ instance (Rank2.Distributive g, Rank2.Traversable g) => Show1 (AST g s) where
    liftShowsPrec _showsPrec _showL _prec Index{} _rest = error "Index should be temporary only"
    liftShowsPrec _showsPrec _showL _prec ResultsWrap{} _rest = error "ResultsWrap should be temporary only"
 
-instance Functor (AST g s) where
+instance Functor (Parser g s) where
    fmap _ Empty = Empty
    fmap f ast = Map f ast
 
-instance Applicative (AST g s) where
+instance Applicative (Parser g s) where
    pure = Pure
    Empty <*> _ = Empty
    _ <*> Empty = Empty
    p <*> q = Ap p q
 
-instance Alternative (AST g s) where
+instance Alternative (Parser g s) where
    empty = Empty
    Empty <|> ast = ast
    ast <|> Empty = ast
@@ -123,21 +140,21 @@ instance Alternative (AST g s) where
    some Empty = Empty
    some ast = Some ast
 
-instance Monad (AST g s) where
+instance Monad (Parser g s) where
    return = pure
    (>>) = (*>)
    Empty >>= _ = Empty
    ast >>= cont = Bind ast cont
 
-instance MonadPlus (AST g s) where
+instance MonadPlus (Parser g s) where
    mzero = empty
    mplus = (<|>)
 
-instance Monoid x => Monoid (AST g s x) where
+instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
-instance MonoidNull s => Parsing (AST g s) where
+instance MonoidNull s => Parsing (Parser g s) where
    eof = Primitive "eof" (Just eof) Nothing eof
    try Empty = Empty
    try ast = Try ast
@@ -147,10 +164,10 @@ instance MonoidNull s => Parsing (AST g s) where
    unexpected msg = Primitive "unexpected" Nothing (Just $ unexpected msg) (unexpected msg)
    skipMany = ConcatMany . (() <$)
 
-instance MonoidNull s => LookAheadParsing (AST g s) where
+instance MonoidNull s => LookAheadParsing (Parser g s) where
    lookAhead = Lookahead
 
-instance (Show s, TextualMonoid s) => Text.Parser.Char.CharParsing (AST g s) where
+instance (Show s, TextualMonoid s) => Text.Parser.Char.CharParsing (Parser g s) where
    satisfy = satisfyChar
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    char = satisfyChar . (==)
@@ -158,24 +175,18 @@ instance (Show s, TextualMonoid s) => Text.Parser.Char.CharParsing (AST g s) whe
    anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance MultiParsing AST where
-   type ResultFunctor AST s = Compose [] ((,) s)
+instance MultiParsing Parser where
+   type ResultFunctor Parser s = Compose [] ((,) s)
    parse g = parse (Rank2.fmap toParser g)
 
--- | Parse the given input against the given general context-free grammar using a generalized packrat algorithm,
--- returning a list of all possible parses of an input prefix paired with the remaining input suffix.
-parsePrefix :: (Rank2.Apply g, Rank2.Traversable g, FactorialMonoid s) =>
-               g (AST g s) -> s -> g (Compose ParseResults (Compose [] ((,) s)))
-parsePrefix g input = Rank2.fmap (Compose . fromResultList input) (snd $ head $ parseRecursive g input)
-
-instance GrammarParsing AST where
-   type GrammarFunctor AST = AST
+instance GrammarParsing Parser where
+   type GrammarFunctor Parser = Parser
    nonTerminal = NonTerminal
 
-instance MonoidNull s => RecursiveParsing (AST g s) where
+instance MonoidNull s => RecursiveParsing (Parser g s) where
    recursive = Recursive
 
-instance MonoidParsing (AST g) where
+instance MonoidParsing (Parser g) where
    (<<|>) = BiasedChoice
    endOfInput = Primitive "endOfInput" (Just endOfInput) Nothing endOfInput
    getInput = Primitive "getInput" (Just $ eof *> getInput) (Just $ notFollowedBy eof *> getInput) getInput
@@ -202,7 +213,7 @@ instance MonoidParsing (AST g) where
    whiteSpace = Primitive "whiteSpace" (Just $ notFollowedBy whiteSpace) (Just whiteSpace) whiteSpace
    concatMany = ConcatMany
 
-toParser :: (Rank2.Functor g, FactorialMonoid s) => AST g s a -> PrefixParser g s a
+toParser :: (Rank2.Functor g, FactorialMonoid s) => Parser g s a -> PrefixParser g s a
 toParser (NonTerminal accessor) = nonTerminal (unwrap . accessor . Rank2.fmap ResultsWrap)
    where unwrap (ResultsWrap x) = x
          unwrap _ = error "should have been wrapped"
@@ -225,7 +236,7 @@ toParser (ConcatMany ast) = concatMany (toParser ast)
 toParser Index{} = error "Index should be temporary only"
 toParser ResultsWrap{} = error "ResultsWrap should be temporary only"
 
-splitDirect :: (Rank2.Functor g, FactorialMonoid s) => AST g s a -> (AST g s a, AST g s a)
+splitDirect :: (Rank2.Functor g, FactorialMonoid s) => Parser g s a -> (Parser g s a, Parser g s a)
 splitDirect ast@NonTerminal{} = (empty, ast)
 splitDirect ast@Primitive{} = (ast, empty)
 splitDirect (Recursive ast) = both Recursive (splitDirect ast)
@@ -262,7 +273,7 @@ splitDirect ast@(ConcatMany ast1) = (pure mempty <|> (<>) <$> d <*> ast, (<>) <$
 splitDirect Index{} = error "Index should be temporary only"
 splitDirect ResultsWrap{} = error "ResultsWrap should be temporary only"
 
-splitNullable :: MonoidNull s => AST g s a -> (AST g s a, AST g s a)
+splitNullable :: MonoidNull s => Parser g s a -> (Parser g s a, Parser g s a)
 splitNullable ast@NonTerminal{} = (ast, empty)
 splitNullable (Primitive name p0 p1 _) = (maybe empty (\p-> Primitive name (Just p) Nothing p) p0,
                                           maybe empty (\p-> Primitive name Nothing (Just p) p) p1)
@@ -301,7 +312,7 @@ splitNullable (Index _) = error "Index should be temporary only"
 both :: (a -> b) -> (a, a) -> (b, b)
 both f (x, y) = (f x, f y)
 
-leftDescendants :: forall g s. (Rank2.Apply g, Rank2.Traversable g) => g (AST g s) -> g (Const (Bool, g (Const Bool)))
+leftDescendants :: forall g s. (Rank2.Apply g, Rank2.Traversable g) => g (Parser g s) -> g (Const (Bool, g (Const Bool)))
 leftDescendants g = evalState (Rank2.traverse (const replaceFromList) g) $ map (setToBools <$>) $
                     IntMap.elems $ calcLeftSets $ IntMap.fromList $ zip [0..] $ Rank2.foldMap successorSet g
    where replaceFromList :: State [x] (Const x y)
@@ -310,14 +321,14 @@ leftDescendants g = evalState (Rank2.traverse (const replaceFromList) g) $ map (
                               return (Const next)
          setToBools :: IntSet -> g (Const Bool)
          setToBools = Rank2.traverse isElem enumeration
-         isElem :: AST g s a -> IntSet -> Const Bool a
+         isElem :: Parser g s a -> IntSet -> Const Bool a
          isElem (Index i) set = Const (IntSet.member i set)
-         successorSet :: AST g s a -> [IntSet]
+         successorSet :: Parser g s a -> [IntSet]
          successorSet a = [leftRecursiveOn a]
          enumeration = ordered g
          universe = Rank2.foldMap (\(Index i)-> IntSet.singleton i) enumeration
          g0 = fixNullable g
-         leftRecursiveOn :: AST g s a -> IntSet
+         leftRecursiveOn :: Parser g s a -> IntSet
          leftRecursiveOn (NonTerminal accessor) = IntSet.singleton i
             where Index i = accessor enumeration
          leftRecursiveOn Primitive{} = mempty
@@ -337,7 +348,7 @@ leftDescendants g = evalState (Rank2.traverse (const replaceFromList) g) $ map (
          leftRecursiveOn (Some ast) = leftRecursiveOn ast
          leftRecursiveOn (ConcatMany ast) = leftRecursiveOn ast
 
-nullable :: Rank2.Functor g => g (Const Bool) -> AST g s a -> Bool
+nullable :: Rank2.Functor g => g (Const Bool) -> Parser g s a -> Bool
 nullable gn (NonTerminal accessor) = n == 1
    where Index n = accessor (Rank2.fmap (\(Const z)-> Index $ if z then 1 else 0) gn)
 nullable _  (Primitive _name z _ _) = isJust z
@@ -357,7 +368,7 @@ nullable _  Many{} = True
 nullable gn (Some ast) = nullable gn ast
 nullable _  ConcatMany{} = True
 
-fixNullable :: (Rank2.Apply g, Rank2.Foldable g) => g (AST g s) -> g (Const Bool)
+fixNullable :: (Rank2.Apply g, Rank2.Foldable g) => g (Parser g s) -> g (Const Bool)
 fixNullable g = go (Rank2.fmap (const $ Const True) g)
    where go gn
             | getAll (Rank2.foldMap (All . getConst) $ Rank2.liftA2 agree gn gn') = gn
@@ -365,9 +376,9 @@ fixNullable g = go (Rank2.fmap (const $ Const True) g)
             where gn' = Rank2.fmap (Const . nullable gn) g
          agree x y = Const (x == y)
 
-ordered :: Rank2.Traversable g => g (AST g s) -> g (AST g s)
+ordered :: Rank2.Traversable g => g (Parser g s) -> g (Parser g s)
 ordered g = evalState (Rank2.traverse (const increment) g) 0
-   where increment :: State Int (AST g s a)
+   where increment :: State Int (Parser g s a)
          increment = do {n <- get; put (n+1); return (Index n)}
 
 data AdvanceFront = AdvanceFront{visited       :: IntSet,
@@ -397,7 +408,7 @@ calcLeftSets successors = (cyclic &&& visited) <$> expandPaths initialDepths
 newtype Couple f a = Couple{unCouple :: (f a, f a)} deriving Show
 
 parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Traversable g, FactorialMonoid s) =>
-                  g (AST g s) -> s -> [(s, g (ResultList g s))]
+                  g (Parser g s) -> s -> [(s, g (ResultList g s))]
 parseRecursive ast = parseSeparated descendants (Rank2.fmap toParser indirect) (Rank2.fmap toParser direct)
    where directRecursive = Rank2.fmap (Couple . splitDirect) ast
          cyclicDescendants = leftDescendants ast
@@ -405,7 +416,7 @@ parseRecursive ast = parseSeparated descendants (Rank2.fmap toParser indirect) (
          descendants = Rank2.liftA3 cond cyclic (Rank2.fmap (mapConst snd) cyclicDescendants) noDescendants
          direct = Rank2.liftA3 cond cyclic (Rank2.fmap (fst . unCouple) directRecursive) ast
          indirect = Rank2.liftA3 cond cyclic (Rank2.fmap (snd . unCouple) directRecursive) emptyGrammar
-         emptyGrammar :: g (AST g s)
+         emptyGrammar :: g (Parser g s)
          emptyGrammar = Rank2.fmap (const empty) ast
          noDescendants = Rank2.fmap (const $ Const $ Rank2.fmap (const $ Const False) ast) ast
          cond (Const False) _t f = f

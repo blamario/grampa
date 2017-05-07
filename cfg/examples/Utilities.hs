@@ -9,11 +9,12 @@ import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 
 import Text.Grampa
+import Text.Grampa.ContextFree.LeftRecursive
 import qualified Rank2
 
 parseUnique :: (FactorialMonoid s, Rank2.Traversable g, Rank2.Distributive g, Rank2.Apply g) =>
-               Grammar g AST s -> (forall f. g f -> f r) -> s -> r
-parseUnique g prod s = case getCompose (prod $ parseAll g s)
+               Grammar g Parser s -> (forall f. g f -> f r) -> s -> r
+parseUnique g prod s = case getCompose (prod $ parseComplete g s)
                        of Left (ParseFailure pos expected) -> error ("Parse failure at " ++ show pos
                                                                      ++ ", expected " ++ intercalate " or " expected)
                           Right [x] -> x

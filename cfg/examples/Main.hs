@@ -5,7 +5,8 @@ import System.Environment (getArgs)
 import Data.Functor.Compose (Compose(..))
 import Data.Map (Map)
 import qualified Rank2
-import Text.Grampa (GrammarBuilder, AST, ParseResults, fixGrammar, parseAll)
+import Text.Grampa (GrammarBuilder, ParseResults, fixGrammar)
+import Text.Grampa.ContextFree.LeftRecursive (Parser, parseComplete)
 import Arithmetic (Arithmetic, arithmetic)
 import qualified Arithmetic
 import qualified Boolean
@@ -22,22 +23,28 @@ main :: IO ()
 main = do args <- concat <$> getArgs
           -- let a = fixGrammar (Arithmetic.arithmetic (production id Arithmetic.expr a))
           -- let a = fixGrammar (Arithmetic.arithmetic (recursive $ Arithmetic.expr a))
-          print (getCompose . Lambda.expr $ parseAll (fixGrammar Lambda.lambdaCalculus) args :: ParseResults [Lambda.LambdaInitial])
-          -- print (((\f-> f (mempty :: Map String Int) [1 :: Int]) <$>) <$> parseAll (fixGrammar Lambda.lambdaCalculus) Lambda.expr args :: ParseResults Int)
-          print (getCompose . Arithmetic.expr $ parseAll (fixGrammar arithmetic) args :: ParseResults [Int])
-          print (getCompose . Comparisons.test . Rank2.snd $ parseAll (fixGrammar comparisons) args :: ParseResults [Bool])
-          print (getCompose . Boolean.expr . Rank2.snd $ parseAll (fixGrammar boolean) args :: ParseResults [Bool])
-          print (getCompose . Conditionals.expr . Rank2.snd $ parseAll (fixGrammar conditionals) args :: ParseResults [Int])
-          print (((\f-> f (mempty :: Map String Combined.Tagged)) <$>) <$> (getCompose . Combined.expr $ parseAll (fixGrammar Combined.expression) args) :: ParseResults [Combined.Tagged])
+          print (getCompose . Lambda.expr $ parseComplete (fixGrammar Lambda.lambdaCalculus) args
+                 :: ParseResults [Lambda.LambdaInitial])
+          -- print (((\f-> f (mempty :: Map String Int) [1 :: Int]) <$>) <$> parseComplete (fixGrammar Lambda.lambdaCalculus) Lambda.expr args :: ParseResults Int)
+          print (getCompose . Arithmetic.expr $ parseComplete (fixGrammar arithmetic) args :: ParseResults [Int])
+          print (getCompose . Comparisons.test . Rank2.snd $ parseComplete (fixGrammar comparisons) args
+                 :: ParseResults [Bool])
+          print (getCompose . Boolean.expr . Rank2.snd $ parseComplete (fixGrammar boolean) args :: ParseResults [Bool])
+          print (getCompose . Conditionals.expr . Rank2.snd $ parseComplete (fixGrammar conditionals) args
+                 :: ParseResults [Int])
+          print (((\f-> f (mempty :: Map String Combined.Tagged)) <$>)
+                 <$> (getCompose . Combined.expr $ parseComplete (fixGrammar Combined.expression) args)
+                 :: ParseResults [Combined.Tagged])
 
-comparisons :: GrammarBuilder (Rank2.Product (Arithmetic.Arithmetic Int) (Comparisons.Comparisons Int Bool)) g AST String
+comparisons :: GrammarBuilder (Rank2.Product (Arithmetic.Arithmetic Int) (Comparisons.Comparisons Int Bool))
+                              g Parser String
 comparisons (Rank2.Pair a c) =
    Rank2.Pair (Arithmetic.arithmetic a) (Comparisons.comparisons c{Comparisons.term= Arithmetic.expr a})
 
-boolean :: GrammarBuilder ArithmeticComparisonsBoolean g AST String
+boolean :: GrammarBuilder ArithmeticComparisonsBoolean g Parser String
 boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Comparisons.test $ Rank2.snd ac) b)
 
-conditionals :: GrammarBuilder ACBC g AST String
+conditionals :: GrammarBuilder ACBC g Parser String
 conditionals (Rank2.Pair acb c) =
    Rank2.Pair
       (boolean acb)
