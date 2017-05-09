@@ -7,7 +7,7 @@ import Data.Monoid ((<>))
 import qualified Rank2.TH
 
 import Text.Grampa
-import Text.Grampa.ContextFree.LeftRecursive
+import Text.Grampa.ContextFree.LeftRecursive (CompleteParser)
 import Utilities (keyword)
 
 class ConditionalDomain c e where
@@ -31,7 +31,7 @@ instance (Show (f t), Show (f e)) => Show (Conditionals t e f) where
 
 $(Rank2.TH.deriveAll ''Conditionals)
 
-conditionals :: ConditionalDomain t e => GrammarBuilder (Conditionals t e) g Parser String
+conditionals :: ConditionalDomain t e => GrammarBuilder (Conditionals t e) g CompleteParser String
 conditionals Conditionals{..} =
    Conditionals{expr= ifThenElse <$> (keyword "if" *> test) <*> (keyword "then" *> term) <*> (keyword "else" *> term),
                 test= empty,

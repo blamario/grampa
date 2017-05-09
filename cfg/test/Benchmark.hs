@@ -15,7 +15,6 @@ import qualified Rank2.TH
 
 import Text.Grampa
 import Text.Grampa.ContextFree.Parallel (PrefixParser)
-import Text.Grampa.ContextFree.LeftRecursive (parseComplete)
 import qualified Arithmetic
 import qualified Boolean
 import Main (arithmetic, boolean)
@@ -33,12 +32,12 @@ recursiveManyGrammar Recursive{..} = Recursive{
    next= string "END"}
 
 parseInt :: String -> [Int]
-parseInt s = case Arithmetic.expr (parseComplete (fixGrammar arithmetic) s)
+parseInt s = case Arithmetic.expr (parse (fixGrammar arithmetic) s)
              of Compose (Right [r]) -> [r]
                 r -> error ("Unexpected " <> show r)
 
 parseBoolean :: String -> [Bool]
-parseBoolean s = case (Boolean.expr . Rank2.snd) (parseComplete (fixGrammar boolean) s)
+parseBoolean s = case (Boolean.expr . Rank2.snd) (parse (fixGrammar boolean) s)
                  of Compose (Right [r]) -> [r]
                     r -> error ("Unexpected " <> show r)
 
@@ -75,7 +74,7 @@ main = do
 {-
       bgroup "many" [
           bench "simple" $ nf (simpleParse $ many (string ";") <* endOfInput) (replicate 400 ';'),
-          bench "recursive" $ nf (parseComplete (fixGrammar recursiveManyGrammar) start) (replicate 400 ';')],
+          bench "recursive" $ nf (parse (fixGrammar recursiveManyGrammar) start) (replicate 400 ';')],
 -}
       bgroup "zero sum" [
          bench "100" $ nf parseInt zeroes100,

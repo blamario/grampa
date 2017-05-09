@@ -31,6 +31,7 @@ import qualified Rank2
 import qualified Rank2.TH
 import Text.Grampa
 import Text.Grampa.ContextFree.Parallel (PrefixParser)
+import Text.Grampa.ContextFree.LeftRecursive (CompleteParser)
 
 import qualified Test.Examples
 
@@ -50,6 +51,7 @@ recursiveManyGrammar Recursive{..} = Recursive{
    one = string "(" *> start <* string ")",
    next= string "]"}
 
+nameListGrammar :: Recursive (CompleteParser Recursive String)
 nameListGrammar = fixGrammar nameListGrammarBuilder
 nameListGrammarBuilder g@Recursive{..} = Recursive{
    start= pure (const . unwords) <*> rec <*> (True <$ symbol "," <* symbol "..." <|> pure False) <|>
@@ -76,12 +78,12 @@ simpleParse :: FactorialMonoid s => Parser (Rank2.Only r) s r -> s -> ParseResul
 simpleParse p input = getCompose <$> simply parse p input
 
 tests = testGroup "Grampa" [
-           let g = fixGrammar recursiveManyGrammar
+           let g = fixGrammar recursiveManyGrammar :: Recursive (CompleteParser Recursive String)
            in testGroup "recursive"
-              [testProperty "minimal" $ start (parseComplete g "()") == Compose (Right [""]),
-               testProperty "bracketed" $ start (parseComplete g "[()]") == Compose (Right [""]),
+              [testProperty "minimal" $ start (parse g "()") == Compose (Right [""]),
+               testProperty "bracketed" $ start (parse g "[()]") == Compose (Right [""]),
                testProperty "name list" $
-                 start (parseComplete nameListGrammar "foo, bar") == Compose (Right ["foo bar"])],
+                 start (parse nameListGrammar "foo, bar") == Compose (Right ["foo bar"])],
            testGroup "arithmetic"
              [testProperty "arithmetic"   $ Test.Examples.parseArithmetical,
               testProperty "comparisons"  $ Test.Examples.parseComparison,

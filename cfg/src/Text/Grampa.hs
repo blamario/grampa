@@ -5,7 +5,7 @@ module Text.Grampa (
    -- * Types
    Grammar, GrammarBuilder, ParseResults, ParseFailure(..),
    -- * Grammar and parser manipulation
-   parseComplete, parsePrefix, simply,
+   simply,
    -- * Parser combinators
    module Text.Parser.Char,
    module Text.Parser.Combinators,
@@ -20,7 +20,6 @@ import Data.Functor.Compose (Compose(..))
 import qualified Rank2
 import Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
                           ParseResults, ParseFailure(..))
-import Text.Grampa.ContextFree.LeftRecursive (parseComplete, parsePrefix)
 
 import Prelude hiding (takeWhile)
 

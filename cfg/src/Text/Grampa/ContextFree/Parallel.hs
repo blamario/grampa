@@ -44,14 +44,17 @@ newtype CompleteParser g s r = CompleteParser {prefixParser :: PrefixParser g s 
 -- | Parallel parser. The 'parse' provides a list of all possible parses of complete input.
 --
 -- @
---   'parse' :: g ('CompleteParser' g s) -> s -> g ('Compose' 'ParseResults' [])
+--   'parse' :: ('Rank2.Functor' g, 'FactorialMonoid' s) =>
+--              g ('CompleteParser' g s) -> s -> g ('Compose' 'ParseResults' [])
 -- @
 instance MultiParsing CompleteParser where
    type ResultFunctor CompleteParser s = []
+   type GrammarConstraint CompleteParser g = Rank2.Apply g
    -- | Returns the list of all possible parses of complete input.
    parse :: forall g s. (Rank2.Functor g, FactorialMonoid s) =>
             g (CompleteParser g s) -> s -> g (Compose ParseResults [])
-   parse g input = Rank2.fmap completeParser (parse (Rank2.fmap prefixParser g) input)
+   parse g input = Rank2.fmap completeParser (parse (Rank2.fmap tillEnd g) input)
+      where tillEnd p = prefixParser p <* endOfInput
 
 data ResultList s r = ResultList ![ResultInfo s r] {-# UNPACK #-} !FailureInfo
 data ResultInfo s r = ResultInfo !s !r

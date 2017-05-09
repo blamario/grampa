@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, TypeFamilies #-}
 module Text.Grampa.ContextFree.Memoizing (FailureInfo(..), ResultList(..), CompleteParser, PrefixParser(..),
-                                          fromResultList)
+                                          fromResultList, reparseTails)
 where
 
 import Control.Applicative
@@ -28,8 +28,7 @@ import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
 
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..),
-                          completeParser)
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
 
 import Prelude hiding (iterate, length, null, showList, span, takeWhile)
 
@@ -47,12 +46,15 @@ newtype CompleteParser g s r = CompleteParser {prefixParser :: PrefixParser g s 
 --   'parse' :: g ('CompleteParser' g s) -> s -> g ('Compose' 'ParseResults' ('Compose' [] ((,) s)))
 -- @
 instance MultiParsing CompleteParser where
+   type GrammarConstraint CompleteParser g = Rank2.Distributive g
    type ResultFunctor CompleteParser s = []
    -- | Returns the list of all possible parses of complete input.
-   parse :: forall g s. (Rank2.Functor g, FactorialMonoid s) =>
+   parse :: forall g s. (Rank2.Distributive g, FactorialMonoid s) =>
             g (CompleteParser g s) -> s -> g (Compose ParseResults [])
-   parse g input = Rank2.fmap completeParser (parse (Rank2.fmap prefixParser g) input)
-
+   parse g input = Rank2.fmap ((snd <$>) . Compose . (getCompose <$>) . fromResultList input)
+                              (snd $ head $ reparseTails close $ parseTails (Rank2.fmap prefixParser g) input)
+      where close = Rank2.fmap (<* endOfInput) selfReferring
+            
 data ResultList g s r = ResultList ![ResultInfo g s r] {-# UNPACK #-} !FailureInfo
 data ResultInfo g s r = ResultInfo ![(s, g (ResultList g s))] !r
 data FailureInfo = FailureInfo !Int Word64 [String] deriving (Eq, Show)
@@ -133,10 +135,18 @@ instance GrammarParsing PrefixParser where
 instance MultiParsing PrefixParser where
    type ResultFunctor PrefixParser s = Compose [] ((,) s)
    -- | Returns the list of all possible input prefix parses paired with the remaining input suffix.
-   parse g input = Rank2.fmap (Compose . fromResultList input) (snd $ head $ foldr parseTail [] $ Factorial.tails input)
-      where parseTail s parsedTail = parsed
-               where parsed = (s,d):parsedTail
-                     d      = Rank2.fmap (($ parsed) . applyParser) g
+   parse g input = Rank2.fmap (Compose . fromResultList input) (snd $ head $ parseTails g input)
+
+parseTails :: (Rank2.Functor g, FactorialMonoid s) => g (PrefixParser g s) -> s -> [(s, g (ResultList g s))]
+parseTails g input = foldr parseTail [] (Factorial.tails input)
+   where parseTail s parsedTail = parsed
+            where parsed = (s,d):parsedTail
+                  d      = Rank2.fmap (($ parsed) . applyParser) g
+
+reparseTails :: Rank2.Functor g => g (PrefixParser g s) -> [(s, g (ResultList g s))] -> [(s, g (ResultList g s))]
+reparseTails _ [] = []
+reparseTails final parsed@((s, _):_) = (s, gd):parsed
+   where gd = Rank2.fmap (`applyParser` parsed) final
 
 instance MonoidParsing (PrefixParser g) where
    Parser p <<|> Parser q = Parser r

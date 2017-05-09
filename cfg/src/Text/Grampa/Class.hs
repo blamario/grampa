@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds, RankNTypes, TypeFamilies #-}
 module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
                           ParseResults, ParseFailure(..), completeParser) where
 
@@ -9,6 +9,7 @@ import qualified Data.Monoid.Null as Null
 import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
+import GHC.Exts (Constraint)
 import Text.Parser.Combinators (Parsing)
 
 import qualified Rank2
@@ -27,8 +28,10 @@ completeParser (Compose (Right (Compose results))) =
 class MultiParsing m where
    -- | Some parser types produce a single result, others a list of results.
    type ResultFunctor m s :: * -> *
+   type GrammarConstraint m (g :: (* -> *) -> *) :: Constraint
+   type GrammarConstraint m g = Rank2.Functor g
    -- | Given a rank-2 record of parsers and input, produce a record of their parsings.
-   parse :: (Rank2.Functor g, FactorialMonoid s) => g (m g s) -> s -> g (Compose ParseResults (ResultFunctor m s))
+   parse :: (GrammarConstraint m g, FactorialMonoid s) => g (m g s) -> s -> g (Compose ParseResults (ResultFunctor m s))
 
 class MultiParsing m => GrammarParsing m where
 --   type GrammarConstraint m :: ((* -> *) -> *) -> Constraint
