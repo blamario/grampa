@@ -30,8 +30,8 @@ import Test.QuickCheck.Classes (functor, monad, monoid, applicative, alternative
 import qualified Rank2
 import qualified Rank2.TH
 import Text.Grampa
-import Text.Grampa.ContextFree.Parallel (PrefixParser)
-import Text.Grampa.ContextFree.LeftRecursive (CompleteParser)
+import qualified Text.Grampa.ContextFree.Parallel as Parallel
+import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 
 import qualified Test.Examples
 
@@ -51,7 +51,7 @@ recursiveManyGrammar Recursive{..} = Recursive{
    one = string "(" *> start <* string ")",
    next= string "]"}
 
-nameListGrammar :: Recursive (CompleteParser Recursive String)
+nameListGrammar :: Recursive (LeftRecursive.Parser Recursive String)
 nameListGrammar = fixGrammar nameListGrammarBuilder
 nameListGrammarBuilder g@Recursive{..} = Recursive{
    start= pure (const . unwords) <*> rec <*> (True <$ symbol "," <* symbol "..." <|> pure False) <|>
@@ -72,18 +72,18 @@ ignorable = whiteSpace *> skipMany (nonTerminal next *> whiteSpace <?> "ignorabl
 
 main = defaultMain tests
 
-type Parser = PrefixParser
+type Parser = Parallel.Parser
 
-simpleParse :: FactorialMonoid s => Parser (Rank2.Only r) s r -> s -> ParseResults [(s, r)]
-simpleParse p input = getCompose <$> simply parse p input
+simpleParse :: FactorialMonoid s => Parallel.Parser (Rank2.Only r) s r -> s -> ParseResults [(s, r)]
+simpleParse p input = getCompose . getCompose $ simply parsePrefix p input
 
 tests = testGroup "Grampa" [
-           let g = fixGrammar recursiveManyGrammar :: Recursive (CompleteParser Recursive String)
+           let g = fixGrammar recursiveManyGrammar :: Recursive (LeftRecursive.Parser Recursive String)
            in testGroup "recursive"
-              [testProperty "minimal" $ start (parse g "()") == Compose (Right [""]),
-               testProperty "bracketed" $ start (parse g "[()]") == Compose (Right [""]),
+              [testProperty "minimal" $ start (parseComplete g "()") == Compose (Right [""]),
+               testProperty "bracketed" $ start (parseComplete g "[()]") == Compose (Right [""]),
                testProperty "name list" $
-                 start (parse nameListGrammar "foo, bar") == Compose (Right ["foo bar"])],
+                 start (parseComplete nameListGrammar "foo, bar") == Compose (Right ["foo bar"])],
            testGroup "arithmetic"
              [testProperty "arithmetic"   $ Test.Examples.parseArithmetical,
               testProperty "comparisons"  $ Test.Examples.parseComparison,

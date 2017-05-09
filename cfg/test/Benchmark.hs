@@ -14,7 +14,7 @@ import qualified Rank2
 import qualified Rank2.TH
 
 import Text.Grampa
-import Text.Grampa.ContextFree.Parallel (PrefixParser)
+import Text.Grampa.ContextFree.Parallel (Parser)
 import qualified Arithmetic
 import qualified Boolean
 import Main (arithmetic, boolean)
@@ -25,19 +25,19 @@ data Recursive f = Recursive{start :: f String,
 
 $(Rank2.TH.deriveAll ''Recursive)
 
-recursiveManyGrammar :: Recursive (PrefixParser g String) -> Recursive (PrefixParser g String)
+recursiveManyGrammar :: Recursive (Parser g String) -> Recursive (Parser g String)
 recursiveManyGrammar Recursive{..} = Recursive{
    start= rec <* endOfInput,
    rec= many (char ';') <* optional next,
    next= string "END"}
 
 parseInt :: String -> [Int]
-parseInt s = case Arithmetic.expr (parse (fixGrammar arithmetic) s)
+parseInt s = case Arithmetic.expr (parseComplete (fixGrammar arithmetic) s)
              of Compose (Right [r]) -> [r]
                 r -> error ("Unexpected " <> show r)
 
 parseBoolean :: String -> [Bool]
-parseBoolean s = case (Boolean.expr . Rank2.snd) (parse (fixGrammar boolean) s)
+parseBoolean s = case (Boolean.expr . Rank2.snd) (parseComplete (fixGrammar boolean) s)
                  of Compose (Right [r]) -> [r]
                     r -> error ("Unexpected " <> show r)
 

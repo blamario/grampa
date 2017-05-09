@@ -157,12 +157,23 @@ instance MonoidParsing (Parser g) where
 --   'parse' :: g ('Parser' g s) -> s -> g ('Compose' 'ParseResults' ((,) s))
 -- @
 instance MultiParsing Parser where
-   type ResultFunctor Parser s = ((,) s)
-   {-# NOINLINE parse #-}
-   parse g input = Rank2.fmap (Compose . fromResult input) (snd $ head $ foldr parseTail [] $ Factorial.tails input)
+   type ResultFunctor Parser = ParseResults
+   {-# NOINLINE parsePrefix #-}
+   parsePrefix g input = Rank2.fmap (Compose . fromResult input) (snd $ head $ parseTails g input)
+   parseComplete g input = Rank2.fmap ((snd <$>) . fromResult input)
+                                      (snd $ head $ reparseTails close $ parseTails g input)
+      where close = Rank2.fmap (<* endOfInput) g
+
+parseTails :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> [(s, g (Result g s))]
+parseTails g input = foldr parseTail [] (Factorial.tails input)
       where parseTail s parsedTail = parsed where
                parsed = (s,d):parsedTail
                d      = Rank2.fmap (($ parsed) . applyParser) g
+
+reparseTails :: Rank2.Functor g => g (Parser g s) -> [(s, g (Result g s))] -> [(s, g (Result g s))]
+reparseTails _ [] = []
+reparseTails final parsed@((s, _):_) = (s, gd):parsed
+   where gd = Rank2.fmap (`applyParser` parsed) final
 
 fromResult :: FactorialMonoid s => s -> Result g s r -> ParseResults (s, r)
 fromResult s (NoParse (FailureInfo _ pos msgs)) =

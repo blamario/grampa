@@ -7,7 +7,7 @@ import Data.Functor.Compose (Compose(..))
 import Data.Monoid ((<>))
 
 import Text.Grampa
-import Text.Grampa.ContextFree.LeftRecursive (CompleteParser)
+import Text.Grampa.ContextFree.LeftRecursive (Parser)
 import Utilities (infixJoin, symbol)
 
 import qualified Rank2
@@ -90,7 +90,7 @@ instance Rank2.Traversable (Arithmetic e) where
                   <*> f (factor a)
                   <*> f (primary a)
 
-arithmetic :: ArithmeticDomain e => GrammarBuilder (Arithmetic e) g CompleteParser String
+arithmetic :: ArithmeticDomain e => GrammarBuilder (Arithmetic e) g Parser String
 arithmetic Arithmetic{..} = Arithmetic{
    expr= sum,
    sum= product
@@ -106,4 +106,4 @@ arithmetic Arithmetic{..} = Arithmetic{
 
 main :: IO ()
 main = getContents >>=
-       print . (getCompose . expr . parse (fixGrammar arithmetic) :: String -> ParseResults [Int])
+       print . (getCompose . expr . parseComplete (fixGrammar arithmetic) :: String -> ParseResults [Int])

@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, GADTs, InstanceSigs, GeneralizedNewtypeDeriving,
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
 {-# OPTIONS -fno-full-laziness #-}
-module Text.Grampa.ContextFree.LeftRecursive (CompleteParser, PrefixParser)
+module Text.Grampa.ContextFree.LeftRecursive (Parser)
 where
 
 import Control.Applicative
@@ -35,15 +35,15 @@ import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), RecursiveParsing(..), ParseResults)
-import Text.Grampa.ContextFree.Memoizing (ResultList(..), fromResultList, reparseTails)
+import Text.Grampa.ContextFree.Memoizing (ResultList(..), fromResultList)
 import qualified Text.Grampa.ContextFree.Memoizing as Memoizing
 
 import Prelude hiding (null, showsPrec, span, takeWhile)
 
 data Parser g s a where
    NonTerminal   :: (g (Parser g s) -> Parser g s a) -> Parser g s a
-   Primitive     :: String -> Maybe (Memoizing.PrefixParser g s a) -> Maybe (Memoizing.PrefixParser g s a)
-                 -> Memoizing.PrefixParser g s a -> Parser g s a
+   Primitive     :: String -> Maybe (Memoizing.Parser g s a) -> Maybe (Memoizing.Parser g s a)
+                 -> Memoizing.Parser g s a -> Parser g s a
    Recursive     :: Parser g s a -> Parser g s a
    Map           :: (a -> b) -> Parser g s a -> Parser g s b
    Ap            :: Parser g s (a -> b) -> Parser g s a -> Parser g s b
@@ -62,58 +62,32 @@ data Parser g s a where
    ResultsWrap   :: ResultList g s a -> Parser g s a
    Index         :: Int -> Parser g s a
 
-newtype CompleteParser g s r = CompleteParser {fromComplete :: Parser g s r}
-   deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Monoid,
-             MonoidParsing, TokenParsing, CharParsing, LookAheadParsing, Parsing)
-
-newtype PrefixParser g s r = PrefixParser {fromPrefix :: Parser g s r}
-   deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Monoid,
-             MonoidParsing, TokenParsing, CharParsing, LookAheadParsing, Parsing)
-
--- | Parser of general context-free grammars, including left recursion. The 'parse' returns a list of all possible
--- parses of complete input.
---
--- @
---   'parse' :: ('Rank2.Apply' g, 'Rank2.Distributive' g, 'Rank2.Traversable' g, 'FactorialMonoid' s) =>
---              g ('PrefixParser' g s) -> s -> g ('Compose' 'ParseResults' ('Compose' [] ((,) s)))
--- @
-instance MultiParsing CompleteParser where
-   type GrammarConstraint CompleteParser g = (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
-   type ResultFunctor CompleteParser s = []
-   parse :: (FactorialMonoid s, Rank2.Traversable g, Rank2.Distributive g, Rank2.Apply g) =>
-            g (CompleteParser g s) -> s -> g (Compose ParseResults [])
-   parse g input = Rank2.fmap ((snd <$>) . Compose . (getCompose <$>) . fromResultList input)
-                              (snd $ head $ reparseTails close $ parseRecursive (Rank2.fmap fromComplete g) input)
-      where close = Rank2.fmap (<* endOfInput) selfReferring
-
 -- | Parser of general context-free grammars, including left recursion. The 'parse' returns a list of all possible
 -- input prefix parses paired with the remaining input suffix.
 --
 -- @
 --   'parse' :: ('Rank2.Apply' g, 'Rank2.Traversable' g, 'FactorialMonoid' s) =>
---              g ('PrefixParser' g s) -> s -> g ('Compose' 'ParseResults' ('Compose' [] ((,) s)))
+--              g ('Parser' g s) -> s -> g ('Compose' ('Compose' 'ParseResults' []) ((,) s))
 -- @
-instance MultiParsing PrefixParser where
-   type GrammarConstraint PrefixParser g = (Rank2.Apply g, Rank2.Traversable g)
-   type ResultFunctor PrefixParser s = Compose [] ((,) s)
-   parse :: (Rank2.Apply g, Rank2.Traversable g, FactorialMonoid s) =>
-            g (PrefixParser g s) -> s -> g (Compose ParseResults (Compose [] ((,) s)))
-   parse g input = Rank2.fmap (Compose . fromResultList input)
-                              (snd $ head $ parseRecursive (Rank2.fmap fromPrefix g) input)
+instance MultiParsing Parser where
+   type GrammarConstraint Parser g = (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
+   type ResultFunctor Parser = Compose ParseResults []
+   parsePrefix :: (Rank2.Apply g, Rank2.Traversable g, FactorialMonoid s) =>
+                  g (Parser g s) -> s -> g (Compose (Compose ParseResults []) ((,) s))
+   parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input)
+                                    (snd $ head $ parseRecursive g input)
+   parseComplete :: (FactorialMonoid s, Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
+                    g (Parser g s) -> s -> g (Compose ParseResults [])
+   parseComplete g input = Rank2.fmap ((snd <$>) . Compose . fromResultList input)
+                                      (snd $ head $ Memoizing.reparseTails close $ parseRecursive g input)
+      where close = Rank2.fmap (<* endOfInput) selfReferring
 
-instance GrammarParsing CompleteParser where
-   type GrammarFunctor CompleteParser = Parser
-   nonTerminal = CompleteParser . NonTerminal
+instance GrammarParsing Parser where
+   type GrammarFunctor Parser = Parser
+   nonTerminal = NonTerminal
 
-instance GrammarParsing PrefixParser where
-   type GrammarFunctor PrefixParser = Parser
-   nonTerminal = PrefixParser . NonTerminal
-
-instance MonoidNull s => RecursiveParsing (CompleteParser g s) where
-   recursive = CompleteParser . Recursive . fromComplete
-
-instance MonoidNull s => RecursiveParsing (PrefixParser g s) where
-   recursive = PrefixParser . Recursive . fromPrefix
+instance MonoidNull s => RecursiveParsing (Parser g s) where
+   recursive = Recursive
 
 instance (Rank2.Distributive g, Rank2.Traversable g) => Show (Parser g s a) where
    show (NonTerminal accessor) = "nt" ++ show i
@@ -244,7 +218,7 @@ instance MonoidParsing (Parser g) where
    whiteSpace = Primitive "whiteSpace" (Just $ notFollowedBy whiteSpace) (Just whiteSpace) whiteSpace
    concatMany = ConcatMany
 
-toParser :: (Rank2.Functor g, FactorialMonoid s) => Parser g s a -> Memoizing.PrefixParser g s a
+toParser :: (Rank2.Functor g, FactorialMonoid s) => Parser g s a -> Memoizing.Parser g s a
 toParser (NonTerminal accessor) = nonTerminal (unwrap . accessor . Rank2.fmap ResultsWrap)
    where unwrap (ResultsWrap x) = x
          unwrap _ = error "should have been wrapped"
@@ -461,7 +435,7 @@ parseRecursive ast = parseSeparated descendants (Rank2.fmap toParser indirect) (
 -- left-recursive productions, the second all others. The first function argument specifies the left-recursive
 -- dependencies among the grammar productions.
 parseSeparated :: forall g s. (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) =>
-                  g (Const (g (Const Bool))) -> g (Memoizing.PrefixParser g s) -> g (Memoizing.PrefixParser g s) -> s
+                  g (Const (g (Const Bool))) -> g (Memoizing.Parser g s) -> g (Memoizing.Parser g s) -> s
                -> [(s, g (ResultList g s))]
 parseSeparated dependencies indirect direct input = foldr parseTail [] (Factorial.tails input)
    where parseTail s parsedTail = parsed

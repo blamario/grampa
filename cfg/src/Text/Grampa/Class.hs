@@ -27,11 +27,14 @@ completeParser (Compose (Right (Compose results))) =
 
 class MultiParsing m where
    -- | Some parser types produce a single result, others a list of results.
-   type ResultFunctor m s :: * -> *
+   type ResultFunctor m :: * -> *
    type GrammarConstraint m (g :: (* -> *) -> *) :: Constraint
    type GrammarConstraint m g = Rank2.Functor g
    -- | Given a rank-2 record of parsers and input, produce a record of their parsings.
-   parse :: (GrammarConstraint m g, FactorialMonoid s) => g (m g s) -> s -> g (Compose ParseResults (ResultFunctor m s))
+   parsePrefix :: (GrammarConstraint m g, FactorialMonoid s) =>
+                  g (m g s) -> s -> g (Compose (ResultFunctor m) ((,) s))
+   parseComplete :: (GrammarConstraint m g, FactorialMonoid s) =>
+                    g (m g s) -> s -> g (ResultFunctor m)
 
 class MultiParsing m => GrammarParsing m where
 --   type GrammarConstraint m :: ((* -> *) -> *) -> Constraint

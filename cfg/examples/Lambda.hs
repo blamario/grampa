@@ -11,7 +11,7 @@ import qualified Rank2
 import qualified Rank2.TH
 
 import Text.Grampa
-import Text.Grampa.ContextFree.LeftRecursive (CompleteParser)
+import Text.Grampa.ContextFree.LeftRecursive (Parser)
 import Utilities (symbol)
 
 class LambdaDomain e where
@@ -96,7 +96,7 @@ instance (Show (f e), Show (f String)) => Show (Lambda e f) where
 
 $(Rank2.TH.deriveAll ''Lambda)
 
-lambdaCalculus :: LambdaDomain e => GrammarBuilder (Lambda e) g CompleteParser String
+lambdaCalculus :: LambdaDomain e => GrammarBuilder (Lambda e) g Parser String
 lambdaCalculus Lambda{..} = Lambda{
    expr= abstraction,
    abstraction= lambda <$> (symbol "\\" *> varName <* symbol "->") <*> abstraction

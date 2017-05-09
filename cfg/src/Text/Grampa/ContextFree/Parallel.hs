@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleContexts, InstanceSigs, GeneralizedNewtypeDeriving,
              RankNTypes, ScopedTypeVariables, TypeFamilies #-}
-module Text.Grampa.ContextFree.Parallel (FailureInfo(..), ResultList(..),
-                                         CompleteParser, PrefixParser, fromResultList, parse)
+module Text.Grampa.ContextFree.Parallel (FailureInfo(..), ResultList(..), Parser, fromResultList)
 where
 
 import Control.Applicative
@@ -34,27 +33,7 @@ import Prelude hiding (iterate, null, showList, span, takeWhile)
 
 -- | Parser type for context-free grammars using a parallel parsing algorithm with no result sharing nor left recursion
 -- support.
-newtype PrefixParser (g :: (* -> *) -> *) s r = Parser{applyParser :: s -> ResultList s r}
-
--- | As 'PrefixParser', but leaves no input suffix behind.
-newtype CompleteParser g s r = CompleteParser {prefixParser :: PrefixParser g s r}
-   deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Monoid,
-             MonoidParsing, TokenParsing, CharParsing, LookAheadParsing, Parsing)
-
--- | Parallel parser. The 'parse' provides a list of all possible parses of complete input.
---
--- @
---   'parse' :: ('Rank2.Functor' g, 'FactorialMonoid' s) =>
---              g ('CompleteParser' g s) -> s -> g ('Compose' 'ParseResults' [])
--- @
-instance MultiParsing CompleteParser where
-   type ResultFunctor CompleteParser s = []
-   type GrammarConstraint CompleteParser g = Rank2.Apply g
-   -- | Returns the list of all possible parses of complete input.
-   parse :: forall g s. (Rank2.Functor g, FactorialMonoid s) =>
-            g (CompleteParser g s) -> s -> g (Compose ParseResults [])
-   parse g input = Rank2.fmap completeParser (parse (Rank2.fmap tillEnd g) input)
-      where tillEnd p = prefixParser p <* endOfInput
+newtype Parser (g :: (* -> *) -> *) s r = Parser{applyParser :: s -> ResultList s r}
 
 data ResultList s r = ResultList ![ResultInfo s r] {-# UNPACK #-} !FailureInfo
 data ResultInfo s r = ResultInfo !s !r
@@ -90,10 +69,10 @@ instance Monoid FailureInfo where
                          | pos1 > pos2 = (pos2, exp2)
                          | otherwise = (pos1, exp1 <> exp2)
 
-instance Functor (PrefixParser g s) where
+instance Functor (Parser g s) where
    fmap f (Parser p) = Parser (fmap f . p)
 
-instance Applicative (PrefixParser g s) where
+instance Applicative (Parser g s) where
    pure a = Parser (\rest-> ResultList [ResultInfo rest a] mempty)
    Parser p <*> Parser q = Parser r where
       r rest = case p rest
@@ -101,23 +80,23 @@ instance Applicative (PrefixParser g s) where
       continue (ResultInfo rest' f) = f <$> q rest'
 
 
-instance FactorialMonoid s => Alternative (PrefixParser g s) where
+instance FactorialMonoid s => Alternative (Parser g s) where
    empty = Parser (\s-> ResultList [] $ FailureInfo 0 (Factorial.length s) ["empty"])
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
 
-instance Monad (PrefixParser g s) where
+instance Monad (Parser g s) where
    return = pure
    Parser p >>= f = Parser q where
       q rest = case p rest
                of ResultList results failure -> ResultList [] failure <> foldMap continue results
       continue (ResultInfo rest' a) = applyParser (f a) rest'
 
-instance FactorialMonoid s => MonadPlus (PrefixParser g s) where
+instance FactorialMonoid s => MonadPlus (Parser g s) where
    mzero = empty
    mplus = (<|>)
 
-instance Monoid x => Monoid (PrefixParser g s x) where
+instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
@@ -125,14 +104,18 @@ instance Monoid x => Monoid (PrefixParser g s x) where
 -- suffix.
 --
 -- @
---   'parse' :: g ('PrefixParser' g s) -> s -> g ('Compose' 'ParseResults' ('Compose' [] ((,) s)))
+--   'parse' :: g ('Parser' g s) -> s -> g ('Compose' 'ParseResults' ('Compose' [] ((,) s)))
 -- @
-instance MultiParsing PrefixParser where
-   type ResultFunctor PrefixParser s = Compose [] ((,) s)
+instance MultiParsing Parser where
+   type ResultFunctor Parser = Compose ParseResults []
    -- | Returns the list of all possible input prefix parses paired with the remaining input suffix.
-   parse g input = Rank2.fmap (Compose . fromResultList input . (`applyParser` input)) g
+   parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input . (`applyParser` input)) g
+   -- | Returns the list of all possible parses of complete input.
+   parseComplete :: forall g s. (Rank2.Functor g, FactorialMonoid s) =>
+                    g (Parser g s) -> s -> g (Compose ParseResults [])
+   parseComplete g input = Rank2.fmap ((snd <$>) . getCompose) (parsePrefix (Rank2.fmap (<* endOfInput) g) input)
 
-instance MonoidParsing (PrefixParser g) where
+instance MonoidParsing (Parser g) where
    Parser p <<|> Parser q = Parser r
       where r rest = case (p rest, q rest)
                      of (ResultList [] f1, ResultList r2 f2) -> ResultList r2 (f1 <> f2)
@@ -184,7 +167,7 @@ instance MonoidParsing (PrefixParser g) where
                where ResultList rs failure = p s
             continue (ResultInfo suffix prefix) = (prefix <>) <$> q suffix
 
-instance FactorialMonoid s => Parsing (PrefixParser g s) where
+instance FactorialMonoid s => Parsing (Parser g s) where
    try (Parser p) = Parser (weakenResults . p)
       where weakenResults (ResultList rl (FailureInfo s pos msgs)) = ResultList rl (FailureInfo (pred s) pos msgs)
    Parser p <?> msg  = Parser (strengthenResults . p)
@@ -197,12 +180,12 @@ instance FactorialMonoid s => Parsing (PrefixParser g s) where
    unexpected msg = Parser (\t-> ResultList [] $ FailureInfo 0 (Factorial.length t) [msg])
    eof = endOfInput
 
-instance FactorialMonoid s => LookAheadParsing (PrefixParser g s) where
+instance FactorialMonoid s => LookAheadParsing (Parser g s) where
    lookAhead (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t (ResultList rl failure) = ResultList (rewindInput t <$> rl) failure
             rewindInput t (ResultInfo _ r) = ResultInfo t r
 
-instance (Show s, TextualMonoid s) => CharParsing (PrefixParser g s) where
+instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
    satisfy = satisfyChar
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    char = satisfyChar . (==)
@@ -210,10 +193,10 @@ instance (Show s, TextualMonoid s) => CharParsing (PrefixParser g s) where
    anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance (Show s, TextualMonoid s) => TokenParsing (PrefixParser g s) where
+instance (Show s, TextualMonoid s) => TokenParsing (Parser g s) where
    someSpace = () <$ takeCharsWhile1 isSpace
 
-fromResultList :: FactorialMonoid s => s -> ResultList s r -> ParseResults (Compose [] ((,) s) r)
+fromResultList :: FactorialMonoid s => s -> ResultList s r -> ParseResults [(s, r)]
 fromResultList s (ResultList [] (FailureInfo _ pos msgs)) = Left (ParseFailure (Factorial.length s - pos) (nub msgs))
-fromResultList _ (ResultList rl _failure) = Right (Compose $ f <$> rl)
+fromResultList _ (ResultList rl _failure) = Right (f <$> rl)
    where f (ResultInfo s r) = (s, r)

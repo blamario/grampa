@@ -142,10 +142,12 @@ instance MonoidParsing (Parser g) where
 --   'parse' :: g ('Parser' g s) -> s -> g ('Compose' 'ParseResults' ((,) s))
 -- @
 instance MultiParsing Parser where
-   type ResultFunctor Parser s = ((,) s)
-   {-# NOINLINE parse #-}
+   type ResultFunctor Parser = ParseResults
+   {-# NOINLINE parsePrefix #-}
    -- | Returns an input prefix parse paired with the remaining input suffix.
-   parse g input = Rank2.fmap (Compose . fromResult input . (`applyParser` input)) g
+   parsePrefix g input = Rank2.fmap (Compose . fromResult input . (`applyParser` input)) g
+   parseComplete g input = Rank2.fmap ((snd <$>) . fromResult input . (`applyParser` input))
+                                      (Rank2.fmap (<* endOfInput) g)
 
 fromResult :: FactorialMonoid s => s -> Result g s r -> ParseResults (s, r)
 fromResult s (NoParse (FailureInfo _ pos msgs)) =
