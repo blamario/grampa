@@ -100,11 +100,11 @@ instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
--- | Parallel parser. The 'parse' provides a list of all possible input prefix parses paired with the remaining input
--- suffix.
+-- | Parallel parser produces a list of all possible parses.
 --
 -- @
---   'parse' :: g ('Parser' g s) -> s -> g ('Compose' 'ParseResults' ('Compose' [] ((,) s)))
+-- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>
+--                  g (Parallel.'Parser' g s) -> s -> g ('Compose' 'ParseResults' [])
 -- @
 instance MultiParsing Parser where
    type ResultFunctor Parser = Compose ParseResults []

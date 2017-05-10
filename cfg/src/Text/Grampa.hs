@@ -1,12 +1,14 @@
+-- | Collection of parsing algorithms with a common interface, operating on grammars represented as records with rank-2
+-- field types.
 {-# LANGUAGE FlexibleContexts, KindSignatures, RankNTypes, ScopedTypeVariables #-}
 module Text.Grampa (
-   -- * Classes
-   MultiParsing(..), GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
+   -- * Parsing methods
+   MultiParsing(..),
+   simply,
    -- * Types
    Grammar, GrammarBuilder, ParseResults, ParseFailure(..),
-   -- * Grammar and parser manipulation
-   simply,
-   -- * Parser combinators
+   -- * Parser combinators and primitives
+   GrammarParsing(..), MonoidParsing(..),
    module Text.Parser.Char,
    module Text.Parser.Combinators,
    module Text.Parser.LookAhead)
@@ -18,8 +20,7 @@ import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 
 import Data.Functor.Compose (Compose(..))
 import qualified Rank2
-import Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
-                          ParseResults, ParseFailure(..))
+import Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), MonoidParsing(..), ParseResults, ParseFailure(..))
 
 import Prelude hiding (takeWhile)
 

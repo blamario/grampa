@@ -34,7 +34,7 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), RecursiveParsing(..), ParseResults)
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults)
 import Text.Grampa.ContextFree.Memoizing (ResultList(..), fromResultList)
 import qualified Text.Grampa.ContextFree.Memoizing as Memoizing
 
@@ -62,12 +62,11 @@ data Parser g s a where
    ResultsWrap   :: ResultList g s a -> Parser g s a
    Index         :: Int -> Parser g s a
 
--- | Parser of general context-free grammars, including left recursion. The 'parse' returns a list of all possible
--- input prefix parses paired with the remaining input suffix.
+-- | Parser of general context-free grammars, including left recursion. O(n³) performance.
 --
 -- @
---   'parse' :: ('Rank2.Apply' g, 'Rank2.Traversable' g, 'FactorialMonoid' s) =>
---              g ('Parser' g s) -> s -> g ('Compose' ('Compose' 'ParseResults' []) ((,) s))
+-- 'parseComplete' :: ("Rank2".'Rank2.Apply' g, "Rank2".'Rank2.Traversable' g, 'FactorialMonoid' s) =>
+--                  g (LeftRecursive.'Parser' g s) -> s -> g ('Compose' 'ParseResults' [])
 -- @
 instance MultiParsing Parser where
    type GrammarConstraint Parser g = (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
@@ -85,8 +84,6 @@ instance MultiParsing Parser where
 instance GrammarParsing Parser where
    type GrammarFunctor Parser = Parser
    nonTerminal = NonTerminal
-
-instance MonoidNull s => RecursiveParsing (Parser g s) where
    recursive = Recursive
 
 instance (Rank2.Distributive g, Rank2.Traversable g) => Show (Parser g s a) where

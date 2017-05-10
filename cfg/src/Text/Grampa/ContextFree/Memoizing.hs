@@ -106,11 +106,11 @@ instance GrammarParsing Parser where
       p ((_, d) : _) = f d
       p _ = ResultList [] (FailureInfo 1 0 ["NonTerminal at endOfInput"])
 
--- | Memoizing parser. The 'parse' returns a list of all possible input prefix parses paired with the remaining input
--- suffix.
+-- | Memoizing parser guarantees O(n²) performance, but provides no left recursion support.
 --
 -- @
---   'parse' :: g ('Parser' g s) -> s -> g ('Compose' 'ParseResults' ('Compose' [] ((,) s)))
+-- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>
+--                  g (Memoizing.'Parser' g s) -> s -> g ('Compose' 'ParseResults' [])
 -- @
 instance MultiParsing Parser where
    type ResultFunctor Parser = Compose ParseResults []

@@ -1,5 +1,5 @@
 {-# LANGUAGE ConstraintKinds, RankNTypes, TypeFamilies #-}
-module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), MonoidParsing(..), RecursiveParsing(..),
+module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), MonoidParsing(..),
                           ParseResults, ParseFailure(..), completeParser) where
 
 import Data.Functor.Compose (Compose(..))
@@ -25,30 +25,34 @@ completeParser (Compose (Right (Compose results))) =
    of [] -> Compose (Left $ ParseFailure 0 ["complete parse"])
       completeResults -> Compose (Right $ snd <$> completeResults)
 
+-- | Choose one of the instances of this class to parse with.
 class MultiParsing m where
    -- | Some parser types produce a single result, others a list of results.
    type ResultFunctor m :: * -> *
    type GrammarConstraint m (g :: (* -> *) -> *) :: Constraint
    type GrammarConstraint m g = Rank2.Functor g
-   -- | Given a rank-2 record of parsers and input, produce a record of their parsings.
-   parsePrefix :: (GrammarConstraint m g, FactorialMonoid s) =>
-                  g (m g s) -> s -> g (Compose (ResultFunctor m) ((,) s))
+   -- | Given a rank-2 record of parsers and input, produce a record of parses of the complete input.
    parseComplete :: (GrammarConstraint m g, FactorialMonoid s) =>
                     g (m g s) -> s -> g (ResultFunctor m)
+   -- | Given a rank-2 record of parsers and input, produce a record of prefix parses paired with the remaining input
+   -- suffix.
+   parsePrefix :: (GrammarConstraint m g, FactorialMonoid s) =>
+                  g (m g s) -> s -> g (Compose (ResultFunctor m) ((,) s))
 
+-- | Parsers that belong to this class memoize the parse results to avoid exponential performance complexity.
 class MultiParsing m => GrammarParsing m where
---   type GrammarConstraint m :: ((* -> *) -> *) -> Constraint
    type GrammarFunctor m :: ((* -> *) -> *) -> * -> * -> *
+   -- | Used to reference a grammar production, only necessary from outside the grammar itself
    nonTerminal :: (g (GrammarFunctor m g s) -> GrammarFunctor m g s a) -> m g s a
---   parse :: GrammarConstraint m g => g (m g s) -> s -> g (ParseResults s)
+   -- | Construct a grammar whose every production refers to itself.
    selfReferring :: Rank2.Distributive g => g (m g s)
+   -- | Convert a self-referring grammar function to a grammar.
    fixGrammar :: forall g s. Rank2.Distributive g => (g (m g s) -> g (m g s)) -> g (m g s)
+   -- | Mark a parser that relies on primitive recursion to prevent an infinite loop in 'fixGrammar'.
+   recursive :: m g s a -> m g s a
 
    selfReferring = Rank2.distributeWith nonTerminal id
    fixGrammar = ($ selfReferring)
-
-class Parsing m => RecursiveParsing m where
-   recursive :: m a -> m a
    recursive = id
 
 class MonoidParsing m where

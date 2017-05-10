@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeFamilies #-}
--- | Backtracking parser
+-- | Backtracking parser for Parsing Expression Grammars
 module Text.Grampa.PEG.Backtrack (Parser) where
 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
@@ -136,10 +136,11 @@ instance MonoidParsing (Parser g) where
                                                 in Parsed (prefix <> prefix') suffix'
                         NoParse{} -> Parsed mempty rest
 
--- | Backtracking PEG parser. The 'parse' returns the input prefix parse paired with the remaining input suffix.
+-- | Backtracking PEG parser
 --
 -- @
---   'parse' :: g ('Parser' g s) -> s -> g ('Compose' 'ParseResults' ((,) s))
+-- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>
+--                  g (Backtrack.'Parser' g s) -> s -> g 'ParseResults'
 -- @
 instance MultiParsing Parser where
    type ResultFunctor Parser = ParseResults

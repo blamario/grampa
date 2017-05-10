@@ -3,7 +3,7 @@
 
 name:                grampa
 version:             0.1
-synopsis:            Grammar parser - combinator library for parsing a general context-free grammar
+synopsis:            Grammatical parsers - parser combinator library for parsing a general context-free grammar
 -- description:         
 homepage:            https://github.com/blamario/grampa
 license:             BSD3

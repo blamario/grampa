@@ -151,10 +151,11 @@ instance MonoidParsing (Parser g) where
       where go = (<>) <$> p <*> go <|> mempty
 
 
--- | Packrat parser. The 'parse' returns an input prefix parse paired with the remaining input suffix.
+-- | Packrat parser
 --
 -- @
---   'parse' :: g ('Parser' g s) -> s -> g ('Compose' 'ParseResults' ((,) s))
+-- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>
+--                  g (Packrat.'Parser' g s) -> s -> g 'ParseResults'
 -- @
 instance MultiParsing Parser where
    type ResultFunctor Parser = ParseResults
