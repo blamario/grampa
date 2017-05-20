@@ -38,8 +38,8 @@ resolver: nightly-2016-09-26
 
 packages:
 - ../monoid-subclasses/
-- rank2/
-- cfg/
+- rank2classes/
+- grammatical-parsers/
 - ../language-lua2/
 
 # Dependency packages to be pulled from upstream that are not in the resolver
