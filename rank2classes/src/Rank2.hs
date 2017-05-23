@@ -1,8 +1,19 @@
+-- | Import this module qualified, like this:
+-- 
+-- > import qualified Rank2
+-- 
+-- This will bring into scope the standard classes 'Functor', 'Applicative', 'Foldable', and 'Traversable', but with a
+-- @Rank2.@ prefix and a twist that their methods operate on a heterogenous collection. The same property is shared by
+-- the two less standard classes 'Apply' and 'Distributive'.
 {-# LANGUAGE InstanceSigs, KindSignatures, Rank2Types, ScopedTypeVariables #-}
-module Rank2 (Functor(..), Apply(..), Applicative(..),
-              Foldable(..), Traversable(..), Distributive(..),
-              Compose(..), Empty(..), Only(..), Identity(..), Product(..), Arrow(..),
-              ap, fmap, liftA3)
+module Rank2 (
+-- * Rank 2 classes
+   Functor(..), Apply(..), Applicative(..),
+   Foldable(..), Traversable(..), Distributive(..),
+-- * Rank 2 data types
+   Compose(..), Empty(..), Only(..), Identity(..), Product(..), Arrow(..),
+-- * Method synonyms and helper functions
+   ap, fmap, liftA3)
 where
 
 import qualified Control.Applicative as Rank1

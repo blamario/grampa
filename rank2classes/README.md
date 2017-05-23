@@ -1,5 +1,5 @@
-rank2
-=====
+rank2classes
+============
 
 ### The standard constructor type classes in the parallel rank-2 universe ###
 

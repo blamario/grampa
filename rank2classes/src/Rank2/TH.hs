@@ -1,3 +1,12 @@
+-- | This module exports the templates for automatic instance deriving of "Rank2" type classes. The most common way to
+-- use it would be
+--
+-- > import qualified Rank2.TH
+-- > data MyDataType = ...
+-- > $(Rank2.TH.deriveAll ''MyDataType)
+--
+-- or, if you're picky, you can invoke only 'deriveFunctor' and whichever other instances you need instead.
+
 {-# Language TemplateHaskell #-}
 -- Adapted from https://wiki.haskell.org/A_practical_Template_Haskell_Tutorial
 
