@@ -1,5 +1,5 @@
-rank2classes
-============
+Rank 2 Classes
+==============
 
 ### The standard constructor type classes in the parallel rank-2 universe ###
 
@@ -8,12 +8,17 @@ The rank2 package exports module `Rank2`, meant to be imported qualified like th
 ~~~ {.haskell}
 {-# LANGUAGE RankNTypes, TemplateHaskell #-}
 module MyModule where
+import qualified Rank2
+import qualified Rank2.TH
+~~~
+
+Several more imports for the examples...
+
+~~~ {.haskell}
 import Data.Functor.Classes (Show1, showsPrec1)
 import Data.Functor.Identity (Identity(..))
 import Data.Functor.Const (Const(..))
 import Data.List (find)
-import qualified Rank2
-import qualified Rank2.TH
 ~~~
 
 This import will make available the following type classes:

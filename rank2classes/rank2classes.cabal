@@ -27,7 +27,7 @@ library
 test-suite doctests
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
+  default-language:    Haskell2010
   main-is:             Doctest.hs
   ghc-options:         -threaded -pgmL markdown-unlit
   build-depends:       base, rank2classes, doctest >= 0.8
-  

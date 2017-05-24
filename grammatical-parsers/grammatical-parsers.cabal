@@ -40,7 +40,7 @@ executable             arithmetic
                        rank2classes < 1.0, grammatical-parsers == 0.1,
                        monoid-subclasses >=0.4 && <0.5
 
-test-suite           tests
+test-suite           quicktests
   type:              exitcode-stdio-1.0
   hs-source-dirs:    test, examples
   x-uses-tf:         true
@@ -51,6 +51,14 @@ test-suite           tests
   main-is:           Test.hs
   other-modules:     Test.Examples, Arithmetic, Boolean, Combined, Comparisons, Conditionals, Utilities
   default-language:  Haskell2010
+
+test-suite           doctests
+  type:              exitcode-stdio-1.0
+  hs-source-dirs:    test
+  default-language:  Haskell2010
+  main-is:           Doctest.hs
+  ghc-options:       -threaded -pgmL markdown-unlit
+  build-depends:     base, rank2classes, doctest >= 0.8
 
 benchmark            benchmarks
   type:              exitcode-stdio-1.0
