@@ -1,8 +1,14 @@
 Grammatical Parsers
 ===================
 
-Yet another parser combinator library in Haskell. You can use the usual ``Applicative``, ``Alternative``, and ``Monad``
-operators to combine primitive parsers into larger ones. Here are some typical imports you may need:
+Behold, yet another parser combinator library in Haskell.
+
+You can apply the usual
+[Applicative](http://hackage.haskell.org/package/base/docs/Control-Applicative.html#t:Applicative),
+[Alternative](http://hackage.haskell.org/package/base/docs/Control-Applicative.html#t:Alternative), and
+[Monad](http://hackage.haskell.org/package/base/docs/Control-Monad.html#t:Monad) operators to combine primitive parsers
+into larger ones. The combinators from the [parsers](http://hackage.haskell.org/package/parsers) library type classes
+are also available. Here are some typical imports you may need:
 
 ~~~ {.haskell}
 {-# LANGUAGE RecordWildCards, ScopedTypeVariables, TemplateHaskell #-}
@@ -56,35 +62,48 @@ Optionally, you may also be inclined to declare a proper ``Show`` instance, as i
 ~~~ {.haskell}
 instance Show1 f => Show (Arithmetic f) where
    show Arithmetic{..} =
-      "Arithmetic{sum=" ++ showsPrec1 0 sum
+      "Arithmetic{\n  sum=" ++ showsPrec1 0 sum
            (",\n  product=" ++ showsPrec1 0 factor
            (",\n  factor=" ++ showsPrec1 0 factor
            (",\n  number=" ++ showsPrec1 0 number "}")))
 ~~~
 
-Once that's done, use ``fixGrammar`` to, well, fix the grammar
+Once that's done, use [fixGrammar](http://hackage.haskell.org/package/grammatical-parsers/docs/Text-Grampa.html#v:fixGrammar) to, well, fix the grammar
 
 ~~~ {.haskell}
 grammar = fixGrammar arithmetic
 ~~~
 
-and ``parseComplete`` or ``parsePrefix`` to parse some input.
+and then [parseComplete](http://hackage.haskell.org/package/grammatical-parsers/docs/Text-Grampa.html#v:parseComplete)
+or [parsePrefix](http://hackage.haskell.org/package/grammatical-parsers/docs/Text-Grampa.html#v:parsePrefix) to parse
+some input.
 
 ~~~ {.haskell}
 -- |
 -- >>> parseComplete grammar "42"
--- Arithmetic{sum=Compose (Right [42]),
+-- Arithmetic{
+--   sum=Compose (Right [42]),
 --   product=Compose (Right [42]),
 --   factor=Compose (Right [42]),
 --   number=Compose (Right ["42"])}
 -- >>> parseComplete grammar "1+2*3"
--- Arithmetic{sum=Compose (Right [7]),
+-- Arithmetic{
+--   sum=Compose (Right [7]),
 --   product=Compose (Left (ParseFailure 1 ["endOfInput"])),
 --   factor=Compose (Left (ParseFailure 1 ["endOfInput"])),
 --   number=Compose (Left (ParseFailure 1 ["endOfInput"]))}
 -- >>> parsePrefix grammar "1+2*3"
--- Arithmetic{sum=Compose (Compose (Right [("+2*3",1),("*3",3),("",7)])),
+-- Arithmetic{
+--   sum=Compose (Compose (Right [("+2*3",1),("*3",3),("",7)])),
 --   product=Compose (Compose (Right [("+2*3",1)])),
 --   factor=Compose (Compose (Right [("+2*3",1)])),
 --   number=Compose (Compose (Right [("+2*3","1")]))}
 ~~~
+
+To see more grammar examples, go straight to the
+[examples](https://github.com/blamario/grampa/tree/master/grammatical-parsers/examples) directory that builds up several
+smaller grammars and combines them all together in the
+[Combined](https://github.com/blamario/grampa/blob/master/grammatical-parsers/examples/Combined.hs) module.
+
+For more conventional tastes there is a monolithic
+[Lua grammar](https://github.com/blamario/language-lua2/blob/master/src/Language/Lua/Grammar.hs) example as well.

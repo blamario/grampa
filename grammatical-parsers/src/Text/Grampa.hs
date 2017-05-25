@@ -22,9 +22,11 @@ import Data.Functor.Compose (Compose(..))
 import qualified Rank2
 import Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), MonoidParsing(..), ParseResults, ParseFailure(..))
 
-import Prelude hiding (takeWhile)
-
+-- | A type synonym for a fixed grammar record type @g@ with a given parser type @p@ on input streams of type @s@
 type Grammar (g  :: (* -> *) -> *) p s = g (p g s)
+
+-- | A type synonym for an endomorphic function on a grammar record type @g@, whose parsers of type @p@ build grammars
+-- of type @g'@, parsing input streams of type @s@
 type GrammarBuilder (g  :: (* -> *) -> *)
                     (g' :: (* -> *) -> *)
                     (p  :: ((* -> *) -> *) -> * -> * -> *)

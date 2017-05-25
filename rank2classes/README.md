@@ -144,3 +144,5 @@ Here is an example GHCi session:
 -- >>> Rank2.distribute [alice, bob, charlie]
 -- Person{name=Compose [Identity "Alice",Identity "Bob",Identity "Charlie"], age=Compose [Identity 44,Identity 45,Identity 19], mother=Compose [Identity Nothing,Identity Nothing,Identity (Just Person{name=Identity "Alice", age=Identity 44, mother=Identity Nothing, father=Identity Nothing})], father=Compose [Identity Nothing,Identity Nothing,Identity (Just Person{name=Identity "Bob", age=Identity 45, mother=Identity Nothing, father=Identity Nothing})]}
 ~~~
+
+For another use case have a look at [grammatical-parsers](https://github.com/blamario/grampa/tree/master/grammatical-parsers).

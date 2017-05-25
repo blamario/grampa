@@ -16,6 +16,7 @@ import qualified Rank2
 
 type ParseResults = Either ParseFailure
 
+-- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset. 
 data ParseFailure = ParseFailure Int [String] deriving (Eq, Show)
 
 completeParser :: MonoidNull s => Compose ParseResults (Compose [] ((,) s)) r -> Compose ParseResults [] r
@@ -55,6 +56,7 @@ class MultiParsing m => GrammarParsing m where
    fixGrammar = ($ selfReferring)
    recursive = id
 
+-- | Methods for parsing monoidal inputs
 class MonoidParsing m where
    infixl 3 <<|>
    (<<|>) :: m s r -> m s r -> m s r
