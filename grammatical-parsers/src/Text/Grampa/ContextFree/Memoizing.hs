@@ -156,32 +156,32 @@ instance MonoidParsing (Parser g) where
                   _ -> ResultList [] (FailureInfo 1 (genericLength rest) ["satisfyChar"])
             p [] = ResultList [] (FailureInfo 1 0 ["satisfyChar"])
    scan s0 f = Parser (p s0)
-      where p s ((i, _):t) = ResultList [ResultInfo (drop (length prefix - 1) t) prefix] mempty
+      where p s rest@((i, _) : _) = ResultList [ResultInfo (drop (Factorial.length prefix) rest) prefix] mempty
                where (prefix, _, _) = Factorial.spanMaybe' s f i
             p _ [] = ResultList [ResultInfo [] mempty] mempty
    scanChars s0 f = Parser (p s0)
-      where p s ((i, _):t) = ResultList [ResultInfo (drop (length prefix - 1) t) prefix] mempty
+      where p s rest@((i, _) : _) = ResultList [ResultInfo (drop (Factorial.length prefix) rest) prefix] mempty
                where (prefix, _, _) = Textual.spanMaybe_' s f i
             p _ [] = ResultList [ResultInfo [] mempty] mempty
    takeWhile predicate = Parser p
       where p rest@((s, _) : _)
                | x <- Factorial.takeWhile predicate s =
-                    ResultList [ResultInfo (Factorial.drop (Factorial.length x) rest) x] mempty
+                    ResultList [ResultInfo (drop (Factorial.length x) rest) x] mempty
             p [] = ResultList [ResultInfo [] mempty] mempty
    takeWhile1 predicate = Parser p
       where p rest@((s, _) : _)
                | x <- Factorial.takeWhile predicate s, not (null x) =
-                    ResultList [ResultInfo (Factorial.drop (Factorial.length x) rest) x] mempty
+                    ResultList [ResultInfo (drop (Factorial.length x) rest) x] mempty
             p rest = ResultList [] (FailureInfo 1 (genericLength rest) ["takeWhile1"])
    takeCharsWhile predicate = Parser p
       where p rest@((s, _) : _)
                | x <- Textual.takeWhile_ False predicate s =
-                    ResultList [ResultInfo (Factorial.drop (Factorial.length x) rest) x] mempty
+                    ResultList [ResultInfo (drop (Factorial.length x) rest) x] mempty
             p [] = ResultList [ResultInfo [] mempty] mempty
    takeCharsWhile1 predicate = Parser p
       where p rest@((s, _) : _)
                | x <- Textual.takeWhile_ False predicate s, not (null x) =
-                    ResultList [ResultInfo (Factorial.drop (Factorial.length x) rest) x] mempty
+                    ResultList [ResultInfo (drop (Factorial.length x) rest) x] mempty
             p rest = ResultList [] (FailureInfo 1 (genericLength rest) ["takeCharsWhile1"])
    string s = Parser p where
       p rest@((s', _) : _)
