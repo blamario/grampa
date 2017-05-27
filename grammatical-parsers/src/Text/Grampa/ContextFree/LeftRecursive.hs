@@ -51,7 +51,6 @@ data Parser g s a where
    Empty         :: Parser g s a
    Bind          :: Parser g s a -> (a -> Parser g s b) -> Parser g s b
    Choice        :: Parser g s a -> Parser g s a -> Parser g s a
-   BiasedChoice  :: Parser g s a -> Parser g s a -> Parser g s a
    Try           :: Parser g s a -> Parser g s a
    Describe      :: Parser g s a -> String -> Parser g s a
    NotFollowedBy :: Show a => Parser g s a -> Parser g s ()
@@ -97,7 +96,6 @@ instance (Rank2.Distributive g, Rank2.Traversable g) => Show (Parser g s a) wher
    show Empty = "empty"
    show (Bind ast _) = "(" ++ show ast ++ " >>= " ++ ")"
    show (Choice l r) = "(" ++ show l ++ " <|> " ++ shows r ")"
-   show (BiasedChoice l r) = "(" ++ show l ++ " <<|> " ++ shows r ")"
    show (Try ast) = "(try " ++ shows ast ")"
    show (Describe ast msg) = "(" ++ shows ast (" <?> " ++ shows msg ")")
    show (NotFollowedBy ast) = "(notFollowedBy " ++ shows ast ")"
@@ -119,7 +117,6 @@ instance (Rank2.Distributive g, Rank2.Traversable g) => Show1 (Parser g s) where
    liftShowsPrec _showsPrec _showL _prec Empty _rest = "empty"
    liftShowsPrec _showsPrec _showL _prec (Bind ast _) rest = "(" ++ shows ast (" >>= " ++ ")" ++ rest)
    liftShowsPrec _showsPrec _showL _prec (Choice l r) rest = "(" ++ show l ++ " <|> " ++ shows r (")" ++ rest)
-   liftShowsPrec _showsPrec _showL _prec (BiasedChoice l r) rest = "(" ++ show l ++ " <<|> " ++ shows r (")" ++ rest)
    liftShowsPrec _showsPrec _showL _prec (Try ast) rest = "(try " ++ shows ast (")" ++ rest)
    liftShowsPrec _showsPrec _showL _prec (Describe ast msg) rest = "(" ++ shows ast (" <?> " ++ shows msg (")" ++ rest))
    liftShowsPrec _showsPrec _showL _prec (NotFollowedBy ast) rest = "(notFollowedBy " ++ shows ast (")" ++ rest)
@@ -189,7 +186,6 @@ instance (Show s, TextualMonoid s) => TokenParsing (Parser g s) where
    someSpace = () <$ takeCharsWhile1 isSpace
 
 instance MonoidParsing (Parser g) where
-   (<<|>) = BiasedChoice
    endOfInput = Primitive "endOfInput" (Just endOfInput) Nothing endOfInput
    getInput = Primitive "getInput" (Just $ eof *> getInput) (Just $ notFollowedBy eof *> getInput) getInput
    anyToken = Primitive "anyToken" Nothing (Just anyToken) anyToken
@@ -227,7 +223,6 @@ toParser (Pure x) = pure x
 toParser Empty = empty
 toParser (Bind ast cont) = toParser ast >>= toParser . cont
 toParser (Choice l r) = toParser l <|> toParser r
-toParser (BiasedChoice l r) = toParser l <<|> toParser r
 toParser (Try ast) = try (toParser ast)
 toParser (Describe ast msg) = toParser ast <?> msg
 toParser (NotFollowedBy ast) = notFollowedBy (toParser ast)
@@ -256,9 +251,6 @@ splitDirect (Bind ast cont) = (d0cd <|> (d1 >>= cont), d0cn <|> (n >>= cont))
          (d0, d1) = splitNullable d
          (d0cd, d0cn) = splitDirect (d0 >>= cont)
 splitDirect (Choice l r) = (ld <|> rd, ln <|> rn)
-   where (ld, ln) = splitDirect l
-         (rd, rn) = splitDirect r
-splitDirect (BiasedChoice l r) = (ld <<|> rd, ln <<|> rn)
    where (ld, ln) = splitDirect l
          (rd, rn) = splitDirect r
 splitDirect (Try ast) = both try (splitDirect ast)
@@ -293,9 +285,6 @@ splitNullable (Bind ast cont) = (fst c0, snd c0 <|> (ast1 >>= cont))
    where (ast0, ast1) = splitNullable ast
          c0 = splitNullable (ast0 >>= cont)
 splitNullable (Choice l r) = (l0 <|> r0, l1 <|> r1)
-   where (l0, l1) = splitNullable l
-         (r0, r1) = splitNullable r
-splitNullable (BiasedChoice l r) = (l0 <<|> r0, l1 <<|> r1)
    where (l0, l1) = splitNullable l
          (r0, r1) = splitNullable r
 splitNullable (Try ast) = both try (splitNullable ast)
@@ -341,7 +330,6 @@ leftDescendants g = evalState (Rank2.traverse (const replaceFromList) g) $ map (
          leftRecursiveOn Empty = mempty
          leftRecursiveOn (Bind ast _cont) = if nullable g0 ast then universe else leftRecursiveOn ast
          leftRecursiveOn (Choice l r) = leftRecursiveOn l <> leftRecursiveOn r
-         leftRecursiveOn (BiasedChoice l r) = leftRecursiveOn l <> leftRecursiveOn r
          leftRecursiveOn (Try ast) = leftRecursiveOn ast
          leftRecursiveOn (Describe ast _) = leftRecursiveOn ast
          leftRecursiveOn (NotFollowedBy ast) = leftRecursiveOn ast
@@ -361,7 +349,6 @@ nullable _  Pure{} = True
 nullable _  Empty = False
 nullable gn (Bind ast _cont) = nullable gn ast
 nullable gn (Choice l r) = nullable gn l || nullable gn r
-nullable gn (BiasedChoice l r) = nullable gn l || nullable gn r
 nullable gn (Try ast) = nullable gn ast
 nullable gn (Describe ast _) = nullable gn ast
 nullable _  NotFollowedBy{} = True

@@ -116,10 +116,6 @@ instance MultiParsing Parser where
    parseComplete g input = Rank2.fmap ((snd <$>) . getCompose) (parsePrefix (Rank2.fmap (<* endOfInput) g) input)
 
 instance MonoidParsing (Parser g) where
-   Parser p <<|> Parser q = Parser r
-      where r rest = case (p rest, q rest)
-                     of (ResultList [] f1, ResultList r2 f2) -> ResultList r2 (f1 <> f2)
-                        (r1, _) -> r1
    endOfInput = Parser f
       where f s | null s = ResultList [ResultInfo s ()] mempty
                 | otherwise = ResultList [] (FailureInfo 1 (Factorial.length s) ["endOfInput"])

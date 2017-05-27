@@ -134,10 +134,6 @@ reparseTails final parsed@((s, _):_) = (s, gd):parsed
    where gd = Rank2.fmap (`applyParser` parsed) final
 
 instance MonoidParsing (Parser g) where
-   Parser p <<|> Parser q = Parser r
-      where r rest = case (p rest, q rest)
-                     of (ResultList [] f1, ResultList r2 f2) -> ResultList r2 (f1 <> f2)
-                        (r1, _) -> r1
    endOfInput = eof
    getInput = Parser p
       where p rest@((s, _):_) = ResultList [ResultInfo [last rest] s] mempty

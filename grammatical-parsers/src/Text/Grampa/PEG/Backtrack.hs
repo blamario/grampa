@@ -82,10 +82,6 @@ instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
             rewind t NoParse{} = Parsed () t
 
 instance MonoidParsing (Parser g) where
-   Parser p <<|> Parser q = Parser r where
-      r rest = case p rest
-               of x@Parsed{} -> x
-                  NoParse{} -> q rest
    endOfInput = Parser p
       where p rest = if Null.null rest
                      then NoParse (FailureInfo 1 (fromIntegral $ Factorial.length rest) ["endOfInput"])

@@ -90,7 +90,6 @@ instance GrammarParsing Parser where
       p _ = NoParse (FailureInfo 1 0 ["NonTerminal at endOfInput"])
 
 instance MonoidParsing (Parser g) where
-   (<<|>) = (<|>)
    endOfInput = Parser p
       where p rest@((s, _) : _)
                | not (Null.null s) = NoParse (FailureInfo 1 (genericLength rest) ["endOfInput"])
