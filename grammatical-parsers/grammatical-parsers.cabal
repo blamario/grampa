@@ -3,14 +3,19 @@ version:             0.1
 synopsis:            Grammatical parsers - combinator library of parsers that combine into grammars
 -- description:         
 homepage:            https://github.com/blamario/grampa/tree/master/grammatical-parsers
+bug-reports:         https://github.com/blamario/grampa/issues
 license:             BSD3
 license-file:        LICENSE
 author:              Mario Blažević
-maintainer:          blamario@protonmail.com
+maintainer:          Mario Blažević <blamario@protonmail.com>
+copyright:           (c) 2017 Mario Blažević
 category:            Text
 build-type:          Simple
--- extra-source-files:  
 cabal-version:       >=1.10
+extra-source-files:  README.md
+source-repository head
+  type:              git
+  location:          https://github.com/blamario/grampa
 
 library
   hs-source-dirs:      src
