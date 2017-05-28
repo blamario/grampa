@@ -1,7 +1,11 @@
 name:                grammatical-parsers
 version:             0.1
-synopsis:            Grammatical parsers - combinator library of parsers that combine into grammars
--- description:         
+synopsis:            parsers that can combine into grammars
+description:
+  /Gram/matical-/pa/rsers, or Grampa for short, is a library of parser types whose values are meant to be assigned
+  to grammar record fields. All parser types support the same set of parser combinators, but have different semantics
+  and performance characteristics.
+
 homepage:            https://github.com/blamario/grampa/tree/master/grammatical-parsers
 bug-reports:         https://github.com/blamario/grampa/issues
 license:             BSD3
