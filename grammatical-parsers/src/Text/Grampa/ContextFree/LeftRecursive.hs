@@ -192,6 +192,8 @@ instance MonoidParsing (Parser g) where
    token x = Primitive "token" Nothing (Just $ token x) (token x)
    satisfy predicate = Primitive "satisfy" Nothing (Just $ satisfy predicate) (satisfy predicate)
    satisfyChar predicate = Primitive "satisfyChar" Nothing (Just $ satisfyChar predicate) (satisfyChar predicate)
+   satisfyCharInput predicate = Primitive "satisfyCharInput" Nothing (Just $ satisfyCharInput predicate) 
+                                          (satisfyCharInput predicate)
    scan s0 f = Primitive "scan" (Just $ mempty <$ notFollowedBy (() <$ p1)) (Just $ lookAhead p1 *> p) p
       where p = scan s0 f
             p1 = satisfy (isJust . f s0)

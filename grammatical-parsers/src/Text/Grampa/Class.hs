@@ -10,7 +10,6 @@ import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 import GHC.Exts (Constraint)
-import Text.Parser.Combinators (Parsing)
 
 import qualified Rank2
 
@@ -69,9 +68,13 @@ class MonoidParsing m where
    token :: (Eq s, FactorialMonoid s) => s -> m s s
    -- | A parser that accepts an input atom only if it satisfies the given predicate.
    satisfy :: FactorialMonoid s => (s -> Bool) -> m s s
-   -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the
-   -- given predicate.
+   -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting and returning an input character only if it
+   -- satisfies the given predicate.
    satisfyChar :: TextualMonoid s => (Char -> Bool) -> m s Char
+   -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the
+   -- given predicate, and returning the input atom that represents the character. A faster version of @singleton <$>
+   -- satisfyChar p@ and of @satisfy (fromMaybe False p . characterPrefix)@.
+   satisfyCharInput :: TextualMonoid s => (Char -> Bool) -> m s s
 
    -- | A stateful scanner. The predicate modifies a state argument, and each transformed state is passed to successive
    -- invocations of the predicate on each token of the input until one returns 'Nothing' or the input ends.
