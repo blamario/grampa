@@ -110,8 +110,14 @@ instance MonoidParsing (Parser g) where
             p [] = NoParse (FailureInfo 1 0 ["satisfy"])
    satisfyChar predicate = Parser p
       where p rest@((s, _):t) =
-               case Textual.splitCharacterPrefix s
-               of Just (first, _) | predicate first -> Parsed first t
+               case Textual.characterPrefix s
+               of Just first | predicate first -> Parsed first t
+                  _ -> NoParse (FailureInfo 1 (genericLength rest) ["satisfyChar"])
+            p [] = NoParse (FailureInfo 1 0 ["satisfyChar"])
+   satisfyCharInput predicate = Parser p
+      where p rest@((s, _):t) =
+               case Textual.characterPrefix s
+               of Just first | predicate first -> Parsed (Factorial.primePrefix s) t
                   _ -> NoParse (FailureInfo 1 (genericLength rest) ["satisfyChar"])
             p [] = NoParse (FailureInfo 1 0 ["satisfyChar"])
    scan s0 f = Parser (p s0)

@@ -27,7 +27,7 @@ import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
 
-import Text.Grampa.Class (MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..), completeParser)
+import Text.Grampa.Class (MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
 
@@ -133,6 +133,11 @@ instance MonoidParsing (Parser g) where
       where p s =
                case Textual.splitCharacterPrefix s
                of Just (first, rest) | predicate first -> ResultList [ResultInfo rest first] mempty
+                  _ -> ResultList [] (FailureInfo 1 (Factorial.length s) ["satisfyChar"])
+   satisfyCharInput predicate = Parser p
+      where p s =
+               case Textual.splitCharacterPrefix s
+               of Just (first, rest) | predicate first -> ResultList [ResultInfo rest $ Factorial.primePrefix s] mempty
                   _ -> ResultList [] (FailureInfo 1 (Factorial.length s) ["satisfyChar"])
    scan s0 f = Parser (p s0)
       where p s i = ResultList [ResultInfo suffix prefix] mempty
