@@ -43,11 +43,11 @@ class MultiParsing m where
 class MultiParsing m => GrammarParsing m where
    type GrammarFunctor m :: ((* -> *) -> *) -> * -> * -> *
    -- | Used to reference a grammar production, only necessary from outside the grammar itself
-   nonTerminal :: (g (GrammarFunctor m g s) -> GrammarFunctor m g s a) -> m g s a
+   nonTerminal :: GrammarConstraint m g => (g (GrammarFunctor m g s) -> GrammarFunctor m g s a) -> m g s a
    -- | Construct a grammar whose every production refers to itself.
-   selfReferring :: Rank2.Distributive g => g (m g s)
+   selfReferring :: (GrammarConstraint m g, Rank2.Distributive g) => g (m g s)
    -- | Convert a self-referring grammar function to a grammar.
-   fixGrammar :: forall g s. Rank2.Distributive g => (g (m g s) -> g (m g s)) -> g (m g s)
+   fixGrammar :: forall g s. (GrammarConstraint m g, Rank2.Distributive g) => (g (m g s) -> g (m g s)) -> g (m g s)
    -- | Mark a parser that relies on primitive recursion to prevent an infinite loop in 'fixGrammar'.
    recursive :: m g s a -> m g s a
 
