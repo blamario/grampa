@@ -28,7 +28,7 @@ import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults)
-import Text.Grampa.ContextFree.Memoizing (ResultList(..), fromResultList)
+import Text.Grampa.ContextFree.Memoizing (ResultList(..), fromResultList, notSatisfy, notSatisfyChar)
 import qualified Text.Grampa.ContextFree.Memoizing as Memoizing
 
 import Prelude hiding (null, showsPrec, span, takeWhile)
@@ -232,24 +232,23 @@ instance MonoidParsing (Parser g) where
    satisfyChar predicate = primitive "satisfyChar" Nothing (satisfyChar predicate) (satisfyChar predicate)
    satisfyCharInput predicate = primitive "satisfyCharInput" Nothing (satisfyCharInput predicate) 
                                           (satisfyCharInput predicate)
-   scan s0 f = primitive "scan" (Just $ mempty <$ notFollowedBy (() <$ p1)) (lookAhead p1 *> p) p
+   scan s0 f = primitive "scan" (Just $ mempty <$ notSatisfy test) (lookAhead (satisfy test) *> p) p
       where p = scan s0 f
-            p1 = satisfy (isJust . f s0)
-   scanChars s0 f = primitive "scanChars" (Just $ mempty <$ notFollowedBy p1) (lookAhead p1 *> p) p
+            test = isJust . f s0
+   scanChars s0 f = primitive "scanChars" (Just $ mempty <$ notSatisfyChar test) (lookAhead (satisfyChar test) *> p) p
       where p = scanChars s0 f
-            p1 = satisfyChar (isJust . f s0)
+            test = isJust . f s0
    string s
       | null s = primitive ("(string " ++ shows s ")") (Just $ string s) empty (string s)
       | otherwise = primitive ("(string " ++ shows s ")") Nothing (string s) (string s)
-   takeWhile predicate = primitive "takeWhile" (Just $ mempty <$ notFollowedBy (() <$ satisfy predicate))
+   takeWhile predicate = primitive "takeWhile" (Just $ (mempty <$ notSatisfy predicate))
                                                (takeWhile1 predicate) (takeWhile predicate)
    takeWhile1 predicate = primitive "takeWhile1" Nothing (takeWhile1 predicate) (takeWhile1 predicate)
-   takeCharsWhile predicate = primitive "takeCharsWhile" (Just $ mempty <$ notFollowedBy (satisfyChar predicate))
+   takeCharsWhile predicate = primitive "takeCharsWhile" (Just $ mempty <$ notSatisfyChar predicate)
                                                          (takeCharsWhile1 predicate) (takeCharsWhile predicate)
    takeCharsWhile1 predicate = primitive "takeCharsWhile1" Nothing (takeCharsWhile1 predicate)
                                                            (takeCharsWhile1 predicate)
-   whiteSpace = primitive "whiteSpace" (Just $ notFollowedBy $ satisfyChar isSpace) (satisfyChar isSpace *> whiteSpace)
-                                       whiteSpace
+   whiteSpace = primitive "whiteSpace" (Just $ notSatisfyChar isSpace) (satisfyChar isSpace *> whiteSpace) whiteSpace
    concatMany p = Parser{complete= cmp,
                          direct= d0 <|> d1,
                          direct0= d0,
