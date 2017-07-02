@@ -10,7 +10,7 @@ import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
 
 import Data.Char (isSpace)
 import Data.Functor.Compose (Compose(..))
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (isJust)
 
 import Data.Monoid (Monoid(mempty), All(..), Any(..), (<>))
 import Data.Monoid.Null (MonoidNull(null))
@@ -33,13 +33,45 @@ import qualified Text.Grampa.ContextFree.Memoizing as Memoizing
 
 import Prelude hiding (null, showsPrec, span, takeWhile)
 
-data Parser g s a = Parser {
-   complete, direct, direct0, direct1, indirect :: Memoizing.Parser g s a,
-   cyclicDescendants :: Rank2.Apply g => g (Const (Bool, Bool, g (Const Bool))) -> (Bool, Bool, g (Const Bool))}
+data Parser g s a =
+   Parser {
+      complete, direct, direct0, direct1, indirect :: Memoizing.Parser g s a,
+      cyclicDescendants :: Rank2.Apply g => g (Const (Bool, Bool, g (Const Bool))) -> (Bool, Bool, g (Const Bool))}
+   | DirectParser {
+      complete, direct0, direct1 :: Memoizing.Parser g s a}
+   | PositiveDirectParser {
+      complete :: Memoizing.Parser g s a}
 
 data ParserFunctor g s a = ParserFunctor {
    resultListF :: ResultList g s a,
    cyclicDescendantsF :: (Bool, Bool, g (Const Bool))}
+
+general, general' :: Parser g s a -> Parser g s a
+
+general p = Parser{
+   complete= complete p,
+   direct = direct p',
+   direct0= direct0 p',
+   direct1= direct1 p',
+   indirect= indirect p',
+   cyclicDescendants= cyclicDescendants p'}
+   where p' = general' p
+
+general' p@PositiveDirectParser{} = Parser{
+   complete= complete p,
+   direct = complete p,
+   direct0= empty,
+   direct1= complete p,
+   indirect= empty,
+   cyclicDescendants= \cd-> (False, False, const (Const False) Rank2.<$> cd)}
+general' p@DirectParser{} = Parser{
+   complete= complete p,
+   direct = complete p,
+   direct0= direct0 p,
+   direct1= direct1 p,
+   indirect= empty,
+   cyclicDescendants= \cd-> (True, False, const (Const False) Rank2.<$> cd)}
+general' p@Parser{} = p
 
 -- | Parser of general context-free grammars, including left recursion.
 --
@@ -83,7 +115,7 @@ instance GrammarParsing Parser where
                                        c || getAny (Rank2.foldMap (Any . getConst) $ Rank2.liftA2 (onConst (&&)) bit d),
                                        Rank2.liftA2 (onConst (||)) bit d)}
             onConst f1 (Const a) (Const b) = Const (f1 a b)
-   recursive = id
+   recursive = general
 
 bits :: Rank2.Traversable g => g f -> g (Const (g (Const Bool)))
 bits g = evalState (Rank2.traverse next g) start 
@@ -96,68 +128,120 @@ shift newBit g = evalState (Rank2.traverse next g) newBit
          next (Const x) = do {prev <- get; put x; return (Const prev)}
 
 instance Functor (Parser g s) where
-   fmap f p = p{complete= fmap f (complete p),
-                direct= fmap f (direct p),
-                direct0= fmap f (direct0 p),
-                direct1= fmap f (direct1 p),
-                indirect= fmap f (indirect p)}
+   fmap f (PositiveDirectParser p) = PositiveDirectParser (fmap f p)
+   fmap f p@DirectParser{} = DirectParser{
+      complete= fmap f (complete p),
+      direct0= fmap f (direct0 p),
+      direct1= fmap f (direct1 p)}
+   fmap f p@Parser{} = p{
+      complete= fmap f (complete p),
+      direct= fmap f (direct p),
+      direct0= fmap f (direct0 p),
+      direct1= fmap f (direct1 p),
+      indirect= fmap f (indirect p)}
 
 instance Applicative (Parser g s) where
-   pure a = Parser{complete= pure a,
-                   direct= pure a,
-                   direct0= pure a,
-                   direct1= empty,
-                   indirect= empty,
-                   cyclicDescendants= \g-> (True, False, const (Const False) Rank2.<$> g)}
-   p <*> q = Parser{complete= complete p <*> complete q,
-                    direct= direct0 p <*> direct q <|> direct1 p <*> complete q,
-                    direct0= direct0 p <*> direct0 q,
-                    direct1= direct0 p <*> direct1 q <|> direct1 p <*> complete q,
-                    indirect= direct0 p <*> indirect q <|> indirect p <*> complete q,
-                    cyclicDescendants= \deps-> let
-                         pcd@(pn, pc, pd) = cyclicDescendants p deps
-                         (qn, qc, qd) = cyclicDescendants q deps
-                      in if pn
-                         then (qn, pc || qc, Rank2.liftA2 union pd qd)
-                         else pcd}
+   pure a = DirectParser{complete= pure a,
+                         direct0= pure a,
+                         direct1= empty}
+   p@PositiveDirectParser{} <*> q = PositiveDirectParser{
+      complete= complete p <*> complete q}
+   p@DirectParser{} <*> q@PositiveDirectParser{} = PositiveDirectParser{
+      complete= complete p <*> complete q}
+   p@DirectParser{} <*> q@DirectParser{} = DirectParser{
+      complete= complete p <*> complete q,
+      direct0= direct0 p <*> direct0 q,
+      direct1= direct0 p <*> direct1 q <|> direct1 p <*> complete q}
+   p <*> q@Parser{} = Parser{
+      complete= complete p' <*> complete q,
+      direct= direct0 p' <*> direct q <|> direct1 p' <*> complete q,
+      direct0= direct0 p' <*> direct0 q,
+      direct1= direct0 p' <*> direct1 q <|> direct1 p' <*> complete q,
+      indirect= direct0 p' <*> indirect q <|> indirect p' <*> complete q,
+      cyclicDescendants= \deps-> let
+           pcd@(pn, pc, pd) = cyclicDescendants p' deps
+           (qn, qc, qd) = cyclicDescendants q deps
+        in if pn
+           then (qn, pc || qc, Rank2.liftA2 union pd qd)
+           else pcd}
+      where p'@Parser{} = general' p
+   p <*> q = Parser{
+      complete= complete p' <*> complete q',
+      direct= direct p' <*> complete q',
+      direct0= direct0 p' <*> direct0 q',
+      direct1= direct0 p' <*> direct1 q' <|> direct1 p' <*> complete q',
+      indirect= indirect p' <*> complete q',
+      cyclicDescendants= \deps-> let
+           pcd@(pn, pc, pd) = cyclicDescendants p' deps
+           (qn, qc, qd) = cyclicDescendants q' deps
+        in if pn
+           then (qn, pc || qc, Rank2.liftA2 union pd qd)
+           else pcd}
+      where p'@Parser{} = general' p
+            q'@Parser{} = general' q
 
 instance Alternative (Parser g s) where
-   empty = Parser{complete= empty,
-                  direct= empty,
-                  direct0= empty,
-                  direct1= empty,
-                  indirect= empty,
-                  cyclicDescendants= \g-> (False, False, const (Const False) Rank2.<$> g)}
-   p <|> q = Parser{complete= complete p <|> complete q,
-                    direct= direct p <|> direct q,
-                    direct0= direct0 p <|> direct0 q,
-                    direct1= direct1 p <|> direct1 q,
-                    indirect= indirect p <|> indirect q,
+   empty = PositiveDirectParser{complete= empty}
+   p@PositiveDirectParser{} <|> q@PositiveDirectParser{} = PositiveDirectParser{complete= complete p <|> complete q}
+   p@PositiveDirectParser{} <|> q@DirectParser{} = DirectParser{
+      complete= complete p <|> complete q,
+      direct0 = direct0 q,
+      direct1= complete p <|> direct1 q}
+   p@DirectParser{} <|> q@PositiveDirectParser{} = DirectParser{
+      complete= complete p <|> complete q,
+      direct0 = direct0 p,
+      direct1= direct1 p <|> complete q}
+   p@DirectParser{} <|> q@DirectParser{} = DirectParser{
+      complete= complete p <|> complete q,
+      direct0 = direct0 p <|> direct0 q,
+      direct1= direct1 p <|> direct1 q}
+   p <|> q = Parser{complete= complete p' <|> complete q',
+                    direct= direct p' <|> direct q',
+                    direct0= direct0 p' <|> direct0 q',
+                    direct1= direct1 p' <|> direct1 q',
+                    indirect= indirect p' <|> indirect q',
                     cyclicDescendants= \deps-> let
-                         (pn, pc, pd) = cyclicDescendants p deps
-                         (qn, qc, qd) = cyclicDescendants q deps
+                         (pn, pc, pd) = cyclicDescendants p' deps
+                         (qn, qc, qd) = cyclicDescendants q' deps
                       in (pn || qn,
                           pc || qc,
                           Rank2.liftA2 union pd qd)}
-   many p = Parser{complete= mcp,
-                   direct= d0 <|> d1,
-                   direct0= d0,
-                   direct1= d1,
-                   indirect= (:) <$> indirect p <*> mcp,
-                   cyclicDescendants= \deps-> let
-                        (_, pc, pd) = cyclicDescendants p deps
-                     in (True, pc, pd)}
+      where p'@Parser{} = general p
+            q'@Parser{} = general q
+   many (PositiveDirectParser p) = DirectParser{
+      complete= many p,
+      direct0= pure [],
+      direct1= some p}
+   many p@DirectParser{} = DirectParser{
+      complete= many (complete p),
+      direct0= pure [] <|> (:[]) <$> direct0 p,
+      direct1= (:) <$> direct1 p <*> many (complete p)}
+   many p@Parser{} = Parser{
+      complete= mcp,
+      direct= d0 <|> d1,
+      direct0= d0,
+      direct1= d1,
+      indirect= (:) <$> indirect p <*> mcp,
+      cyclicDescendants= \deps-> let
+         (_, pc, pd) = cyclicDescendants p deps
+         in (True, pc, pd)}
       where d0 = pure [] <|> (:[]) <$> direct0 p
             d1 = (:) <$> direct1 p <*> mcp
             mcp = many (complete p)
-   some p = Parser{complete= some (complete p),
-                   direct= d0 <|> d1,
-                   direct0= d0,
-                   direct1= d1,
-                   indirect= (:) <$> indirect p <*> many (complete p),
-                   cyclicDescendants= \deps-> let
-                        (pn, pc, pd) = cyclicDescendants p deps
-                     in (pn, pc, pd)}
+   some (PositiveDirectParser p) = PositiveDirectParser{complete= some p}
+   some p@DirectParser{} = DirectParser{
+      complete= some (complete p),
+      direct0= (:[]) <$> direct0 p,
+      direct1= (:) <$> direct1 p <*> many (complete p)}
+   some p@Parser{} = Parser{
+      complete= some (complete p),
+      direct= d0 <|> d1,
+      direct0= d0,
+      direct1= d1,
+      indirect= (:) <$> indirect p <*> many (complete p),
+      cyclicDescendants= \deps-> let
+           (pn, pc, pd) = cyclicDescendants p deps
+        in (pn, pc, pd)}
       where d0 = (:[]) <$> direct0 p
             d1= (:) <$> direct1 p <*> many (complete p)
 
@@ -168,14 +252,17 @@ union (Const True) _ = Const True
 instance Monad (Parser g s) where
    return = pure
    (>>) = (*>)
-   p >>= cont = Parser{complete= complete p >>= complete . cont,
-                       direct= d0 <|> d1,
-                       direct0= d0,
-                       direct1= d1,
-                       indirect= (indirect p >>= complete . cont) <|> (direct0 p >>= indirect . cont),
-                       cyclicDescendants= cyclicDescendants p}
+   PositiveDirectParser p >>= cont = PositiveDirectParser (p >>= complete . cont)
+   p >>= cont = Parser{
+      complete= complete p >>= complete . cont,
+      direct= d0 <|> d1,
+      direct0= d0,
+      direct1= d1,
+      indirect= (indirect p >>= complete . cont) <|> (direct0 p >>= indirect . general' . cont),
+      cyclicDescendants= cyclicDescendants p'}
       where d0 = direct0 p >>= direct0 . cont
-            d1 = (direct0 p >>= direct1 . cont) <|> (direct1 p >>= complete . cont)
+            d1 = (direct0 p >>= direct1 . general' . cont) <|> (direct1 p >>= complete . cont)
+            p' = general' p
 
 instance MonadPlus (Parser g s) where
    mzero = empty
@@ -185,81 +272,124 @@ instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
-primitive :: String -> Maybe (Memoizing.Parser g s a) -> Memoizing.Parser g s a -> Memoizing.Parser g s a
+primitive :: String -> Memoizing.Parser g s a -> Memoizing.Parser g s a -> Memoizing.Parser g s a
           -> Parser g s a
-primitive _name d0 d1 d = Parser{complete= d,
-                                 direct= d,
-                                 direct0= fromMaybe empty d0,
-                                 direct1= d1,
-                                 indirect= empty,
-                                 cyclicDescendants= \g-> (isJust d0, False, const (Const False) Rank2.<$> g)}
+primitive _name d0 d1 d = DirectParser{complete= d,
+                                       direct0= d0,
+                                       direct1= d1}
+
+positivePrimitive :: String -> Memoizing.Parser g s a -> Parser g s a
+positivePrimitive _name p = PositiveDirectParser{complete= p}
 
 instance MonoidNull s => Parsing (Parser g s) where
-   eof = primitive "eof" (Just eof) empty eof
-   try p = p{complete= try (direct0 p),
-             direct= try (direct p),
-             direct0= try (direct0 p),
-             direct1= try (direct0 p),
-             indirect= try (indirect p)}
-   p <?> msg = p{complete= complete p <?> msg,
-                 direct= direct p <?> msg,
-                 direct0= direct0 p <?> msg,
-                 direct1= direct1 p <?> msg,
-                 indirect= indirect p <?> msg}
-   notFollowedBy p = Parser{complete= notFollowedBy (complete p),
-                            direct= notFollowedBy (direct p),
-                            direct0= notFollowedBy (direct p),
-                            direct1= empty,
-                            indirect= notFollowedBy (indirect p),
-                            cyclicDescendants= \deps-> let (_, nc, nd) = cyclicDescendants p deps in (True, nc, nd)}
-   unexpected msg = primitive "unexpected" Nothing (unexpected msg) (unexpected msg)
+   eof = primitive "eof" eof empty eof
+   try (PositiveDirectParser p) = PositiveDirectParser (try p)
+   try p@DirectParser{} = DirectParser{
+      complete= try (complete p),
+      direct0= try (direct0 p),
+      direct1= try (direct0 p)}
+   try p@Parser{} = p{
+      complete= try (complete p),
+      direct= try (direct p),
+      direct0= try (direct0 p),
+      direct1= try (direct0 p),
+      indirect= try (indirect p)}
+   PositiveDirectParser p <?> msg = PositiveDirectParser (p <?> msg)
+   p@DirectParser{} <?> msg = DirectParser{
+      complete= complete p <?> msg,
+      direct0= direct0 p <?> msg,
+      direct1= direct1 p <?> msg}
+   p@Parser{} <?> msg = p{
+      complete= complete p <?> msg,
+      direct= direct p <?> msg,
+      direct0= direct0 p <?> msg,
+      direct1= direct1 p <?> msg,
+      indirect= indirect p <?> msg}
+   notFollowedBy p@PositiveDirectParser{} = DirectParser{
+      complete= notFollowedBy (complete p),
+      direct0= notFollowedBy (complete p),
+      direct1= empty}
+   notFollowedBy p@DirectParser{} = DirectParser{
+      complete= notFollowedBy (complete p),
+      direct0= notFollowedBy (complete p),
+      direct1= empty}
+   notFollowedBy p@Parser{} = Parser{
+      complete= notFollowedBy (complete p),
+      direct= notFollowedBy (direct p),
+      direct0= notFollowedBy (direct p),
+      direct1= empty,
+      indirect= notFollowedBy (indirect p),
+      cyclicDescendants= \deps-> let (_, nc, nd) = cyclicDescendants p deps in (True, nc, nd)}
+   unexpected msg = positivePrimitive "unexpected" (unexpected msg)
    skipMany = concatMany . (() <$)
 
 instance MonoidNull s => LookAheadParsing (Parser g s) where
-   lookAhead p = Parser{complete= lookAhead (complete p),
-                        direct= lookAhead (direct p),
-                        direct0= lookAhead (direct p),
-                        direct1= empty,
-                        indirect= lookAhead (indirect p),
-                        cyclicDescendants= \deps-> let (_, nc, nd) = cyclicDescendants p deps in (True, nc, nd)}
+   lookAhead p@PositiveDirectParser{} = DirectParser{
+      complete= lookAhead (complete p),
+      direct0= lookAhead (complete p),
+      direct1= empty}
+   lookAhead p@DirectParser{} = DirectParser{
+      complete= lookAhead (complete p),
+      direct0= lookAhead (complete p),
+      direct1= empty}
+   lookAhead p@Parser{} = Parser{
+      complete= lookAhead (complete p),
+      direct= lookAhead (direct p),
+      direct0= lookAhead (direct p),
+      direct1= empty,
+      indirect= lookAhead (indirect p),
+      cyclicDescendants= \deps-> let (_, nc, nd) = cyclicDescendants p deps in (True, nc, nd)}
 
 instance MonoidParsing (Parser g) where
-   endOfInput = primitive "endOfInput" (Just endOfInput) empty endOfInput
-   getInput = primitive "getInput" (Just $ eof *> getInput) (notFollowedBy eof *> getInput) getInput
-   anyToken = primitive "anyToken" Nothing anyToken anyToken
-   token x = primitive "token" Nothing (token x) (token x)
-   satisfy predicate = primitive "satisfy" Nothing (satisfy predicate) (satisfy predicate)
-   satisfyChar predicate = primitive "satisfyChar" Nothing (satisfyChar predicate) (satisfyChar predicate)
-   satisfyCharInput predicate = primitive "satisfyCharInput" Nothing (satisfyCharInput predicate) 
-                                          (satisfyCharInput predicate)
-   scan s0 f = primitive "scan" (Just $ mempty <$ notSatisfy test) (lookAhead (satisfy test) *> p) p
+   endOfInput = primitive "endOfInput" endOfInput empty endOfInput
+   getInput = primitive "getInput" (eof *> getInput) (notFollowedBy eof *> getInput) getInput
+   anyToken = positivePrimitive "anyToken" anyToken
+   token x = positivePrimitive "token" (token x)
+   satisfy predicate = positivePrimitive "satisfy" (satisfy predicate)
+   satisfyChar predicate = positivePrimitive "satisfyChar" (satisfyChar predicate)
+   satisfyCharInput predicate = positivePrimitive "satisfyCharInput" (satisfyCharInput predicate)
+   scan s0 f = primitive "scan" (mempty <$ notSatisfy test) (lookAhead (satisfy test) *> p) p
       where p = scan s0 f
             test = isJust . f s0
-   scanChars s0 f = primitive "scanChars" (Just $ mempty <$ notSatisfyChar test) (lookAhead (satisfyChar test) *> p) p
+   scanChars s0 f = primitive "scanChars" (mempty <$ notSatisfyChar test) (lookAhead (satisfyChar test) *> p) p
       where p = scanChars s0 f
             test = isJust . f s0
    string s
-      | null s = primitive ("(string " ++ shows s ")") (Just $ string s) empty (string s)
-      | otherwise = primitive ("(string " ++ shows s ")") Nothing (string s) (string s)
-   takeWhile predicate = primitive "takeWhile" (Just $ (mempty <$ notSatisfy predicate))
+      | null s = primitive ("(string " ++ shows s ")") (string s) empty (string s)
+      | otherwise = positivePrimitive ("(string " ++ shows s ")") (string s)
+   takeWhile predicate = primitive "takeWhile" (mempty <$ notSatisfy predicate)
                                                (takeWhile1 predicate) (takeWhile predicate)
-   takeWhile1 predicate = primitive "takeWhile1" Nothing (takeWhile1 predicate) (takeWhile1 predicate)
-   takeCharsWhile predicate = primitive "takeCharsWhile" (Just $ mempty <$ notSatisfyChar predicate)
+   takeWhile1 predicate = positivePrimitive "takeWhile1" (takeWhile1 predicate)
+   takeCharsWhile predicate = primitive "takeCharsWhile" (mempty <$ notSatisfyChar predicate)
                                                          (takeCharsWhile1 predicate) (takeCharsWhile predicate)
-   takeCharsWhile1 predicate = primitive "takeCharsWhile1" Nothing (takeCharsWhile1 predicate)
-                                                           (takeCharsWhile1 predicate)
-   whiteSpace = primitive "whiteSpace" (Just $ notSatisfyChar isSpace) (satisfyChar isSpace *> whiteSpace) whiteSpace
-   concatMany p = Parser{complete= cmp,
-                         direct= d0 <|> d1,
-                         direct0= d0,
-                         direct1= d1,
-                         indirect= (<>) <$> indirect p <*> cmp,
-                         cyclicDescendants= \deps-> let
-                              (_, pc, pd) = cyclicDescendants p deps
-                           in (True, pc, pd)}
-                  where d0 = pure mempty <|> direct0 p
-                        d1 = (<>) <$> direct1 p <*> cmp
-                        cmp = concatMany (complete p)
+   takeCharsWhile1 predicate = positivePrimitive "takeCharsWhile1" (takeCharsWhile1 predicate)
+   whiteSpace = primitive "whiteSpace" (notSatisfyChar isSpace) (satisfyChar isSpace *> whiteSpace) whiteSpace
+   concatMany p@PositiveDirectParser{} = DirectParser{
+      complete= cmp,
+      direct0= d0,
+      direct1= d1}
+      where d0 = pure mempty
+            d1 = (<>) <$> complete p <*> cmp
+            cmp = concatMany (complete p)
+   concatMany p@DirectParser{} = DirectParser{
+      complete= cmp,
+      direct0= d0,
+      direct1= d1}
+      where d0 = pure mempty <|> direct0 p
+            d1 = (<>) <$> direct1 p <*> cmp
+            cmp = concatMany (complete p)
+   concatMany p@Parser{} = Parser{
+      complete= cmp,
+      direct= d0 <|> d1,
+      direct0= d0,
+      direct1= d1,
+      indirect= (<>) <$> indirect p <*> cmp,
+      cyclicDescendants= \deps-> let
+           (_, pc, pd) = cyclicDescendants p deps
+        in (True, pc, pd)}
+      where d0 = pure mempty <|> direct0 p
+            d1 = (<>) <$> direct1 p <*> cmp
+            cmp = concatMany (complete p)
 
 instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
    satisfy = satisfyChar
@@ -284,7 +414,7 @@ parseRecursive g = parseSeparated descendants indirects directs
          indirectOrEmpty (Const (_, cyclic, _)) p = if cyclic then indirect p else empty
          directOrComplete (Const (_, cyclic, _)) p = if cyclic then direct p else complete p
          desc (Const (_, cyclic, gd)) = Const (if cyclic then gd else falses)
-         cyclicDescendantses = fixCyclicDescendants initial $ Rank2.fmap (Const . cyclicDescendants) g
+         cyclicDescendantses = fixCyclicDescendants initial $ Rank2.fmap (Const . cyclicDescendants . general) g
          initial = const (Const (True, False, falses)) Rank2.<$> g
          falses = const (Const False) Rank2.<$> g
 
