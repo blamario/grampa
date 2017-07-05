@@ -108,7 +108,7 @@ instance GrammarParsing Parser where
                                                              resultListF= error "resultListF of wrapCyclicDescendants"}
             wrapResultList rl = ParserFunctor{resultListF= rl,
                                               cyclicDescendantsF= error "cyclicDescendantsF of wrapResultList"}
-            addSelf g = Rank2.liftA2 adjust (bits g) g
+            addSelf g = Rank2.liftA2 adjust bits g
             adjust :: forall b. Const (g (Const Bool)) b -> ParserFunctor g s b -> ParserFunctor g s b
             adjust (Const bit) pf@ParserFunctor{cyclicDescendantsF= (n, c, d)} =
                pf{cyclicDescendantsF= (n,
@@ -117,15 +117,13 @@ instance GrammarParsing Parser where
             onConst f1 (Const a) (Const b) = Const (f1 a b)
    recursive = general
 
-bits :: Rank2.Traversable g => g f -> g (Const (g (Const Bool)))
-bits g = evalState (Rank2.traverse next g) start 
-   where start = shift True (const (Const False) Rank2.<$> g)
-         next _ = do {prev <- get; put (shift False prev); return (Const prev)}
-
-shift :: Rank2.Traversable g => Bool -> g (Const Bool) -> g (Const Bool)
-shift newBit g = evalState (Rank2.traverse next g) newBit
-   where next :: forall a. Const Bool a -> State Bool (Const Bool a)
-         next (Const x) = do {prev <- get; put x; return (Const prev)}
+bits :: forall (g :: (* -> *) -> *). (Rank2.Distributive g, Rank2.Traversable g) => g (Const (g (Const Bool)))
+bits = start `seq` Rank2.fmap oneBit start
+   where start = evalState (Rank2.traverse next (Rank2.distributeM Nothing)) 0
+         oneBit :: Const Int a -> Const (g (Const Bool)) a
+         next :: f a -> State Int (Const Int a)
+         oneBit (Const i) = Const (Rank2.fmap (Const . (i ==) . getConst) start)
+         next _ = do {i <- get; let {i' = succ i}; seq i' (put i'); return (Const i)}
 
 instance Functor (Parser g s) where
    fmap f (PositiveDirectParser p) = PositiveDirectParser (fmap f p)
