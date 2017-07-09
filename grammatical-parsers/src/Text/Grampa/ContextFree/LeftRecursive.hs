@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, GADTs, InstanceSigs, GeneralizedNewtypeDeriving,
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
 {-# OPTIONS -fno-full-laziness #-}
-module Text.Grampa.ContextFree.LeftRecursive (Parser, parseSeparated)
+module Text.Grampa.ContextFree.LeftRecursive (Parser(..), parseSeparated)
 where
 
 import Control.Applicative
@@ -102,19 +102,19 @@ instance GrammarParsing Parser where
       direct0= empty,
       direct1= empty,
       indirect= ind,
-      cyclicDescendants= cyclicDescendantsF . f . addSelf . Rank2.fmap wrapCyclicDescendants}
+      cyclicDescendants= cyclicDescendantsF . f . Rank2.fmap wrapCyclicDescendants . addSelf}
       where ind = nonTerminal (resultListF . f . Rank2.fmap wrapResultList)
             wrapCyclicDescendants (Const cd) = ParserFunctor{cyclicDescendantsF= cd,
                                                              resultListF= error "resultListF of wrapCyclicDescendants"}
             wrapResultList rl = ParserFunctor{resultListF= rl,
                                               cyclicDescendantsF= error "cyclicDescendantsF of wrapResultList"}
             addSelf g = Rank2.liftA2 adjust bits g
-            adjust :: forall b. Const (g (Const Bool)) b -> ParserFunctor g s b -> ParserFunctor g s b
-            adjust (Const bit) pf@ParserFunctor{cyclicDescendantsF= (n, c, d)} =
-               pf{cyclicDescendantsF= (n,
-                                       c || getAny (Rank2.foldMap (Any . getConst) $ Rank2.liftA2 (onConst (&&)) bit d),
-                                       Rank2.liftA2 (onConst (||)) bit d)}
-            onConst f1 (Const a) (Const b) = Const (f1 a b)
+            adjust :: forall b. Const (g (Const Bool)) b -> Const (Bool, Bool, g (Const Bool)) b -> Const (Bool, Bool, g (Const Bool)) b
+            adjust (Const bit) (Const (n, c, d)) =
+               Const (n,
+                      c || getAny (Rank2.foldMap (Any . getConst) $ Rank2.liftA2 intersection bit d),
+                      Rank2.liftA2 union bit d)
+            intersection (Const a) (Const b) = Const (a && b)
    recursive = general
 
 bits :: forall (g :: (* -> *) -> *). (Rank2.Distributive g, Rank2.Traversable g) => g (Const (g (Const Bool)))
@@ -257,10 +257,9 @@ instance Monad (Parser g s) where
       direct0= d0,
       direct1= d1,
       indirect= (indirect p >>= complete . cont) <|> (direct0 p >>= indirect . general' . cont),
-      cyclicDescendants= cyclicDescendants p'}
+      cyclicDescendants= \cd-> (True, True, Rank2.fmap (const $ Const True) cd)}
       where d0 = direct0 p >>= direct0 . cont
             d1 = (direct0 p >>= direct1 . general' . cont) <|> (direct1 p >>= complete . cont)
-            p' = general' p
 
 instance MonadPlus (Parser g s) where
    mzero = empty
@@ -412,23 +411,23 @@ parseRecursive g = parseSeparated descendants indirects directs
          indirectOrEmpty (Const (_, cyclic, _)) p = if cyclic then indirect p else empty
          directOrComplete (Const (_, cyclic, _)) p = if cyclic then direct p else complete p
          desc (Const (_, cyclic, gd)) = Const (if cyclic then gd else falses)
-         cyclicDescendantses = fixCyclicDescendants initial $ Rank2.fmap (Const . cyclicDescendants . general) g
-         initial = const (Const (True, False, falses)) Rank2.<$> g
+         cyclicDescendantses = fixCyclicDescendants (Rank2.fmap (Const . cyclicDescendants . general) g)
          falses = const (Const False) Rank2.<$> g
 
 fixCyclicDescendants :: forall g. (Rank2.Apply g, Rank2.Traversable g)
-                     => g (Const (Bool, Bool, g (Const Bool)))
-                     -> g (Const (g (Const (Bool, Bool, g (Const Bool))) -> (Bool, Bool, g (Const Bool))))
+                     => g (Const (g (Const (Bool, Bool, g (Const Bool))) -> (Bool, Bool, g (Const Bool))))
                      -> g (Const (Bool, Bool, g (Const Bool)))
-fixCyclicDescendants g gf = go g
+fixCyclicDescendants gf = go initial
    where go :: g (Const (Bool, Bool, g (Const Bool))) -> g (Const (Bool, Bool, g (Const Bool)))
          go cd
             | getAll (Rank2.foldMap (All . getConst) $ Rank2.liftA2 agree cd cd') = cd
             | otherwise = go cd'
-            where cd' = Rank2.fmap (\(Const f)-> Const (f cd)) gf
+            where cd' = Rank2.liftA2 depsUnion cd (Rank2.fmap (\(Const f)-> Const (f cd)) gf)
          agree (Const (xn, xc, xd)) (Const (yn, yc, yd)) =
             Const (xn == yn && xc == yc && getAll (Rank2.foldMap (All . getConst) (Rank2.liftA2 agree' xd yd)))
          agree' (Const x) (Const y) = Const (x == y)
+         depsUnion (Const (_, _, old)) (Const (n, c, new)) = Const (n, c, if c then Rank2.liftA2 union old new else new)
+         initial = const (Const (True, False, const (Const False) Rank2.<$> gf)) Rank2.<$> gf
 
 -- | Parse the given input using a context-free grammar separated into two parts: the first specifying all the
 -- left-recursive productions, the second all others. The first function argument specifies the left-recursive
