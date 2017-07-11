@@ -28,7 +28,7 @@ import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults)
-import Text.Grampa.ContextFree.Memoizing (ResultList(..), fromResultList, notSatisfy, notSatisfyChar)
+import Text.Grampa.ContextFree.Memoizing (ResultList(..), fromResultList)
 import qualified Text.Grampa.ContextFree.Memoizing as Memoizing
 
 import Prelude hiding (null, showsPrec, span, takeWhile)
@@ -345,6 +345,8 @@ instance MonoidParsing (Parser g) where
    satisfy predicate = positivePrimitive "satisfy" (satisfy predicate)
    satisfyChar predicate = positivePrimitive "satisfyChar" (satisfyChar predicate)
    satisfyCharInput predicate = positivePrimitive "satisfyCharInput" (satisfyCharInput predicate)
+   notSatisfy predicate = primitive "notSatisfy" (notSatisfy predicate) empty (notSatisfy predicate)
+   notSatisfyChar predicate = primitive "notSatisfyChar" (notSatisfyChar predicate) empty (notSatisfyChar predicate)
    scan s0 f = primitive "scan" (mempty <$ notSatisfy test) (lookAhead (satisfy test) *> p) p
       where p = scan s0 f
             test = isJust . f s0

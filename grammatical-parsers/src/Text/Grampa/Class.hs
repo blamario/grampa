@@ -75,6 +75,10 @@ class MonoidParsing m where
    -- given predicate, and returning the input atom that represents the character. A faster version of @singleton <$>
    -- satisfyChar p@ and of @satisfy (fromMaybe False p . characterPrefix)@.
    satisfyCharInput :: TextualMonoid s => (Char -> Bool) -> m s s
+   -- | A parser that succeeds exactly when satisfy doesn't, equivalent to @notFollowedBy . satisfy@
+   notSatisfy :: FactorialMonoid s => (s -> Bool) -> m s ()
+   -- | A parser that succeeds exactly when satisfyChar doesn't, equivalent to @notFollowedBy . satisfyChar@
+   notSatisfyChar :: TextualMonoid s => (Char -> Bool) -> m s ()
 
    -- | A stateful scanner. The predicate modifies a state argument, and each transformed state is passed to successive
    -- invocations of the predicate on each token of the input until one returns 'Nothing' or the input ends.
