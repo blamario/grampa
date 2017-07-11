@@ -5,11 +5,11 @@
 -- This will bring into scope the standard classes 'Functor', 'Applicative', 'Foldable', and 'Traversable', but with a
 -- @Rank2.@ prefix and a twist that their methods operate on a heterogenous collection. The same property is shared by
 -- the two less standard classes 'Apply' and 'Distributive'.
-{-# LANGUAGE InstanceSigs, KindSignatures, Rank2Types, ScopedTypeVariables, PolyKinds #-}
+{-# LANGUAGE InstanceSigs, KindSignatures, Rank2Types, ScopedTypeVariables, PolyKinds, DefaultSignatures #-}
 module Rank2 (
 -- * Rank 2 classes
    Functor(..), Apply(..), Applicative(..),
-   Foldable(..), Traversable(..), Distributive(..),
+   Foldable(..), Traversable(..), Distributive(..), DistributiveTraversable(..), DistributiveM(..),
 -- * Rank 2 data types
    Compose(..), Empty(..), Only(..), Identity(..), Product(..), Arrow(..),
 -- * Method synonyms and helper functions
@@ -72,18 +72,35 @@ liftA3 f g h i = (\x-> Arrow (Arrow . f x)) <$> g <*> h <*> i
 -- | Equivalent of 'Rank1.Applicative' for rank 2 data types
 class Apply g => Applicative g where
    pure :: (forall a. f a) -> g f
-
--- | Equivalent of 'Distributive' for rank 2 data types
-class Functor g => Distributive g where
+  
+-- | Equivalent of 'Rank1.Distributive' for rank 2 data types
+class DistributiveTraversable g => Distributive g where
    {-# MINIMAL distributeWith #-}
    collect :: Rank1.Functor f1 => (a -> g f2) -> f1 a -> g (Compose f1 f2)
    distribute :: Rank1.Functor f1 => f1 (g f2) -> g (Compose f1 f2)
    distributeWith :: Rank1.Functor f1 => (forall x. f1 (f2 x) -> f x) -> f1 (g f2) -> g f
-   distributeM :: Rank1.Monad f => f (g f) -> g f
 
    collect f = distribute . Rank1.fmap f
    distribute = distributeWith Compose
+
+-- | A stronger 'Distributive' that allows 'Rank1.distributeM'.
+--   However this restricts the kind of @g@ to @(* -> *) -> *@. 
+--   This is less general than the kind of 'Distributive' so 'distributeM' has been placed in it's in a own class.
+class Distributive g => DistributiveM g where
+   distributeM :: Rank1.Monad f => f (g f) -> g f
    distributeM = distributeWith Rank1.join
+
+-- | A weaker 'Distributive' that requires 'Rank1.Traversable' to use, not just a 'Rank1.Functor'.
+class Functor g => DistributiveTraversable (g :: (k -> *) -> *) where
+   collectTraversable :: Rank1.Traversable f1 => (a -> g f2) -> f1 a -> g (Compose f1 f2)   
+   distributeTraversable :: Rank1.Traversable f1 => f1 (g f2) -> g (Compose f1 f2)
+   distributeWithTraversable :: Rank1.Traversable f1 => (forall x. f1 (f2 x) -> f x) -> f1 (g f2) -> g f
+
+   collectTraversable f = distributeTraversable . Rank1.fmap f
+   distributeTraversable = distributeWithTraversable Compose
+   
+   default distributeWithTraversable :: (Rank1.Traversable f1, Distributive g) => (forall x. f1 (f2 x) -> f x) -> f1 (g f2) -> g f
+   distributeWithTraversable = distributeWith
 
 -- | A rank-2 equivalent of '()', a zero-element tuple
 data Empty (f :: * -> *) = Empty deriving (Eq, Ord, Show)
@@ -184,18 +201,31 @@ instance Applicative g => Applicative (Identity g) where
 instance (Applicative g, Applicative h) => Applicative (Product g h) where
    pure f = Pair (pure f) (pure f)
 
+instance DistributiveTraversable Empty
+instance DistributiveTraversable (Only x)
+instance Distributive g => DistributiveTraversable (Identity g)
+instance (Distributive g, Distributive h) => DistributiveTraversable (Product g h)
+
 instance Distributive Empty where
    distributeWith _ _ = Empty
-   distributeM _ = Empty
 
 instance Distributive (Only x) where
    distributeWith w f = Only (w $ Rank1.fmap fromOnly f)
-   distributeM f = Only (f >>= fromOnly)
 
 instance Distributive g => Distributive (Identity g) where
    distributeWith w f = Identity (distributeWith w $ Rank1.fmap runIdentity f)
-   distributeM f = Identity (distributeM $ Rank1.fmap runIdentity f)
 
 instance (Distributive g, Distributive h) => Distributive (Product g h) where
    distributeWith w f = Pair (distributeWith w $ Rank1.fmap fst f) (distributeWith w $ Rank1.fmap snd f)
+
+instance DistributiveM Empty where
+   distributeM _ = Empty
+
+instance DistributiveM (Only x) where
+   distributeM f = Only (f >>= fromOnly)
+
+instance DistributiveM g => DistributiveM (Identity g) where
+   distributeM f = Identity (distributeM $ Rank1.fmap runIdentity f)
+
+instance (DistributiveM g, DistributiveM h) => DistributiveM (Product g h) where
    distributeM f = Pair (distributeM $ Rank1.fmap fst f) (distributeM $ Rank1.fmap snd f)
