@@ -120,6 +120,16 @@ instance MonoidParsing (Parser g) where
                of Just first | predicate first -> Parsed (Factorial.primePrefix s) t
                   _ -> NoParse (FailureInfo 1 (genericLength rest) ["satisfyChar"])
             p [] = NoParse (FailureInfo 1 0 ["satisfyChar"])
+   notSatisfy predicate = Parser p
+      where p rest@((s, _):_)
+               | Just (first, _) <- Factorial.splitPrimePrefix s, 
+                 predicate first = NoParse (FailureInfo 1 (genericLength rest) ["notSatisfy"])
+            p rest = Parsed () rest
+   notSatisfyChar predicate = Parser p
+      where p rest@((s, _):_)
+               | Just first <- Textual.characterPrefix s, 
+                 predicate first = NoParse (FailureInfo 1 (genericLength rest) ["notSatisfyChar"])
+            p rest = Parsed () rest
    scan s0 f = Parser (p s0)
       where p s ((i, _):t) = Parsed prefix (drop (Factorial.length prefix - 1) t)
                where (prefix, _, _) = Factorial.spanMaybe' s f i

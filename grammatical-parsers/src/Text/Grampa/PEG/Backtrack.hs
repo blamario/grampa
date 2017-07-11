@@ -107,6 +107,16 @@ instance MonoidParsing (Parser g) where
                case Textual.splitCharacterPrefix rest
                of Just (first, suffix) | predicate first -> Parsed (Factorial.primePrefix rest) suffix
                   _ -> NoParse (FailureInfo 1 (fromIntegral $ Factorial.length rest) ["satisfyChar"])
+   notSatisfy predicate = Parser p
+      where p s = case Factorial.splitPrimePrefix s
+                  of Just (first, _) 
+                        | predicate first -> NoParse (FailureInfo 1 (fromIntegral $ Factorial.length s) ["notSatisfy"])
+                     _ -> Parsed () s
+   notSatisfyChar predicate = Parser p
+      where p s = case Textual.characterPrefix s
+                  of Just first | predicate first 
+                                  -> NoParse (FailureInfo 1 (fromIntegral $ Factorial.length s) ["notSatisfyChar"])
+                     _ -> Parsed () s
    scan s0 f = Parser (p s0)
       where p s rest = Parsed prefix suffix
                where (prefix, suffix, _) = Factorial.spanMaybe' s f rest

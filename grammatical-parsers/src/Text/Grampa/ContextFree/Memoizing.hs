@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, TypeFamilies #-}
 module Text.Grampa.ContextFree.Memoizing (FailureInfo(..), ResultList(..), Parser(..), 
-                                          fromResultList, notSatisfy, notSatisfyChar, reparseTails)
+                                          fromResultList, reparseTails)
 where
 
 import Control.Applicative
@@ -197,22 +197,16 @@ instance MonoidParsing (Parser g) where
    whiteSpace = () <$ takeCharsWhile isSpace
    concatMany p = go
       where go = mempty <|> (<>) <$> p <*> go
-
--- | A more efficient equivalent of @notFollowedBy . satisfy@
-notSatisfy :: FactorialMonoid s => (s -> Bool) -> Parser g s ()
-notSatisfy predicate = Parser p
-   where p rest@((s, _):_)
-            | Just (first, _) <- splitPrimePrefix s, 
-              predicate first = ResultList [] (FailureInfo 1 (genericLength rest) ["notSatisfy"])
-         p rest = ResultList [ResultInfo rest ()] mempty
-
--- | A more efficient equivalent of @notFollowedBy . satisfyChar@
-notSatisfyChar :: TextualMonoid s => (Char -> Bool) -> Parser g s ()
-notSatisfyChar predicate = Parser p
-   where p rest@((s, _):_)
-            | Just first <- Textual.characterPrefix s, 
-              predicate first = ResultList [] (FailureInfo 1 (genericLength rest) ["notSatisfyChar"])
-         p rest = ResultList [ResultInfo rest ()] mempty
+   notSatisfy predicate = Parser p
+      where p rest@((s, _):_)
+               | Just (first, _) <- splitPrimePrefix s, 
+                 predicate first = ResultList [] (FailureInfo 1 (genericLength rest) ["notSatisfy"])
+            p rest = ResultList [ResultInfo rest ()] mempty
+   notSatisfyChar predicate = Parser p
+      where p rest@((s, _):_)
+               | Just first <- Textual.characterPrefix s, 
+                 predicate first = ResultList [] (FailureInfo 1 (genericLength rest) ["notSatisfyChar"])
+            p rest = ResultList [ResultInfo rest ()] mempty
 
 instance MonoidNull s => Parsing (Parser g s) where
    try (Parser p) = Parser (weakenResults . p)
