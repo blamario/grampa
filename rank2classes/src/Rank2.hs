@@ -5,7 +5,7 @@
 -- This will bring into scope the standard classes 'Functor', 'Applicative', 'Foldable', and 'Traversable', but with a
 -- @Rank2.@ prefix and a twist that their methods operate on a heterogenous collection. The same property is shared by
 -- the two less standard classes 'Apply' and 'Distributive'.
-{-# LANGUAGE InstanceSigs, KindSignatures, Rank2Types, ScopedTypeVariables #-}
+{-# LANGUAGE InstanceSigs, KindSignatures, Rank2Types, ScopedTypeVariables, PolyKinds #-}
 module Rank2 (
 -- * Rank 2 classes
    Functor(..), Apply(..), Applicative(..),
