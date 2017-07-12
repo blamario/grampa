@@ -10,7 +10,6 @@ import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 import GHC.Exts (Constraint)
-import Text.Parser.Combinators (Parsing)
 
 import qualified Rank2
 
@@ -44,11 +43,11 @@ class MultiParsing m where
 class MultiParsing m => GrammarParsing m where
    type GrammarFunctor m :: ((* -> *) -> *) -> * -> * -> *
    -- | Used to reference a grammar production, only necessary from outside the grammar itself
-   nonTerminal :: (g (GrammarFunctor m g s) -> GrammarFunctor m g s a) -> m g s a
+   nonTerminal :: GrammarConstraint m g => (g (GrammarFunctor m g s) -> GrammarFunctor m g s a) -> m g s a
    -- | Construct a grammar whose every production refers to itself.
-   selfReferring :: Rank2.Distributive g => g (m g s)
+   selfReferring :: (GrammarConstraint m g, Rank2.Distributive g) => g (m g s)
    -- | Convert a self-referring grammar function to a grammar.
-   fixGrammar :: forall g s. Rank2.Distributive g => (g (m g s) -> g (m g s)) -> g (m g s)
+   fixGrammar :: forall g s. (GrammarConstraint m g, Rank2.Distributive g) => (g (m g s) -> g (m g s)) -> g (m g s)
    -- | Mark a parser that relies on primitive recursion to prevent an infinite loop in 'fixGrammar'.
    recursive :: m g s a -> m g s a
 
@@ -69,9 +68,17 @@ class MonoidParsing m where
    token :: (Eq s, FactorialMonoid s) => s -> m s s
    -- | A parser that accepts an input atom only if it satisfies the given predicate.
    satisfy :: FactorialMonoid s => (s -> Bool) -> m s s
-   -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the
-   -- given predicate.
+   -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting and returning an input character only if it
+   -- satisfies the given predicate.
    satisfyChar :: TextualMonoid s => (Char -> Bool) -> m s Char
+   -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the
+   -- given predicate, and returning the input atom that represents the character. A faster version of @singleton <$>
+   -- satisfyChar p@ and of @satisfy (fromMaybe False p . characterPrefix)@.
+   satisfyCharInput :: TextualMonoid s => (Char -> Bool) -> m s s
+   -- | A parser that succeeds exactly when satisfy doesn't, equivalent to @notFollowedBy . satisfy@
+   notSatisfy :: FactorialMonoid s => (s -> Bool) -> m s ()
+   -- | A parser that succeeds exactly when satisfyChar doesn't, equivalent to @notFollowedBy . satisfyChar@
+   notSatisfyChar :: TextualMonoid s => (Char -> Bool) -> m s ()
 
    -- | A stateful scanner. The predicate modifies a state argument, and each transformed state is passed to successive
    -- invocations of the predicate on each token of the input until one returns 'Nothing' or the input ends.

@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, TypeFamilies #-}
-module Text.Grampa.ContextFree.Memoizing (FailureInfo(..), ResultList(..), Parser(..), fromResultList, reparseTails)
+module Text.Grampa.ContextFree.Memoizing (FailureInfo(..), ResultList(..), Parser(..), 
+                                          fromResultList, reparseTails)
 where
 
 import Control.Applicative
@@ -151,10 +152,16 @@ instance MonoidParsing (Parser g) where
             p [] = ResultList [] (FailureInfo 1 0 ["satisfy"])
    satisfyChar predicate = Parser p
       where p rest@((s, _):t) =
-               case Textual.splitCharacterPrefix s
-               of Just (first, _) | predicate first -> ResultList [ResultInfo t first] mempty
+               case Textual.characterPrefix s
+               of Just first | predicate first -> ResultList [ResultInfo t first] mempty
                   _ -> ResultList [] (FailureInfo 1 (genericLength rest) ["satisfyChar"])
             p [] = ResultList [] (FailureInfo 1 0 ["satisfyChar"])
+   satisfyCharInput predicate = Parser p
+      where p rest@((s, _):t) =
+               case Textual.characterPrefix s
+               of Just first | predicate first -> ResultList [ResultInfo t $ Factorial.primePrefix s] mempty
+                  _ -> ResultList [] (FailureInfo 1 (genericLength rest) ["satisfyCharInput"])
+            p [] = ResultList [] (FailureInfo 1 0 ["satisfyCharInput"])
    scan s0 f = Parser (p s0)
       where p s rest@((i, _) : _) = ResultList [ResultInfo (drop (Factorial.length prefix) rest) prefix] mempty
                where (prefix, _, _) = Factorial.spanMaybe' s f i
@@ -190,6 +197,16 @@ instance MonoidParsing (Parser g) where
    whiteSpace = () <$ takeCharsWhile isSpace
    concatMany p = go
       where go = mempty <|> (<>) <$> p <*> go
+   notSatisfy predicate = Parser p
+      where p rest@((s, _):_)
+               | Just (first, _) <- splitPrimePrefix s, 
+                 predicate first = ResultList [] (FailureInfo 1 (genericLength rest) ["notSatisfy"])
+            p rest = ResultList [ResultInfo rest ()] mempty
+   notSatisfyChar predicate = Parser p
+      where p rest@((s, _):_)
+               | Just first <- Textual.characterPrefix s, 
+                 predicate first = ResultList [] (FailureInfo 1 (genericLength rest) ["notSatisfyChar"])
+            p rest = ResultList [ResultInfo rest ()] mempty
 
 instance MonoidNull s => Parsing (Parser g s) where
    try (Parser p) = Parser (weakenResults . p)

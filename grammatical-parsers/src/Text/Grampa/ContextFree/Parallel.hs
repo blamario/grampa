@@ -27,7 +27,7 @@ import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
 
-import Text.Grampa.Class (MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..), completeParser)
+import Text.Grampa.Class (MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
 
@@ -134,6 +134,21 @@ instance MonoidParsing (Parser g) where
                case Textual.splitCharacterPrefix s
                of Just (first, rest) | predicate first -> ResultList [ResultInfo rest first] mempty
                   _ -> ResultList [] (FailureInfo 1 (Factorial.length s) ["satisfyChar"])
+   satisfyCharInput predicate = Parser p
+      where p s =
+               case Textual.splitCharacterPrefix s
+               of Just (first, rest) | predicate first -> ResultList [ResultInfo rest $ Factorial.primePrefix s] mempty
+                  _ -> ResultList [] (FailureInfo 1 (Factorial.length s) ["satisfyChar"])
+   notSatisfy predicate = Parser p
+      where p s = case Factorial.splitPrimePrefix s
+                  of Just (first, _) 
+                        | predicate first -> ResultList [] (FailureInfo 1 (Factorial.length s) ["notSatisfy"])
+                     _ -> ResultList [ResultInfo s ()] mempty
+   notSatisfyChar predicate = Parser p
+      where p s = case Textual.characterPrefix s
+                  of Just first 
+                        | predicate first -> ResultList [] (FailureInfo 1 (Factorial.length s) ["notSatisfyChar"])
+                     _ -> ResultList [ResultInfo s ()] mempty
    scan s0 f = Parser (p s0)
       where p s i = ResultList [ResultInfo suffix prefix] mempty
                where (prefix, suffix, _) = Factorial.spanMaybe' s f i
