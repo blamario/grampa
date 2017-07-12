@@ -9,7 +9,7 @@
 module Rank2 (
 -- * Rank 2 classes
    Functor(..), Apply(..), Applicative(..),
-   Foldable(..), Traversable(..), Distributive(..), DistributiveTraversable(..), DistributiveM(..),
+   Foldable(..), Traversable(..), Distributive(..), DistributiveTraversable(..), distributeM,
 -- * Rank 2 data types
    Compose(..), Empty(..), Only(..), Identity(..), Product(..), Arrow(..),
 -- * Method synonyms and helper functions
@@ -83,12 +83,8 @@ class DistributiveTraversable g => Distributive g where
    collect f = distribute . Rank1.fmap f
    distribute = distributeWith Compose
 
--- | A stronger 'Distributive' that allows 'Rank1.distributeM'.
---   However this restricts the kind of @g@ to @(* -> *) -> *@. 
---   This is less general than the kind of 'Distributive' so 'distributeM' has been placed in it's in a own class.
-class Distributive g => DistributiveM g where
-   distributeM :: Rank1.Monad f => f (g f) -> g f
-   distributeM = distributeWith Rank1.join
+distributeM :: (Distributive g, Rank1.Monad f) => f (g f) -> g f
+distributeM = distributeWith Rank1.join
 
 -- | A weaker 'Distributive' that requires 'Rank1.Traversable' to use, not just a 'Rank1.Functor'.
 class Functor g => DistributiveTraversable (g :: (k -> *) -> *) where
@@ -103,17 +99,16 @@ class Functor g => DistributiveTraversable (g :: (k -> *) -> *) where
    distributeWithTraversable = distributeWith
 
 -- | A rank-2 equivalent of '()', a zero-element tuple
-data Empty (f :: * -> *) = Empty deriving (Eq, Ord, Show)
+data Empty f = Empty deriving (Eq, Ord, Show)
 
 -- | A rank-2 tuple of only one element
-newtype Only a (f :: * -> *) = Only {fromOnly :: f a} deriving (Eq, Ord, Show)
+newtype Only a f = Only {fromOnly :: f a} deriving (Eq, Ord, Show)
 
 -- | Equivalent of 'Data.Functor.Identity' for rank 2 data types
-newtype Identity g (f :: * -> *) = Identity {runIdentity :: g f} deriving (Eq, Ord, Show)
+newtype Identity g f = Identity {runIdentity :: g f} deriving (Eq, Ord, Show)
 
 -- | Equivalent of 'Data.Functor.Product' for rank 2 data types
-data Product g h (f :: * -> *) = Pair {fst :: g f,
-                                       snd :: h f}
+data Product g h f = Pair {fst :: g f, snd :: h f}
                                deriving (Eq, Ord, Show)
 
 newtype Flip g a f = Flip (g (f a)) deriving (Eq, Ord, Show)
@@ -218,14 +213,3 @@ instance Distributive g => Distributive (Identity g) where
 instance (Distributive g, Distributive h) => Distributive (Product g h) where
    distributeWith w f = Pair (distributeWith w $ Rank1.fmap fst f) (distributeWith w $ Rank1.fmap snd f)
 
-instance DistributiveM Empty where
-   distributeM _ = Empty
-
-instance DistributiveM (Only x) where
-   distributeM f = Only (f >>= fromOnly)
-
-instance DistributiveM g => DistributiveM (Identity g) where
-   distributeM f = Identity (distributeM $ Rank1.fmap runIdentity f)
-
-instance (DistributiveM g, DistributiveM h) => DistributiveM (Product g h) where
-   distributeM f = Pair (distributeM $ Rank1.fmap fst f) (distributeM $ Rank1.fmap snd f)
