@@ -13,7 +13,8 @@ module Rank2 (
 -- * Rank 2 data types
    Compose(..), Empty(..), Only(..), Identity(..), Product(..), Arrow(..),
 -- * Method synonyms and helper functions
-   ap, fmap, liftA3)
+   ap, fmap, liftA3,
+   fmapTraverse, liftA2Traverse1, liftA2Traverse2, liftA2TraverseBoth)
 where
 
 import qualified Control.Applicative as Rank1
@@ -85,6 +86,19 @@ class DistributiveTraversable g => Distributive g where
 
 distributeM :: (Distributive g, Rank1.Monad f) => f (g f) -> g f
 distributeM = distributeWith Rank1.join
+
+-- | 'fmap', but traverses over it's argument
+fmapTraverse :: (DistributiveTraversable f, Rank1.Traversable g) => (forall a. g (t a) -> u a) -> g (f t) -> f u
+fmapTraverse f x = fmap (f . getCompose) (distributeTraversable x)
+
+liftA2Traverse1 :: (Apply f, DistributiveTraversable f, Rank1.Traversable g) => (forall a. g (t a) -> u a -> v a) -> g (f t) -> f u -> f v
+liftA2Traverse1 f x = liftA2 (f . getCompose) (distributeTraversable x)
+
+liftA2Traverse2 :: (Apply f, DistributiveTraversable f, Rank1.Traversable g) => (forall a. t a -> g (u a) -> v a) -> f t -> g (f u) -> f v
+liftA2Traverse2 f x y = liftA2 (\x' y' -> f x' (getCompose y')) x (distributeTraversable y)
+
+liftA2TraverseBoth :: (Apply f, DistributiveTraversable f, Rank1.Traversable g1, Rank1.Traversable g2) => (forall a. g1 (t a) -> g2 (u a) -> v a) -> g1 (f t) -> g2 (f u) -> f v
+liftA2TraverseBoth f x y = liftA2 (\x' y' -> f (getCompose x') (getCompose y')) (distributeTraversable x) (distributeTraversable y)
 
 -- | A weaker 'Distributive' that requires 'Rank1.Traversable' to use, not just a 'Rank1.Functor'.
 class Functor g => DistributiveTraversable (g :: (k -> *) -> *) where
