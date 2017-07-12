@@ -11,7 +11,7 @@
 -- Adapted from https://wiki.haskell.org/A_practical_Template_Haskell_Tutorial
 
 module Rank2.TH (deriveAll, deriveFunctor, deriveApply, deriveApplicative,
-                 deriveFoldable, deriveTraversable, deriveDistributive)
+                 deriveFoldable, deriveTraversable, deriveDistributive, deriveDistributiveTraversable)
 where
 
 import Control.Monad (replicateM)
@@ -25,7 +25,7 @@ data Deriving = Deriving { derivingConstructor :: Name, derivingVariable :: Name
 
 deriveAll :: Name -> Q [Dec]
 deriveAll ty = foldr f (pure []) [deriveFunctor, deriveApply, deriveApplicative,
-                                  deriveFoldable, deriveTraversable, deriveDistributive]
+                                  deriveFoldable, deriveTraversable, deriveDistributive, deriveDistributiveTraversable]
    where f derive rest = (<>) <$> derive ty <*> rest
 
 deriveFunctor :: Name -> Q [Dec]
@@ -56,7 +56,12 @@ deriveTraversable ty = do
 deriveDistributive :: Name -> Q [Dec]
 deriveDistributive ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Distributive ty
-   sequence [instanceD (return []) instanceType [genDistributeWith cs, genDistributeM cs]]
+   sequence [instanceD (return []) instanceType [genDistributeWith cs]]
+
+deriveDistributiveTraversable :: Name -> Q [Dec]
+deriveDistributiveTraversable ty = do
+   (instanceType, cs) <- reifyConstructors ''Rank2.DistributiveTraversable ty
+   sequence [instanceD (return []) instanceType [genDistributeWithTraversable cs]]
 
 reifyConstructors :: Name -> Name -> Q (TypeQ, [Con])
 reifyConstructors cls ty = do
@@ -89,11 +94,11 @@ genFoldMap cs = funD 'Rank2.foldMap (map genFoldMapClause cs)
 genTraverse :: [Con] -> Q Dec
 genTraverse cs = funD 'Rank2.traverse (map genTraverseClause cs)
 
-genDistributeM :: [Con] -> Q Dec
-genDistributeM cs = funD 'Rank2.distributeM (map genDistributeMClause cs)
-
 genDistributeWith :: [Con] -> Q Dec
 genDistributeWith cs = funD 'Rank2.distributeWith (map genDistributeWithClause cs)
+
+genDistributeWithTraversable :: [Con] -> Q Dec
+genDistributeWithTraversable cs = funD 'Rank2.distributeWith (map genDistributeWithTraversableClause cs)
 
 genFmapClause :: Con -> Q Clause
 genFmapClause (NormalC name fieldTypes) = do
@@ -233,19 +238,6 @@ genTraverseClause (RecC name fields) = do
              _ -> [| $(varE x) |]
    clause [varP f, varP x] body []
 
-genDistributeMClause :: Con -> Q Clause
-genDistributeMClause (RecC name fields) = do
-   argName <- newName "f"
-   let body = normalB $ recConE name $ map newNamedField fields
-       newNamedField :: VarBangType -> Q (Name, Exp)
-       newNamedField (fieldName, _, fieldType) = do
-          Just (Deriving _ typeVar) <- getQ
-          case fieldType of
-             AppT ty _ | ty == VarT typeVar -> fieldExp fieldName [| $(varE argName) >>= $(varE fieldName) |]
-             AppT _ ty | ty == VarT typeVar ->
-                         fieldExp fieldName [| Rank2.distributeM ($(varE fieldName) <$> $(varE argName)) |]
-   clause [varP argName] body []
-
 genDistributeWithClause :: Con -> Q Clause
 genDistributeWithClause (RecC name fields) = do
    withName <- newName "w"
@@ -260,4 +252,20 @@ genDistributeWithClause (RecC name fields) = do
              AppT _ ty
                 | ty == VarT typeVar ->
                   fieldExp fieldName [| Rank2.distributeWith $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
+   clause [varP withName, varP argName] body []
+
+genDistributeWithTraversableClause :: Con -> Q Clause
+genDistributeWithTraversableClause (RecC name fields) = do
+   withName <- newName "w"
+   argName <- newName "f"
+   let body = normalB $ recConE name $ map newNamedField fields
+       newNamedField :: VarBangType -> Q (Name, Exp)
+       newNamedField (fieldName, _, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
+          case fieldType of
+             AppT ty _
+                | ty == VarT typeVar -> fieldExp fieldName [| $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
+             AppT _ ty
+                | ty == VarT typeVar ->
+                  fieldExp fieldName [| Rank2.distributeWithTraversable $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
    clause [varP withName, varP argName] body []
