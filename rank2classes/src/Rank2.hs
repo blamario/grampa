@@ -87,16 +87,19 @@ class DistributiveTraversable g => Distributive g where
 distributeM :: (Distributive g, Rank1.Monad f) => f (g f) -> g f
 distributeM = distributeWith Rank1.join
 
--- | 'fmap', but traverses over it's argument
+-- | Like 'fmap', but traverses over it's argument
 fmapTraverse :: (DistributiveTraversable f, Rank1.Traversable g) => (forall a. g (t a) -> u a) -> g (f t) -> f u
 fmapTraverse f x = fmap (f . getCompose) (distributeTraversable x)
 
+-- | Like 'liftA2', but traverses over it's first argument
 liftA2Traverse1 :: (Apply f, DistributiveTraversable f, Rank1.Traversable g) => (forall a. g (t a) -> u a -> v a) -> g (f t) -> f u -> f v
 liftA2Traverse1 f x = liftA2 (f . getCompose) (distributeTraversable x)
 
+-- | Like 'liftA2', but traverses over it's second argument
 liftA2Traverse2 :: (Apply f, DistributiveTraversable f, Rank1.Traversable g) => (forall a. t a -> g (u a) -> v a) -> f t -> g (f u) -> f v
 liftA2Traverse2 f x y = liftA2 (\x' y' -> f x' (getCompose y')) x (distributeTraversable y)
 
+-- | Like 'liftA2', but traverses over both it's arguments
 liftA2TraverseBoth :: (Apply f, DistributiveTraversable f, Rank1.Traversable g1, Rank1.Traversable g2) => (forall a. g1 (t a) -> g2 (u a) -> v a) -> g1 (f t) -> g2 (f u) -> f v
 liftA2TraverseBoth f x y = liftA2 (\x' y' -> f (getCompose x') (getCompose y')) (distributeTraversable x) (distributeTraversable y)
 
