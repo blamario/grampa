@@ -14,7 +14,8 @@ module Rank2 (
    Compose(..), Empty(..), Only(..), Identity(..), Product(..), Arrow(..),
 -- * Method synonyms and helper functions
    ap, fmap, liftA3,
-   fmapTraverse, liftA2Traverse1, liftA2Traverse2, liftA2TraverseBoth)
+   fmapTraverse, liftA2Traverse1, liftA2Traverse2, liftA2TraverseBoth,
+   cotraverse, cotraverseTraversable)
 where
 
 import qualified Control.Applicative as Rank1
