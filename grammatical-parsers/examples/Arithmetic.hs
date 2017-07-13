@@ -67,12 +67,9 @@ instance Rank2.Apply (Arithmetic e) where
 instance Rank2.Applicative (Arithmetic e) where
    pure f = Arithmetic f f f f f
 
+instance Rank2.DistributiveTraversable (Arithmetic e)
+
 instance Rank2.Distributive (Arithmetic e) where
-   distributeM f = Arithmetic{expr= f >>= expr,
-                              sum= f >>= sum,
-                              product= f >>= product,
-                              factor= f >>= factor,
-                              primary= f >>= primary}
    distributeWith w f = Arithmetic{expr= w (expr <$> f),
                                    sum= w (sum <$> f),
                                    product= w (product <$> f),

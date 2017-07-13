@@ -48,9 +48,9 @@ instance Rank2.Apply (Comparisons c e) where
 instance Rank2.Applicative (Comparisons c e) where
    pure f = Comparisons f f
 
+instance Rank2.DistributiveTraversable (Comparisons c e)
+
 instance Rank2.Distributive (Comparisons c e) where
-   distributeM f = Comparisons{test= f >>= test,
-                               term= f >>= term}
    distributeWith w f = Comparisons{test= w (test <$> f),
                                     term= w (term <$> f)}
 
