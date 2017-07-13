@@ -1,5 +1,5 @@
 name:                rank2classes
-version:             0.1
+version:             0.2
 synopsis:            a mirror image of some standard type classes, with methods of rank 2 types
 description:
   A mirror image of the standard constructor type class hierarchy rooted in 'Functor', except with methods of rank 2
