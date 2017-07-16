@@ -53,8 +53,9 @@ type PersonDatabaseByColumns = Person []
 
 If you wish to have the standard [Eq](http://hackage.haskell.org/package/base/docs/Data-Eq.html#t:Eq) and
 [Show](http://hackage.haskell.org/package/base/docs/Text-Show.html#t:Show) instances for a record type like `Person`,
-it's best if they refer to the [Eq1](http://hackage.haskell.org/package/base-4.9.1.0/docs/Data-Functor-Classes.html#t:Eq1)
-and [Show1](http://hackage.haskell.org/package/base-4.9.1.0/docs/Data-Functor-Classes.html#t:Show1) instances for its
+it's best if they refer to the
+[Eq1](http://hackage.haskell.org/package/base-4.9.1.0/docs/Data-Functor-Classes.html#t:Eq1) and
+[Show1](http://hackage.haskell.org/package/base-4.9.1.0/docs/Data-Functor-Classes.html#t:Show1) instances for its
 parameter `f`:
 
 ~~~ {.haskell}

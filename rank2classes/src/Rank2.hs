@@ -94,34 +94,40 @@ class Functor g => DistributiveTraversable (g :: (k -> *) -> *) where
    collectTraversable f = distributeTraversable . Rank1.fmap f
    distributeTraversable = distributeWithTraversable Compose
    
-   default distributeWithTraversable :: (Rank1.Traversable f1, Distributive g) => (forall x. f1 (f2 x) -> f x) -> f1 (g f2) -> g f
+   default distributeWithTraversable :: (Rank1.Traversable f1, Distributive g) => 
+                                        (forall x. f1 (f2 x) -> f x) -> f1 (g f2) -> g f
    distributeWithTraversable = distributeWith
 
 distributeM :: (Distributive g, Rank1.Monad f) => f (g f) -> g f
 distributeM = distributeWith Rank1.join
 
--- | Like 'fmap', but traverses over it's argument
+-- | Like 'fmap', but traverses over its argument
 fmapTraverse :: (DistributiveTraversable f, Rank1.Traversable g) => (forall a. g (t a) -> u a) -> g (f t) -> f u
 fmapTraverse f x = fmap (f . getCompose) (distributeTraversable x)
 
--- | Like 'liftA2', but traverses over it's first argument
-liftA2Traverse1 :: (Apply f, DistributiveTraversable f, Rank1.Traversable g) => (forall a. g (t a) -> u a -> v a) -> g (f t) -> f u -> f v
+-- | Like 'liftA2', but traverses over its first argument
+liftA2Traverse1 :: (Apply f, DistributiveTraversable f, Rank1.Traversable g) =>
+                   (forall a. g (t a) -> u a -> v a) -> g (f t) -> f u -> f v
 liftA2Traverse1 f x = liftA2 (f . getCompose) (distributeTraversable x)
 
--- | Like 'liftA2', but traverses over it's second argument
-liftA2Traverse2 :: (Apply f, DistributiveTraversable f, Rank1.Traversable g) => (forall a. t a -> g (u a) -> v a) -> f t -> g (f u) -> f v
+-- | Like 'liftA2', but traverses over its second argument
+liftA2Traverse2 :: (Apply f, DistributiveTraversable f, Rank1.Traversable g) => 
+                   (forall a. t a -> g (u a) -> v a) -> f t -> g (f u) -> f v
 liftA2Traverse2 f x y = liftA2 (\x' y' -> f x' (getCompose y')) x (distributeTraversable y)
 
--- | Like 'liftA2', but traverses over both it's arguments
-liftA2TraverseBoth :: (Apply f, DistributiveTraversable f, Rank1.Traversable g1, Rank1.Traversable g2) => (forall a. g1 (t a) -> g2 (u a) -> v a) -> g1 (f t) -> g2 (f u) -> f v
-liftA2TraverseBoth f x y = liftA2 (\x' y' -> f (getCompose x') (getCompose y')) (distributeTraversable x) (distributeTraversable y)
+-- | Like 'liftA2', but traverses over both its arguments
+liftA2TraverseBoth :: (Apply f, DistributiveTraversable f, Rank1.Traversable g1, Rank1.Traversable g2) =>
+                      (forall a. g1 (t a) -> g2 (u a) -> v a) -> g1 (f t) -> g2 (f u) -> f v
+liftA2TraverseBoth f x y = liftA2 applyCompose (distributeTraversable x) (distributeTraversable y)
+   where applyCompose x' y' = f (getCompose x') (getCompose y')
 
 -- | Equivalent of 'Rank1.cotraverse' for rank 2 data types 
 cotraverse :: (Distributive g, Rank1.Functor f) => (forall i. f (a i) -> b i) -> f (g a) -> g b
 cotraverse f = (fmap (f . getCompose)) . distribute
 
 -- | Equivalent of 'Rank1.cotraverse' for rank 2 data types using traversable
-cotraverseTraversable :: (DistributiveTraversable g, Rank1.Traversable f) => (forall i. f (a i) -> b i) -> f (g a) -> g b
+cotraverseTraversable :: (DistributiveTraversable g, Rank1.Traversable f) => 
+                         (forall i. f (a i) -> b i) -> f (g a) -> g b
 cotraverseTraversable f = (fmap (f . getCompose)) . distributeTraversable
 
 -- | A rank-2 equivalent of '()', a zero-element tuple
@@ -227,7 +233,8 @@ instance DistributiveTraversable (Only x)
 instance DistributiveTraversable g => DistributiveTraversable (Identity g) where
    distributeWithTraversable w f = Identity (distributeWithTraversable w $ Rank1.fmap runIdentity f)
 instance (DistributiveTraversable g, DistributiveTraversable h) => DistributiveTraversable (Product g h) where
-   distributeWithTraversable w f = Pair (distributeWithTraversable w $ Rank1.fmap fst f) (distributeWithTraversable w $ Rank1.fmap snd f)
+   distributeWithTraversable w f = Pair (distributeWithTraversable w $ Rank1.fmap fst f) 
+                                        (distributeWithTraversable w $ Rank1.fmap snd f)
 
 instance Distributive Empty where
    distributeWith _ _ = Empty
