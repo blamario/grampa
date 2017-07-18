@@ -446,14 +446,21 @@ parseSeparated dependencies indirects directs input = foldr parseTail [] (Factor
          fixRecursive :: s -> [(s, g (ResultList g s))] -> g (ResultList g s) -> g (ResultList g s)
          whileAnyContinues :: g (ResultList g s) -> g (ResultList g s) -> g (ResultList g s)
          recurseOnce :: s -> [(s, g (ResultList g s))] -> g (ResultList g s) -> g (ResultList g s)
+         maybeDependencies :: g (Const (Maybe (g (Const Bool))))
 
          fixRecursive s parsedTail initial =
             foldr1 whileAnyContinues (iterate (recurseOnce s parsedTail) initial)
 
-         whileAnyContinues g1 g2 = Rank2.liftA3 choiceWhile dependencies g1 g2
-            where choiceWhile :: Const (g (Const Bool)) x -> ResultList g i x -> ResultList g i x -> ResultList g i x
+         maybeDependencies = Rank2.fmap (\(Const deps)-> Const (if getAny (Rank2.foldMap (Any . getConst) deps) 
+                                                                then Just deps else Nothing))
+                             dependencies
+
+         whileAnyContinues g1 g2 = Rank2.liftA3 choiceWhile maybeDependencies g1 g2
+            where choiceWhile :: Const (Maybe (g (Const Bool))) x -> ResultList g i x -> ResultList g i x 
+                                 -> ResultList g i x
                   combine :: Const Bool x -> ResultList g i x -> Const Bool x
-                  choiceWhile (Const deps) r1 r2
+                  choiceWhile (Const Nothing) r1 _ = r1
+                  choiceWhile (Const (Just deps)) r1 r2
                      | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps g1)) = r1 <> r2
                      | otherwise = r1
                   combine (Const False) _ = Const False
