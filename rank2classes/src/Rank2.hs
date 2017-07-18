@@ -13,7 +13,7 @@ module Rank2 (
 -- * Rank 2 data types
    Compose(..), Empty(..), Only(..), Identity(..), Product(..), Arrow(..),
 -- * Method synonyms and helper functions
-   ap, fmap, liftA3,
+   ap, fmap, liftA3, liftA4, liftA5,
    fmapTraverse, liftA2Traverse1, liftA2Traverse2, liftA2TraverseBoth,
    cotraverse, cotraverseTraversable)
 where
@@ -33,7 +33,8 @@ class Functor g where
 
 -- | Alphabetical synonym for '<$>'
 fmap :: Functor g => (forall a. p a -> q a) -> g p -> g q
-fmap = (<$>)
+fmap f g = f <$> g
+{-# INLINE fmap #-}
 
 -- | Equivalent of 'Foldable' for rank 2 data types
 class Foldable g where
@@ -59,17 +60,22 @@ class Functor g => Apply g where
    (<*>) :: g (Arrow p q) -> g p -> g q
    -- | Equivalent of 'Rank1.liftA2' for rank 2 data types
    liftA2 :: (forall a. p a -> q a -> r a) -> g p -> g q -> g r
+   -- | Equivalent of 'Rank1.liftA3' for rank 2 data types
+   liftA3 :: (forall a. p a -> q a -> r a -> s a) -> g p -> g q -> g r -> g s
 
    (<*>) = liftA2 apply
    liftA2 f g h = (Arrow . f) <$> g <*> h
+   liftA3 f g h i = liftA2 (\p q-> Arrow (f p q)) g h <*> i
+
+liftA4 :: Apply g => (forall a. p a -> q a -> r a -> s a -> t a) -> g p -> g q -> g r -> g s -> g t
+liftA4 f g h i j = liftA3 (\p q r-> Arrow (f p q r)) g h i <*> j
+
+liftA5 :: Apply g => (forall a. p a -> q a -> r a -> s a -> t a -> u a) -> g p -> g q -> g r -> g s -> g t -> g u
+liftA5 f g1 g2 g3 g4 g5 = liftA4 (\p q r s-> Arrow (f p q r s)) g1 g2 g3 g4 <*> g5
 
 -- | Alphabetical synonym for '<*>'
 ap :: Apply g => g (Arrow p q) -> g p -> g q
 ap = (<*>)
-
--- | Equivalent of 'Rank1.liftA3' for rank 2 data types
-liftA3 :: Apply g => (forall a. p a -> q a -> r a -> s a) -> g p -> g q -> g r -> g s
-liftA3 f g h i = (\x-> Arrow (Arrow . f x)) <$> g <*> h <*> i
 
 -- | Equivalent of 'Rank1.Applicative' for rank 2 data types
 class Apply g => Applicative g where

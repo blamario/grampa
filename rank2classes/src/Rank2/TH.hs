@@ -36,7 +36,7 @@ deriveFunctor ty = do
 deriveApply :: Name -> Q [Dec]
 deriveApply ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Apply ty
-   sequence [instanceD (return []) instanceType [genAp cs]]
+   sequence [instanceD (return []) instanceType [genAp cs, genLiftA2 cs, genLiftA3 cs]]
 
 deriveApplicative :: Name -> Q [Dec]
 deriveApplicative ty = do
@@ -85,6 +85,12 @@ genFmap cs = funD '(Rank2.<$>) (map genFmapClause cs)
 genAp :: [Con] -> Q Dec
 genAp cs = funD '(Rank2.<*>) (map genApClause cs)
 
+genLiftA2 :: [Con] -> Q Dec
+genLiftA2 cs = funD 'Rank2.liftA2 (map genLiftA2Clause cs)
+
+genLiftA3 :: [Con] -> Q Dec
+genLiftA3 cs = funD 'Rank2.liftA3 (map genLiftA3Clause cs)
+
 genPure :: [Con] -> Q Dec
 genPure cs = funD 'Rank2.pure (map genPureClause cs)
 
@@ -128,7 +134,74 @@ genFmapClause (RecC name fields) = do
                 | ty == VarT typeVar -> fieldExp fieldName [| Rank2.fmap $(varE f) ($(varE fieldName) $(varE x)) |]
              _ -> fieldExp fieldName [| $(varE x) |]
    clause [varP f, varP x] body []
- 
+
+genLiftA2Clause :: Con -> Q Clause
+genLiftA2Clause (NormalC name fieldTypes) = do
+   f          <- newName "f"
+   fieldNames1 <- replicateM (length fieldTypes) (newName "x")
+   fieldNames2 <- replicateM (length fieldTypes) (newName "y")
+   let pats = [varP f, tildeP (conP name $ map varP fieldNames1), tildeP (conP name $ map varP fieldNames2)]
+       body = normalB $ appsE $ conE name : zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
+       newField :: (Name, Name) -> BangType -> Q Exp
+       newField (x, y) (_, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
+          case fieldType of
+             AppT ty _ | ty == VarT typeVar -> [| $(varE f) $(varE x) $(varE y) |]
+             AppT _ ty | ty == VarT typeVar -> [| Rank2.liftA2 $(varE f) $(varE x) $(varE y) |]
+   clause pats body []
+genLiftA2Clause (RecC name fields) = do
+   f <- newName "f"
+   x <- newName "x"
+   y <- newName "y"
+   let body = normalB $ recConE name $ map newNamedField fields
+       newNamedField :: VarBangType -> Q (Name, Exp)
+       newNamedField (fieldName, _, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
+          case fieldType of
+             AppT ty _
+                | ty == VarT typeVar -> fieldExp fieldName [| $(varE f) ($(varE fieldName) $(varE x)) 
+                                                                        ($(varE fieldName) $(varE y)) |]
+             AppT _ ty
+                | ty == VarT typeVar -> fieldExp fieldName [| Rank2.liftA2 $(varE f) ($(varE fieldName) $(varE x)) 
+                                                                                     ($(varE fieldName) $(varE y)) |]
+   clause [varP f, varP x, varP y] body []
+
+genLiftA3Clause :: Con -> Q Clause
+genLiftA3Clause (NormalC name fieldTypes) = do
+   f          <- newName "f"
+   fieldNames1 <- replicateM (length fieldTypes) (newName "x")
+   fieldNames2 <- replicateM (length fieldTypes) (newName "y")
+   fieldNames3 <- replicateM (length fieldTypes) (newName "z")
+   let pats = [varP f, tildeP (conP name $ map varP fieldNames1), tildeP (conP name $ map varP fieldNames2), 
+               tildeP (conP name $ map varP fieldNames3)]
+       body = normalB $ appsE $ conE name : zipWith newField (zip3 fieldNames1 fieldNames2 fieldNames3) fieldTypes
+       newField :: (Name, Name, Name) -> BangType -> Q Exp
+       newField (x, y, z) (_, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
+          case fieldType of
+             AppT ty _ | ty == VarT typeVar -> [| $(varE f) $(varE x) $(varE y) $(varE z) |]
+             AppT _ ty | ty == VarT typeVar -> [| Rank2.liftA3 $(varE f) $(varE x) $(varE y) $(varE z) |]
+   clause pats body []
+genLiftA3Clause (RecC name fields) = do
+   f <- newName "f"
+   x <- newName "x"
+   y <- newName "y"
+   z <- newName "z"
+   let body = normalB $ recConE name $ map newNamedField fields
+       newNamedField :: VarBangType -> Q (Name, Exp)
+       newNamedField (fieldName, _, fieldType) = do
+          Just (Deriving _ typeVar) <- getQ
+          case fieldType of
+             AppT ty _
+                | ty == VarT typeVar -> fieldExp fieldName [| $(varE f) ($(varE fieldName) $(varE x))
+                                                                        ($(varE fieldName) $(varE y))
+                                                                        ($(varE fieldName) $(varE z)) |]
+             AppT _ ty
+                | ty == VarT typeVar -> fieldExp fieldName [| Rank2.liftA3 $(varE f) ($(varE fieldName) $(varE x))
+                                                                                     ($(varE fieldName) $(varE y))
+                                                                                     ($(varE fieldName) $(varE z)) |]
+   clause [varP f, varP x, varP y, varP z] body []
+
 genApClause :: Con -> Q Clause
 genApClause (NormalC name fieldTypes) = do
    fieldNames1 <- replicateM (length fieldTypes) (newName "x")
