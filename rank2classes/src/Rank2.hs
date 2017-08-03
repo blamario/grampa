@@ -9,7 +9,7 @@
 module Rank2 (
 -- * Rank 2 classes
    Functor(..), Apply(..), Applicative(..),
-   Foldable(..), Traversable(..), Distributive(..), DistributiveTraversable(..), distributeM,
+   Foldable(..), Traversable(..), Distributive(..), DistributiveTraversable(..), distributeJoin,
 -- * Rank 2 data types
    Compose(..), Empty(..), Only(..), Identity(..), Product(..), Arrow(..),
 -- * Method synonyms and helper functions
@@ -104,8 +104,9 @@ class Functor g => DistributiveTraversable (g :: (k -> *) -> *) where
                                         (forall x. f1 (f2 x) -> f x) -> f1 (g f2) -> g f
    distributeWithTraversable = distributeWith
 
-distributeM :: (Distributive g, Rank1.Monad f) => f (g f) -> g f
-distributeM = distributeWith Rank1.join
+-- | A variant of 'distribute' convenient with 'Rank1.Monad' instances
+distributeJoin :: (Distributive g, Rank1.Monad f) => f (g f) -> g f
+distributeJoin = distributeWith Rank1.join
 
 -- | Like 'fmap', but traverses over its argument
 fmapTraverse :: (DistributiveTraversable f, Rank1.Traversable g) => (forall a. g (t a) -> u a) -> g (f t) -> f u
