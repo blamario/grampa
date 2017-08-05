@@ -119,7 +119,7 @@ instance GrammarParsing Parser where
 
 bits :: forall (g :: (* -> *) -> *). (Rank2.Distributive g, Rank2.Traversable g) => g (Const (g (Const Bool)))
 bits = start `seq` Rank2.fmap oneBit start
-   where start = evalState (Rank2.traverse next (Rank2.distributeM Nothing)) 0
+   where start = evalState (Rank2.traverse next (Rank2.distributeJoin Nothing)) 0
          oneBit :: Const Int a -> Const (g (Const Bool)) a
          next :: f a -> State Int (Const Int a)
          oneBit (Const i) = Const (Rank2.fmap (Const . (i ==) . getConst) start)
