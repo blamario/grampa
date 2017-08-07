@@ -2,7 +2,7 @@
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies, UndecidableInstances #-}
 {-# OPTIONS -fno-full-laziness #-}
 module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..), longest, peg, terminalPEG, 
-                                              parseSeparated, separated)
+                                              parseSeparated, separated, (<<|>))
 where
 
 import Control.Applicative
@@ -257,6 +257,29 @@ instance Alternative (p g s) => Alternative (Fixed p g s) where
       cyclicDescendants= cyclicDescendants p}
       where d0 = (:[]) <$> direct0 p
             d1= (:) <$> direct1 p <*> many (complete p)
+
+(<<|>) :: Parser g s a -> Parser g s a -> Parser g s a
+p@DirectParser{} <<|> q@PositiveDirectParser{} = DirectParser{
+   complete= complete p Memoizing.<<|> complete q,
+   direct0 = direct0 p,
+   direct1= direct1 p Memoizing.<<|> complete q}
+p@DirectParser{} <<|> q@DirectParser{} = DirectParser{
+   complete= complete p Memoizing.<<|> complete q,
+   direct0 = direct0 p Memoizing.<<|> direct0 q,
+   direct1= direct1 p Memoizing.<<|> direct1 q}
+p <<|> q = Parser{complete= complete p' Memoizing.<<|> complete q',
+                 direct= direct p' Memoizing.<<|> direct q',
+                 direct0= direct0 p' Memoizing.<<|> direct0 q',
+                 direct1= direct1 p' Memoizing.<<|> direct1 q',
+                 indirect= indirect p' Memoizing.<<|> indirect q',
+                 cyclicDescendants= \deps-> let
+                      (pn, pc, pd) = cyclicDescendants p' deps
+                      (qn, qc, qd) = cyclicDescendants q' deps
+                   in (pn || qn,
+                       pc || qc,
+                       Rank2.liftA2 union pd qd)}
+   where p'@Parser{} = general p
+         q'@Parser{} = general q
 
 union :: Const Bool x -> Const Bool x -> Const Bool x
 union (Const False) d = d
