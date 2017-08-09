@@ -36,15 +36,21 @@ import Prelude hiding (null, showsPrec, span, takeWhile)
 data Parser g s a =
    Parser {
       complete, direct, direct0, direct1, indirect :: Memoizing.Parser g s a,
-      cyclicDescendants :: Rank2.Apply g => g (Const (Bool, Bool, g (Const Bool))) -> (Bool, Bool, g (Const Bool))}
+      cyclicDescendants :: Rank2.Apply g => g (Const (ParserFlags g)) -> ParserFlags g}
    | DirectParser {
       complete, direct0, direct1 :: Memoizing.Parser g s a}
    | PositiveDirectParser {
       complete :: Memoizing.Parser g s a}
 
+data ParserFlags g = ParserFlags {
+   nullable :: Bool,
+   cyclic :: Bool,
+   dependsOn :: g (Const Bool)
+   }
+
 data ParserFunctor g s a = ParserFunctor {
    resultListF :: ResultList g s a,
-   cyclicDescendantsF :: (Bool, Bool, g (Const Bool))}
+   cyclicDescendantsF :: ParserFlags g}
 
 general, general' :: Parser g s a -> Parser g s a
 
@@ -63,14 +69,14 @@ general' p@PositiveDirectParser{} = Parser{
    direct0= empty,
    direct1= complete p,
    indirect= empty,
-   cyclicDescendants= \cd-> (False, False, const (Const False) Rank2.<$> cd)}
+   cyclicDescendants= \cd-> ParserFlags False False (const (Const False) Rank2.<$> cd)}
 general' p@DirectParser{} = Parser{
    complete= complete p,
    direct = complete p,
    direct0= direct0 p,
    direct1= direct1 p,
    indirect= empty,
-   cyclicDescendants= \cd-> (True, False, const (Const False) Rank2.<$> cd)}
+   cyclicDescendants= \cd-> ParserFlags True False (const (Const False) Rank2.<$> cd)}
 general' p@Parser{} = p
 
 -- | Parser of general context-free grammars, including left recursion.
@@ -109,11 +115,12 @@ instance GrammarParsing Parser where
             wrapResultList rl = ParserFunctor{resultListF= rl,
                                               cyclicDescendantsF= error "cyclicDescendantsF of wrapResultList"}
             addSelf g = Rank2.liftA2 adjust bits g
-            adjust :: forall b. Const (g (Const Bool)) b -> Const (Bool, Bool, g (Const Bool)) b -> Const (Bool, Bool, g (Const Bool)) b
-            adjust (Const bit) (Const (n, c, d)) =
-               Const (n,
-                      c || getAny (Rank2.foldMap (Any . getConst) $ Rank2.liftA2 intersection bit d),
-                      Rank2.liftA2 union bit d)
+            adjust :: forall b. Const (g (Const Bool)) b -> Const (ParserFlags g) b -> Const (ParserFlags g) b
+            adjust (Const bit) (Const (ParserFlags n c d)) =
+               Const ParserFlags{
+                  nullable= n, 
+                  cyclic= c || getAny (Rank2.foldMap (Any . getConst) $ Rank2.liftA2 intersection bit d),
+                  dependsOn= Rank2.liftA2 union bit d}
             intersection (Const a) (Const b) = Const (a && b)
    recursive = general
 
@@ -157,10 +164,10 @@ instance Applicative (Parser g s) where
       direct1= direct0 p' <*> direct1 q <|> direct1 p' <*> complete q,
       indirect= direct0 p' <*> indirect q <|> indirect p' <*> complete q,
       cyclicDescendants= \deps-> let
-           pcd@(pn, pc, pd) = cyclicDescendants p' deps
-           (qn, qc, qd) = cyclicDescendants q deps
+           pcd@(ParserFlags pn pc pd) = cyclicDescendants p' deps
+           ParserFlags qn qc qd = cyclicDescendants q deps
         in if pn
-           then (qn, pc || qc, Rank2.liftA2 union pd qd)
+           then ParserFlags qn (pc || qc) (Rank2.liftA2 union pd qd)
            else pcd}
       where p'@Parser{} = general' p
    p <*> q = Parser{
@@ -170,10 +177,10 @@ instance Applicative (Parser g s) where
       direct1= direct0 p' <*> direct1 q' <|> direct1 p' <*> complete q',
       indirect= indirect p' <*> complete q',
       cyclicDescendants= \deps-> let
-           pcd@(pn, pc, pd) = cyclicDescendants p' deps
-           (qn, qc, qd) = cyclicDescendants q' deps
+           pcd@(ParserFlags pn pc pd) = cyclicDescendants p' deps
+           ParserFlags qn qc qd = cyclicDescendants q' deps
         in if pn
-           then (qn, pc || qc, Rank2.liftA2 union pd qd)
+           then ParserFlags qn (pc || qc) (Rank2.liftA2 union pd qd)
            else pcd}
       where p'@Parser{} = general' p
             q'@Parser{} = general' q
@@ -199,11 +206,9 @@ instance Alternative (Parser g s) where
                     direct1= direct1 p' <|> direct1 q',
                     indirect= indirect p' <|> indirect q',
                     cyclicDescendants= \deps-> let
-                         (pn, pc, pd) = cyclicDescendants p' deps
-                         (qn, qc, qd) = cyclicDescendants q' deps
-                      in (pn || qn,
-                          pc || qc,
-                          Rank2.liftA2 union pd qd)}
+                         ParserFlags pn pc pd = cyclicDescendants p' deps
+                         ParserFlags qn qc qd = cyclicDescendants q' deps
+                      in ParserFlags (pn || qn) (pc || qc) (Rank2.liftA2 union pd qd)}
       where p'@Parser{} = general p
             q'@Parser{} = general q
    many (PositiveDirectParser p) = DirectParser{
@@ -220,9 +225,7 @@ instance Alternative (Parser g s) where
       direct0= d0,
       direct1= d1,
       indirect= (:) <$> indirect p <*> mcp,
-      cyclicDescendants= \deps-> let
-         (_, pc, pd) = cyclicDescendants p deps
-         in (True, pc, pd)}
+      cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
       where d0 = pure [] <|> (:[]) <$> direct0 p
             d1 = (:) <$> direct1 p <*> mcp
             mcp = many (complete p)
@@ -237,9 +240,7 @@ instance Alternative (Parser g s) where
       direct0= d0,
       direct1= d1,
       indirect= (:) <$> indirect p <*> many (complete p),
-      cyclicDescendants= \deps-> let
-           (pn, pc, pd) = cyclicDescendants p deps
-        in (pn, pc, pd)}
+      cyclicDescendants= cyclicDescendants p}
       where d0 = (:[]) <$> direct0 p
             d1= (:) <$> direct1 p <*> many (complete p)
 
@@ -257,7 +258,7 @@ instance Monad (Parser g s) where
       direct0= d0,
       direct1= d1,
       indirect= (indirect p >>= complete . cont) <|> (direct0 p >>= indirect . general' . cont),
-      cyclicDescendants= \cd-> (True, True, Rank2.fmap (const $ Const True) cd)}
+      cyclicDescendants= \cd-> (ParserFlags True True $ Rank2.fmap (const $ Const True) cd)}
       where d0 = direct0 p >>= direct0 . cont
             d1 = (direct0 p >>= direct1 . general' . cont) <|> (direct1 p >>= complete . cont)
 
@@ -316,7 +317,7 @@ instance MonoidNull s => Parsing (Parser g s) where
       direct0= notFollowedBy (direct p),
       direct1= empty,
       indirect= notFollowedBy (indirect p),
-      cyclicDescendants= \deps-> let (_, nc, nd) = cyclicDescendants p deps in (True, nc, nd)}
+      cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
    unexpected msg = positivePrimitive "unexpected" (unexpected msg)
    skipMany = concatMany . (() <$)
 
@@ -335,7 +336,7 @@ instance MonoidNull s => LookAheadParsing (Parser g s) where
       direct0= lookAhead (direct p),
       direct1= empty,
       indirect= lookAhead (indirect p),
-      cyclicDescendants= \deps-> let (_, nc, nd) = cyclicDescendants p deps in (True, nc, nd)}
+      cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
 
 instance MonoidParsing (Parser g) where
    endOfInput = primitive "endOfInput" endOfInput empty endOfInput
@@ -383,9 +384,7 @@ instance MonoidParsing (Parser g) where
       direct0= d0,
       direct1= d1,
       indirect= (<>) <$> indirect p <*> cmp,
-      cyclicDescendants= \deps-> let
-           (_, pc, pd) = cyclicDescendants p deps
-        in (True, pc, pd)}
+      cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
       where d0 = pure mempty <|> direct0 p
             d1 = (<>) <$> direct1 p <*> cmp
             cmp = concatMany (complete p)
@@ -405,31 +404,31 @@ parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Traversable g, FactorialMono
                   g (Parser g s) -> s -> [(s, g (ResultList g s))]
 parseRecursive g = parseSeparated descendants indirects directs
    where descendants :: g (Const (g (Const Bool)))
-         desc :: forall x. Const (Bool, Bool, g (Const Bool)) x -> Const (g (Const Bool)) x
-         cyclicDescendantses :: g (Const (Bool, Bool, g (Const Bool)))
+         desc :: forall x. Const (ParserFlags g) x -> Const (g (Const Bool)) x
+         cyclicDescendantses :: g (Const (ParserFlags g))
          descendants = Rank2.fmap desc cyclicDescendantses
          indirects = Rank2.liftA2 indirectOrEmpty cyclicDescendantses g
          directs = Rank2.liftA2 directOrComplete cyclicDescendantses g
-         indirectOrEmpty (Const (_, cyclic, _)) p = if cyclic then indirect p else empty
-         directOrComplete (Const (_, cyclic, _)) p = if cyclic then direct p else complete p
-         desc (Const (_, cyclic, gd)) = Const (if cyclic then gd else falses)
+         indirectOrEmpty (Const flags) p = if cyclic flags then indirect p else empty
+         directOrComplete (Const flags) p = if cyclic flags then direct p else complete p
+         desc (Const flags) = Const (if cyclic flags then dependsOn flags else falses)
          cyclicDescendantses = fixCyclicDescendants (Rank2.fmap (Const . cyclicDescendants . general) g)
          falses = const (Const False) Rank2.<$> g
 
 fixCyclicDescendants :: forall g. (Rank2.Apply g, Rank2.Traversable g)
-                     => g (Const (g (Const (Bool, Bool, g (Const Bool))) -> (Bool, Bool, g (Const Bool))))
-                     -> g (Const (Bool, Bool, g (Const Bool)))
+                     => g (Const (g (Const (ParserFlags g)) -> (ParserFlags g))) -> g (Const (ParserFlags g))
 fixCyclicDescendants gf = go initial
-   where go :: g (Const (Bool, Bool, g (Const Bool))) -> g (Const (Bool, Bool, g (Const Bool)))
+   where go :: g (Const (ParserFlags g)) -> g (Const (ParserFlags g))
          go cd
             | getAll (Rank2.foldMap (All . getConst) $ Rank2.liftA2 agree cd cd') = cd
             | otherwise = go cd'
             where cd' = Rank2.liftA2 depsUnion cd (Rank2.fmap (\(Const f)-> Const (f cd)) gf)
-         agree (Const (xn, xc, xd)) (Const (yn, yc, yd)) =
+         agree (Const (ParserFlags xn xc xd)) (Const (ParserFlags yn yc yd)) =
             Const (xn == yn && xc == yc && getAll (Rank2.foldMap (All . getConst) (Rank2.liftA2 agree' xd yd)))
          agree' (Const x) (Const y) = Const (x == y)
-         depsUnion (Const (_, _, old)) (Const (n, c, new)) = Const (n, c, if c then Rank2.liftA2 union old new else new)
-         initial = const (Const (True, False, const (Const False) Rank2.<$> gf)) Rank2.<$> gf
+         depsUnion (Const ParserFlags{dependsOn= old}) (Const (ParserFlags n c new)) = 
+            Const (ParserFlags n c $ if c then Rank2.liftA2 union old new else new)
+         initial = const (Const (ParserFlags True False (const (Const False) Rank2.<$> gf))) Rank2.<$> gf
 
 -- | Parse the given input using a context-free grammar separated into two parts: the first specifying all the
 -- left-recursive productions, the second all others. The first function argument specifies the left-recursive
