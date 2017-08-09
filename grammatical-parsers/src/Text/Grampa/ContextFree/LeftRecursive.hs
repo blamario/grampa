@@ -29,7 +29,7 @@ import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults)
-import Text.Grampa.ContextFree.Memoizing (ResultList(..), fromResultList)
+import Text.Grampa.ContextFree.Memoizing (ResultList(..), BinTree(EmptyTree), fromResultList)
 import qualified Text.Grampa.ContextFree.Memoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Length as Backtrack
 
@@ -632,7 +632,7 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                      | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps g1)) = r1 <> r2
                      | otherwise = r1
                   combine (Const False) _ = Const False
-                  combine (Const True) (ResultList [] _) = Const False
+                  combine (Const True) (ResultList EmptyTree _) = Const False
                   combine (Const True) _ = Const True
 
          recurseOnce s parsedTail initial = Rank2.fmap (($ parsed) . Memoizing.applyParser) indirects
