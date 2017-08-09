@@ -13,7 +13,7 @@ module Rank2 (
 -- * Rank 2 data types
    Compose(..), Empty(..), Only(..), Identity(..), Product(..), Arrow(..),
 -- * Method synonyms and helper functions
-   ap, fmap, liftA3, liftA4, liftA5,
+   ap, fmap, liftA4, liftA5,
    fmapTraverse, liftA2Traverse1, liftA2Traverse2, liftA2TraverseBoth,
    cotraverse, cotraverseTraversable)
 where
