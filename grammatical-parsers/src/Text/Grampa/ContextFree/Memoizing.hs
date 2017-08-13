@@ -46,7 +46,6 @@ data BinTree a = Fork !(BinTree a) !(BinTree a)
 
 data ResultList g s r = ResultList !(BinTree (ResultInfo g s r)) {-# UNPACK #-} !FailureInfo
 data ResultInfo g s r = ResultInfo !Int ![(s, g (ResultList g s))] !r
-data FailureInfo = FailureInfo !Int Word64 [String] deriving (Eq, Show)
 
 instance Functor BinTree where
    fmap f (Fork left right) = Fork (fmap f left) (fmap f right)
@@ -83,17 +82,6 @@ instance Functor (ResultList g s) where
 instance Monoid (ResultList g s r) where
    mempty = ResultList mempty mempty
    ResultList rl1 f1 `mappend` ResultList rl2 f2 = ResultList (rl1 <> rl2) (f1 <> f2)
-
-instance Monoid FailureInfo where
-   mempty = FailureInfo 0 maxBound []
-   f1@(FailureInfo s1 pos1 exp1) `mappend` f2@(FailureInfo s2 pos2 exp2)
-      | s1 < s2 = f2
-      | s1 > s2 = f1
-      | otherwise = FailureInfo s1 pos' exp'
-      where FailureInfo _ pos' exp' 
-               | pos1 < pos2 = f1
-               | pos1 > pos2 = f2
-               | otherwise = FailureInfo s1 pos1 (exp1 <> exp2)
 
 instance Functor (Parser g i) where
    fmap f (Parser p) = Parser (fmap f . p)
@@ -178,7 +166,7 @@ instance MonoidParsing (Parser g) where
       where p rest@((s, _):t) = case splitPrimePrefix s
                                 of Just (first, _) -> ResultList (Leaf $ ResultInfo 1 t first) mempty
                                    _ -> ResultList mempty (FailureInfo 1 (genericLength rest) ["anyToken"])
-            p [] = ResultList [] (FailureInfo 1 0 ["anyToken"])
+            p [] = ResultList mempty (FailureInfo 1 0 ["anyToken"])
    satisfy predicate = Parser p
       where p rest@((s, _):t) =
                case splitPrimePrefix s
@@ -219,7 +207,7 @@ instance MonoidParsing (Parser g) where
             p rest = ResultList mempty (FailureInfo 1 (genericLength rest) ["takeWhile1"])
    takeCharsWhile predicate = Parser p
       where p rest@((s, _) : _)
-               | x <- Textual.takeWhile_ False predicate s, l <- Factorial.length x, l > 0 =
+               | x <- Textual.takeWhile_ False predicate s, l <- Factorial.length x =
                     ResultList (Leaf $ ResultInfo l (drop l rest) x) mempty
             p [] = ResultList (Leaf $ ResultInfo 0 [] mempty) mempty
    takeCharsWhile1 predicate = Parser p
@@ -292,7 +280,6 @@ longest :: FactorialMonoid s => Parser g s a -> Backtrack.Parser g [(s, g (Resul
 longest p = Backtrack.Parser q where
    q rest = case applyParser p rest
             of ResultList EmptyTree failure -> Backtrack.NoParse failure
-               ResultList [r] _ -> parsed r
                ResultList rs _ -> parsed (maximumBy (compare `on` resultLength) rs)
    resultLength (ResultInfo l _ _) = l
    parsed (ResultInfo l s r) = Backtrack.Parsed l r s

@@ -273,11 +273,9 @@ p <<|> q = Parser{complete= complete p' Memoizing.<<|> complete q',
                  direct1= direct1 p' Memoizing.<<|> direct1 q',
                  indirect= indirect p' Memoizing.<<|> indirect q',
                  cyclicDescendants= \deps-> let
-                      (pn, pc, pd) = cyclicDescendants p' deps
-                      (qn, qc, qd) = cyclicDescendants q' deps
-                   in (pn || qn,
-                       pc || qc,
-                       Rank2.liftA2 union pd qd)}
+                         ParserFlags pn pd = cyclicDescendants p' deps
+                         ParserFlags qn qd = cyclicDescendants q' deps
+                      in ParserFlags (pn || qn) (Rank2.liftA2 union pd qd)}
    where p'@Parser{} = general p
          q'@Parser{} = general q
 
