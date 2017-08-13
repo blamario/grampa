@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, GADTs, InstanceSigs, GeneralizedNewtypeDeriving,
-             RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
+             RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies, UndecidableInstances #-}
 {-# OPTIONS -fno-full-laziness #-}
-module Text.Grampa.ContextFree.LeftRecursive (Parser(..), parseSeparated)
+module Text.Grampa.ContextFree.LeftRecursive (Parser(..), parseSeparated, fixCyclicDescendants, cyclicDescendants, general, separated, ParserFlags(..))
 where
 
 import Control.Applicative
@@ -31,7 +31,7 @@ import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..
 import Text.Grampa.ContextFree.Memoizing (ResultList(..), fromResultList)
 import qualified Text.Grampa.ContextFree.Memoizing as Memoizing
 
-import Prelude hiding (null, showsPrec, span, takeWhile)
+import Prelude hiding (cycle, null, span, takeWhile)
 
 data Parser g s a =
    Parser {
@@ -42,15 +42,31 @@ data Parser g s a =
    | PositiveDirectParser {
       complete :: Memoizing.Parser g s a}
 
+data SeparatedParser g s a = SeparatedParser {
+   front :: Maybe (Memoizing.Parser g s a),
+   cycle :: Maybe (Memoizing.Parser g s a, g (Const Bool)),
+   back  :: Memoizing.Parser g s a}
+
+instance Show (g (Const Bool)) => Show (SeparatedParser g s a) where
+   show sp = "SeparatedParser{\n  front=" ++ show (isJust $ front sp) ++ ",\n  cycle=" ++ shows (snd <$> cycle sp) "}"
+
 data ParserFlags g = ParserFlags {
    nullable :: Bool,
    cyclic :: Bool,
-   dependsOn :: g (Const Bool)
-   }
+   dependsOn :: g (Const Bool)}
 
-data ParserFunctor g s a = ParserFunctor {
-   resultListF :: ResultList g s a,
-   cyclicDescendantsF :: ParserFlags g}
+data ParserFunctor g s a = ParserResultsFunctor {parserResults :: ResultList g s a}
+                         | ParserFlagsFuntor {parserFlags :: ParserFlags g}
+                         | ParserFlagFunctor {parserFlag :: Bool}
+
+newtype Union (g :: (* -> *) -> *) = Union{getUnion :: g (Const Bool)}
+
+--instance Rank2.Applicative g => Monoid (Union g) where
+--   mempty = Union (Rank2.pure $ Const False)
+
+instance (Rank2.Apply g, Rank2.Distributive g) => Monoid (Union g) where
+   mempty = Union (Rank2.distributeWith (Const . getConst) (Const False))
+   mappend (Union g1) (Union g2) = Union (Rank2.liftA2 union g1 g2)
 
 general, general' :: Parser g s a -> Parser g s a
 
@@ -88,7 +104,7 @@ general' p@Parser{} = p
 instance MultiParsing Parser where
    type GrammarConstraint Parser g = (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
    type ResultFunctor Parser = Compose ParseResults []
-   parsePrefix :: (Rank2.Apply g, Rank2.Traversable g, FactorialMonoid s) =>
+   parsePrefix :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, FactorialMonoid s) =>
                   g (Parser g s) -> s -> g (Compose (Compose ParseResults []) ((,) s))
    parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input)
                                     (snd $ head $ parseRecursive g input)
@@ -108,20 +124,15 @@ instance GrammarParsing Parser where
       direct0= empty,
       direct1= empty,
       indirect= ind,
-      cyclicDescendants= cyclicDescendantsF . f . Rank2.fmap wrapCyclicDescendants . addSelf}
-      where ind = nonTerminal (resultListF . f . Rank2.fmap wrapResultList)
-            wrapCyclicDescendants (Const cd) = ParserFunctor{cyclicDescendantsF= cd,
-                                                             resultListF= error "resultListF of wrapCyclicDescendants"}
-            wrapResultList rl = ParserFunctor{resultListF= rl,
-                                              cyclicDescendantsF= error "cyclicDescendantsF of wrapResultList"}
+      cyclicDescendants= parserFlags . f . Rank2.fmap (ParserFlagsFuntor . getConst) . addSelf}
+      where ind = nonTerminal (parserResults . f . Rank2.fmap ParserResultsFunctor)
             addSelf g = Rank2.liftA2 adjust bits g
             adjust :: forall b. Const (g (Const Bool)) b -> Const (ParserFlags g) b -> Const (ParserFlags g) b
             adjust (Const bit) (Const (ParserFlags n c d)) =
                Const ParserFlags{
                   nullable= n, 
-                  cyclic= c || getAny (Rank2.foldMap (Any . getConst) $ Rank2.liftA2 intersection bit d),
+                  cyclic= parserFlag (f $ Rank2.fmap (ParserFlagFunctor . getConst) d),
                   dependsOn= Rank2.liftA2 union bit d}
-            intersection (Const a) (Const b) = Const (a && b)
    recursive = general
 
 bits :: forall (g :: (* -> *) -> *). (Rank2.Distributive g, Rank2.Traversable g) => g (Const (g (Const Bool)))
@@ -400,20 +411,47 @@ instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
 instance (Show s, TextualMonoid s) => TokenParsing (Parser g s) where
    someSpace = () <$ takeCharsWhile1 isSpace
 
-parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Traversable g, FactorialMonoid s) =>
+parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, FactorialMonoid s) =>
                   g (Parser g s) -> s -> [(s, g (ResultList g s))]
-parseRecursive g = parseSeparated descendants indirects directs
+parseRecursive = parseSeparated . separated
+
+separated :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
+             g (Parser g s) -> g (SeparatedParser g s)
+separated g = Rank2.liftA4 reseparate circulars cycleFollowers (Rank2.fmap (Const . dependsOn . getConst) cyclicDescendantses) g
    where descendants :: g (Const (g (Const Bool)))
-         desc :: forall x. Const (ParserFlags g) x -> Const (g (Const Bool)) x
+         cycleLeaders, cycleFollowers, circulars :: g (Const Bool)
+         desc :: forall a. Const Bool a -> Const (ParserFlags g) a -> Const (g (Const Bool)) a
          cyclicDescendantses :: g (Const (ParserFlags g))
-         descendants = Rank2.fmap desc cyclicDescendantses
-         indirects = Rank2.liftA2 indirectOrEmpty cyclicDescendantses g
-         directs = Rank2.liftA2 directOrComplete cyclicDescendantses g
-         indirectOrEmpty (Const flags) p = if cyclic flags then indirect p else empty
-         directOrComplete (Const flags) p = if cyclic flags then direct p else complete p
-         desc (Const flags) = Const (if cyclic flags then dependsOn flags else falses)
+         leftRecursive :: forall a. Const (g (Const Bool)) a -> Const (ParserFlags g) a -> Const Bool a
+         leftRecursiveLeader :: forall a. Const (ParserFlags g) a -> Const Bool a
+         leftRecursiveDeps :: forall a. Const Bool a -> Const (ParserFlags g) a -> Const (g (Const Bool)) a
+         reseparate :: forall a. Const Bool a -> Const Bool a -> Const (g (Const Bool)) a -> Parser g s a -> SeparatedParser g s a
+         descendants = Rank2.liftA2 desc circulars cyclicDescendantses
+         leaders = Rank2.liftA3 leaderOrEmpty cycleLeaders circulars g
+         indirects = Rank2.liftA2 indirectOrEmpty circulars g
+         directs = Rank2.liftA2 directOrComplete circulars g
+         reseparate (Const circular) (Const follower) (Const deps) p
+            | circular || leader && follower = SeparatedParser Nothing (Just (indirect p, deps)) (direct p)
+            | follower = SeparatedParser Nothing Nothing (complete p)
+            | otherwise = SeparatedParser (Just $ complete p) Nothing (error "not used by any cycle")
+            where leader = getAny (Rank2.foldMap (Any . getConst) $ Rank2.liftA2 intersection circulars deps)
+         leaderOrEmpty (Const leader) (Const circular) p = if leader && not circular then complete p else empty
+         indirectOrEmpty (Const circular) p = if circular then indirect p else empty
+         directOrComplete (Const circular) p = if circular then direct p else complete p
+         desc (Const circular) (Const flags) = Const (if circular then dependsOn flags else falses)
          cyclicDescendantses = fixCyclicDescendants (Rank2.fmap (Const . cyclicDescendants . general) g)
          falses = const (Const False) Rank2.<$> g
+         circulars = Rank2.liftA2 leftRecursive bits cyclicDescendantses
+         cycleFollowers = getUnion (Rank2.foldMap (Union . getConst) $
+                                    Rank2.liftA2 leftRecursiveDeps circulars cyclicDescendantses)
+         cycleLeaders = Rank2.fmap leftRecursiveLeader cyclicDescendantses
+         leftRecursive (Const bit) (Const flags) =
+            Const (getAny $ Rank2.foldMap (Any . getConst) $ Rank2.liftA2 intersection bit $ dependsOn flags)
+         leftRecursiveDeps (Const True) (Const flags) = Const (dependsOn flags)
+         leftRecursiveDeps (Const False) (Const flags) = Const (Rank2.fmap (const $ Const False) (dependsOn flags))
+         leftRecursiveLeader (Const flags) = 
+            Const (getAny $ Rank2.foldMap (Any . getConst) $ Rank2.liftA2 intersection circulars $ dependsOn flags)
+         intersection (Const a) (Const b) = Const (a && b)
 
 fixCyclicDescendants :: forall g. (Rank2.Apply g, Rank2.Traversable g)
                      => g (Const (g (Const (ParserFlags g)) -> (ParserFlags g))) -> g (Const (ParserFlags g))
@@ -434,25 +472,30 @@ fixCyclicDescendants gf = go initial
 -- left-recursive productions, the second all others. The first function argument specifies the left-recursive
 -- dependencies among the grammar productions.
 parseSeparated :: forall g s. (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) =>
-                  g (Const (g (Const Bool))) -> g (Memoizing.Parser g s) -> g (Memoizing.Parser g s) -> s
-               -> [(s, g (ResultList g s))]
-parseSeparated dependencies indirects directs input = foldr parseTail [] (Factorial.tails input)
+                  g (SeparatedParser g s) -> s -> [(s, g (ResultList g s))]
+parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
    where parseTail s parsedTail = parsed
-            where parsed = (s,d'):parsedTail
+            where parsed = (s,d''):parsedTail
                   d      = Rank2.fmap (($ (s,d):parsedTail) . Memoizing.applyParser) directs
                   d'     = fixRecursive s parsedTail d
-
+                  d''    = Rank2.liftA2 f parsers d'
+                  f :: forall a. SeparatedParser g s a -> ResultList g s a -> ResultList g s a
+                  f sp res = maybe res (($ (s,d''):parsedTail) . Memoizing.applyParser) (front sp)
          fixRecursive :: s -> [(s, g (ResultList g s))] -> g (ResultList g s) -> g (ResultList g s)
          whileAnyContinues :: g (ResultList g s) -> g (ResultList g s) -> g (ResultList g s)
          recurseOnce :: s -> [(s, g (ResultList g s))] -> g (ResultList g s) -> g (ResultList g s)
          maybeDependencies :: g (Const (Maybe (g (Const Bool))))
 
+         directs = Rank2.fmap back parsers
+         indirects = Rank2.fmap (maybe empty fst . cycle) parsers
+         maybeDependencies = Rank2.fmap (Const . fmap snd . cycle) parsers
+                                                                   
          fixRecursive s parsedTail initial =
             foldr1 whileAnyContinues (iterate (recurseOnce s parsedTail) initial)
 
-         maybeDependencies = Rank2.fmap (\(Const deps)-> Const (if getAny (Rank2.foldMap (Any . getConst) deps) 
-                                                                then Just deps else Nothing))
-                             dependencies
+         -- maybeDependencies = Rank2.fmap (\(Const deps)-> Const (if getAny (Rank2.foldMap (Any . getConst) deps) 
+         --                                                        then Just deps else Nothing))
+         --                     dependencies
 
          whileAnyContinues g1 g2 = Rank2.liftA3 choiceWhile maybeDependencies g1 g2
             where choiceWhile :: Const (Maybe (g (Const Bool))) x -> ResultList g i x -> ResultList g i x 
