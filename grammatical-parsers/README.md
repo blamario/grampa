@@ -1,7 +1,7 @@
 Grammatical Parsers
 ===================
 
-Behold, yet another parser combinator library in Haskell.
+Behold, yet another parser combinator library in Haskell. Except this one is capable of working with grammars rather than mere parsers. A more in-depth description is available in the [paper](../Grampa.lhs.pdf) from Haskell Symposium 2017, what follows is a short tutorial.
 
 You can apply the usual
 [Applicative](http://hackage.haskell.org/package/base/docs/Control-Applicative.html#t:Applicative),
