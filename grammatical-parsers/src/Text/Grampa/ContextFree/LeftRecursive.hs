@@ -263,6 +263,15 @@ instance Monad (Parser g s) where
    return = pure
    (>>) = (*>)
    PositiveDirectParser p >>= cont = PositiveDirectParser (p >>= complete . cont)
+   p@DirectParser{} >>= cont = Parser{
+      complete= complete p >>= complete . cont,
+      direct= d0 <|> d1,
+      direct0= d0,
+      direct1= d1,
+      indirect= direct0 p >>= indirect . general' . cont,
+      cyclicDescendants= \cd-> (ParserFlags True $ Rank2.fmap (const $ Const True) cd)}
+      where d0 = direct0 p >>= direct0 . general' . cont
+            d1 = (direct0 p >>= direct1 . general' . cont) <|> (direct1 p >>= complete . cont)
    p >>= cont = Parser{
       complete= complete p >>= complete . cont,
       direct= d0 <|> d1,
@@ -270,7 +279,7 @@ instance Monad (Parser g s) where
       direct1= d1,
       indirect= (indirect p >>= complete . cont) <|> (direct0 p >>= indirect . general' . cont),
       cyclicDescendants= \cd-> (ParserFlags True $ Rank2.fmap (const $ Const True) cd)}
-      where d0 = direct0 p >>= direct0 . cont
+      where d0 = direct0 p >>= direct0 . general' . cont
             d1 = (direct0 p >>= direct1 . general' . cont) <|> (direct1 p >>= complete . cont)
 
 instance MonadPlus (Parser g s) where
