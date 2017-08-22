@@ -11,6 +11,7 @@ import Data.Functor.Compose (Compose(..))
 import Data.List (nub)
 import Data.Monoid (Monoid(mappend, mempty), (<>))
 import Data.Monoid.Factorial(FactorialMonoid)
+import Data.String (fromString)
 import Data.Word (Word64)
 
 import qualified Data.Monoid.Cancellative as Cancellative
@@ -20,7 +21,11 @@ import qualified Data.Monoid.Textual as Textual
 
 import qualified Rank2
 
+import qualified Text.Parser.Char
+import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
+import Text.Parser.LookAhead (LookAheadParsing(..))
+import Text.Parser.Token (TokenParsing(someSpace))
 import Text.Grampa.Class (MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
 
 data Result (g :: (* -> *) -> *) s v = Parsed{ parsedPrefix :: v, 
@@ -80,6 +85,22 @@ instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t Parsed{} = NoParse (FailureInfo 1 (fromIntegral $ Factorial.length t) ["notFollowedBy"])
             rewind t NoParse{} = Parsed () t
+
+instance Factorial.FactorialMonoid s => LookAheadParsing (Parser g s) where
+   lookAhead (Parser p) = Parser (\input-> rewind input (p input))
+      where rewind t (Parsed r _) = Parsed r t
+            rewind _ r@NoParse{} = r
+
+instance (Show s, Textual.TextualMonoid s) => CharParsing (Parser g s) where
+   satisfy = satisfyChar
+   string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
+   char = satisfyChar . (==)
+   notChar = satisfyChar . (/=)
+   anyChar = satisfyChar (const True)
+   text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
+
+instance (Show s, Textual.TextualMonoid s) => TokenParsing (Parser g s) where
+   someSpace = () <$ takeCharsWhile1 isSpace
 
 instance MonoidParsing (Parser g) where
    endOfInput = Parser p
