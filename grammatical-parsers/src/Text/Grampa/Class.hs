@@ -32,8 +32,7 @@ class MultiParsing m where
    type GrammarConstraint m (g :: (* -> *) -> *) :: Constraint
    type GrammarConstraint m g = Rank2.Functor g
    -- | Given a rank-2 record of parsers and input, produce a record of parses of the complete input.
-   parseComplete :: (GrammarConstraint m g, FactorialMonoid s) =>
-                    g (m g s) -> s -> g (ResultFunctor m)
+   parseComplete :: (GrammarConstraint m g, FactorialMonoid s) => g (m g s) -> s -> g (ResultFunctor m)
    -- | Given a rank-2 record of parsers and input, produce a record of prefix parses paired with the remaining input
    -- suffix.
    parsePrefix :: (GrammarConstraint m g, FactorialMonoid s) =>
@@ -60,7 +59,7 @@ class MonoidParsing m where
    -- | A parser that fails on any input and succeeds at its end.
    endOfInput :: FactorialMonoid s => m s ()
    -- | Always sucessful parser that returns the remaining input without consuming it.
-   getInput :: MonoidNull s => m s s
+   getInput :: FactorialMonoid s => m s s
 
    -- | A parser that accepts any single input atom.
    anyToken :: FactorialMonoid s => m s s

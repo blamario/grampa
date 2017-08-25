@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 -- | Backtracking parser for Parsing Expression Grammars
-module Text.Grampa.PEG.Backtrack (Parser) where
+module Text.Grampa.PEG.Backtrack (Parser(..), Result(..), alt) where
 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
 import Control.Monad (Monad(..), MonadPlus(..))
@@ -27,11 +27,11 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing(someSpace))
 import Text.Grampa.Class (MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
+import Text.Grampa.Internal (FailureInfo(..))
 
-data Result (g :: (* -> *) -> *) s v = Parsed{ parsedPrefix :: v, 
-                                              _parsedSuffix :: s}
+data Result (g :: (* -> *) -> *) s v = Parsed{parsedPrefix :: v, 
+                                              parsedSuffix :: s}
                                      | NoParse FailureInfo
-data FailureInfo = FailureInfo !Int Word64 [String] deriving (Eq, Show)
 
 -- | Parser type for Parsing Expression Grammars that uses a backtracking algorithm, fast for grammars in LL(1) class
 -- but with potentially exponential performance for longer ambiguous prefixes.
@@ -57,7 +57,11 @@ instance Applicative (Parser g s) where
 
 instance Factorial.FactorialMonoid s => Alternative (Parser g s) where
    empty = Parser (\rest-> NoParse $ FailureInfo 0 (fromIntegral $ Factorial.length rest) ["empty"])
-   Parser p <|> Parser q = Parser r where
+   (<|>) = alt
+
+-- | A named and unconstrained version of the '<|>' operator
+alt :: Parser g s a -> Parser g s a -> Parser g s a
+Parser p `alt` Parser q = Parser r where
       r rest = case p rest
                of x@Parsed{} -> x
                   NoParse{} -> q rest

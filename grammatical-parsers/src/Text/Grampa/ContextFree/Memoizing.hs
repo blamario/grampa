@@ -1,15 +1,16 @@
 {-# LANGUAGE FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, TypeFamilies #-}
 module Text.Grampa.ContextFree.Memoizing (FailureInfo(..), ResultList(..), Parser(..), 
-                                          fromResultList, reparseTails)
+                                          fromResultList, reparseTails, longest, peg)
 where
 
 import Control.Applicative
 import Control.Monad (Monad(..), MonadPlus(..))
 import Data.Char (isSpace)
+import Data.Function (on)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
-import Data.List (genericLength, nub)
+import Data.List (genericLength, minimumBy, nub)
 import Data.Monoid (Monoid(mappend, mempty), (<>))
 import Data.Monoid.Cancellative (LeftReductiveMonoid (isPrefixOf))
 import Data.Monoid.Null (MonoidNull(null))
@@ -29,6 +30,9 @@ import Text.Parser.Token (TokenParsing(someSpace))
 import qualified Rank2
 
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
+import Text.Grampa.Internal (FailureInfo(..))
+import qualified Text.Grampa.PEG.Backtrack as Backtrack
+import qualified Text.Grampa.PEG.Packrat as Packrat
 
 import Prelude hiding (iterate, length, null, showList, span, takeWhile)
 
@@ -38,7 +42,6 @@ newtype Parser g s r = Parser{applyParser :: [(s, g (ResultList g s))] -> Result
             
 data ResultList g s r = ResultList ![ResultInfo g s r] {-# UNPACK #-} !FailureInfo
 data ResultInfo g s r = ResultInfo ![(s, g (ResultList g s))] !r
-data FailureInfo = FailureInfo !Int Word64 [String] deriving (Eq, Show)
 
 instance (Show s, Show r) => Show (ResultList g s r) where
    show (ResultList l f) = "ResultList (" ++ shows l (") (" ++ shows f ")")
@@ -59,16 +62,6 @@ instance Functor (ResultList g s) where
 instance Monoid (ResultList g s r) where
    mempty = ResultList [] mempty
    ResultList rl1 f1 `mappend` ResultList rl2 f2 = ResultList (rl1 <> rl2) (f1 <> f2)
-
-instance Monoid FailureInfo where
-   mempty = FailureInfo 0 maxBound []
-   f1@(FailureInfo s1 pos1 exp1) `mappend` f2@(FailureInfo s2 pos2 exp2)
-      | s1 < s2 = f2
-      | s1 > s2 = f1
-      | otherwise = FailureInfo s1 pos' exp'
-      where (pos', exp') | pos1 < pos2 = (pos1, exp1)
-                         | pos1 > pos2 = (pos2, exp2)
-                         | otherwise = (pos1, exp1 <> exp2)
 
 instance Functor (Parser g i) where
    fmap f (Parser p) = Parser (fmap f . p)
@@ -247,3 +240,19 @@ fromResultList s (ResultList [] (FailureInfo _ pos msgs)) =
 fromResultList _ (ResultList rl _failure) = Right (f <$> rl)
    where f (ResultInfo ((s, _):_) r) = (s, r)
          f (ResultInfo [] r) = (mempty, r)
+
+longest :: FactorialMonoid s => Parser g s a -> Backtrack.Parser g [(s, g (ResultList g s))] a
+longest p = Backtrack.Parser q where
+   q rest = case applyParser p rest
+            of ResultList [] failure -> Backtrack.NoParse failure
+               ResultList [r] _ -> parsed r
+               ResultList rs _ -> parsed (minimumBy (compare `on` suffixLength) rs)
+   suffixLength (ResultInfo [] _) = -1
+   suffixLength (ResultInfo ((s,_):_) _) = length s
+   parsed (ResultInfo s r) = Backtrack.Parsed r s
+
+peg :: Backtrack.Parser g [(s, g (ResultList g s))] a -> Parser g s a
+peg p = Parser q where
+   q rest = case Backtrack.applyParser p rest
+            of Backtrack.Parsed result suffix -> ResultList [ResultInfo suffix result] mempty
+               Backtrack.NoParse failure -> ResultList [] failure

@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 -- | Packrat parser
-module Text.Grampa.PEG.Packrat (Parser) where
+module Text.Grampa.PEG.Packrat (Parser(..), Result(..)) where
 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
 import Control.Monad (Monad(..), MonadPlus(..))
@@ -27,12 +27,12 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing(someSpace))
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
+import Text.Grampa.Internal (FailureInfo(..))
 import qualified Text.Grampa.PEG.Backtrack as Backtrack (Parser)
 
 data Result g s v = Parsed{parsedPrefix :: v, 
                            parsedSuffix :: [(s, g (Result g s))]}
                   | NoParse FailureInfo
-data FailureInfo = FailureInfo !Int Word64 [String] deriving (Eq, Show)
 
 -- | Parser type for Parsing Expression Grammars that uses an improved packrat algorithm, with O(1) performance bounds
 -- but with worse constants and more memory consumption than 'Backtrack.Parser'. The 'parse' function returns an input

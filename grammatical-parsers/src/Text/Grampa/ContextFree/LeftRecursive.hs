@@ -1,7 +1,7 @@
-{-# LANGUAGE FlexibleContexts, GADTs, InstanceSigs, GeneralizedNewtypeDeriving,
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies, UndecidableInstances #-}
 {-# OPTIONS -fno-full-laziness #-}
-module Text.Grampa.ContextFree.LeftRecursive (Parser(..), SeparatedParser(..), parseSeparated, fixDescendants, general, separated, ParserFlags(..))
+module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..), longest, peg, parseSeparated, separated)
 where
 
 import Control.Applicative
@@ -30,25 +30,28 @@ import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults)
 import Text.Grampa.ContextFree.Memoizing (ResultList(..), fromResultList)
 import qualified Text.Grampa.ContextFree.Memoizing as Memoizing
+import qualified Text.Grampa.PEG.Backtrack as Backtrack
 
 import Prelude hiding (cycle, null, span, takeWhile)
 
-data Parser g s a =
+type Parser = Fixed Memoizing.Parser
+
+data Fixed p g s a =
    Parser {
-      complete, direct, direct0, direct1, indirect :: Memoizing.Parser g s a,
+      complete, direct, direct0, direct1, indirect :: p g s a,
       cyclicDescendants :: Rank2.Apply g => g (Const (ParserFlags g)) -> ParserFlags g}
    | DirectParser {
-      complete, direct0, direct1 :: Memoizing.Parser g s a}
+      complete, direct0, direct1 :: p g s a}
    | PositiveDirectParser {
-      complete :: Memoizing.Parser g s a}
+      complete :: p g s a}
 
-data SeparatedParser g s a = FrontParser (Memoizing.Parser g s a)
-                           | CycleParser {
-                                cycleParser  :: Memoizing.Parser g s a,
-                                backParser   :: Memoizing.Parser g s a,
-                                dependencies :: g (Const Bool)}
-                           | BackParser {
-                                backParser :: Memoizing.Parser g s a}
+data SeparatedParser p g s a = FrontParser (p g s a)
+                             | CycleParser {
+                                  cycleParser  :: p g s a,
+                                  backParser   :: p g s a,
+                                  dependencies :: g (Const Bool)}
+                             | BackParser {
+                                  backParser :: p g s a}
 
 data ParserFlags g = ParserFlags {
    nullable :: Bool,
@@ -69,7 +72,7 @@ instance (Rank2.Apply g, Rank2.Distributive g) => Monoid (Union g) where
    mempty = Union (Rank2.distributeWith (Const . getConst) (Const False))
    mappend (Union g1) (Union g2) = Union (Rank2.liftA2 union g1 g2)
 
-general, general' :: Parser g s a -> Parser g s a
+general, general' :: Alternative (p g s) => Fixed p g s a -> Fixed p g s a
 
 general p = Parser{
    complete= complete p,
@@ -100,23 +103,23 @@ general' p@Parser{} = p
 --
 -- @
 -- 'parseComplete' :: ("Rank2".'Rank2.Apply' g, "Rank2".'Rank2.Traversable' g, 'FactorialMonoid' s) =>
---                  g (LeftRecursive.'Parser' g s) -> s -> g ('Compose' 'ParseResults' [])
+--                  g (LeftRecursive.'Fixed g s) -> s -> g ('Compose' 'ParseResults' [])
 -- @
-instance MultiParsing Parser where
-   type GrammarConstraint Parser g = (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
-   type ResultFunctor Parser = Compose ParseResults []
+instance MultiParsing (Fixed Memoizing.Parser) where
+   type GrammarConstraint (Fixed Memoizing.Parser) g = (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
+   type ResultFunctor (Fixed Memoizing.Parser) = Compose ParseResults []
    parsePrefix :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, FactorialMonoid s) =>
-                  g (Parser g s) -> s -> g (Compose (Compose ParseResults []) ((,) s))
+                  g (Fixed Memoizing.Parser g s) -> s -> g (Compose (Compose ParseResults []) ((,) s))
    parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input)
                                     (snd $ head $ parseRecursive g input)
    parseComplete :: (FactorialMonoid s, Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
-                    g (Parser g s) -> s -> g (Compose ParseResults [])
+                    g (Fixed Memoizing.Parser g s) -> s -> g (Compose ParseResults [])
    parseComplete g input = Rank2.fmap ((snd <$>) . Compose . fromResultList input)
                                       (snd $ head $ Memoizing.reparseTails close $ parseRecursive g input)
       where close = Rank2.fmap (<* endOfInput) selfReferring
 
-instance GrammarParsing Parser where
-   type GrammarFunctor Parser = ParserFunctor
+instance GrammarParsing (Fixed Memoizing.Parser) where
+   type GrammarFunctor (Fixed Memoizing.Parser) = ParserFunctor
    nonTerminal :: forall g s a. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
                   => (g (ParserFunctor g s) -> ParserFunctor g s a) -> Parser g s a
    nonTerminal f = Parser{
@@ -143,7 +146,7 @@ bits = start `seq` Rank2.fmap oneBit start
          oneBit (Const i) = Const (Rank2.fmap (Const . (i ==) . getConst) start)
          next _ = do {i <- get; let {i' = succ i}; seq i' (put i'); return (Const i)}
 
-instance Functor (Parser g s) where
+instance Functor (p g s) => Functor (Fixed p g s) where
    fmap f (PositiveDirectParser p) = PositiveDirectParser (fmap f p)
    fmap f p@DirectParser{} = DirectParser{
       complete= fmap f (complete p),
@@ -156,7 +159,7 @@ instance Functor (Parser g s) where
       direct1= fmap f (direct1 p),
       indirect= fmap f (indirect p)}
 
-instance Applicative (Parser g s) where
+instance Alternative (p g s) => Applicative (Fixed p g s) where
    pure a = DirectParser{complete= pure a,
                          direct0= pure a,
                          direct1= empty}
@@ -196,7 +199,7 @@ instance Applicative (Parser g s) where
       where p'@Parser{} = general' p
             q'@Parser{} = general' q
 
-instance Alternative (Parser g s) where
+instance Alternative (p g s) => Alternative (Fixed p g s) where
    empty = PositiveDirectParser{complete= empty}
    p@PositiveDirectParser{} <|> q@PositiveDirectParser{} = PositiveDirectParser{complete= complete p <|> complete q}
    p@PositiveDirectParser{} <|> q@DirectParser{} = DirectParser{
@@ -259,7 +262,7 @@ union :: Const Bool x -> Const Bool x -> Const Bool x
 union (Const False) d = d
 union (Const True) _ = Const True
 
-instance Monad (Parser g s) where
+instance (Alternative (p g s), Monad (p g s)) => Monad (Fixed p g s) where
    return = pure
    (>>) = (*>)
    PositiveDirectParser p >>= cont = PositiveDirectParser (p >>= complete . cont)
@@ -282,24 +285,23 @@ instance Monad (Parser g s) where
       where d0 = direct0 p >>= direct0 . general' . cont
             d1 = (direct0 p >>= direct1 . general' . cont) <|> (direct1 p >>= complete . cont)
 
-instance MonadPlus (Parser g s) where
+instance MonadPlus (p g s) => MonadPlus (Fixed p g s) where
    mzero = empty
    mplus = (<|>)
 
-instance Monoid x => Monoid (Parser g s x) where
+instance (Alternative (p g s), Monoid x) => Monoid (Fixed p g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
-primitive :: String -> Memoizing.Parser g s a -> Memoizing.Parser g s a -> Memoizing.Parser g s a
-          -> Parser g s a
+primitive :: String -> p g s a -> p g s a -> p g s a -> Fixed p g s a
 primitive _name d0 d1 d = DirectParser{complete= d,
                                        direct0= d0,
                                        direct1= d1}
 
-positivePrimitive :: String -> Memoizing.Parser g s a -> Parser g s a
+positivePrimitive :: String -> p g s a -> Fixed p g s a
 positivePrimitive _name p = PositiveDirectParser{complete= p}
 
-instance MonoidNull s => Parsing (Parser g s) where
+instance (LookAheadParsing (p g s), MonoidParsing (Fixed p g)) => Parsing (Fixed p g s) where
    eof = primitive "eof" eof empty eof
    try (PositiveDirectParser p) = PositiveDirectParser (try p)
    try p@DirectParser{} = DirectParser{
@@ -339,9 +341,9 @@ instance MonoidNull s => Parsing (Parser g s) where
       indirect= notFollowedBy (indirect p),
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
    unexpected msg = positivePrimitive "unexpected" (unexpected msg)
-   skipMany = concatMany . (() <$)
+   skipMany p = concatMany (() <$ p)
 
-instance MonoidNull s => LookAheadParsing (Parser g s) where
+instance (LookAheadParsing (p g s), MonoidParsing (Fixed p g)) => LookAheadParsing (Fixed p g s) where
    lookAhead p@PositiveDirectParser{} = DirectParser{
       complete= lookAhead (complete p),
       direct0= lookAhead (complete p),
@@ -358,9 +360,9 @@ instance MonoidNull s => LookAheadParsing (Parser g s) where
       indirect= lookAhead (indirect p),
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
 
-instance MonoidParsing (Parser g) where
+instance MonoidParsing (Fixed Memoizing.Parser g) where
    endOfInput = primitive "endOfInput" endOfInput empty endOfInput
-   getInput = primitive "getInput" (eof *> getInput) (notFollowedBy eof *> getInput) getInput
+   getInput = primitive "getInput" (endOfInput *> getInput) (notFollowedBy endOfInput *> getInput) getInput
    anyToken = positivePrimitive "anyToken" anyToken
    token x = positivePrimitive "token" (token x)
    satisfy predicate = positivePrimitive "satisfy" (satisfy predicate)
@@ -409,7 +411,59 @@ instance MonoidParsing (Parser g) where
             d1 = (<>) <$> direct1 p <*> cmp
             cmp = concatMany (complete p)
 
-instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
+instance MonoidParsing (Fixed Backtrack.Parser g) where
+   endOfInput = primitive "endOfInput" endOfInput empty endOfInput
+   getInput = primitive "getInput" (endOfInput *> getInput) (notFollowedBy endOfInput *> getInput) getInput
+   anyToken = positivePrimitive "anyToken" anyToken
+   token x = positivePrimitive "token" (token x)
+   satisfy predicate = positivePrimitive "satisfy" (satisfy predicate)
+   satisfyChar predicate = positivePrimitive "satisfyChar" (satisfyChar predicate)
+   satisfyCharInput predicate = positivePrimitive "satisfyCharInput" (satisfyCharInput predicate)
+   notSatisfy predicate = primitive "notSatisfy" (notSatisfy predicate) empty (notSatisfy predicate)
+   notSatisfyChar predicate = primitive "notSatisfyChar" (notSatisfyChar predicate) empty (notSatisfyChar predicate)
+   scan s0 f = primitive "scan" (mempty <$ notSatisfy test) (lookAhead (satisfy test) *> p) p
+      where p = scan s0 f
+            test = isJust . f s0
+   scanChars s0 f = primitive "scanChars" (mempty <$ notSatisfyChar test) (lookAhead (satisfyChar test) *> p) p
+      where p = scanChars s0 f
+            test = isJust . f s0
+   string s
+      | null s = primitive ("(string " ++ shows s ")") (string s) empty (string s)
+      | otherwise = positivePrimitive ("(string " ++ shows s ")") (string s)
+   takeWhile predicate = primitive "takeWhile" (mempty <$ notSatisfy predicate)
+                                               (takeWhile1 predicate) (takeWhile predicate)
+   takeWhile1 predicate = positivePrimitive "takeWhile1" (takeWhile1 predicate)
+   takeCharsWhile predicate = primitive "takeCharsWhile" (mempty <$ notSatisfyChar predicate)
+                                                         (takeCharsWhile1 predicate) (takeCharsWhile predicate)
+   takeCharsWhile1 predicate = positivePrimitive "takeCharsWhile1" (takeCharsWhile1 predicate)
+   whiteSpace = primitive "whiteSpace" (notSatisfyChar isSpace) (satisfyChar isSpace *> whiteSpace) whiteSpace
+   concatMany p@PositiveDirectParser{} = DirectParser{
+      complete= cmp,
+      direct0= d0,
+      direct1= d1}
+      where d0 = pure mempty
+            d1 = (<>) <$> complete p <*> cmp
+            cmp = concatMany (complete p)
+   concatMany p@DirectParser{} = DirectParser{
+      complete= cmp,
+      direct0= d0,
+      direct1= d1}
+      where d0 = pure mempty `Backtrack.alt` direct0 p
+            d1 = (<>) <$> direct1 p <*> cmp
+            cmp = concatMany (complete p)
+   concatMany p@Parser{} = Parser{
+      complete= cmp,
+      direct= d0 `Backtrack.alt` d1,
+      direct0= d0,
+      direct1= d1,
+      indirect= (<>) <$> indirect p <*> cmp,
+      cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
+      where d0 = pure mempty `Backtrack.alt` direct0 p
+            d1 = (<>) <$> direct1 p <*> cmp
+            cmp = concatMany (complete p)
+
+instance (LookAheadParsing (p g s), MonoidParsing (Fixed p g), Show s, TextualMonoid s) =>
+         CharParsing (Fixed p g s) where
    satisfy = satisfyChar
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    char = satisfyChar . (==)
@@ -417,15 +471,40 @@ instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
    anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance (Show s, TextualMonoid s) => TokenParsing (Parser g s) where
-   someSpace = () <$ takeCharsWhile1 isSpace
+instance (LookAheadParsing (p g s), TokenParsing (p g s), MonoidParsing (Fixed p g), Show s, TextualMonoid s) => 
+         TokenParsing (Fixed p g s) where
+   someSpace = positivePrimitive "someSpace" someSpace
+
+longest :: FactorialMonoid s => Fixed Memoizing.Parser g s a -> Fixed Backtrack.Parser g [(s, g (ResultList g s))] a
+longest (PositiveDirectParser p) = PositiveDirectParser (Memoizing.longest p)
+longest p@DirectParser{} = DirectParser{complete= Memoizing.longest (complete p),
+                                        direct0=  Memoizing.longest (direct0 p),
+                                        direct1=  Memoizing.longest (direct1 p)}
+longest p@Parser{} = Parser{complete= Memoizing.longest (complete p),
+                            direct=  Memoizing.longest (direct p),
+                            direct0=  Memoizing.longest (direct0 p),
+                            direct1=  Memoizing.longest (direct1 p),
+                            indirect=  Memoizing.longest (indirect p),
+                            cyclicDescendants= cyclicDescendants p}
+
+peg :: Fixed Backtrack.Parser g [(s, g (ResultList g s))] a -> Fixed Memoizing.Parser g s a
+peg (PositiveDirectParser p) = PositiveDirectParser (Memoizing.peg p)
+peg p@DirectParser{} = DirectParser{complete= Memoizing.peg (complete p),
+                                        direct0=  Memoizing.peg (direct0 p),
+                                        direct1=  Memoizing.peg (direct1 p)}
+peg p@Parser{} = Parser{complete= Memoizing.peg (complete p),
+                        direct=  Memoizing.peg (direct p),
+                        direct0=  Memoizing.peg (direct0 p),
+                        direct1=  Memoizing.peg (direct1 p),
+                        indirect=  Memoizing.peg (indirect p),
+                        cyclicDescendants= cyclicDescendants p}
 
 parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, FactorialMonoid s) =>
-                  g (Parser g s) -> s -> [(s, g (ResultList g s))]
+                  g (Fixed Memoizing.Parser g s) -> s -> [(s, g (ResultList g s))]
 parseRecursive = parseSeparated . separated
 
 separated :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
-             g (Parser g s) -> g (SeparatedParser g s)
+             g (Fixed Memoizing.Parser g s) -> g (SeparatedParser Memoizing.Parser g s)
 separated g = Rank2.liftA4 reseparate circulars cycleFollowers descendants g
    where descendants :: g (Const (g (Const Bool)))
          cycleFollowers, circulars :: g (Const Bool)
@@ -433,7 +512,7 @@ separated g = Rank2.liftA4 reseparate circulars cycleFollowers descendants g
          leftRecursive :: forall a. Const (g (Const Bool)) a -> Const (ParserFlags g) a -> Const Bool a
          leftRecursiveDeps :: forall a. Const Bool a -> Const (ParserFlags g) a -> Const (g (Const Bool)) a
          reseparate :: forall a. Const Bool a -> Const Bool a -> Const (g (Const Bool)) a -> Parser g s a
-                    -> SeparatedParser g s a
+                    -> SeparatedParser Memoizing.Parser g s a
          reseparate (Const circular) (Const follower) (Const deps) p
             | circular || leader && follower = CycleParser (indirect p) (direct p) deps
             | follower = BackParser (complete p)
@@ -481,14 +560,14 @@ fixNullabilities gf = Rank2.fmap (Const . nullable . getConst) (go initial)
 -- left-recursive productions, the second all others. The first function argument specifies the left-recursive
 -- dependencies among the grammar productions.
 parseSeparated :: forall g s. (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) =>
-                  g (SeparatedParser g s) -> s -> [(s, g (ResultList g s))]
+                  g (SeparatedParser Memoizing.Parser g s) -> s -> [(s, g (ResultList g s))]
 parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
    where parseTail s parsedTail = parsed
             where parsed = (s,d''):parsedTail
                   d      = Rank2.fmap (($ (s,d):parsedTail) . Memoizing.applyParser) directs
                   d'     = fixRecursive s parsedTail d
                   d''    = Rank2.liftA2 f parsers d'
-                  f :: forall a. SeparatedParser g s a -> ResultList g s a -> ResultList g s a
+                  f :: forall a. SeparatedParser Memoizing.Parser g s a -> ResultList g s a -> ResultList g s a
                   f (FrontParser p) _ = Memoizing.applyParser p ((s,d''):parsedTail)
                   f _ result = result
          fixRecursive :: s -> [(s, g (ResultList g s))] -> g (ResultList g s) -> g (ResultList g s)
