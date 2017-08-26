@@ -29,8 +29,8 @@ import Text.Parser.Token (TokenParsing(someSpace))
 import Text.Grampa.Class (MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (FailureInfo(..))
 
-data Result (g :: (* -> *) -> *) s v = Parsed{parsedPrefix :: v, 
-                                              parsedSuffix :: s}
+data Result (g :: (* -> *) -> *) s v = Parsed{parsedPrefix :: !v,
+                                              parsedSuffix :: !s}
                                      | NoParse FailureInfo
 
 -- | Parser type for Parsing Expression Grammars that uses a backtracking algorithm, fast for grammars in LL(1) class

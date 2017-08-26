@@ -30,8 +30,8 @@ import Text.Grampa.Class (MonoidParsing(..), MultiParsing(..), ParseResults, Par
 import Text.Grampa.Internal (FailureInfo(..))
 
 data Result (g :: (* -> *) -> *) s v = Parsed{parsedLength :: !Int,
-                                              parsedResult :: v,
-                                              parsedSuffix :: s}
+                                              parsedResult :: !v,
+                                              parsedSuffix :: !s}
                                      | NoParse FailureInfo
 
 -- | Parser type for Parsing Expression Grammars that uses a backtracking algorithm, fast for grammars in LL(1) class

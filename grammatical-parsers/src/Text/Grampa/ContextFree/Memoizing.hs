@@ -19,7 +19,6 @@ import Data.Monoid.Textual (TextualMonoid)
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
 import Data.String (fromString)
-import Data.Word (Word64)
 
 import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)

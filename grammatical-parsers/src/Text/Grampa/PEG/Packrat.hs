@@ -30,8 +30,8 @@ import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..
 import Text.Grampa.Internal (FailureInfo(..))
 import qualified Text.Grampa.PEG.Backtrack as Backtrack (Parser)
 
-data Result g s v = Parsed{parsedPrefix :: v, 
-                           parsedSuffix :: [(s, g (Result g s))]}
+data Result g s v = Parsed{parsedPrefix :: !v, 
+                           parsedSuffix :: ![(s, g (Result g s))]}
                   | NoParse FailureInfo
 
 -- | Parser type for Parsing Expression Grammars that uses an improved packrat algorithm, with O(1) performance bounds
