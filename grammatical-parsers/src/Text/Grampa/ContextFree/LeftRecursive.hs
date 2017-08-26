@@ -30,7 +30,7 @@ import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults)
 import Text.Grampa.ContextFree.Memoizing (ResultList(..), fromResultList)
 import qualified Text.Grampa.ContextFree.Memoizing as Memoizing
-import qualified Text.Grampa.PEG.Backtrack as Backtrack
+import qualified Text.Grampa.PEG.Backtrack.Length as Backtrack
 
 import Prelude hiding (cycle, null, span, takeWhile)
 
