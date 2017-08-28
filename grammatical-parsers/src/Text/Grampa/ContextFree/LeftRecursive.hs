@@ -1,7 +1,8 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies, UndecidableInstances #-}
 {-# OPTIONS -fno-full-laziness #-}
-module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..), longest, peg, parseSeparated, separated)
+module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..), longest, peg, terminalPEG, 
+                                              parseSeparated, separated)
 where
 
 import Control.Applicative
@@ -475,6 +476,8 @@ instance (LookAheadParsing (p g s), TokenParsing (p g s), MonoidParsing (Fixed p
          TokenParsing (Fixed p g s) where
    someSpace = positivePrimitive "someSpace" someSpace
 
+-- | Turns a context-free parser into a backtracking PEG parser that consumes the longest possible prefix of the list
+-- of input tails, opposite of 'peg'
 longest :: FactorialMonoid s => Fixed Memoizing.Parser g s a -> Fixed Backtrack.Parser g [(s, g (ResultList g s))] a
 longest (PositiveDirectParser p) = PositiveDirectParser (Memoizing.longest p)
 longest p@DirectParser{} = DirectParser{complete= Memoizing.longest (complete p),
@@ -487,6 +490,7 @@ longest p@Parser{} = Parser{complete= Memoizing.longest (complete p),
                             indirect=  Memoizing.longest (indirect p),
                             cyclicDescendants= cyclicDescendants p}
 
+-- | Turns a backtracking PEG parser of the list of input tails into a context-free parser, opposite of 'longest'
 peg :: Fixed Backtrack.Parser g [(s, g (ResultList g s))] a -> Fixed Memoizing.Parser g s a
 peg (PositiveDirectParser p) = PositiveDirectParser (Memoizing.peg p)
 peg p@DirectParser{} = DirectParser{complete= Memoizing.peg (complete p),
@@ -498,6 +502,19 @@ peg p@Parser{} = Parser{complete= Memoizing.peg (complete p),
                         direct1=  Memoizing.peg (direct1 p),
                         indirect=  Memoizing.peg (indirect p),
                         cyclicDescendants= cyclicDescendants p}
+
+-- | Turns a backtracking PEG parser into a context-free parser
+terminalPEG :: Monoid s => Fixed Backtrack.Parser g s a -> Fixed Memoizing.Parser g s a
+terminalPEG (PositiveDirectParser p) = PositiveDirectParser (Memoizing.terminalPEG p)
+terminalPEG p@DirectParser{} = DirectParser{complete= Memoizing.terminalPEG (complete p),
+                                            direct0=  Memoizing.terminalPEG (direct0 p),
+                                            direct1=  Memoizing.terminalPEG (direct1 p)}
+terminalPEG p@Parser{} = Parser{complete= Memoizing.terminalPEG (complete p),
+                                direct=  Memoizing.terminalPEG (direct p),
+                                direct0=  Memoizing.terminalPEG (direct0 p),
+                                direct1=  Memoizing.terminalPEG (direct1 p),
+                                indirect=  Memoizing.terminalPEG (indirect p),
+                                cyclicDescendants= cyclicDescendants p}
 
 parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, FactorialMonoid s) =>
                   g (Fixed Memoizing.Parser g s) -> s -> [(s, g (ResultList g s))]

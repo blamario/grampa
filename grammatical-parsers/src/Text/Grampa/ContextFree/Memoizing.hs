@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, TypeFamilies #-}
 module Text.Grampa.ContextFree.Memoizing (FailureInfo(..), ResultList(..), Parser(..), 
-                                          fromResultList, reparseTails, longest, peg)
+                                          fromResultList, reparseTails, longest, peg, terminalPEG)
 where
 
 import Control.Applicative
@@ -245,6 +245,8 @@ fromResultList _ (ResultList rl _failure) = Right (f <$> rl)
    where f (ResultInfo _ ((s, _):_) r) = (s, r)
          f (ResultInfo _ [] r) = (mempty, r)
 
+-- | Turns a context-free parser into a backtracking PEG parser that consumes the longest possible prefix of the list
+-- of input tails, opposite of 'peg'
 longest :: FactorialMonoid s => Parser g s a -> Backtrack.Parser g [(s, g (ResultList g s))] a
 longest p = Backtrack.Parser q where
    q rest = case applyParser p rest
@@ -254,8 +256,19 @@ longest p = Backtrack.Parser q where
    resultLength (ResultInfo l _ _) = l
    parsed (ResultInfo l s r) = Backtrack.Parsed l r s
 
+-- | Turns a backtracking PEG parser of the list of input tails into a context-free parser, opposite of 'longest'
 peg :: Backtrack.Parser g [(s, g (ResultList g s))] a -> Parser g s a
 peg p = Parser q where
    q rest = case Backtrack.applyParser p rest
             of Backtrack.Parsed l result suffix -> ResultList [ResultInfo l suffix result] mempty
                Backtrack.NoParse failure -> ResultList [] failure
+
+-- | Turns a backtracking PEG parser into a context-free parser
+terminalPEG :: Monoid s => Backtrack.Parser g s a -> Parser g s a
+terminalPEG p = Parser q where
+   q [] = case Backtrack.applyParser p mempty
+            of Backtrack.Parsed l result _ -> ResultList [ResultInfo l [] result] mempty
+               Backtrack.NoParse failure -> ResultList [] failure
+   q rest@((s, _):_) = case Backtrack.applyParser p s
+                       of Backtrack.Parsed l result _ -> ResultList [ResultInfo l (drop l rest) result] mempty
+                          Backtrack.NoParse failure -> ResultList [] failure
