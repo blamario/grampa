@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, TypeFamilies #-}
 module Text.Grampa.ContextFree.Memoizing (FailureInfo(..), ResultList(..), Parser(..), BinTree(..), (<<|>),
-                                          fromResultList, reparseTails, longest, peg)
+                                          fromResultList, reparseTails, longest, peg, terminalPEG)
 where
 
 import Control.Applicative
