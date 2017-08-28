@@ -100,6 +100,7 @@ instance Alternative (Parser g i) where
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
 
+infixl 3 <<|>
 (<<|>) :: Parser g s a -> Parser g s a -> Parser g s a
 Parser p <<|> Parser q = Parser r where
    r rest = case p rest

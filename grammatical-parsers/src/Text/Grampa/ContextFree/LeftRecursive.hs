@@ -258,6 +258,7 @@ instance Alternative (p g s) => Alternative (Fixed p g s) where
       where d0 = (:[]) <$> direct0 p
             d1= (:) <$> direct1 p <*> many (complete p)
 
+infixl 3 <<|>
 (<<|>) :: Parser g s a -> Parser g s a -> Parser g s a
 p@DirectParser{} <<|> q@PositiveDirectParser{} = DirectParser{
    complete= complete p Memoizing.<<|> complete q,
