@@ -113,9 +113,9 @@ instance (Show s, Textual.TextualMonoid s) => TokenParsing (Parser g s) where
 
 instance MonoidParsing (Parser g) where
    endOfInput = Parser p
-      where p rest = if Null.null rest
-                     then NoParse (FailureInfo 1 (fromIntegral $ Factorial.length rest) ["endOfInput"])
-                     else Parsed 0 () rest
+      where p rest
+               | Null.null rest = Parsed 0 () rest
+               | otherwise = NoParse (FailureInfo 1 (fromIntegral $ Factorial.length rest) ["endOfInput"])
    getInput = Parser p
       where p rest = Parsed (Factorial.length rest) rest mempty
    anyToken = Parser p
