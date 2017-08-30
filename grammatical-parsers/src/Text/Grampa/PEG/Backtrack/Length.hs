@@ -47,6 +47,7 @@ instance Functor (Result g s) where
    
 instance Functor (Parser g s) where
    fmap f (Parser p) = Parser (fmap f . p)
+   {-# INLINABLE fmap #-}
 
 instance Applicative (Parser g s) where
    pure a = Parser (Parsed 0 a)
@@ -56,6 +57,7 @@ instance Applicative (Parser g s) where
                                       of Parsed l' a rest'' -> Parsed (l+l') (f a) rest''
                                          NoParse failure -> NoParse failure
                   NoParse failure -> NoParse failure
+   {-# INLINABLE (<*>) #-}
 
 instance Factorial.FactorialMonoid s => Alternative (Parser g s) where
    empty = Parser (\rest-> NoParse $ FailureInfo 0 (fromIntegral $ Factorial.length rest) ["empty"])
@@ -178,6 +180,7 @@ instance MonoidParsing (Parser g) where
                      of Parsed l prefix suffix -> let Parsed l' prefix' suffix' = q suffix
                                                   in Parsed (l+l') (prefix <> prefix') suffix'
                         NoParse{} -> Parsed 0 mempty rest
+   {-# INLINABLE string #-}
 
 -- | Backtracking PEG parser
 --

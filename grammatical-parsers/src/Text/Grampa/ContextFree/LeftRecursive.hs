@@ -136,6 +136,7 @@ instance GrammarParsing (Fixed Memoizing.Parser) where
                Const ParserFlags{
                   nullable= n, 
                   dependsOn= Rank2.liftA2 union bit d}
+   {-# INLINE nonTerminal #-}
    recursive = general
 
 bits :: forall (g :: (* -> *) -> *). (Rank2.Distributive g, Rank2.Traversable g) => g (Const (g (Const Bool)))
@@ -158,6 +159,7 @@ instance Functor (p g s) => Functor (Fixed p g s) where
       direct0= fmap f (direct0 p),
       direct1= fmap f (direct1 p),
       indirect= fmap f (indirect p)}
+   {-# INLINABLE fmap #-}
 
 instance Alternative (p g s) => Applicative (Fixed p g s) where
    pure a = DirectParser{complete= pure a,
@@ -198,6 +200,8 @@ instance Alternative (p g s) => Applicative (Fixed p g s) where
            else pcd}
       where p'@Parser{} = general' p
             q'@Parser{} = general' q
+   {-# INLINABLE pure #-}
+   {-# INLINABLE (<*>) #-}
 
 instance Alternative (p g s) => Alternative (Fixed p g s) where
    empty = PositiveDirectParser{complete= empty}
@@ -257,6 +261,9 @@ instance Alternative (p g s) => Alternative (Fixed p g s) where
       cyclicDescendants= cyclicDescendants p}
       where d0 = (:[]) <$> direct0 p
             d1= (:) <$> direct1 p <*> many (complete p)
+   {-# INLINABLE (<|>) #-}
+   {-# INLINABLE many #-}
+   {-# INLINABLE some #-}
 
 infixl 3 <<|>
 (<<|>) :: Parser g s a -> Parser g s a -> Parser g s a
@@ -432,6 +439,7 @@ instance MonoidParsing (Fixed Memoizing.Parser g) where
       where d0 = pure mempty <|> direct0 p
             d1 = (<>) <$> direct1 p <*> cmp
             cmp = concatMany (complete p)
+   {-# INLINABLE string #-}
 
 instance MonoidParsing (Fixed Backtrack.Parser g) where
    endOfInput = primitive "endOfInput" endOfInput empty endOfInput
@@ -483,6 +491,7 @@ instance MonoidParsing (Fixed Backtrack.Parser g) where
       where d0 = pure mempty `Backtrack.alt` direct0 p
             d1 = (<>) <$> direct1 p <*> cmp
             cmp = concatMany (complete p)
+   {-# INLINABLE string #-}
 
 instance (LookAheadParsing (p g s), MonoidParsing (Fixed p g), Show s, TextualMonoid s) =>
          CharParsing (Fixed p g s) where

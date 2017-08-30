@@ -85,6 +85,7 @@ instance Monoid (ResultList g s r) where
 
 instance Functor (Parser g i) where
    fmap f (Parser p) = Parser (fmap f . p)
+   {-# INLINABLE fmap #-}
 
 instance Applicative (Parser g i) where
    pure a = Parser (\rest-> ResultList (Leaf $ ResultInfo 0 rest a) mempty)
@@ -94,11 +95,14 @@ instance Applicative (Parser g i) where
       continue (ResultInfo l rest' f) = continue' l f (q rest')
       continue' l f (ResultList rs failure) = ResultList (adjust l f <$> rs) failure
       adjust l f (ResultInfo l' rest' a) = ResultInfo (l+l') rest' (f a)
+   {-# INLINABLE pure #-}
+   {-# INLINABLE (<*>) #-}
 
 instance Alternative (Parser g i) where
    empty = Parser (\rest-> ResultList mempty $ FailureInfo 0 (genericLength rest) ["empty"])
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
+   {-# INLINABLE (<|>) #-}
 
 infixl 3 <<|>
 (<<|>) :: Parser g s a -> Parser g s a -> Parser g s a
@@ -129,6 +133,7 @@ instance GrammarParsing Parser where
    nonTerminal f = Parser p where
       p ((_, d) : _) = f d
       p _ = ResultList mempty (FailureInfo 1 0 ["NonTerminal at endOfInput"])
+   {-# INLINE nonTerminal #-}
 
 -- | Memoizing parser guarantees O(n²) performance for grammars with unambiguous productions, but provides no left
 -- recursion support.
@@ -234,6 +239,7 @@ instance MonoidParsing (Parser g) where
                | Just first <- Textual.characterPrefix s, 
                  predicate first = ResultList mempty (FailureInfo 1 (genericLength rest) ["notSatisfyChar"])
             p rest = ResultList (Leaf $ ResultInfo 0 rest ()) mempty
+   {-# INLINABLE string #-}
 
 instance MonoidNull s => Parsing (Parser g s) where
    try (Parser p) = Parser (weakenResults . p)
