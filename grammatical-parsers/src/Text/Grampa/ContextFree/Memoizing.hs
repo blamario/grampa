@@ -30,7 +30,7 @@ import Text.Parser.Token (TokenParsing(someSpace))
 import qualified Rank2
 
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
-import Text.Grampa.Internal (FailureInfo(..))
+import Text.Grampa.Internal (BinTree(..), FailureInfo(..))
 import qualified Text.Grampa.PEG.Backtrack.Length as Backtrack
 
 import Prelude hiding (iterate, length, null, showList, span, takeWhile)
@@ -39,29 +39,8 @@ import Prelude hiding (iterate, length, null, showList, span, takeWhile)
 -- grammars.
 newtype Parser g s r = Parser{applyParser :: [(s, g (ResultList g s))] -> ResultList g s r}
 
-data BinTree a = Fork !(BinTree a) !(BinTree a)
-               | Leaf !a
-               | EmptyTree
-               deriving (Show)
-
 data ResultList g s r = ResultList !(BinTree (ResultInfo g s r)) {-# UNPACK #-} !FailureInfo
 data ResultInfo g s r = ResultInfo !Int ![(s, g (ResultList g s))] !r
-
-instance Functor BinTree where
-   fmap f (Fork left right) = Fork (fmap f left) (fmap f right)
-   fmap f (Leaf a) = Leaf (f a)
-   fmap _ EmptyTree = EmptyTree
-
-instance Foldable BinTree where
-   foldMap f (Fork left right) = foldMap f left <> foldMap f right
-   foldMap f (Leaf a) = f a
-   foldMap _ EmptyTree = mempty
-
-instance Monoid (BinTree a) where
-   mempty = EmptyTree
-   mappend EmptyTree t = t
-   mappend t EmptyTree = t
-   mappend l r = Fork l r
 
 instance (Show s, Show r) => Show (ResultList g s r) where
    show (ResultList l f) = "ResultList (" ++ shows l (") (" ++ shows f ")")

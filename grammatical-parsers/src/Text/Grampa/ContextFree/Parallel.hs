@@ -6,6 +6,7 @@ where
 import Control.Applicative
 import Control.Monad (Monad(..), MonadPlus(..))
 import Data.Char (isSpace)
+import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List (nub)
@@ -28,6 +29,7 @@ import Text.Parser.Token (TokenParsing(someSpace))
 import qualified Rank2
 
 import Text.Grampa.Class (MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
+import Text.Grampa.Internal (BinTree(..))
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
 
@@ -35,7 +37,7 @@ import Prelude hiding (iterate, null, showList, span, takeWhile)
 -- support.
 newtype Parser (g :: (* -> *) -> *) s r = Parser{applyParser :: s -> ResultList s r}
 
-data ResultList s r = ResultList ![ResultInfo s r] {-# UNPACK #-} !FailureInfo
+data ResultList s r = ResultList !(BinTree (ResultInfo s r)) {-# UNPACK #-} !FailureInfo
 data ResultInfo s r = ResultInfo !s !r
 data FailureInfo = FailureInfo !Int Int [String] deriving (Eq, Show)
 
@@ -43,7 +45,7 @@ instance (Show s, Show r) => Show (ResultList s r) where
    show (ResultList l f) = "ResultList (" ++ shows l (") (" ++ shows f ")")
 
 instance Show1 (ResultList s) where
-   liftShowsPrec _sp showList _prec (ResultList l f) rest = "ResultList " ++ showList (simplify <$> l) (shows f rest)
+   liftShowsPrec _sp showList _prec (ResultList l f) rest = "ResultList " ++ showList (simplify <$> toList l) (shows f rest)
       where simplify (ResultInfo _ r) = r
 
 instance (Show s, Show r) => Show (ResultInfo s r) where
@@ -56,7 +58,7 @@ instance Functor (ResultList s) where
    fmap f (ResultList l failure) = ResultList ((f <$>) <$> l) failure
 
 instance Monoid (ResultList s r) where
-   mempty = ResultList [] mempty
+   mempty = ResultList mempty mempty
    ResultList rl1 f1 `mappend` ResultList rl2 f2 = ResultList (rl1 <> rl2) (f1 <> f2)
 
 instance Monoid FailureInfo where
@@ -73,15 +75,15 @@ instance Functor (Parser g s) where
    fmap f (Parser p) = Parser (fmap f . p)
 
 instance Applicative (Parser g s) where
-   pure a = Parser (\rest-> ResultList [ResultInfo rest a] mempty)
+   pure a = Parser (\rest-> ResultList (Leaf $ ResultInfo rest a) mempty)
    Parser p <*> Parser q = Parser r where
       r rest = case p rest
-               of ResultList results failure -> ResultList [] failure <> foldMap continue results
+               of ResultList results failure -> ResultList mempty failure <> foldMap continue results
       continue (ResultInfo rest' f) = f <$> q rest'
 
 
 instance FactorialMonoid s => Alternative (Parser g s) where
-   empty = Parser (\s-> ResultList [] $ FailureInfo 0 (Factorial.length s) ["empty"])
+   empty = Parser (\s-> ResultList mempty $ FailureInfo 0 (Factorial.length s) ["empty"])
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
 
@@ -89,7 +91,7 @@ instance Monad (Parser g s) where
    return = pure
    Parser p >>= f = Parser q where
       q rest = case p rest
-               of ResultList results failure -> ResultList [] failure <> foldMap continue results
+               of ResultList results failure -> ResultList mempty failure <> foldMap continue results
       continue (ResultInfo rest' a) = applyParser (f a) rest'
 
 instance FactorialMonoid s => MonadPlus (Parser g s) where
@@ -117,64 +119,65 @@ instance MultiParsing Parser where
 
 instance MonoidParsing (Parser g) where
    endOfInput = Parser f
-      where f s | null s = ResultList [ResultInfo s ()] mempty
-                | otherwise = ResultList [] (FailureInfo 1 (Factorial.length s) ["endOfInput"])
+      where f s | null s = ResultList (Leaf $ ResultInfo s ()) mempty
+                | otherwise = ResultList mempty (FailureInfo 1 (Factorial.length s) ["endOfInput"])
    getInput = Parser p
-      where p s = ResultList [ResultInfo mempty s] mempty
+      where p s = ResultList (Leaf $ ResultInfo mempty s) mempty
    anyToken = Parser p
       where p s = case Factorial.splitPrimePrefix s
-                  of Just (first, rest) -> ResultList [ResultInfo rest first] mempty
-                     _ -> ResultList [] (FailureInfo 1 (Factorial.length s) ["anyToken"])
+                  of Just (first, rest) -> ResultList (Leaf $ ResultInfo rest first) mempty
+                     _ -> ResultList mempty (FailureInfo 1 (Factorial.length s) ["anyToken"])
    satisfy predicate = Parser p
       where p s = case Factorial.splitPrimePrefix s
-                  of Just (first, rest) | predicate first -> ResultList [ResultInfo rest first] mempty
-                     _ -> ResultList [] (FailureInfo 1 (Factorial.length s) ["satisfy"])
+                  of Just (first, rest) | predicate first -> ResultList (Leaf $ ResultInfo rest first) mempty
+                     _ -> ResultList mempty (FailureInfo 1 (Factorial.length s) ["satisfy"])
    satisfyChar predicate = Parser p
       where p s =
                case Textual.splitCharacterPrefix s
-               of Just (first, rest) | predicate first -> ResultList [ResultInfo rest first] mempty
-                  _ -> ResultList [] (FailureInfo 1 (Factorial.length s) ["satisfyChar"])
+               of Just (first, rest) | predicate first -> ResultList (Leaf $ ResultInfo rest first) mempty
+                  _ -> ResultList mempty (FailureInfo 1 (Factorial.length s) ["satisfyChar"])
    satisfyCharInput predicate = Parser p
       where p s =
                case Textual.splitCharacterPrefix s
-               of Just (first, rest) | predicate first -> ResultList [ResultInfo rest $ Factorial.primePrefix s] mempty
-                  _ -> ResultList [] (FailureInfo 1 (Factorial.length s) ["satisfyChar"])
+               of Just (first, rest) | predicate first -> ResultList (Leaf $ ResultInfo rest $ Factorial.primePrefix s) mempty
+                  _ -> ResultList mempty (FailureInfo 1 (Factorial.length s) ["satisfyChar"])
    notSatisfy predicate = Parser p
       where p s = case Factorial.splitPrimePrefix s
                   of Just (first, _) 
-                        | predicate first -> ResultList [] (FailureInfo 1 (Factorial.length s) ["notSatisfy"])
-                     _ -> ResultList [ResultInfo s ()] mempty
+                        | predicate first -> ResultList mempty (FailureInfo 1 (Factorial.length s) ["notSatisfy"])
+                     _ -> ResultList (Leaf $ ResultInfo s ()) mempty
    notSatisfyChar predicate = Parser p
       where p s = case Textual.characterPrefix s
                   of Just first 
-                        | predicate first -> ResultList [] (FailureInfo 1 (Factorial.length s) ["notSatisfyChar"])
-                     _ -> ResultList [ResultInfo s ()] mempty
+                        | predicate first -> ResultList mempty (FailureInfo 1 (Factorial.length s) ["notSatisfyChar"])
+                     _ -> ResultList (Leaf $ ResultInfo s ()) mempty
    scan s0 f = Parser (p s0)
-      where p s i = ResultList [ResultInfo suffix prefix] mempty
+      where p s i = ResultList (Leaf $ ResultInfo suffix prefix) mempty
                where (prefix, suffix, _) = Factorial.spanMaybe' s f i
    scanChars s0 f = Parser (p s0)
-      where p s i = ResultList [ResultInfo suffix prefix] mempty
+      where p s i = ResultList (Leaf $ ResultInfo suffix prefix) mempty
                where (prefix, suffix, _) = Textual.spanMaybe_' s f i
    takeWhile predicate = Parser p
-      where p s | (prefix, suffix) <- Factorial.span predicate s = ResultList [ResultInfo suffix prefix] mempty
+      where p s | (prefix, suffix) <- Factorial.span predicate s = ResultList (Leaf $ ResultInfo suffix prefix) mempty
    takeWhile1 predicate = Parser p
       where p s | (prefix, suffix) <- Factorial.span predicate s = 
                if Null.null prefix
-               then ResultList [] (FailureInfo 1 (Factorial.length s) ["takeWhile1"])
-               else ResultList [ResultInfo suffix prefix] mempty
+               then ResultList mempty (FailureInfo 1 (Factorial.length s) ["takeWhile1"])
+               else ResultList (Leaf $ ResultInfo suffix prefix) mempty
    takeCharsWhile predicate = Parser p
-      where p s | (prefix, suffix) <- Textual.span_ False predicate s = ResultList [ResultInfo suffix prefix] mempty
+      where p s | (prefix, suffix) <- Textual.span_ False predicate s = 
+               ResultList (Leaf $ ResultInfo suffix prefix) mempty
    takeCharsWhile1 predicate = Parser p
       where p s | (prefix, suffix) <- Textual.span_ False predicate s =
                if null prefix
-               then ResultList [] (FailureInfo 1 (Factorial.length s) ["takeCharsWhile1"])
-               else ResultList [ResultInfo suffix prefix] mempty
+               then ResultList mempty (FailureInfo 1 (Factorial.length s) ["takeCharsWhile1"])
+               else ResultList (Leaf $ ResultInfo suffix prefix) mempty
    string s = Parser p where
-      p s' | Just suffix <- Cancellative.stripPrefix s s' = ResultList [ResultInfo suffix s] mempty
-           | otherwise = ResultList [] (FailureInfo 1 (Factorial.length s') ["string " ++ show s])
+      p s' | Just suffix <- Cancellative.stripPrefix s s' = ResultList (Leaf $ ResultInfo suffix s) mempty
+           | otherwise = ResultList mempty (FailureInfo 1 (Factorial.length s') ["string " ++ show s])
    whiteSpace = () <$ takeCharsWhile isSpace
    concatMany (Parser p) = Parser q
-      where q s = ResultList [] failure <> foldMap continue rs
+      where q s = ResultList mempty failure <> foldMap continue rs
                where ResultList rs failure = p s
             continue (ResultInfo suffix prefix) = (prefix <>) <$> q suffix
 
@@ -184,11 +187,11 @@ instance FactorialMonoid s => Parsing (Parser g s) where
    Parser p <?> msg  = Parser (strengthenResults . p)
       where strengthenResults (ResultList rl (FailureInfo s pos _msgs)) = ResultList rl (FailureInfo (succ s) pos [msg])
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
-      where rewind t (ResultList [] _) = ResultList [ResultInfo t ()] mempty
-            rewind t ResultList{} = ResultList [] (FailureInfo 1 (Factorial.length t) ["notFollowedBy"])
+      where rewind t (ResultList EmptyTree _) = ResultList (Leaf $ ResultInfo t ()) mempty
+            rewind t ResultList{} = ResultList mempty (FailureInfo 1 (Factorial.length t) ["notFollowedBy"])
    skipMany p = go
       where go = pure () <|> p *> go
-   unexpected msg = Parser (\t-> ResultList [] $ FailureInfo 0 (Factorial.length t) [msg])
+   unexpected msg = Parser (\t-> ResultList mempty $ FailureInfo 0 (Factorial.length t) [msg])
    eof = endOfInput
 
 instance FactorialMonoid s => LookAheadParsing (Parser g s) where
@@ -208,6 +211,7 @@ instance (Show s, TextualMonoid s) => TokenParsing (Parser g s) where
    someSpace = () <$ takeCharsWhile1 isSpace
 
 fromResultList :: FactorialMonoid s => s -> ResultList s r -> ParseResults [(s, r)]
-fromResultList s (ResultList [] (FailureInfo _ pos msgs)) = Left (ParseFailure (Factorial.length s - pos) (nub msgs))
-fromResultList _ (ResultList rl _failure) = Right (f <$> rl)
+fromResultList s (ResultList EmptyTree (FailureInfo _ pos msgs)) = 
+   Left (ParseFailure (Factorial.length s - pos) (nub msgs))
+fromResultList _ (ResultList rl _failure) = Right (f <$> toList rl)
    where f (ResultInfo s r) = (s, r)
