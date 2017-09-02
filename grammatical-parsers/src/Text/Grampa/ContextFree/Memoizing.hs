@@ -87,7 +87,7 @@ infixl 3 <<|>
 (<<|>) :: Parser g s a -> Parser g s a -> Parser g s a
 Parser p <<|> Parser q = Parser r where
    r rest = case p rest
-            of rl@(ResultList EmptyTree failure) -> rl <> q rest
+            of rl@(ResultList EmptyTree _failure) -> rl <> q rest
                rl -> rl
 
 instance Monad (Parser g i) where
