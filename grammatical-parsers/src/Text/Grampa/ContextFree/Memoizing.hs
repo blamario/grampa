@@ -101,7 +101,8 @@ instance GrammarParsing Parser where
       p ((_, d) : _) = f d
       p _ = ResultList [] (FailureInfo 1 0 ["NonTerminal at endOfInput"])
 
--- | Memoizing parser guarantees O(n²) performance, but provides no left recursion support.
+-- | Memoizing parser guarantees O(n²) performance for grammars with unambiguous productions, but provides no left
+-- recursion support.
 --
 -- @
 -- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>

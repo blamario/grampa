@@ -12,7 +12,6 @@ import Data.List (genericLength, nub)
 import Data.Monoid (Monoid(mappend, mempty), (<>))
 import Data.Monoid.Factorial(FactorialMonoid)
 import Data.String (fromString)
-import Data.Word (Word64)
 
 import qualified Data.Monoid.Cancellative as Cancellative
 import qualified Data.Monoid.Factorial as Factorial

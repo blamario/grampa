@@ -61,8 +61,7 @@ data ParserFlags g = ParserFlags {
 deriving instance Show (g (Const Bool)) => Show (ParserFlags g)
 
 data ParserFunctor g s a = ParserResultsFunctor {parserResults :: ResultList g s a}
-                         | ParserFlagsFuntor {parserFlags :: ParserFlags g}
-                         | ParserFlagFunctor {parserFlag :: Bool}
+                         | ParserFlagsFunctor {parserFlags :: ParserFlags g}
 
 newtype Union (g :: (* -> *) -> *) = Union{getUnion :: g (Const Bool)}
 
@@ -129,7 +128,7 @@ instance GrammarParsing (Fixed Memoizing.Parser) where
       direct0= empty,
       direct1= empty,
       indirect= ind,
-      cyclicDescendants= parserFlags . f . Rank2.fmap (ParserFlagsFuntor . getConst) . addSelf}
+      cyclicDescendants= parserFlags . f . Rank2.fmap (ParserFlagsFunctor . getConst) . addSelf}
       where ind = nonTerminal (parserResults . f . Rank2.fmap ParserResultsFunctor)
             addSelf g = Rank2.liftA2 adjust bits g
             adjust :: forall b. Const (g (Const Bool)) b -> Const (ParserFlags g) b -> Const (ParserFlags g) b
@@ -554,7 +553,7 @@ fixDescendants gf = go initial
             | getAll (Rank2.foldMap (All . getConst) $ Rank2.liftA2 agree cd cd') = cd
             | otherwise = go cd'
             where cd' = Rank2.liftA2 depsUnion cd (Rank2.fmap (\(Const f)-> Const (f cd)) gf)
-         agree (Const (ParserFlags xn xd)) (Const (ParserFlags yn yd)) =
+         agree (Const (ParserFlags _xn xd)) (Const (ParserFlags _yn yd)) =
             Const (getAll (Rank2.foldMap (All . getConst) (Rank2.liftA2 agree' xd yd)))
          agree' (Const x) (Const y) = Const (x == y)
          depsUnion (Const ParserFlags{dependsOn= old}) (Const (ParserFlags n new)) = 
