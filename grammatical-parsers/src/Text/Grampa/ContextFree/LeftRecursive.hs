@@ -110,11 +110,11 @@ instance MultiParsing (Fixed Memoizing.Parser) where
    type GrammarConstraint (Fixed Memoizing.Parser) g = (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
    type ResultFunctor (Fixed Memoizing.Parser) = Compose ParseResults []
    parsePrefix :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, FactorialMonoid s) =>
-                  g (Fixed Memoizing.Parser g s) -> s -> g (Compose (Compose ParseResults []) ((,) s))
+                  g (Parser g s) -> s -> g (Compose (Compose ParseResults []) ((,) s))
    parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input)
                                     (snd $ head $ parseRecursive g input)
    parseComplete :: (FactorialMonoid s, Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
-                    g (Fixed Memoizing.Parser g s) -> s -> g (Compose ParseResults [])
+                    g (Parser g s) -> s -> g (Compose ParseResults [])
    parseComplete g input = Rank2.fmap ((snd <$>) . Compose . fromResultList input)
                                       (snd $ head $ Memoizing.reparseTails close $ parseRecursive g input)
       where close = Rank2.fmap (<* endOfInput) selfReferring
@@ -517,11 +517,11 @@ terminalPEG p@Parser{} = Parser{complete= Memoizing.terminalPEG (complete p),
                                 cyclicDescendants= cyclicDescendants p}
 
 parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, FactorialMonoid s) =>
-                  g (Fixed Memoizing.Parser g s) -> s -> [(s, g (ResultList g s))]
+                  g (Parser g s) -> s -> [(s, g (ResultList g s))]
 parseRecursive = parseSeparated . separated
 
 separated :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
-             g (Fixed Memoizing.Parser g s) -> g (SeparatedParser Memoizing.Parser g s)
+             g (Parser g s) -> g (SeparatedParser Memoizing.Parser g s)
 separated g = Rank2.liftA4 reseparate circulars cycleFollowers descendants g
    where descendants :: g (Const (g (Const Bool)))
          cycleFollowers, circulars :: g (Const Bool)
