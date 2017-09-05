@@ -177,7 +177,7 @@ instance MonoidParsing (Parser g) where
            | otherwise = ResultList mempty (FailureInfo 1 (Factorial.length s') ["string " ++ show s])
    whiteSpace = () <$ takeCharsWhile isSpace
    concatMany (Parser p) = Parser q
-      where q s = ResultList mempty failure <> foldMap continue rs
+      where q s = ResultList (Leaf $ ResultInfo s mempty) failure <> foldMap continue rs
                where ResultList rs failure = p s
             continue (ResultInfo suffix prefix) = (prefix <>) <$> q suffix
 
