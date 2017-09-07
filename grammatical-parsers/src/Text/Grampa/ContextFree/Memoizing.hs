@@ -42,14 +42,14 @@ newtype Parser g s r = Parser{applyParser :: [(s, g (ResultList g s))] -> Result
 data ResultList g s r = ResultList !(BinTree (ResultInfo g s r)) {-# UNPACK #-} !FailureInfo
 data ResultInfo g s r = ResultInfo !Int ![(s, g (ResultList g s))] !r
 
-instance (Show s, Show r) => Show (ResultList g s r) where
+instance Show r => Show (ResultList g s r) where
    show (ResultList l f) = "ResultList (" ++ shows l (") (" ++ shows f ")")
 
 instance Show1 (ResultList g s) where
    liftShowsPrec _sp showList _prec (ResultList l f) rest = "ResultList " ++ showList (simplify <$> toList l) (shows f rest)
       where simplify (ResultInfo _ _ r) = r
 
-instance (Show s, Show r) => Show (ResultInfo g s r) where
+instance Show r => Show (ResultInfo g s r) where
    show (ResultInfo l _ r) = "(ResultInfo @" ++ show l ++ " " ++ shows r ")"
 
 instance Functor (ResultInfo g s) where
@@ -262,7 +262,7 @@ fromResultList _ (ResultList rl _failure) = Right (f <$> toList rl)
 
 -- | Turns a context-free parser into a backtracking PEG parser that consumes the longest possible prefix of the list
 -- of input tails, opposite of 'peg'
-longest :: FactorialMonoid s => Parser g s a -> Backtrack.Parser g [(s, g (ResultList g s))] a
+longest :: Parser g s a -> Backtrack.Parser g [(s, g (ResultList g s))] a
 longest p = Backtrack.Parser q where
    q rest = case applyParser p rest
             of ResultList EmptyTree failure -> Backtrack.NoParse failure

@@ -509,7 +509,7 @@ instance (LookAheadParsing (p g s), TokenParsing (p g s), MonoidParsing (Fixed p
 
 -- | Turns a context-free parser into a backtracking PEG parser that consumes the longest possible prefix of the list
 -- of input tails, opposite of 'peg'
-longest :: FactorialMonoid s => Fixed Memoizing.Parser g s a -> Fixed Backtrack.Parser g [(s, g (ResultList g s))] a
+longest :: Fixed Memoizing.Parser g s a -> Fixed Backtrack.Parser g [(s, g (ResultList g s))] a
 longest (PositiveDirectParser p) = PositiveDirectParser (Memoizing.longest p)
 longest p@DirectParser{} = DirectParser{complete= Memoizing.longest (complete p),
                                         direct0=  Memoizing.longest (direct0 p),
