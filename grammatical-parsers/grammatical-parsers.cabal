@@ -24,10 +24,13 @@ source-repository head
 library
   hs-source-dirs:      src
   exposed-modules:     Text.Grampa,
-                       Text.Grampa.PEG.Backtrack, Text.Grampa.PEG.Continued, Text.Grampa.PEG.Packrat,
+                       Text.Grampa.PEG.Backtrack, Text.Grampa.PEG.Packrat,
                        Text.Grampa.ContextFree.Continued, Text.Grampa.ContextFree.Parallel,
                        Text.Grampa.ContextFree.Memoizing, Text.Grampa.ContextFree.LeftRecursive
-  other-modules:       Text.Grampa.Class, Text.Grampa.Internal, Text.Grampa.PEG.Backtrack.Length
+  other-modules:       Text.Grampa.Class, Text.Grampa.Internal,
+                       Text.Grampa.PEG.Backtrack.Length,
+                       Text.Grampa.PEG.Continued, Text.Grampa.PEG.Continued.Measured,
+                       Text.Grampa.ContextFree.Continued.Measured
   default-language:    Haskell2010
   -- other-modules:
   ghc-options:         -Wall
