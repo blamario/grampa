@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 -- | Backtracking parser for Parsing Expression Grammars, tracking the consumed input length
-module Text.Grampa.PEG.Backtrack.Length (Parser(..), Result(..), alt) where
+module Text.Grampa.PEG.Backtrack.Measured (Parser(..), Result(..), alt) where
 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
 import Control.Monad (Monad(..), MonadPlus(..))

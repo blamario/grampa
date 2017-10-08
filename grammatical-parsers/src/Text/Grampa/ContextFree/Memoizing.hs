@@ -31,7 +31,7 @@ import qualified Rank2
 
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (BinTree(..), FailureInfo(..))
-import qualified Text.Grampa.PEG.Backtrack.Length as Backtrack
+import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
 import Prelude hiding (iterate, length, null, showList, span, takeWhile)
 
