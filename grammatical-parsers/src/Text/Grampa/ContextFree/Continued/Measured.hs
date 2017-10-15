@@ -1,5 +1,5 @@
 {-# LANGUAGE BangPatterns, InstanceSigs, RankNTypes, ScopedTypeVariables, TypeFamilies #-}
--- | Backtracking parser for Parsing Expression Grammars
+-- | Continuation-passing parser for context-free grammars that keeps track of the parsed prefix length
 module Text.Grampa.ContextFree.Continued.Measured (Parser(..), Result(..), alt) where
 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
@@ -33,8 +33,8 @@ data Result (g :: (* -> *) -> *) s v = Parsed{parsedPrefix :: !v,
                                               parsedSuffix :: !s}
                                      | NoParse FailureInfo
 
--- | Parser type for Parsing Expression Grammars that uses a backtracking algorithm, fast for grammars in LL(1) class
--- but with potentially exponential performance for longer ambiguous prefixes.
+-- | Parser type for context-free grammars that uses a continuation-passing algorithm, fast for grammars in LL(1)
+-- class but with potentially exponential performance for longer ambiguous prefixes.
 newtype Parser (g :: (* -> *) -> *) s r =
    Parser{applyParser :: forall x. s -> (r -> Int -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x}
 
@@ -227,11 +227,11 @@ instance MonoidParsing (Parser g) where
                           (const $ success prefix len suffix failure')
    {-# INLINABLE string #-}
 
--- | Backtracking PEG parser
+-- | Continuation-passing context-free parser that keeps track of the parsed prefix length
 --
 -- @
 -- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>
---                  g (Backtrack.'Parser' g s) -> s -> g 'ParseResults'
+--                  g (Continued.'Parser' g s) -> s -> g 'ParseResults'
 -- @
 instance MultiParsing Parser where
    type ResultFunctor Parser = ParseResults

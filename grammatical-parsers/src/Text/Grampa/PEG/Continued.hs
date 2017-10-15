@@ -1,5 +1,5 @@
 {-# LANGUAGE InstanceSigs, RankNTypes, ScopedTypeVariables, TypeFamilies #-}
--- | Backtracking parser for Parsing Expression Grammars
+-- | Continuation-passing parser for Parsing Expression Grammars
 module Text.Grampa.PEG.Continued (Parser(..), Result(..), alt) where
 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
@@ -33,8 +33,8 @@ data Result (g :: (* -> *) -> *) s v = Parsed{parsedPrefix :: !v,
                                               parsedSuffix :: !s}
                                      | NoParse FailureInfo
 
--- | Parser type for Parsing Expression Grammars that uses a backtracking algorithm, fast for grammars in LL(1) class
--- but with potentially exponential performance for longer ambiguous prefixes.
+-- | Parser type for Parsing Expression Grammars that uses a continuation-passing algorithm, fast for grammars in
+-- LL(1) class but with potentially exponential performance for longer ambiguous prefixes.
 newtype Parser (g :: (* -> *) -> *) s r =
    Parser{applyParser :: forall x. s -> (r -> s -> x) -> (FailureInfo -> x) -> x}
 
@@ -210,11 +210,11 @@ instance MonoidParsing (Parser g) where
                      failure _ = success mempty rest
    {-# INLINABLE string #-}
 
--- | Backtracking PEG parser
+-- | Continuation-passing PEG parser
 --
 -- @
 -- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>
---                  g (Backtrack.'Parser' g s) -> s -> g 'ParseResults'
+--                  g (Continued.'Parser' g s) -> s -> g 'ParseResults'
 -- @
 instance MultiParsing Parser where
    type ResultFunctor Parser = ParseResults
