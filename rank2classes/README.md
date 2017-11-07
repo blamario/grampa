@@ -29,8 +29,9 @@ The `Rank2` import will make available the following type classes:
   * [Rank2.Traversable](http://hackage.haskell.org/packages/archive/doc/html/Rank2.html#t:Traversable)
   * [Rank2.Distributive](http://hackage.haskell.org/packages/archive/doc/html/Rank2.html#t:Distributive)
 
-The methods of these type classes all have rank-2 types. The class instances are data types of kind `(* -> *) -> *`, one
-example of which would be a database record with different field types but all wrapped by the same type constructor:
+The methods of these type classes all have rank-2 types. The class instances are data types of kind `(k -> *) -> *`,
+one example of which would be a database record with different field types but all wrapped by the same type
+constructor:
 
 ~~~ {.haskell}
 data Person f = Person{
@@ -60,11 +61,12 @@ parameter `f`:
 
 ~~~ {.haskell}
 instance Show1 f => Show (Person f) where
-   showsPrec prec person rest = "Person{" ++ separator ++ "name=" ++ showsPrec1 prec' (name person)
-                                     ("," ++ separator ++ "age=" ++ showsPrec1 prec' (age person)
-                                     ("," ++ separator ++ "mother=" ++ showsPrec1 prec' (mother person)
-                                     ("," ++ separator ++ "father=" ++ showsPrec1 prec' (father person)
-                                     ("}" ++ rest))))
+   showsPrec prec person rest =
+       "Person{" ++ separator ++ "name=" ++ showsPrec1 prec' (name person)
+            ("," ++ separator ++ "age=" ++ showsPrec1 prec' (age person)
+            ("," ++ separator ++ "mother=" ++ showsPrec1 prec' (mother person)
+            ("," ++ separator ++ "father=" ++ showsPrec1 prec' (father person)
+            ("}" ++ rest))))
         where prec' = succ prec
               separator = "\n" ++ replicate prec' ' '
 ~~~
@@ -146,9 +148,18 @@ Here is an example GHCi session:
 
 ~~~ {.haskell}
 -- |
--- >>> let Right alice = completeVerified $ verify [] Person{name= Const "Alice", age= Const "44", mother= Const "", father= Const ""}
--- >>> let Right bob = completeVerified $ verify [] Person{name= Const "Bob", age= Const "45", mother= Const "", father= Const ""}
--- >>> let Right charlie = completeVerified $ verify [alice, bob] Person{name= Const "Charlie", age= Const "19", mother= Const "Alice", father= Const "Bob"}
+-- >>> :{
+--let Right alice = completeVerified $
+--                  verify [] Person{name= Const "Alice", age= Const "44",
+--                                   mother= Const "", father= Const ""}
+--    Right bob = completeVerified $
+--                verify [] Person{name= Const "Bob", age= Const "45",
+--                                 mother= Const "", father= Const ""}
+--    Right charlie = completeVerified $
+--                    verify [alice, bob] Person{name= Const "Charlie", age= Const "19",
+--                                               mother= Const "Alice", father= Const "Bob"}
+-- :}
+-- 
 -- >>> charlie
 -- Person{
 --  name=Identity "Charlie",
@@ -163,10 +174,15 @@ Here is an example GHCi session:
 --             age=(Identity 45),
 --             mother=(Identity Nothing),
 --             father=(Identity Nothing)})}
--- >>> let dave = verify [alice, bob, charlie] Person{name= Const "Eve", age= Const "young", mother= Const "Lise", father= Const "Mike"}
+-- >>> :{
+--let dave = verify [alice, bob, charlie]
+--           Person{name= Const "Dave", age= Const "young",
+--                  mother= Const "Lise", father= Const "Mike"}
+-- :}
+--
 -- >>> dave
 -- Person{
---  name=Right "Eve",
+--  name=Right "Dave",
 --  age=Left "young is not an integer",
 --  mother=Left "Nobody by name of Lise",
 --  father=Left "Nobody by name of Mike"}
