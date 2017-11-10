@@ -101,10 +101,10 @@ genTraverse :: [Con] -> Q Dec
 genTraverse cs = funD 'Rank2.traverse (map genTraverseClause cs)
 
 genDistributeWith :: [Con] -> Q Dec
-genDistributeWith cs = funD 'Rank2.distributeWith (map genDistributeWithClause cs)
+genDistributeWith cs = funD 'Rank2.cotraverse (map genDistributeWithClause cs)
 
 genDistributeWithTraversable :: [Con] -> Q Dec
-genDistributeWithTraversable cs = funD 'Rank2.distributeWith (map genDistributeWithTraversableClause cs)
+genDistributeWithTraversable cs = funD 'Rank2.cotraverse (map genDistributeWithTraversableClause cs)
 
 genFmapClause :: Con -> Q Clause
 genFmapClause (NormalC name fieldTypes) = do
@@ -324,7 +324,7 @@ genDistributeWithClause (RecC name fields) = do
                 | ty == VarT typeVar -> fieldExp fieldName [| $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
              AppT _ ty
                 | ty == VarT typeVar ->
-                  fieldExp fieldName [| Rank2.distributeWith $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
+                  fieldExp fieldName [| Rank2.cotraverse $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
    clause [varP withName, varP argName] body []
 
 genDistributeWithTraversableClause :: Con -> Q Clause
@@ -340,5 +340,5 @@ genDistributeWithTraversableClause (RecC name fields) = do
                 | ty == VarT typeVar -> fieldExp fieldName [| $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
              AppT _ ty
                 | ty == VarT typeVar ->
-                  fieldExp fieldName [| Rank2.distributeWithTraversable $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
+                  fieldExp fieldName [| Rank2.cotraverseTraversable $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
    clause [varP withName, varP argName] body []

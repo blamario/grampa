@@ -70,7 +70,7 @@ newtype Union (g :: (* -> *) -> *) = Union{getUnion :: g (Const Bool)}
 --   mempty = Union (Rank2.pure $ Const False)
 
 instance (Rank2.Apply g, Rank2.Distributive g) => Monoid (Union g) where
-   mempty = Union (Rank2.distributeWith (Const . getConst) (Const False))
+   mempty = Union (Rank2.cotraverse (Const . getConst) (Const False))
    mappend (Union g1) (Union g2) = Union (Rank2.liftA2 union g1 g2)
 
 general, general' :: Alternative (p g s) => Fixed p g s a -> Fixed p g s a

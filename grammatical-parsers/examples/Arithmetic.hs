@@ -70,11 +70,11 @@ instance Rank2.Applicative (Arithmetic e) where
 instance Rank2.DistributiveTraversable (Arithmetic e)
 
 instance Rank2.Distributive (Arithmetic e) where
-   distributeWith w f = Arithmetic{expr= w (expr <$> f),
-                                   sum= w (sum <$> f),
-                                   product= w (product <$> f),
-                                   factor= w (factor <$> f),
-                                   primary= w (primary <$> f)}
+   cotraverse w f = Arithmetic{expr= w (expr <$> f),
+                               sum= w (sum <$> f),
+                               product= w (product <$> f),
+                               factor= w (factor <$> f),
+                               primary= w (primary <$> f)}
 
 instance Rank2.Foldable (Arithmetic e) where
    foldMap f a = f (expr a) <> f (sum a) <> f (product a) <> f (factor a) <> f (primary a)

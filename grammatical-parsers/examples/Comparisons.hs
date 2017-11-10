@@ -51,8 +51,8 @@ instance Rank2.Applicative (Comparisons c e) where
 instance Rank2.DistributiveTraversable (Comparisons c e)
 
 instance Rank2.Distributive (Comparisons c e) where
-   distributeWith w f = Comparisons{test= w (test <$> f),
-                                    term= w (term <$> f)}
+   cotraverse w f = Comparisons{test= w (test <$> f),
+                                term= w (term <$> f)}
 
 instance Rank2.Foldable (Comparisons c e) where
    foldMap f g = f (test g) <> f (term g)

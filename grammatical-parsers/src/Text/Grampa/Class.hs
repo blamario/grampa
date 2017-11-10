@@ -50,7 +50,7 @@ class MultiParsing m => GrammarParsing m where
    -- | Mark a parser that relies on primitive recursion to prevent an infinite loop in 'fixGrammar'.
    recursive :: m g s a -> m g s a
 
-   selfReferring = Rank2.distributeWith nonTerminal id
+   selfReferring = Rank2.cotraverse nonTerminal id
    fixGrammar = ($ selfReferring)
    recursive = id
 

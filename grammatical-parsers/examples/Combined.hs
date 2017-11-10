@@ -159,14 +159,14 @@ instance Rank2.Distributive Expression where
                               comparisonGrammar= Rank2.distributeM (comparisonGrammar <$> f),
                               conditionalGrammar= Rank2.distributeM (conditionalGrammar <$> f),
                               lambdaGrammar= Rank2.distributeM (lambdaGrammar <$> f)}
-   distributeWith w f = Expression{expr= w (expr <$> f),
-                                   term= w (term <$> f),
-                                   primary= w (primary <$> f),
-                                   arithmeticGrammar= Rank2.distributeWith w (arithmeticGrammar <$> f),
-                                   booleanGrammar= Rank2.distributeWith w (booleanGrammar <$> f),
-                                   comparisonGrammar= Rank2.distributeWith w (comparisonGrammar <$> f),
-                                   conditionalGrammar= Rank2.distributeWith w (conditionalGrammar <$> f),
-                                   lambdaGrammar= Rank2.distributeWith w (lambdaGrammar <$> f)}
+   cotraverse w f = Expression{expr= w (expr <$> f),
+                               term= w (term <$> f),
+                               primary= w (primary <$> f),
+                               arithmeticGrammar= Rank2.cotraverse w (arithmeticGrammar <$> f),
+                               booleanGrammar= Rank2.cotraverse w (booleanGrammar <$> f),
+                               comparisonGrammar= Rank2.cotraverse w (comparisonGrammar <$> f),
+                               conditionalGrammar= Rank2.cotraverse w (conditionalGrammar <$> f),
+                               lambdaGrammar= Rank2.cotraverse w (lambdaGrammar <$> f)}
 
 instance Rank2.Foldable Expression where
    foldMap f g = f (expr g) <> f (term g) <> f (primary g)
