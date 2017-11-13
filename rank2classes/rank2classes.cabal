@@ -1,9 +1,9 @@
 name:                rank2classes
 version:             0.2.1.1
-synopsis:            a mirror image of some standard type classes, with methods of rank 2 types
+synopsis:            standard type constructor class hierarchy, only with methods of rank 2 types
 description:
-  A mirror image of the standard constructor type class hierarchy rooted in 'Functor', except with methods of rank 2
-  types and class instances of kind @(*->*)->*@. The classes enable generic handling of heterogenously typed data
+  A mirror image of the standard type constructor class hierarchy rooted in 'Functor', except with methods of rank 2
+  types and class instances of kind @(k->*)->*@. The classes enable generic handling of heterogenously typed data
   structures and other neat tricks.
 
 homepage:            https://github.com/blamario/grampa/tree/master/rank2classes

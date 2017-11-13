@@ -130,12 +130,12 @@ liftA2TraverseBoth :: (Apply f, DistributiveTraversable f, Rank1.Traversable g1,
 liftA2TraverseBoth f x y = liftA2 applyCompose (distributeTraversable x) (distributeTraversable y)
    where applyCompose x' y' = f (getCompose x') (getCompose y')
 
-{-# DEPRECATED #-}
+{-# DEPRECATED distributeWith "Use cotraverse instead." #-}
 -- | Synonym for 'cotraverse'
 distributeWith :: (Distributive g, Rank1.Functor f) => (forall i. f (a i) -> b i) -> f (g a) -> g b
 distributeWith = cotraverse
 
-{-# DEPRECATED #-}
+{-# DEPRECATED distributeWithTraversable "Use cotraverseTraversable instead." #-}
 -- | Synonym for 'cotraverseTraversable'
 distributeWithTraversable :: (DistributiveTraversable g, Rank1.Traversable m) =>
                              (forall a. m (p a) -> q a) -> m (g p) -> g q
