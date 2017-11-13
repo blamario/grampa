@@ -15,7 +15,9 @@
 # resolver:
 #  name: custom-snapshot
 #  location: "./custom-snapshot.yaml"
-resolver: nightly-2016-09-26
+# resolver: nightly-2016-09-26
+# resolver: ghc-8.0.2
+resolver: lts-9.13
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -40,7 +42,9 @@ packages:
 - ../monoid-subclasses/
 - rank2classes/
 - grammatical-parsers/
+# - ../language-lua/
 - ../language-lua2/
+- ../language-webidl-hs/
 
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
