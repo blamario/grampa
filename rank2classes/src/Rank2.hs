@@ -27,7 +27,10 @@ import Data.Functor.Compose (Compose(..))
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
--- | Equivalent of 'Functor' for rank 2 data types
+-- | Equivalent of 'Functor' for rank 2 data types, satisfying the usual functor laws
+--
+-- > id <$> g == g
+-- > (p . q) <$> g == p <$> (q <$> g)
 class Functor g where
    (<$>) :: (forall a. p a -> q a) -> g p -> g q
 
@@ -51,7 +54,7 @@ class (Functor g, Foldable g) => Traversable g where
 -- | Wrapper for functions that map the argument constructor type
 newtype Arrow p q a = Arrow{apply :: p a -> q a}
 
--- | Subclass of 'Functor' halfway to 'Applicative'
+-- | Subclass of 'Functor' halfway to 'Applicative', satisfying
 --
 -- > (.) <$> u <*> v <*> w == u <*> (v <*> w)
 class Functor g => Apply g where
@@ -80,7 +83,7 @@ ap = (<*>)
 -- | Equivalent of 'Rank1.Applicative' for rank 2 data types
 class Apply g => Applicative g where
    pure :: (forall a. f a) -> g f
-  
+
 -- | Equivalent of 'Rank1.Distributive' for rank 2 data types
 class DistributiveTraversable g => Distributive g where
    {-# MINIMAL cotraverse|distribute #-}
