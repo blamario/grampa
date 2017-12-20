@@ -1,5 +1,5 @@
 name:                rank2classes
-version:             1.0
+version:             1.0.1
 synopsis:            standard type constructor class hierarchy, only with methods of rank 2 types
 description:
   A mirror image of the standard type constructor class hierarchy rooted in 'Functor', except with methods of rank 2
@@ -17,7 +17,7 @@ category:            Control, Data, Generics
 build-type:          Simple
 -- extra-source-files:  
 cabal-version:       >=1.10
-extra-source-files:  README.md
+extra-source-files:  README.md, CHANGELOG.md, test/README.lhs
 source-repository head
   type:              git
   location:          https://github.com/blamario/grampa
