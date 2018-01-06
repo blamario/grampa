@@ -132,7 +132,7 @@ genFmapClause (RecC name fields) = do
                 | ty == VarT typeVar -> fieldExp fieldName [| $(varE f) ($(varE fieldName) $(varE x)) |]
              AppT _ ty
                 | ty == VarT typeVar -> fieldExp fieldName [| Rank2.fmap $(varE f) ($(varE fieldName) $(varE x)) |]
-             _ -> fieldExp fieldName [| $(varE x) |]
+             _ -> fieldExp fieldName [| $(varE fieldName) $(varE x) |]
    clause [varP f, varP x] body []
 
 genLiftA2Clause :: Con -> Q Clause
