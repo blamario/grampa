@@ -5,13 +5,14 @@
 -- This will bring into scope the standard classes 'Functor', 'Applicative', 'Foldable', and 'Traversable', but with a
 -- @Rank2.@ prefix and a twist that their methods operate on a heterogenous collection. The same property is shared by
 -- the two less standard classes 'Apply' and 'Distributive'.
-{-# LANGUAGE InstanceSigs, KindSignatures, Rank2Types, ScopedTypeVariables, PolyKinds, DefaultSignatures #-}
+{-# LANGUAGE DefaultSignatures, InstanceSigs, KindSignatures, PolyKinds, Rank2Types #-}
+{-# LANGUAGE ScopedTypeVariables, TypeOperators #-}
 module Rank2 (
 -- * Rank 2 classes
    Functor(..), Apply(..), Applicative(..),
    Foldable(..), Traversable(..), Distributive(..), DistributiveTraversable(..), distributeJoin,
 -- * Rank 2 data types
-   Compose(..), Empty(..), Only(..), Identity(..), Product(..), Arrow(..),
+   Compose(..), Empty(..), Only(..), Identity(..), Product(..), Arrow(..), type (~>),
 -- * Method synonyms and helper functions
    ap, fmap, liftA4, liftA5,
    fmapTraverse, liftA2Traverse1, liftA2Traverse2, liftA2TraverseBoth,
@@ -54,13 +55,16 @@ class (Functor g, Foldable g) => Traversable g where
 -- | Wrapper for functions that map the argument constructor type
 newtype Arrow p q a = Arrow{apply :: p a -> q a}
 
+type (~>) = Arrow
+infixr 0 ~>
+
 -- | Subclass of 'Functor' halfway to 'Applicative', satisfying
 --
 -- > (.) <$> u <*> v <*> w == u <*> (v <*> w)
 class Functor g => Apply g where
    {-# MINIMAL liftA2 | (<*>) #-}
    -- | Equivalent of 'Rank1.<*>' for rank 2 data types
-   (<*>) :: g (Arrow p q) -> g p -> g q
+   (<*>) :: g (p ~> q) -> g p -> g q
    -- | Equivalent of 'Rank1.liftA2' for rank 2 data types
    liftA2 :: (forall a. p a -> q a -> r a) -> g p -> g q -> g r
    -- | Equivalent of 'Rank1.liftA3' for rank 2 data types
@@ -77,7 +81,7 @@ liftA5 :: Apply g => (forall a. p a -> q a -> r a -> s a -> t a -> u a) -> g p -
 liftA5 f g1 g2 g3 g4 g5 = liftA4 (\p q r s-> Arrow (f p q r s)) g1 g2 g3 g4 <*> g5
 
 -- | Alphabetical synonym for '<*>'
-ap :: Apply g => g (Arrow p q) -> g p -> g q
+ap :: Apply g => g (p ~> q) -> g p -> g q
 ap = (<*>)
 
 -- | Equivalent of 'Rank1.Applicative' for rank 2 data types

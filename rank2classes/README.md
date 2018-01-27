@@ -6,7 +6,7 @@ Rank 2 Classes
 The rank2 package exports module `Rank2`, meant to be imported qualified like this:
 
 ~~~ {.haskell}
-{-# LANGUAGE RankNTypes, TemplateHaskell #-}
+{-# LANGUAGE RankNTypes, TemplateHaskell, TypeOperators #-}
 module MyModule where
 import qualified Rank2
 import qualified Rank2.TH
@@ -100,7 +100,7 @@ Now we can start by constructing a `Person` record with rank-2 functions for fie
 as a field-by-field person verifier:
  
 ~~~ {.haskell}
-personChecker :: PersonDatabase -> Person (Rank2.Arrow (Const String) (Either String))
+personChecker :: PersonDatabase -> Person (Const String Rank2.~> Either String)
 personChecker db =
    Person{name= Rank2.Arrow (Right . getConst),
           age= Rank2.Arrow $ \(Const age)->
