@@ -12,7 +12,7 @@ module Rank2 (
    Functor(..), Apply(..), Applicative(..),
    Foldable(..), Traversable(..), Distributive(..), DistributiveTraversable(..), distributeJoin,
 -- * Rank 2 data types
-   Compose(..), Empty(..), Only(..), Identity(..), Product(..), Sum(..), Arrow(..), type (~>),
+   Compose(..), Empty(..), Only(..), Flip(..), Identity(..), Product(..), Sum(..), Arrow(..), type (~>),
 -- * Method synonyms and helper functions
    fst, snd, ap, fmap, liftA4, liftA5,
    fmapTraverse, liftA2Traverse1, liftA2Traverse2, liftA2TraverseBoth,
