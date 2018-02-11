@@ -26,7 +26,8 @@ library
   exposed-modules:     Text.Grampa,
                        Text.Grampa.PEG.Backtrack, Text.Grampa.PEG.Packrat,
                        Text.Grampa.ContextFree.Continued, Text.Grampa.ContextFree.Parallel,
-                       Text.Grampa.ContextFree.Memoizing, Text.Grampa.ContextFree.LeftRecursive
+                       Text.Grampa.ContextFree.Memoizing, Text.Grampa.ContextFree.SortedMemoizing,
+                       Text.Grampa.ContextFree.LeftRecursive
   other-modules:       Text.Grampa.Class, Text.Grampa.Internal,
                        Text.Grampa.PEG.Backtrack.Measured,
                        Text.Grampa.PEG.Continued, Text.Grampa.PEG.Continued.Measured,

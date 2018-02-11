@@ -104,6 +104,7 @@ Parser p <<|> Parser q = Parser r where
 
 instance Monad (Parser g i) where
    return = pure
+   (>>) = (*>)
    Parser p >>= f = Parser q where
       q rest = case p rest
                of ResultList results failure -> ResultList mempty failure <> foldMap continue results
