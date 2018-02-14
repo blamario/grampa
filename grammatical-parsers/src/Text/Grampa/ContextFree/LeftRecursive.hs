@@ -1,7 +1,8 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies, UndecidableInstances #-}
 {-# OPTIONS -fno-full-laziness #-}
-module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..), longest, peg, terminalPEG, 
+module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..),
+                                              longest, peg, terminalPEG,
                                               parseSeparated, separated, (<<|>))
 where
 
@@ -28,10 +29,9 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults)
-import Text.Grampa.Internal (BinTree(EmptyTree))
-import Text.Grampa.ContextFree.Memoizing (ResultList(..), fromResultList)
-import qualified Text.Grampa.ContextFree.Memoizing as Memoizing
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), AmbiguousParsing(..), ParseResults)
+import Text.Grampa.ContextFree.SortedMemoizing (ResultList(..), fromResultList)
+import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
 import Prelude hiding (cycle, null, span, takeWhile)
@@ -507,6 +507,18 @@ instance (LookAheadParsing (p g s), TokenParsing (p g s), MonoidParsing (Fixed p
          TokenParsing (Fixed p g s) where
    someSpace = positivePrimitive "someSpace" someSpace
 
+instance AmbiguousParsing (Fixed Memoizing.Parser g s) where
+   ambiguous (PositiveDirectParser p) = PositiveDirectParser (ambiguous p)
+   ambiguous p@DirectParser{} = DirectParser{complete= ambiguous (complete p),
+                                             direct0=  ambiguous (direct0 p),
+                                             direct1=  ambiguous (direct1 p)}
+   ambiguous p@Parser{} = Parser{complete= ambiguous (complete p),
+                                 direct=   ambiguous (direct p),
+                                 direct0=  ambiguous (direct0 p),
+                                 direct1=  ambiguous (direct1 p),
+                                 indirect= ambiguous (indirect p),
+                                 cyclicDescendants= cyclicDescendants p}
+
 -- | Turns a context-free parser into a backtracking PEG parser that consumes the longest possible prefix of the list
 -- of input tails, opposite of 'peg'
 longest :: Fixed Memoizing.Parser g s a -> Fixed Backtrack.Parser g [(s, g (ResultList g s))] a
@@ -641,7 +653,7 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                      | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps g1)) = r1 <> r2
                      | otherwise = r1
                   combine (Const False) _ = Const False
-                  combine (Const True) (ResultList EmptyTree _) = Const False
+                  combine (Const True) (ResultList [] _) = Const False
                   combine (Const True) _ = Const True
 
          recurseOnce s parsedTail initial = Rank2.fmap (($ parsed) . Memoizing.applyParser) indirects

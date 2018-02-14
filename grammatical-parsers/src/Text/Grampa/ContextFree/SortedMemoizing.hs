@@ -31,7 +31,8 @@ import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
 
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), AmbiguousParsing(..),
+                          Ambiguous(Ambiguous), ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (BinTree(..), FailureInfo(..))
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
@@ -266,6 +267,11 @@ instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
 
 instance (Show s, TextualMonoid s) => TokenParsing (Parser g s) where
    someSpace = () <$ takeCharsWhile1 isSpace
+
+instance AmbiguousParsing (Parser g s) where
+   ambiguous (Parser p) = Parser q
+      where q rest | ResultList rs failure <- p rest = ResultList (groupByLength <$> rs) failure
+            groupByLength (ResultsOfLength l rest rs) = ResultsOfLength l rest (Ambiguous rs :| [])
 
 fromResultList :: FactorialMonoid s => s -> ResultList g s r -> ParseResults [(s, r)]
 fromResultList s (ResultList [] (FailureInfo _ pos msgs)) =
