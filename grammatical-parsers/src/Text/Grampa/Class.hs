@@ -1,8 +1,9 @@
 {-# LANGUAGE ConstraintKinds, RankNTypes, TypeFamilies #-}
-module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), MonoidParsing(..),
-                          ParseResults, ParseFailure(..), completeParser) where
+module Text.Grampa.Class (MultiParsing(..), AmbiguousParsing(..), GrammarParsing(..), MonoidParsing(..),
+                          ParseResults, ParseFailure(..), Ambiguous(..), completeParser) where
 
 import Data.Functor.Compose (Compose(..))
+import Data.List.NonEmpty (NonEmpty)
 import Data.Monoid (Monoid)
 import Data.Monoid.Cancellative (LeftReductiveMonoid)
 import qualified Data.Monoid.Null as Null
@@ -17,6 +18,8 @@ type ParseResults = Either ParseFailure
 
 -- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset. 
 data ParseFailure = ParseFailure Int [String] deriving (Eq, Show)
+
+newtype Ambiguous a = Ambiguous (NonEmpty a)
 
 completeParser :: MonoidNull s => Compose ParseResults (Compose [] ((,) s)) r -> Compose ParseResults [] r
 completeParser (Compose (Left failure)) = Compose (Left failure)
@@ -117,3 +120,6 @@ class MonoidParsing m where
    concatMany :: Monoid a => m s a -> m s a
 
    token x = satisfy (== x)
+
+class AmbiguousParsing m where
+   ambiguous :: m a -> m (Ambiguous a)
