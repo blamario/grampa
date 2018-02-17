@@ -21,6 +21,8 @@ type ParseResults = Either ParseFailure
 -- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset. 
 data ParseFailure = ParseFailure Int [String] deriving (Eq, Show)
 
+-- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of alternative
+-- results.
 newtype Ambiguous a = Ambiguous (NonEmpty a) deriving (Data, Eq, Functor, Ord, Show, Typeable)
 
 completeParser :: MonoidNull s => Compose ParseResults (Compose [] ((,) s)) r -> Compose ParseResults [] r
@@ -124,4 +126,5 @@ class MonoidParsing m where
    token x = satisfy (== x)
 
 class AmbiguousParsing m where
+   -- | Collect all alternative parses of the same length into a 'NonEmpty' list of results.
    ambiguous :: m a -> m (Ambiguous a)
