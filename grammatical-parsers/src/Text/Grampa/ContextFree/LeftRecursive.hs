@@ -30,7 +30,7 @@ import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), AmbiguousParsing(..), ParseResults)
-import Text.Grampa.ContextFree.SortedMemoizing (ResultList(..), fromResultList)
+import Text.Grampa.Internal (ResultList(..), fromResultList)
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
