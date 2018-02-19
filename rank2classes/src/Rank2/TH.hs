@@ -21,7 +21,7 @@ import Language.Haskell.TH.Syntax (BangType, VarBangType, getQ, putQ)
 
 import qualified Rank2
 
-data Deriving = Deriving { derivingConstructor :: Name, derivingVariable :: Name }
+data Deriving = Deriving { _derivingConstructor :: Name, _derivingVariable :: Name }
 
 deriveAll :: Name -> Q [Dec]
 deriveAll ty = foldr f (pure []) [deriveFunctor, deriveApply, deriveApplicative,
@@ -56,12 +56,12 @@ deriveTraversable ty = do
 deriveDistributive :: Name -> Q [Dec]
 deriveDistributive ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Distributive ty
-   sequence [instanceD (return []) instanceType [genDistributeWith cs]]
+   sequence [instanceD (return []) instanceType [genCotraverse cs]]
 
 deriveDistributiveTraversable :: Name -> Q [Dec]
 deriveDistributiveTraversable ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.DistributiveTraversable ty
-   sequence [instanceD (return []) instanceType [genDistributeWithTraversable cs]]
+   sequence [instanceD (return []) instanceType [genCotraverseTraversable cs]]
 
 reifyConstructors :: Name -> Name -> Q (TypeQ, [Con])
 reifyConstructors cls ty = do
@@ -100,11 +100,11 @@ genFoldMap cs = funD 'Rank2.foldMap (map genFoldMapClause cs)
 genTraverse :: [Con] -> Q Dec
 genTraverse cs = funD 'Rank2.traverse (map genTraverseClause cs)
 
-genDistributeWith :: [Con] -> Q Dec
-genDistributeWith cs = funD 'Rank2.cotraverse (map genDistributeWithClause cs)
+genCotraverse :: [Con] -> Q Dec
+genCotraverse cs = funD 'Rank2.cotraverse (map genCotraverseClause cs)
 
-genDistributeWithTraversable :: [Con] -> Q Dec
-genDistributeWithTraversable cs = funD 'Rank2.cotraverse (map genDistributeWithTraversableClause cs)
+genCotraverseTraversable :: [Con] -> Q Dec
+genCotraverseTraversable cs = funD 'Rank2.cotraverse (map genCotraverseTraversableClause cs)
 
 genFmapClause :: Con -> Q Clause
 genFmapClause (NormalC name fieldTypes) = do
@@ -311,8 +311,8 @@ genTraverseClause (RecC name fields) = do
              _ -> [| $(varE x) |]
    clause [varP f, varP x] body []
 
-genDistributeWithClause :: Con -> Q Clause
-genDistributeWithClause (RecC name fields) = do
+genCotraverseClause :: Con -> Q Clause
+genCotraverseClause (RecC name fields) = do
    withName <- newName "w"
    argName <- newName "f"
    let body = normalB $ recConE name $ map newNamedField fields
@@ -327,8 +327,8 @@ genDistributeWithClause (RecC name fields) = do
                   fieldExp fieldName [| Rank2.cotraverse $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
    clause [varP withName, varP argName] body []
 
-genDistributeWithTraversableClause :: Con -> Q Clause
-genDistributeWithTraversableClause (RecC name fields) = do
+genCotraverseTraversableClause :: Con -> Q Clause
+genCotraverseTraversableClause (RecC name fields) = do
    withName <- newName "w"
    argName <- newName "f"
    let body = normalB $ recConE name $ map newNamedField fields
