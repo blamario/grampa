@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, InstanceSigs,
-             RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies, UndecidableInstances #-}
+             RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
 {-# OPTIONS -fno-full-laziness #-}
 module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..),
                                               longest, peg, terminalPEG,
@@ -12,7 +12,9 @@ import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
 
 import Data.Char (isSpace)
 import Data.Functor.Compose (Compose(..))
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (isJust)
+import qualified Data.Semigroup as Semigroup
 
 import Data.Monoid (Monoid(mempty), All(..), Any(..), (<>))
 import Data.Monoid.Null (MonoidNull(null))
@@ -29,8 +31,9 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), AmbiguousParsing(..), ParseResults)
-import Text.Grampa.Internal (ResultList(..), fromResultList)
+import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), AmbiguousParsing(..),
+                          Ambiguous(..), ParseResults)
+import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), fromResultList)
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
@@ -38,9 +41,12 @@ import Prelude hiding (cycle, null, span, takeWhile)
 
 type Parser = Fixed Memoizing.Parser
 
+type ResultAppend g s = ResultList g s Rank2.~> ResultList g s Rank2.~> ResultList g s
+
 data Fixed p g s a =
    Parser {
       complete, direct, direct0, direct1, indirect :: p g s a,
+      appendResults :: ResultList g s a -> ResultList g s a -> ResultList g s a,
       cyclicDescendants :: Rank2.Apply g => g (Const (ParserFlags g)) -> ParserFlags g}
    | DirectParser {
       complete, direct0, direct1 :: p g s a}
@@ -51,6 +57,7 @@ data SeparatedParser p g s a = FrontParser (p g s a)
                              | CycleParser {
                                   cycleParser  :: p g s a,
                                   backParser   :: p g s a,
+                                  appendResultsArrow :: ResultAppend g s a,
                                   dependencies :: g (Const Bool)}
                              | BackParser {
                                   backParser :: p g s a}
@@ -81,6 +88,7 @@ general p = Parser{
    direct0= direct0 p',
    direct1= direct1 p',
    indirect= indirect p',
+   appendResults= appendResults p',
    cyclicDescendants= cyclicDescendants p'}
    where p' = general' p
 
@@ -90,6 +98,7 @@ general' p@PositiveDirectParser{} = Parser{
    direct0= empty,
    direct1= complete p,
    indirect= empty,
+   appendResults= (<>),
    cyclicDescendants= \cd-> ParserFlags False (const (Const False) Rank2.<$> cd)}
 general' p@DirectParser{} = Parser{
    complete= complete p,
@@ -97,6 +106,7 @@ general' p@DirectParser{} = Parser{
    direct0= direct0 p,
    direct1= direct1 p,
    indirect= empty,
+   appendResults= (<>),
    cyclicDescendants= \cd-> ParserFlags True (const (Const False) Rank2.<$> cd)}
 general' p@Parser{} = p
 
@@ -129,6 +139,7 @@ instance GrammarParsing (Fixed Memoizing.Parser) where
       direct0= empty,
       direct1= empty,
       indirect= ind,
+      appendResults= (<>),
       cyclicDescendants= parserFlags . f . Rank2.fmap (ParserFlagsFunctor . getConst) . addSelf}
       where ind = nonTerminal (parserResults . f . Rank2.fmap ParserResultsFunctor)
             addSelf g = Rank2.liftA2 adjust bits g
@@ -159,7 +170,8 @@ instance Functor (p g s) => Functor (Fixed p g s) where
       direct= fmap f (direct p),
       direct0= fmap f (direct0 p),
       direct1= fmap f (direct1 p),
-      indirect= fmap f (indirect p)}
+      indirect= fmap f (indirect p),
+      appendResults= (<>)}
    {-# INLINABLE fmap #-}
 
 instance Alternative (p g s) => Applicative (Fixed p g s) where
@@ -180,6 +192,7 @@ instance Alternative (p g s) => Applicative (Fixed p g s) where
       direct0= direct0 p' <*> direct0 q,
       direct1= direct0 p' <*> direct1 q <|> direct1 p' <*> complete q,
       indirect= direct0 p' <*> indirect q <|> indirect p' <*> complete q,
+      appendResults= (<>),
       cyclicDescendants= \deps-> let
            pcd@(ParserFlags pn pd) = cyclicDescendants p' deps
            ParserFlags qn qd = cyclicDescendants q deps
@@ -193,6 +206,7 @@ instance Alternative (p g s) => Applicative (Fixed p g s) where
       direct0= direct0 p' <*> direct0 q',
       direct1= direct0 p' <*> direct1 q' <|> direct1 p' <*> complete q',
       indirect= indirect p' <*> complete q',
+      appendResults= (<>),
       cyclicDescendants= \deps-> let
            pcd@(ParserFlags pn pd) = cyclicDescendants p' deps
            ParserFlags qn qd = cyclicDescendants q' deps
@@ -224,6 +238,7 @@ instance Alternative (p g s) => Alternative (Fixed p g s) where
                     direct0= direct0 p' <|> direct0 q',
                     direct1= direct1 p' <|> direct1 q',
                     indirect= indirect p' <|> indirect q',
+                    appendResults= (<>),
                     cyclicDescendants= \deps-> let
                          ParserFlags pn pd = cyclicDescendants p' deps
                          ParserFlags qn qd = cyclicDescendants q' deps
@@ -244,6 +259,7 @@ instance Alternative (p g s) => Alternative (Fixed p g s) where
       direct0= d0,
       direct1= d1,
       indirect= (:) <$> indirect p <*> mcp,
+      appendResults= (<>),
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
       where d0 = pure [] <|> (:[]) <$> direct0 p
             d1 = (:) <$> direct1 p <*> mcp
@@ -259,6 +275,7 @@ instance Alternative (p g s) => Alternative (Fixed p g s) where
       direct0= d0,
       direct1= d1,
       indirect= (:) <$> indirect p <*> many (complete p),
+      appendResults= (<>),
       cyclicDescendants= cyclicDescendants p}
       where d0 = (:[]) <$> direct0 p
             d1= (:) <$> direct1 p <*> many (complete p)
@@ -281,6 +298,7 @@ p <<|> q = Parser{complete= complete p' Memoizing.<<|> complete q',
                  direct0= direct0 p' Memoizing.<<|> direct0 q',
                  direct1= direct1 p' Memoizing.<<|> direct1 q',
                  indirect= indirect p' Memoizing.<<|> indirect q',
+                 appendResults= (<>),
                  cyclicDescendants= \deps-> let
                          ParserFlags pn pd = cyclicDescendants p' deps
                          ParserFlags qn qd = cyclicDescendants q' deps
@@ -302,6 +320,7 @@ instance (Alternative (p g s), Monad (p g s)) => Monad (Fixed p g s) where
       direct0= d0,
       direct1= d1,
       indirect= direct0 p >>= indirect . general' . cont,
+      appendResults= (<>),
       cyclicDescendants= \cd-> (ParserFlags True $ Rank2.fmap (const $ Const True) cd)}
       where d0 = direct0 p >>= direct0 . general' . cont
             d1 = (direct0 p >>= direct1 . general' . cont) <|> (direct1 p >>= complete . cont)
@@ -311,6 +330,7 @@ instance (Alternative (p g s), Monad (p g s)) => Monad (Fixed p g s) where
       direct0= d0,
       direct1= d1,
       indirect= (indirect p >>= complete . cont) <|> (direct0 p >>= indirect . general' . cont),
+      appendResults= (<>),
       cyclicDescendants= \cd-> (ParserFlags True $ Rank2.fmap (const $ Const True) cd)}
       where d0 = direct0 p >>= direct0 . general' . cont
             d1 = (direct0 p >>= direct1 . general' . cont) <|> (direct1 p >>= complete . cont)
@@ -368,6 +388,7 @@ instance (LookAheadParsing (p g s), MonoidParsing (Fixed p g)) => Parsing (Fixed
       direct= notFollowedBy (direct p),
       direct0= notFollowedBy (direct p),
       direct1= empty,
+      appendResults= (<>),
       indirect= notFollowedBy (indirect p),
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
    unexpected msg = positivePrimitive "unexpected" (unexpected msg)
@@ -387,6 +408,7 @@ instance (LookAheadParsing (p g s), MonoidParsing (Fixed p g)) => LookAheadParsi
       direct= lookAhead (direct p),
       direct0= lookAhead (direct p),
       direct1= empty,
+      appendResults= appendResults p,
       indirect= lookAhead (indirect p),
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
 
@@ -436,6 +458,7 @@ instance MonoidParsing (Fixed Memoizing.Parser g) where
       direct0= d0,
       direct1= d1,
       indirect= (<>) <$> indirect p <*> cmp,
+      appendResults= (<>),
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
       where d0 = pure mempty <|> direct0 p
             d1 = (<>) <$> direct1 p <*> cmp
@@ -488,6 +511,7 @@ instance MonoidParsing (Fixed Backtrack.Parser g) where
       direct0= d0,
       direct1= d1,
       indirect= (<>) <$> indirect p <*> cmp,
+      appendResults= (<>),
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
       where d0 = pure mempty `Backtrack.alt` direct0 p
             d1 = (<>) <$> direct1 p <*> cmp
@@ -517,7 +541,18 @@ instance AmbiguousParsing (Fixed Memoizing.Parser g s) where
                                  direct0=  ambiguous (direct0 p),
                                  direct1=  ambiguous (direct1 p),
                                  indirect= ambiguous (indirect p),
+                                 appendResults= appendAmbiguous,
                                  cyclicDescendants= cyclicDescendants p}
+      where appendAmbiguous (ResultList rl1 f1) (ResultList rl2 f2) = ResultList (join rl1 rl2) (f1 <> f2)
+            join [] rl = rl
+            join rl [] = rl
+            join rl1'@(rol1@(ResultsOfLength l1 s1 r1) : rest1) rl2'@(rol2@(ResultsOfLength l2 _ r2) : rest2)
+               | l1 < l2 = rol1 : join rest1 rl2'
+               | l1 > l2 = rol2 : join rl1' rest2
+               | Ambiguous ar1 :| [] <- r1,
+                 Ambiguous ar2 :| [] <- r2 =
+                    ResultsOfLength l1 s1 (Ambiguous (ar1 Semigroup.<> ar2) :| []) : join rest1 rest2
+               | otherwise = error "Ambiguous results should be grouped as a single value"
 
 -- | Turns a context-free parser into a backtracking PEG parser that consumes the longest possible prefix of the list
 -- of input tails, opposite of 'peg'
@@ -531,6 +566,7 @@ longest p@Parser{} = Parser{complete= Memoizing.longest (complete p),
                             direct0=  Memoizing.longest (direct0 p),
                             direct1=  Memoizing.longest (direct1 p),
                             indirect=  Memoizing.longest (indirect p),
+                            appendResults= (<>),
                             cyclicDescendants= cyclicDescendants p}
 
 -- | Turns a backtracking PEG parser of the list of input tails into a context-free parser, opposite of 'longest'
@@ -544,6 +580,7 @@ peg p@Parser{} = Parser{complete= Memoizing.peg (complete p),
                         direct0=  Memoizing.peg (direct0 p),
                         direct1=  Memoizing.peg (direct1 p),
                         indirect=  Memoizing.peg (indirect p),
+                        appendResults= (<>),
                         cyclicDescendants= cyclicDescendants p}
 
 -- | Turns a backtracking PEG parser into a context-free parser
@@ -557,6 +594,7 @@ terminalPEG p@Parser{} = Parser{complete= Memoizing.terminalPEG (complete p),
                                 direct0=  Memoizing.terminalPEG (direct0 p),
                                 direct1=  Memoizing.terminalPEG (direct1 p),
                                 indirect=  Memoizing.terminalPEG (indirect p),
+                                appendResults= (<>),
                                 cyclicDescendants= cyclicDescendants p}
 
 parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, FactorialMonoid s) =>
@@ -574,7 +612,8 @@ separated g = Rank2.liftA4 reseparate circulars cycleFollowers descendants g
          reseparate :: forall a. Const Bool a -> Const Bool a -> Const (g (Const Bool)) a -> Parser g s a
                     -> SeparatedParser Memoizing.Parser g s a
          reseparate (Const circular) (Const follower) (Const deps) p
-            | circular || leader && follower = CycleParser (indirect p) (direct p) deps
+            | circular || leader && follower =
+              CycleParser (indirect p) (direct p) (Rank2.Arrow (Rank2.Arrow . appendResults p)) deps
             | follower = BackParser (complete p)
             | otherwise = FrontParser (complete p)
             where leader = getAny (Rank2.foldMap (Any . getConst) $ Rank2.liftA2 intersection circulars deps)
@@ -633,24 +672,27 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
          fixRecursive :: s -> [(s, g (ResultList g s))] -> g (ResultList g s) -> g (ResultList g s)
          whileAnyContinues :: g (ResultList g s) -> g (ResultList g s) -> g (ResultList g s)
          recurseOnce :: s -> [(s, g (ResultList g s))] -> g (ResultList g s) -> g (ResultList g s)
-         maybeDependencies :: g (Const (Maybe (g (Const Bool))))
+         maybeDependencies :: g (Rank2.Product (Const (Maybe (g (Const Bool)))) (ResultAppend g s))
+         maybeDependency :: SeparatedParser Memoizing.Parser g s r
+                         -> Rank2.Product (Const (Maybe (g (Const Bool)))) (ResultAppend g s) r
 
          directs = Rank2.fmap backParser parsers
          indirects = Rank2.fmap (\p-> case p of {CycleParser{}-> cycleParser p; _ -> empty}) parsers
-         maybeDependencies = Rank2.fmap (Const . maybeDependency) parsers
-         maybeDependency p@CycleParser{} = Just (dependencies p)
-         maybeDependency _ = Nothing
+         maybeDependencies = Rank2.fmap maybeDependency parsers
+         maybeDependency p@CycleParser{} = Rank2.Pair (Const $ Just $ dependencies p) (appendResultsArrow p)
+         maybeDependency _ = Rank2.Pair (Const Nothing) (Rank2.Arrow (Rank2.Arrow . (<>)))
                                                                    
          fixRecursive s parsedTail initial =
             foldr1 whileAnyContinues (iterate (recurseOnce s parsedTail) initial)
 
          whileAnyContinues g1 g2 = Rank2.liftA3 choiceWhile maybeDependencies g1 g2
-            where choiceWhile :: Const (Maybe (g (Const Bool))) x -> ResultList g i x -> ResultList g i x 
-                                 -> ResultList g i x
-                  combine :: Const Bool x -> ResultList g i x -> Const Bool x
-                  choiceWhile (Const Nothing) r1 _ = r1
-                  choiceWhile (Const (Just deps)) r1 r2
-                     | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps g1)) = r1 <> r2
+            where choiceWhile :: Rank2.Product (Const (Maybe (g (Const Bool)))) (ResultAppend g s) x
+                              -> ResultList g s x -> ResultList g s x -> ResultList g s x
+                  combine :: Const Bool x -> ResultList g s x -> Const Bool x
+                  choiceWhile (Rank2.Pair (Const Nothing) _) r1 _ = r1
+                  choiceWhile (Rank2.Pair (Const (Just deps)) append) r1 r2
+                     | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps g1)) =
+                       append `Rank2.apply` r1 `Rank2.apply` r2
                      | otherwise = r1
                   combine (Const False) _ = Const False
                   combine (Const True) (ResultList [] _) = Const False
