@@ -331,9 +331,14 @@ instance (Alternative (p g s), Monad (p g s)) => Monad (Fixed p g s) where
       direct1= d1,
       indirect= (indirect p >>= complete . cont) <|> (direct0 p >>= indirect . general' . cont),
       appendResults= (<>),
-      cyclicDescendants= \cd-> (ParserFlags True $ Rank2.fmap (const $ Const True) cd)}
+      cyclicDescendants= \cd->
+         let pcd@(ParserFlags pn _) = cyclicDescendants p' cd
+         in if pn
+            then ParserFlags True (Rank2.fmap (const $ Const True) cd)
+            else pcd}
       where d0 = direct0 p >>= direct0 . general' . cont
             d1 = (direct0 p >>= direct1 . general' . cont) <|> (direct1 p >>= complete . cont)
+            p'@Parser{} = general' p
 
 instance MonadPlus (p g s) => MonadPlus (Fixed p g s) where
    mzero = empty
@@ -681,7 +686,7 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
          maybeDependencies = Rank2.fmap maybeDependency parsers
          maybeDependency p@CycleParser{} = Rank2.Pair (Const $ Just $ dependencies p) (appendResultsArrow p)
          maybeDependency _ = Rank2.Pair (Const Nothing) (Rank2.Arrow (Rank2.Arrow . (<>)))
-                                                                   
+
          fixRecursive s parsedTail initial =
             foldr1 whileAnyContinues (iterate (recurseOnce s parsedTail) initial)
 
