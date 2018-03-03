@@ -2,11 +2,12 @@
 module Text.Grampa.Class (MultiParsing(..), AmbiguousParsing(..), GrammarParsing(..), MonoidParsing(..),
                           ParseResults, ParseFailure(..), Ambiguous(..), completeParser) where
 
+import Data.Functor.Classes (Show1(..), showsUnaryWith)
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty)
 import Data.Data (Data)
 import Data.Typeable (Typeable)
-import Data.Monoid (Monoid)
+import Data.Monoid (Monoid, (<>))
 import Data.Monoid.Cancellative (LeftReductiveMonoid)
 import qualified Data.Monoid.Null as Null
 import Data.Monoid.Null (MonoidNull)
@@ -24,6 +25,11 @@ data ParseFailure = ParseFailure Int [String] deriving (Eq, Show)
 -- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of alternative
 -- results.
 newtype Ambiguous a = Ambiguous (NonEmpty a) deriving (Data, Eq, Functor, Ord, Show, Typeable)
+
+instance Show1 Ambiguous where
+   liftShowsPrec sp sl d (Ambiguous l) t
+      | d > 5 = "(Ambiguous " <> liftShowsPrec sp sl 0 l (')' : t)
+      | otherwise = "Ambiguous " <> liftShowsPrec sp sl d l t
 
 completeParser :: MonoidNull s => Compose ParseResults (Compose [] ((,) s)) r -> Compose ParseResults [] r
 completeParser (Compose (Left failure)) = Compose (Left failure)
