@@ -16,7 +16,7 @@ import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 import Text.Parser.Combinators (skipMany)
-import Text.Parser.Char (CharParsing)
+import Text.Parser.Char (CharParsing(char))
 import Text.Parser.Token (TokenParsing)
 import GHC.Exts (Constraint)
 
@@ -141,14 +141,25 @@ class AmbiguousParsing m where
    -- | Collect all alternative parses of the same length into a 'NonEmpty' list of results.
    ambiguous :: m a -> m (Ambiguous a)
 
--- | If a grammar is 'Lexical', its parsers instantiate the 'TokenParsing' class.
+-- | If a grammar is 'Lexical', its parsers can instantiate the 'TokenParsing' class.
 class Lexical (g :: (* -> *) -> *) where
-   lexicalSpace :: (CharParsing (m g s), MonoidParsing (m g)) => m g s ()
+   -- | Always succceeds, consuming all white space and comments
+   lexicalWhiteSpace :: (CharParsing (m g s), MonoidParsing (m g)) => m g s ()
+   -- | Consumes all whitespace and comments, failing if there are none
    someLexicalSpace :: (CharParsing (m g s), MonoidParsing (m g)) => m g s ()
+   -- | Consumes a single comment, defaults to 'empty'
    lexicalComment :: (CharParsing (m g s), MonoidParsing (m g)) => m g s ()
+   -- | Consumes a single semicolon and any trailing whitespace, returning the character |';'|. The method can be
+   -- overridden for automatic semicolon insertion, but if it succeeds on semicolon or white space input it must
+   -- consume it.
+   lexicalSemicolon :: (CharParsing (m g s), MonoidParsing (m g)) => m g s Char
+   -- | Applies the argument parser and consumes the trailing 'lexicalWhitespace'
+   lexicalToken :: (CharParsing (m g s), MonoidParsing (m g)) => m g s a -> m g s a
 
-   default lexicalSpace :: (CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) => m g s ()
+   default lexicalWhiteSpace :: (CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) => m g s ()
    default someLexicalSpace :: (CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) => m g s ()
-   lexicalSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> lexicalSpace)
-   someLexicalSpace = takeCharsWhile1 isSpace *> skipMany (lexicalComment *> lexicalSpace)
+   lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> lexicalWhiteSpace)
+   someLexicalSpace = takeCharsWhile1 isSpace *> skipMany (lexicalComment *> lexicalWhiteSpace)
    lexicalComment = empty
+   lexicalSemicolon = char ';' <* lexicalWhiteSpace
+   lexicalToken p = p <* lexicalWhiteSpace

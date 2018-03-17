@@ -6,9 +6,9 @@ module Text.Grampa (
    MultiParsing(..),
    simply,
    -- * Types
-   Grammar, GrammarBuilder, ParseResults, ParseFailure(..),
+   Grammar, GrammarBuilder, ParseResults, ParseFailure(..), Ambiguous(..),
    -- * Parser combinators and primitives
-   GrammarParsing(..), MonoidParsing(..), AmbiguousParsing(..), Ambiguous(..),
+   GrammarParsing(..), MonoidParsing(..), AmbiguousParsing(..), Lexical(..),
    module Text.Parser.Char,
    module Text.Parser.Combinators,
    module Text.Parser.LookAhead)
@@ -19,7 +19,7 @@ import Text.Parser.Combinators (Parsing((<?>), notFollowedBy, skipMany, skipSome
 import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 
 import qualified Rank2
-import Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), MonoidParsing(..), AmbiguousParsing(..),
+import Text.Grampa.Class (Lexical(..), MultiParsing(..), GrammarParsing(..), MonoidParsing(..), AmbiguousParsing(..),
                           Ambiguous(..), ParseResults, ParseFailure(..))
 
 -- | A type synonym for a fixed grammar record type @g@ with a given parser type @p@ on input streams of type @s@

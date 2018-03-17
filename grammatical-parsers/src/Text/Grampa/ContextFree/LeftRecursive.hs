@@ -28,11 +28,12 @@ import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
-import Text.Parser.Token (TokenParsing(someSpace))
+import Text.Parser.Token (TokenParsing)
+import qualified Text.Parser.Token as Token
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), AmbiguousParsing(..),
-                          Ambiguous(..), ParseResults)
+                          Lexical(..), Ambiguous(..), ParseResults)
 import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), fromResultList)
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
@@ -362,7 +363,7 @@ primitive _name d0 d1 d = DirectParser{complete= d,
 positivePrimitive :: String -> p g s a -> Fixed p g s a
 positivePrimitive _name p = PositiveDirectParser{complete= p}
 
-instance (LookAheadParsing (p g s), MonoidParsing (Fixed p g)) => Parsing (Fixed p g s) where
+instance (Parsing (p g s), MonoidParsing (Fixed p g)) => Parsing (Fixed p g s) where
    eof = primitive "eof" eof empty eof
    try (PositiveDirectParser p) = PositiveDirectParser (try p)
    try p@DirectParser{} = DirectParser{
@@ -529,8 +530,7 @@ instance MonoidParsing (Fixed Backtrack.Parser g) where
             cmp = concatMany (complete p)
    {-# INLINABLE string #-}
 
-instance (LookAheadParsing (p g s), MonoidParsing (Fixed p g), Show s, TextualMonoid s) =>
-         CharParsing (Fixed p g s) where
+instance (Parsing (p g s), MonoidParsing (Fixed p g), Show s, TextualMonoid s) => CharParsing (Fixed p g s) where
    satisfy = satisfyChar
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    char = satisfyChar . (==)
@@ -538,9 +538,13 @@ instance (LookAheadParsing (p g s), MonoidParsing (Fixed p g), Show s, TextualMo
    anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance (LookAheadParsing (p g s), TokenParsing (p g s), MonoidParsing (Fixed p g), Show s, TextualMonoid s) => 
+instance (Lexical g, TokenParsing (p g s), MonoidParsing (p g), MonoidParsing (Fixed p g), Show s, TextualMonoid s) =>
          TokenParsing (Fixed p g s) where
-   someSpace = positivePrimitive "someSpace" someSpace
+   someSpace = positivePrimitive "someSpace" Token.someSpace
+   semi = primitive "semi" (noSemi *> Token.semi) (notFollowedBy noSemi *> Token.semi) Token.semi
+      where mayBeSemi c = c == ';' || isSpace c
+            noSemi = notSatisfyChar mayBeSemi
+   token p = lexicalToken p
 
 instance AmbiguousParsing (Fixed Memoizing.Parser g s) where
    ambiguous (PositiveDirectParser p) = PositiveDirectParser (ambiguous p)

@@ -26,7 +26,8 @@ import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
-import Text.Parser.Token (TokenParsing(someSpace))
+import Text.Parser.Token (TokenParsing)
+import qualified Text.Parser.Token
 import Text.Grampa.Class (Lexical(..), MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (FailureInfo(..))
 
@@ -121,6 +122,8 @@ instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
 
 instance (Lexical g, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
    someSpace = someLexicalSpace
+   semi = lexicalSemicolon
+   token = lexicalToken
 
 instance MonoidParsing (Parser g) where
    endOfInput = Parser p
