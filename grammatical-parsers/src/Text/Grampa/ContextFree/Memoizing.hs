@@ -214,7 +214,7 @@ instance MonoidParsing (Parser g) where
       l = Factorial.length s
    whiteSpace = () <$ takeCharsWhile isSpace
    concatMany p = go
-      where go = mempty <|> (<>) <$> p <*> go
+      where go = mempty <|> mappend <$> p <*> go
    notSatisfy predicate = Parser p
       where p rest@((s, _):_)
                | Just (first, _) <- splitPrimePrefix s, 

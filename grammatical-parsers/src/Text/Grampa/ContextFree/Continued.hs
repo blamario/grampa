@@ -214,7 +214,7 @@ instance MonoidParsing (Parser g) where
       where q :: forall x. s -> (a -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
             q rest success failure = p rest success' (const $ success mempty rest failure)
                where success' prefix suffix failure' =
-                        q suffix (success . (prefix <>)) (const $ success prefix suffix failure')
+                        q suffix (success . mappend prefix) (const $ success prefix suffix failure')
    {-# INLINABLE string #-}
 
 -- | Continuation-passing context-free parser

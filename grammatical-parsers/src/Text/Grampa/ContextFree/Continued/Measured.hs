@@ -227,7 +227,7 @@ instance MonoidParsing (Parser g) where
             q rest success failure = p rest success' (const $ success mempty 0 rest failure)
                where success' prefix !len suffix failure' =
                         q suffix 
-                          (\prefix' !len'-> success (prefix <> prefix') (len + len')) 
+                          (\prefix' !len'-> success (mappend prefix prefix') (len + len')) 
                           (const $ success prefix len suffix failure')
    {-# INLINABLE string #-}
 

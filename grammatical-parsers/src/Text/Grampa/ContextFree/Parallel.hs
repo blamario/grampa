@@ -189,7 +189,7 @@ instance MonoidParsing (Parser g) where
    concatMany (Parser p) = Parser q
       where q s = ResultList (Leaf $ ResultInfo s mempty) failure <> foldMap continue rs
                where ResultList rs failure = p s
-            continue (ResultInfo suffix prefix) = (prefix <>) <$> q suffix
+            continue (ResultInfo suffix prefix) = mappend prefix <$> q suffix
 
 instance FactorialMonoid s => Parsing (Parser g s) where
    try (Parser p) = Parser (weakenResults . p)

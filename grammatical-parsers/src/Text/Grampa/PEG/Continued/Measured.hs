@@ -223,7 +223,7 @@ instance MonoidParsing (Parser g) where
       where q :: forall x. s -> (a -> Int -> s -> x) -> (FailureInfo -> x) -> x
             q rest success _ = p rest success' failure
                where success' prefix !len suffix = 
-                        q suffix (\prefix' !len'-> success (prefix <> prefix') (len + len')) 
+                        q suffix (\prefix' !len'-> success (mappend prefix prefix') (len + len')) 
                           (const $ success prefix len suffix)
                      failure _ = success mempty 0 rest
    {-# INLINABLE string #-}

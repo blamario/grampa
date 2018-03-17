@@ -210,7 +210,7 @@ instance MonoidParsing (Parser g) where
    concatMany (Parser p) = Parser q
       where q :: forall x. s -> (a -> s -> x) -> (FailureInfo -> x) -> x
             q rest success _ = p rest success' failure
-               where success' prefix suffix = q suffix (success . (prefix <>)) (const $ success prefix suffix)
+               where success' prefix suffix = q suffix (success . mappend prefix) (const $ success prefix suffix)
                      failure _ = success mempty rest
    {-# INLINABLE string #-}
 

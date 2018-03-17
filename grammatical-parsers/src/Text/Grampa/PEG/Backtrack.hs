@@ -174,7 +174,7 @@ instance MonoidParsing (Parser g) where
    concatMany (Parser p) = Parser q
       where q rest = case p rest
                      of Parsed prefix suffix -> let Parsed prefix' suffix' = q suffix
-                                                in Parsed (prefix <> prefix') suffix'
+                                                in Parsed (mappend prefix prefix') suffix'
                         NoParse{} -> Parsed mempty rest
    {-# INLINABLE string #-}
 

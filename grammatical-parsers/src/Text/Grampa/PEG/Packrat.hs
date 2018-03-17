@@ -187,7 +187,7 @@ instance MonoidParsing (Parser g) where
       p rest = NoParse (FailureInfo 1 (genericLength rest) ["string " ++ show s])
    whiteSpace = () <$ takeCharsWhile isSpace
    concatMany p = go
-      where go = (<>) <$> p <*> go <|> mempty
+      where go = mappend <$> p <*> go <|> mempty
 
 
 -- | Packrat parser

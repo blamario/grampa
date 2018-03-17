@@ -454,25 +454,25 @@ instance MonoidParsing (Fixed Memoizing.Parser g) where
       direct0= d0,
       direct1= d1}
       where d0 = pure mempty
-            d1 = (<>) <$> complete p <*> cmp
+            d1 = mappend <$> complete p <*> cmp
             cmp = concatMany (complete p)
    concatMany p@DirectParser{} = DirectParser{
       complete= cmp,
       direct0= d0,
       direct1= d1}
       where d0 = pure mempty <|> direct0 p
-            d1 = (<>) <$> direct1 p <*> cmp
+            d1 = mappend <$> direct1 p <*> cmp
             cmp = concatMany (complete p)
    concatMany p@Parser{} = Parser{
       complete= cmp,
       direct= d0 <|> d1,
       direct0= d0,
       direct1= d1,
-      indirect= (<>) <$> indirect p <*> cmp,
-      appendResults= (<>),
+      indirect= mappend <$> indirect p <*> cmp,
+      appendResults= mappend,
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
       where d0 = pure mempty <|> direct0 p
-            d1 = (<>) <$> direct1 p <*> cmp
+            d1 = mappend <$> direct1 p <*> cmp
             cmp = concatMany (complete p)
    {-# INLINABLE string #-}
 
@@ -507,25 +507,25 @@ instance MonoidParsing (Fixed Backtrack.Parser g) where
       direct0= d0,
       direct1= d1}
       where d0 = pure mempty
-            d1 = (<>) <$> complete p <*> cmp
+            d1 = mappend <$> complete p <*> cmp
             cmp = concatMany (complete p)
    concatMany p@DirectParser{} = DirectParser{
       complete= cmp,
       direct0= d0,
       direct1= d1}
       where d0 = pure mempty `Backtrack.alt` direct0 p
-            d1 = (<>) <$> direct1 p <*> cmp
+            d1 = mappend <$> direct1 p <*> cmp
             cmp = concatMany (complete p)
    concatMany p@Parser{} = Parser{
       complete= cmp,
       direct= d0 `Backtrack.alt` d1,
       direct0= d0,
       direct1= d1,
-      indirect= (<>) <$> indirect p <*> cmp,
-      appendResults= (<>),
+      indirect= mappend <$> indirect p <*> cmp,
+      appendResults= mappend,
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
       where d0 = pure mempty `Backtrack.alt` direct0 p
-            d1 = (<>) <$> direct1 p <*> cmp
+            d1 = mappend <$> direct1 p <*> cmp
             cmp = concatMany (complete p)
    {-# INLINABLE string #-}
 
