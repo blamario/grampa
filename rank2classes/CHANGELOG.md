@@ -1,3 +1,9 @@
+Version 1.0.2
+---------------
+* Fixed the bounds and Semigroup to compile with GHC 8.4.1
+* Added the ~> type synonym
+* Fixed deriveFunctor for record fields with concrete types - PR by Tom Smalley
+
 Version 1.0.1
 ---------------
 * Fixed the doctests

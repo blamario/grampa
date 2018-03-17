@@ -23,7 +23,8 @@ import qualified Control.Applicative as Rank1
 import qualified Control.Monad as Rank1
 import qualified Data.Foldable as Rank1
 import qualified Data.Traversable as Rank1
-import Data.Monoid (Monoid(..), (<>))
+import Data.Semigroup (Semigroup(..))
+import Data.Monoid (Monoid(..))
 import Data.Functor.Compose (Compose(..))
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
@@ -163,6 +164,9 @@ data Product g h f = Pair {fst :: g f, snd :: h f}
 
 newtype Flip g a f = Flip (g (f a)) deriving (Eq, Ord, Show)
 
+instance Semigroup (g (f a)) => Semigroup (Flip g a f) where
+   Flip x <> Flip y = Flip (x <> y)
+
 instance Monoid (g (f a)) => Monoid (Flip g a f) where
    mempty = Flip mempty
    Flip x `mappend` Flip y = Flip (x `mappend` y)
@@ -204,7 +208,7 @@ instance Foldable g => Foldable (Identity g) where
    foldMap f (Identity g) = foldMap f g
 
 instance (Foldable g, Foldable h) => Foldable (Product g h) where
-   foldMap f ~(Pair g h) = foldMap f g <> foldMap f h
+   foldMap f ~(Pair g h) = foldMap f g `mappend` foldMap f h
 
 instance Traversable Empty where
    traverse _ _ = Rank1.pure Empty
