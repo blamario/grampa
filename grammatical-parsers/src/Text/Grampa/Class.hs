@@ -2,7 +2,7 @@
 module Text.Grampa.Class (MultiParsing(..), AmbiguousParsing(..), GrammarParsing(..), MonoidParsing(..), Lexical(..),
                           ParseResults, ParseFailure(..), Ambiguous(..), completeParser) where
 
-import Control.Applicative (empty)
+import Control.Applicative (Alternative(empty))
 import Data.Char (isSpace)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
@@ -143,21 +143,30 @@ class AmbiguousParsing m where
 
 -- | If a grammar is 'Lexical', its parsers can instantiate the 'TokenParsing' class.
 class Lexical (g :: (* -> *) -> *) where
+   type LexicalConstraint (m :: ((* -> *) -> *) -> * -> * -> *) g s :: Constraint
    -- | Always succceeds, consuming all white space and comments
-   lexicalWhiteSpace :: (CharParsing (m g s), MonoidParsing (m g)) => m g s ()
+   lexicalWhiteSpace :: LexicalConstraint m g s => m g s ()
    -- | Consumes all whitespace and comments, failing if there are none
-   someLexicalSpace :: (CharParsing (m g s), MonoidParsing (m g)) => m g s ()
+   someLexicalSpace :: LexicalConstraint m g s => m g s ()
    -- | Consumes a single comment, defaults to 'empty'
-   lexicalComment :: (CharParsing (m g s), MonoidParsing (m g)) => m g s ()
+   lexicalComment :: LexicalConstraint m g s => m g s ()
    -- | Consumes a single semicolon and any trailing whitespace, returning the character |';'|. The method can be
    -- overridden for automatic semicolon insertion, but if it succeeds on semicolon or white space input it must
    -- consume it.
-   lexicalSemicolon :: (CharParsing (m g s), MonoidParsing (m g)) => m g s Char
+   lexicalSemicolon :: LexicalConstraint m g s => m g s Char
    -- | Applies the argument parser and consumes the trailing 'lexicalWhitespace'
-   lexicalToken :: (CharParsing (m g s), MonoidParsing (m g)) => m g s a -> m g s a
+   lexicalToken :: LexicalConstraint m g s => m g s a -> m g s a
 
-   default lexicalWhiteSpace :: (CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) => m g s ()
-   default someLexicalSpace :: (CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) => m g s ()
+   type instance LexicalConstraint m g s = (CharParsing (m g s), MonoidParsing (m g), TextualMonoid s)
+   default lexicalComment :: Alternative (m g s) => m g s ()
+   default lexicalWhiteSpace :: (LexicalConstraint m g s, CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) 
+                             => m g s ()
+   default someLexicalSpace :: (LexicalConstraint m g s, CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) =>
+                               m g s ()
+   default lexicalSemicolon :: (LexicalConstraint m g s, CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) =>
+                               m g s Char
+   default lexicalToken ::  (LexicalConstraint m g s, CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) => 
+                            m g s a -> m g s a
    lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> lexicalWhiteSpace)
    someLexicalSpace = takeCharsWhile1 isSpace *> skipMany (lexicalComment *> lexicalWhiteSpace)
    lexicalComment = empty

@@ -538,7 +538,8 @@ instance (Parsing (p g s), MonoidParsing (Fixed p g), Show s, TextualMonoid s) =
    anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance (Lexical g, TokenParsing (p g s), MonoidParsing (p g), MonoidParsing (Fixed p g), Show s, TextualMonoid s) =>
+instance (Lexical g, LexicalConstraint (Fixed p) g s, 
+          TokenParsing (p g s), MonoidParsing (p g), MonoidParsing (Fixed p g), Show s, TextualMonoid s) =>
          TokenParsing (Fixed p g s) where
    someSpace = positivePrimitive "someSpace" Token.someSpace
    semi = primitive "semi" (noSemi *> Token.semi) (notFollowedBy noSemi *> Token.semi) Token.semi

@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, InstanceSigs, RankNTypes, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE BangPatterns, InstanceSigs, RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
 -- | Continuation-passing parser for context-free grammars that keeps track of the parsed prefix length
 module Text.Grampa.ContextFree.Continued.Measured (Parser(..), Result(..), alt) where
 
@@ -120,7 +120,7 @@ instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
    anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance (Lexical g, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
+instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
    someSpace = someLexicalSpace
    semi = lexicalSemicolon
    token = lexicalToken

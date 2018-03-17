@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
-             RankNTypes, ScopedTypeVariables, TypeFamilies #-}
+             RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
 module Text.Grampa.ContextFree.Memoizing (FailureInfo(..), ResultList(..), Parser(..), BinTree(..), (<<|>),
                                           fromResultList, reparseTails, longest, peg, terminalPEG)
 where
@@ -259,7 +259,7 @@ instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
    anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance (Lexical g, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
+instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
    someSpace = someLexicalSpace
    semi = lexicalSemicolon
    token = lexicalToken

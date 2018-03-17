@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies, UndecidableInstances #-}
 -- | Backtracking parser for Parsing Expression Grammars, tracking the consumed input length
 module Text.Grampa.PEG.Backtrack.Measured (Parser(..), Result(..), alt) where
 
@@ -115,7 +115,7 @@ instance (Show s, Textual.TextualMonoid s) => CharParsing (Parser g s) where
    anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance (Lexical g, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
+instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
    someSpace = someLexicalSpace
    semi = lexicalSemicolon
    token = lexicalToken

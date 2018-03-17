@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies, UndecidableInstances #-}
 -- | Packrat parser
 module Text.Grampa.PEG.Packrat (Parser(..), Result(..)) where
 
@@ -107,7 +107,7 @@ instance (Show s, Textual.TextualMonoid s) => CharParsing (Parser g s) where
    anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance (Lexical g, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
+instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
    someSpace = someLexicalSpace
    semi = lexicalSemicolon
    token = lexicalToken
