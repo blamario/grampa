@@ -12,6 +12,7 @@ import Data.List (genericLength, nub)
 import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Factorial(FactorialMonoid)
+import Data.Monoid.Textual(TextualMonoid)
 import Data.String (fromString)
 
 import qualified Data.Monoid.Cancellative as Cancellative
@@ -26,7 +27,8 @@ import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing(someSpace))
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
+import Text.Grampa.Class (Lexical(..), GrammarParsing(..), MonoidParsing(..), MultiParsing(..), 
+                          ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (FailureInfo(..))
 import qualified Text.Grampa.PEG.Backtrack as Backtrack (Parser)
 
@@ -104,8 +106,8 @@ instance (Show s, Textual.TextualMonoid s) => CharParsing (Parser g s) where
    anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance (Show s, Textual.TextualMonoid s) => TokenParsing (Parser g s) where
-   someSpace = () <$ takeCharsWhile1 isSpace
+instance (Lexical g, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
+   someSpace = someLexicalSpace
 
 instance GrammarParsing Parser where
    type GrammarFunctor Parser = Result

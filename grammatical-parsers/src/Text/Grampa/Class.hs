@@ -1,8 +1,10 @@
-{-# LANGUAGE ConstraintKinds, RankNTypes, TypeFamilies, DeriveDataTypeable, DeriveFunctor #-}
-module Text.Grampa.Class (MultiParsing(..), AmbiguousParsing(..), GrammarParsing(..), MonoidParsing(..),
+{-# LANGUAGE ConstraintKinds, DefaultSignatures, RankNTypes, TypeFamilies, DeriveDataTypeable, DeriveFunctor #-}
+module Text.Grampa.Class (MultiParsing(..), AmbiguousParsing(..), GrammarParsing(..), MonoidParsing(..), Lexical(..),
                           ParseResults, ParseFailure(..), Ambiguous(..), completeParser) where
 
-import Data.Functor.Classes (Show1(..), showsUnaryWith)
+import Control.Applicative (empty)
+import Data.Char (isSpace)
+import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty)
 import Data.Data (Data)
@@ -13,6 +15,9 @@ import qualified Data.Monoid.Null as Null
 import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
+import Text.Parser.Combinators (skipMany)
+import Text.Parser.Char (CharParsing)
+import Text.Parser.Token (TokenParsing)
 import GHC.Exts (Constraint)
 
 import qualified Rank2
@@ -51,7 +56,7 @@ class MultiParsing m where
    parsePrefix :: (GrammarConstraint m g, FactorialMonoid s) =>
                   g (m g s) -> s -> g (Compose (ResultFunctor m) ((,) s))
 
--- | Parsers that belong to this class memoize the parse results to avoid exponential performance complexity.
+-- | Parsers that belong to this class can memoize the parse results to avoid exponential performance complexity.
 class MultiParsing m => GrammarParsing m where
    type GrammarFunctor m :: ((* -> *) -> *) -> * -> * -> *
    -- | Used to reference a grammar production, only necessary from outside the grammar itself
@@ -131,6 +136,19 @@ class MonoidParsing m where
 
    token x = satisfy (== x)
 
+-- | Parsers that can produce alternative parses and collect them into an 'Ambiguous' node
 class AmbiguousParsing m where
    -- | Collect all alternative parses of the same length into a 'NonEmpty' list of results.
    ambiguous :: m a -> m (Ambiguous a)
+
+-- | If a grammar is 'Lexical', its parsers instantiate the 'TokenParsing' class.
+class Lexical (g :: (* -> *) -> *) where
+   lexicalSpace :: (CharParsing (m g s), MonoidParsing (m g)) => m g s ()
+   someLexicalSpace :: (CharParsing (m g s), MonoidParsing (m g)) => m g s ()
+   lexicalComment :: (CharParsing (m g s), MonoidParsing (m g)) => m g s ()
+
+   default lexicalSpace :: (CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) => m g s ()
+   default someLexicalSpace :: (CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) => m g s ()
+   lexicalSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> lexicalSpace)
+   someLexicalSpace = takeCharsWhile1 isSpace *> skipMany (lexicalComment *> lexicalSpace)
+   lexicalComment = empty

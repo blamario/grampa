@@ -30,7 +30,7 @@ import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
 
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), AmbiguousParsing(..),
+import Text.Grampa.Class (Lexical(..), GrammarParsing(..), MonoidParsing(..), MultiParsing(..), AmbiguousParsing(..),
                           Ambiguous(Ambiguous), ParseResults)
 import Text.Grampa.Internal (FailureInfo(..), ResultList(..), ResultsOfLength(..), fromResultList)
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
@@ -234,8 +234,8 @@ instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
    anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance (Show s, TextualMonoid s) => TokenParsing (Parser g s) where
-   someSpace = () <$ takeCharsWhile1 isSpace
+instance (Lexical g, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
+   someSpace = someLexicalSpace
 
 instance AmbiguousParsing (Parser g s) where
    ambiguous (Parser p) = Parser q

@@ -29,7 +29,7 @@ import Text.Parser.Token (TokenParsing(someSpace))
 
 import qualified Rank2
 
-import Text.Grampa.Class (MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
+import Text.Grampa.Class (Lexical(..), MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (BinTree(..))
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
@@ -217,8 +217,8 @@ instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
    anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance (Show s, TextualMonoid s) => TokenParsing (Parser g s) where
-   someSpace = () <$ takeCharsWhile1 isSpace
+instance (Lexical g, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
+   someSpace = someLexicalSpace
 
 fromResultList :: FactorialMonoid s => s -> ResultList s r -> ParseResults [(s, r)]
 fromResultList s (ResultList EmptyTree (FailureInfo _ pos msgs)) = 
