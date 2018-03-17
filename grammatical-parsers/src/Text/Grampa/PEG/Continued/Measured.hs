@@ -9,7 +9,8 @@ import Data.Char (isSpace)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List (nub)
-import Data.Monoid (Monoid(mappend, mempty), (<>))
+import Data.Semigroup (Semigroup(..))
+import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Factorial(FactorialMonoid)
 import Data.Monoid.Textual(TextualMonoid)
 import Data.String (fromString)
@@ -81,6 +82,9 @@ instance Monad (Parser g s) where
 instance Factorial.FactorialMonoid s => MonadPlus (Parser g s) where
    mzero = empty
    mplus = (<|>)
+
+instance Semigroup x => Semigroup (Parser g s x) where
+   (<>) = liftA2 (<>)
 
 instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty

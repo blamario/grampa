@@ -10,7 +10,8 @@ import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List (nub)
-import Data.Monoid (Monoid(mappend, mempty), (<>))
+import Data.Semigroup (Semigroup(..))
+import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
@@ -57,19 +58,25 @@ instance Functor (ResultInfo s) where
 instance Functor (ResultList s) where
    fmap f (ResultList l failure) = ResultList ((f <$>) <$> l) failure
 
+instance Semigroup (ResultList s r) where
+   ResultList rl1 f1 <> ResultList rl2 f2 = ResultList (rl1 <> rl2) (f1 <> f2)
+
 instance Monoid (ResultList s r) where
    mempty = ResultList mempty mempty
-   ResultList rl1 f1 `mappend` ResultList rl2 f2 = ResultList (rl1 <> rl2) (f1 <> f2)
+   mappend = (<>)
 
-instance Monoid FailureInfo where
-   mempty = FailureInfo 0 maxBound []
-   f1@(FailureInfo s1 pos1 exp1) `mappend` f2@(FailureInfo s2 pos2 exp2)
+instance Semigroup FailureInfo where
+   f1@(FailureInfo s1 pos1 exp1) <> f2@(FailureInfo s2 pos2 exp2)
       | s1 < s2 = f2
       | s1 > s2 = f1
       | otherwise = FailureInfo s1 pos' exp'
       where (pos', exp') | pos1 < pos2 = (pos1, exp1)
                          | pos1 > pos2 = (pos2, exp2)
                          | otherwise = (pos1, exp1 <> exp2)
+
+instance Monoid FailureInfo where
+   mempty = FailureInfo 0 maxBound []
+   mappend = (<>)
 
 instance Functor (Parser g s) where
    fmap f (Parser p) = Parser (fmap f . p)
@@ -97,6 +104,9 @@ instance Monad (Parser g s) where
 instance FactorialMonoid s => MonadPlus (Parser g s) where
    mzero = empty
    mplus = (<|>)
+
+instance Semigroup x => Semigroup (Parser g s x) where
+   (<>) = liftA2 (<>)
 
 instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty

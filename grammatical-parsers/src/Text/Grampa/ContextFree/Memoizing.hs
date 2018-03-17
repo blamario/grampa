@@ -12,7 +12,8 @@ import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List (genericLength, maximumBy, nub)
-import Data.Monoid (Monoid(mappend, mempty), (<>))
+import Data.Semigroup (Semigroup(..))
+import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Cancellative (LeftReductiveMonoid (isPrefixOf))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid(length, splitPrimePrefix))
@@ -58,9 +59,12 @@ instance Functor (ResultInfo g s) where
 instance Functor (ResultList g s) where
    fmap f (ResultList l failure) = ResultList ((f <$>) <$> l) failure
 
+instance Semigroup (ResultList g s r) where
+   ResultList rl1 f1 <> ResultList rl2 f2 = ResultList (rl1 <> rl2) (f1 <> f2)
+
 instance Monoid (ResultList g s r) where
    mempty = ResultList mempty mempty
-   ResultList rl1 f1 `mappend` ResultList rl2 f2 = ResultList (rl1 <> rl2) (f1 <> f2)
+   mappend = (<>)
 
 instance Functor (Parser g i) where
    fmap f (Parser p) = Parser (fmap f . p)
@@ -102,6 +106,9 @@ instance Monad (Parser g i) where
 instance MonadPlus (Parser g s) where
    mzero = empty
    mplus = (<|>)
+
+instance Semigroup x => Semigroup (Parser g s x) where
+   (<>) = liftA2 (<>)
 
 instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty

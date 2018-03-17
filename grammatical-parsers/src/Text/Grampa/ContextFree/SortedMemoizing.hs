@@ -11,6 +11,7 @@ import Data.Char (isSpace)
 import Data.Functor.Compose (Compose(..))
 import Data.List (genericLength)
 import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Cancellative (LeftReductiveMonoid (isPrefixOf))
 import Data.Monoid.Null (MonoidNull(null))
@@ -81,6 +82,9 @@ instance Monad (Parser g i) where
 instance MonadPlus (Parser g s) where
    mzero = empty
    mplus = (<|>)
+
+instance Semigroup x => Semigroup (Parser g s x) where
+   (<>) = liftA2 (<>)
 
 instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty

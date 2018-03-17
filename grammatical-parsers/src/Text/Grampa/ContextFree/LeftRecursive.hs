@@ -14,9 +14,9 @@ import Data.Char (isSpace)
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (isJust)
-import qualified Data.Semigroup as Semigroup
 
-import Data.Monoid (Monoid(mempty), All(..), Any(..), (<>))
+import Data.Semigroup (Semigroup(..))
+import Data.Monoid (Monoid(mempty), All(..), Any(..))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
@@ -75,6 +75,9 @@ newtype Union (g :: (* -> *) -> *) = Union{getUnion :: g (Const Bool)}
 
 --instance Rank2.Applicative g => Monoid (Union g) where
 --   mempty = Union (Rank2.pure $ Const False)
+
+instance (Rank2.Apply g, Rank2.Distributive g) => Semigroup (Union g) where
+   Union g1 <> Union g2 = Union (Rank2.liftA2 union g1 g2)
 
 instance (Rank2.Apply g, Rank2.Distributive g) => Monoid (Union g) where
    mempty = Union (Rank2.cotraverse (Const . getConst) (Const False))
@@ -344,6 +347,9 @@ instance MonadPlus (p g s) => MonadPlus (Fixed p g s) where
    mzero = empty
    mplus = (<|>)
 
+instance (Alternative (p g s), Semigroup x) => Semigroup (Fixed p g s x) where
+   (<>) = liftA2 (<>)
+
 instance (Alternative (p g s), Monoid x) => Monoid (Fixed p g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
@@ -556,7 +562,7 @@ instance AmbiguousParsing (Fixed Memoizing.Parser g s) where
                | l1 > l2 = rol2 : join rl1' rest2
                | Ambiguous ar1 :| [] <- r1,
                  Ambiguous ar2 :| [] <- r2 =
-                    ResultsOfLength l1 s1 (Ambiguous (ar1 Semigroup.<> ar2) :| []) : join rest1 rest2
+                    ResultsOfLength l1 s1 (Ambiguous (ar1 <> ar2) :| []) : join rest1 rest2
                | otherwise = error "Ambiguous results should be grouped as a single value"
 
 -- | Turns a context-free parser into a backtracking PEG parser that consumes the longest possible prefix of the list
