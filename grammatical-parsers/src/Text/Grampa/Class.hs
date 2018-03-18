@@ -2,8 +2,8 @@
 module Text.Grampa.Class (MultiParsing(..), AmbiguousParsing(..), GrammarParsing(..), MonoidParsing(..), Lexical(..),
                           ParseResults, ParseFailure(..), Ambiguous(..), completeParser) where
 
-import Control.Applicative (Alternative(empty))
-import Data.Char (isSpace)
+import Control.Applicative (Alternative(empty), liftA2)
+import Data.Char (isAlphaNum, isLetter, isSpace)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty)
@@ -15,9 +15,9 @@ import qualified Data.Monoid.Null as Null
 import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
-import Text.Parser.Combinators (skipMany)
+import Text.Parser.Combinators (Parsing(notFollowedBy), skipMany)
 import Text.Parser.Char (CharParsing(char))
-import Text.Parser.Token (TokenParsing)
+import Text.Parser.Token (TokenParsing, IdentifierStyle)
 import GHC.Exts (Constraint)
 
 import qualified Rank2
@@ -156,19 +156,32 @@ class Lexical (g :: (* -> *) -> *) where
    lexicalSemicolon :: LexicalConstraint m g s => m g s Char
    -- | Applies the argument parser and consumes the trailing 'lexicalWhitespace'
    lexicalToken :: LexicalConstraint m g s => m g s a -> m g s a
+   identifierStart :: LexicalConstraint m g s => m g s s
+   identifierRest :: LexicalConstraint m g s => m g s s
+   identifier :: LexicalConstraint m g s => m g s s
+   keyword :: LexicalConstraint m g s => s -> m g s ()
 
-   type instance LexicalConstraint m g s = (CharParsing (m g s), MonoidParsing (m g), TextualMonoid s)
+   type instance LexicalConstraint m g s = (CharParsing (m g s), MonoidParsing (m g), Show s, TextualMonoid s)
    default lexicalComment :: Alternative (m g s) => m g s ()
-   default lexicalWhiteSpace :: (LexicalConstraint m g s, CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) 
-                             => m g s ()
-   default someLexicalSpace :: (LexicalConstraint m g s, CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) =>
+   default lexicalWhiteSpace :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s) =>
+                                m g s ()
+   default someLexicalSpace :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s) =>
                                m g s ()
    default lexicalSemicolon :: (LexicalConstraint m g s, CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) =>
                                m g s Char
-   default lexicalToken ::  (LexicalConstraint m g s, CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) => 
+   default lexicalToken ::  (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s) =>
                             m g s a -> m g s a
+   default identifierStart :: (LexicalConstraint m g s, MonoidParsing (m g), TextualMonoid s) => m g s s
+   default identifierRest :: (LexicalConstraint m g s, MonoidParsing (m g), TextualMonoid s) => m g s s
+   default identifier :: (LexicalConstraint m g s, Applicative (m g s), MonoidParsing (m g), TextualMonoid s) => m g s s
+   default keyword :: (LexicalConstraint m g s,
+                       Parsing (m g s), MonoidParsing (m g), Show s, TextualMonoid s) => s -> m g s ()
    lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> lexicalWhiteSpace)
    someLexicalSpace = takeCharsWhile1 isSpace *> skipMany (lexicalComment *> lexicalWhiteSpace)
    lexicalComment = empty
    lexicalSemicolon = char ';' <* lexicalWhiteSpace
    lexicalToken p = p <* lexicalWhiteSpace
+   identifierStart = satisfyCharInput isLetter
+   identifierRest = satisfyCharInput (\c-> isAlphaNum c || c == '_')
+   identifier = liftA2 (<>) identifierStart identifierRest
+   keyword s = string s *> notFollowedBy identifierRest

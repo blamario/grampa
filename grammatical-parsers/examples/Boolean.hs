@@ -1,4 +1,5 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, KindSignatures, RecordWildCards, ScopedTypeVariables, TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, KindSignatures, RecordWildCards, ScopedTypeVariables,
+             TypeFamilies, TemplateHaskell #-}
 module Boolean where
 
 import Control.Applicative
@@ -9,7 +10,7 @@ import Data.Monoid ((<>))
 import qualified Rank2.TH
 
 import Text.Grampa
-import Utilities (infixJoin, keyword, symbol)
+import Utilities (infixJoin, symbol)
 
 import Prelude hiding (and, or, not)
 
@@ -41,10 +42,13 @@ data Boolean e f =
       factor :: f e}
    deriving Show
 
+instance Lexical (Boolean e)
+
 $(Rank2.TH.deriveAll ''Boolean)
 
 boolean :: forall e p (g :: (* -> *) -> *).
-           (BooleanDomain e, Alternative (p g String), Parsing (p g String), MonoidParsing (p g)) =>
+           (Lexical g, LexicalConstraint p g String,
+            BooleanDomain e, Alternative (p g String), Parsing (p g String), MonoidParsing (p g)) =>
            p g String e -> Boolean e (p g String) -> Boolean e (p g String)
 boolean p Boolean{..} = Boolean{
    expr= term

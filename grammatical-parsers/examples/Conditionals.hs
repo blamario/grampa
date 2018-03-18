@@ -1,4 +1,5 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RecordWildCards, TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RecordWildCards,
+             TypeFamilies, TemplateHaskell #-}
 module Conditionals where
 
 import Control.Applicative
@@ -8,7 +9,6 @@ import qualified Rank2.TH
 
 import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive (Parser)
-import Utilities (keyword)
 
 class ConditionalDomain c e where
    ifThenElse :: c -> e -> e -> e
@@ -29,9 +29,13 @@ instance (Show (f t), Show (f e)) => Show (Conditionals t e f) where
                            (", test= " ++ showsPrec prec (test a)
                             (", term= " ++ showsPrec prec (term a) ("}" ++ rest)))
 
+instance Lexical (Conditionals t e) where
+   type LexicalConstraint p (Conditionals t e) s = (p ~ Parser, s ~ String)
+
 $(Rank2.TH.deriveAll ''Conditionals)
 
-conditionals :: ConditionalDomain t e => GrammarBuilder (Conditionals t e) g Parser String
+conditionals :: (ConditionalDomain t e, Lexical g, LexicalConstraint Parser g String)
+             => GrammarBuilder (Conditionals t e) g Parser String
 conditionals Conditionals{..} =
    Conditionals{expr= ifThenElse <$> (keyword "if" *> test) <*> (keyword "then" *> term) <*> (keyword "else" *> term),
                 test= empty,
