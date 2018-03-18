@@ -29,7 +29,7 @@ import Test.QuickCheck.Classes (functor, monad, monoid, applicative, alternative
 
 import qualified Rank2
 import qualified Rank2.TH
-import Text.Grampa
+import Text.Grampa hiding (symbol)
 import qualified Text.Grampa.ContextFree.Parallel as Parallel
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 

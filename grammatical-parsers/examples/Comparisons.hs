@@ -6,7 +6,6 @@ import Data.Monoid ((<>))
 
 import qualified Rank2
 import Text.Grampa
-import Utilities (symbol)
 
 class ComparisonDomain c e where
    greaterThan :: c -> c -> e
@@ -62,7 +61,8 @@ instance Rank2.Traversable (Comparisons c e) where
                   <$> f (test g)
                   <*> f (term g)
 
-comparisons :: (ComparisonDomain c e, Alternative (p g String), MonoidParsing (p g)) =>
+comparisons :: (Lexical g, LexicalConstraint p g String,
+                ComparisonDomain c e, Alternative (p g String), MonoidParsing (p g)) =>
                GrammarBuilder (Comparisons c e) g p String
 comparisons Comparisons{..} =
    Comparisons{

@@ -8,7 +8,7 @@ import Data.Monoid ((<>))
 
 import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive (Parser)
-import Utilities (infixJoin, symbol)
+import Utilities (infixJoin)
 
 import qualified Rank2
 import Prelude hiding (negate, product, subtract, sum)
@@ -87,7 +87,10 @@ instance Rank2.Traversable (Arithmetic e) where
                   <*> f (factor a)
                   <*> f (primary a)
 
-arithmetic :: ArithmeticDomain e => GrammarBuilder (Arithmetic e) g Parser String
+instance Lexical (Arithmetic e)
+
+arithmetic :: (Lexical g, LexicalConstraint Parser g String, ArithmeticDomain e) =>
+              GrammarBuilder (Arithmetic e) g Parser String
 arithmetic Arithmetic{..} = Arithmetic{
    expr= sum,
    sum= product
@@ -99,7 +102,7 @@ arithmetic Arithmetic{..} = Arithmetic{
          <|> divide <$> product <* symbol "/" <*> factor,
    factor= primary
            <|> symbol "(" *> expr <* symbol ")",
-   primary= whiteSpace *> ((number . read) <$> takeCharsWhile1 isDigit <?> "digits")}
+   primary= lexicalToken ((number . read) <$> takeCharsWhile1 isDigit) <?> "digits"}
 
 main :: IO ()
 main = getContents >>=

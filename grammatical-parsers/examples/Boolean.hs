@@ -10,7 +10,7 @@ import Data.Monoid ((<>))
 import qualified Rank2.TH
 
 import Text.Grampa
-import Utilities (infixJoin, symbol)
+import Utilities (infixJoin)
 
 import Prelude hiding (and, or, not)
 

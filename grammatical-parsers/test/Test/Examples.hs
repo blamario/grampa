@@ -1,4 +1,4 @@
-{-# Language RankNTypes, ScopedTypeVariables #-}
+{-# Language FlexibleInstances, RankNTypes, ScopedTypeVariables #-}
 module Test.Examples where
 
 import Control.Applicative (empty, (<|>))
@@ -30,7 +30,8 @@ parseComparison (Comparison s) = f s' == s'
    where f = uniqueParse (fixGrammar comparisons) (Comparisons.test . Rank2.snd)
          s' = f s
 
-comparisons :: Rank2.Functor g => GrammarBuilder ArithmeticComparisons g Parser String
+comparisons :: (Rank2.Functor g, Lexical g, LexicalConstraint Parser g String) =>
+               GrammarBuilder ArithmeticComparisons g Parser String
 comparisons (Rank2.Pair a c) =
    Rank2.Pair (Arithmetic.arithmetic a) (Comparisons.comparisons c){Comparisons.term= Arithmetic.expr a}
 
@@ -39,7 +40,8 @@ parseBoolean (Disjunction s) = f s' == s'
    where f = uniqueParse (fixGrammar boolean) (Boolean.expr . Rank2.snd)
          s' = f s
 
-boolean :: Rank2.Functor g => GrammarBuilder ArithmeticComparisonsBoolean g Parser String
+boolean :: (Rank2.Functor g, Lexical g, LexicalConstraint Parser g String) =>
+           GrammarBuilder ArithmeticComparisonsBoolean g Parser String
 boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Comparisons.test $ Rank2.snd ac) b)
 
 parseConditional :: Conditional -> Bool
@@ -47,7 +49,7 @@ parseConditional (Conditional s) = f s' == s'
    where f = uniqueParse (fixGrammar conditionals) (Conditionals.expr . Rank2.snd)
          s' = f s
 
-conditionals :: Rank2.Functor g => GrammarBuilder ACBC g Parser String
+conditionals :: (Rank2.Functor g, Lexical g, LexicalConstraint Parser g String) => GrammarBuilder ACBC g Parser String
 conditionals (Rank2.Pair acb c) =
    boolean acb `Rank2.Pair`
    Conditionals.conditionals c{Conditionals.test= Boolean.expr (Rank2.snd acb),
@@ -129,3 +131,7 @@ uniqueParse g p s = case getCompose (p $ parseComplete g s)
                        Right [] -> error "Unparseable"
                        Right _ -> error "Ambiguous"
                        Left (ParseFailure pos exp) -> error ("At " <> show pos <> " expected one of " <> show exp)
+
+instance Lexical ArithmeticComparisons
+instance Lexical ArithmeticComparisonsBoolean
+instance Lexical ACBC

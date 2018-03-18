@@ -1,4 +1,5 @@
-{-# LANGUAGE ConstraintKinds, DefaultSignatures, RankNTypes, TypeFamilies, DeriveDataTypeable, DeriveFunctor #-}
+{-# LANGUAGE ConstraintKinds, DefaultSignatures, RankNTypes, TypeApplications, TypeFamilies,
+             DeriveDataTypeable, DeriveFunctor #-}
 module Text.Grampa.Class (MultiParsing(..), AmbiguousParsing(..), GrammarParsing(..), MonoidParsing(..), Lexical(..),
                           ParseResults, ParseFailure(..), Ambiguous(..), completeParser) where
 
@@ -158,10 +159,13 @@ class Lexical (g :: (* -> *) -> *) where
    lexicalToken :: LexicalConstraint m g s => m g s a -> m g s a
    identifierStart :: LexicalConstraint m g s => m g s s
    identifierRest :: LexicalConstraint m g s => m g s s
+   verifyIdentifier :: LexicalConstraint m g s => s -> m g s s
    identifier :: LexicalConstraint m g s => m g s s
    keyword :: LexicalConstraint m g s => s -> m g s ()
+   symbol :: LexicalConstraint m g s => s -> m g s ()
 
-   type instance LexicalConstraint m g s = (CharParsing (m g s), MonoidParsing (m g), Show s, TextualMonoid s)
+   type instance LexicalConstraint m g s = (Monad (m g s), CharParsing (m g s), MonoidParsing (m g),
+                                            Show s, TextualMonoid s)
    default lexicalComment :: Alternative (m g s) => m g s ()
    default lexicalWhiteSpace :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s) =>
                                 m g s ()
@@ -173,9 +177,12 @@ class Lexical (g :: (* -> *) -> *) where
                             m g s a -> m g s a
    default identifierStart :: (LexicalConstraint m g s, MonoidParsing (m g), TextualMonoid s) => m g s s
    default identifierRest :: (LexicalConstraint m g s, MonoidParsing (m g), TextualMonoid s) => m g s s
-   default identifier :: (LexicalConstraint m g s, Applicative (m g s), MonoidParsing (m g), TextualMonoid s) => m g s s
+   default verifyIdentifier :: (LexicalConstraint m g s, Applicative (m g s)) => s -> m g s s
+   default identifier :: (LexicalConstraint m g s, Monad (m g s), MonoidParsing (m g), TextualMonoid s) => m g s s
    default keyword :: (LexicalConstraint m g s,
                        Parsing (m g s), MonoidParsing (m g), Show s, TextualMonoid s) => s -> m g s ()
+   default symbol :: (LexicalConstraint m g s,
+                      Parsing (m g s), MonoidParsing (m g), Show s, TextualMonoid s) => s -> m g s ()
    lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> lexicalWhiteSpace)
    someLexicalSpace = takeCharsWhile1 isSpace *> skipMany (lexicalComment *> lexicalWhiteSpace)
    lexicalComment = empty
@@ -183,5 +190,7 @@ class Lexical (g :: (* -> *) -> *) where
    lexicalToken p = p <* lexicalWhiteSpace
    identifierStart = satisfyCharInput isLetter
    identifierRest = satisfyCharInput (\c-> isAlphaNum c || c == '_')
-   identifier = liftA2 (<>) identifierStart identifierRest
-   keyword s = string s *> notFollowedBy identifierRest
+   verifyIdentifier = pure
+   identifier = (liftA2 (<>) identifierStart identifierRest >>= verifyIdentifier) <* lexicalWhiteSpace
+   keyword s = string s *> notFollowedBy identifierRest *> lexicalWhiteSpace
+   symbol s = string s *> lexicalWhiteSpace
