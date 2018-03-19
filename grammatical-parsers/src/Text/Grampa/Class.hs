@@ -157,11 +157,18 @@ class Lexical (g :: (* -> *) -> *) where
    lexicalSemicolon :: LexicalConstraint m g s => m g s Char
    -- | Applies the argument parser and consumes the trailing 'lexicalWhitespace'
    lexicalToken :: LexicalConstraint m g s => m g s a -> m g s a
+   -- | Parses the initial part of an identifier
    identifierStart :: LexicalConstraint m g s => m g s s
+   -- | Parses the remaining part of an identifier
    identifierRest :: LexicalConstraint m g s => m g s s
+   -- | Given a parsed identifier, fails if it's not valid — a reserved word, for example — and potentially modifies the
+   -- result if valid
    verifyIdentifier :: LexicalConstraint m g s => s -> m g s s
+   -- | Parses a valid identifier and consumes the trailing 'lexicalWhitespace'
    identifier :: LexicalConstraint m g s => m g s s
+   -- | Parses the argument word whole, not followed by 'identifierRest', and consumes the trailing 'lexicalWhitespace'
    keyword :: LexicalConstraint m g s => s -> m g s ()
+   -- | Parses the argument textual symbol and consumes the trailing 'lexicalWhitespace'
    symbol :: LexicalConstraint m g s => s -> m g s ()
 
    type instance LexicalConstraint m g s = (Monad (m g s), CharParsing (m g s), MonoidParsing (m g),
