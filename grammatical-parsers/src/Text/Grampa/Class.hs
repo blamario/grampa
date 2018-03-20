@@ -1,13 +1,14 @@
-{-# LANGUAGE ConstraintKinds, DefaultSignatures, RankNTypes, TypeApplications, TypeFamilies,
-             DeriveDataTypeable, DeriveFunctor #-}
+{-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, RankNTypes, ScopedTypeVariables,
+             TypeApplications, TypeFamilies, DeriveDataTypeable, DeriveFunctor #-}
 module Text.Grampa.Class (MultiParsing(..), AmbiguousParsing(..), GrammarParsing(..), MonoidParsing(..), Lexical(..),
                           ParseResults, ParseFailure(..), Ambiguous(..), completeParser) where
 
 import Control.Applicative (Alternative(empty), liftA2)
+import Control.Monad (guard)
 import Data.Char (isAlphaNum, isLetter, isSpace)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Data (Data)
 import Data.Typeable (Typeable)
 import Data.Monoid (Monoid, (<>))
@@ -33,9 +34,9 @@ data ParseFailure = ParseFailure Int [String] deriving (Eq, Show)
 newtype Ambiguous a = Ambiguous (NonEmpty a) deriving (Data, Eq, Functor, Ord, Show, Typeable)
 
 instance Show1 Ambiguous where
-   liftShowsPrec sp sl d (Ambiguous l) t
-      | d > 5 = "(Ambiguous " <> liftShowsPrec sp sl 0 l (')' : t)
-      | otherwise = "Ambiguous " <> liftShowsPrec sp sl d l t
+   liftShowsPrec sp sl d (Ambiguous (h :| l)) t
+      | d > 5 = "(Ambiguous $ " <> sp 0 h (" :| " <> sl l (')' : t))
+      | otherwise = "Ambiguous (" <> sp 0 h (" :| " <> sl l (')' : t))
 
 completeParser :: MonoidNull s => Compose ParseResults (Compose [] ((,) s)) r -> Compose ParseResults [] r
 completeParser (Compose (Left failure)) = Compose (Left failure)
@@ -161,9 +162,8 @@ class Lexical (g :: (* -> *) -> *) where
    identifierStart :: LexicalConstraint m g s => m g s s
    -- | Parses the remaining part of an identifier
    identifierRest :: LexicalConstraint m g s => m g s s
-   -- | Given a parsed identifier, fails if it's not valid — a reserved word, for example — and potentially modifies the
-   -- result if valid
-   verifyIdentifier :: LexicalConstraint m g s => s -> m g s s
+   -- | Determines whether a parsed identifier is legal — not a reserved word, in particular
+   verifyIdentifier :: s -> Bool
    -- | Parses a valid identifier and consumes the trailing 'lexicalWhitespace'
    identifier :: LexicalConstraint m g s => m g s s
    -- | Parses the argument word whole, not followed by 'identifierRest', and consumes the trailing 'lexicalWhitespace'
@@ -171,7 +171,8 @@ class Lexical (g :: (* -> *) -> *) where
    -- | Parses the argument textual symbol and consumes the trailing 'lexicalWhitespace'
    symbol :: LexicalConstraint m g s => s -> m g s ()
 
-   type instance LexicalConstraint m g s = (Monad (m g s), CharParsing (m g s), MonoidParsing (m g),
+   type instance LexicalConstraint m g s = (Applicative (m g ()), Monad (m g s),
+                                            CharParsing (m g s), MonoidParsing (m g),
                                             Show s, TextualMonoid s)
    default lexicalComment :: Alternative (m g s) => m g s ()
    default lexicalWhiteSpace :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s) =>
@@ -184,8 +185,8 @@ class Lexical (g :: (* -> *) -> *) where
                             m g s a -> m g s a
    default identifierStart :: (LexicalConstraint m g s, MonoidParsing (m g), TextualMonoid s) => m g s s
    default identifierRest :: (LexicalConstraint m g s, MonoidParsing (m g), TextualMonoid s) => m g s s
-   default verifyIdentifier :: (LexicalConstraint m g s, Applicative (m g s)) => s -> m g s s
-   default identifier :: (LexicalConstraint m g s, Monad (m g s), MonoidParsing (m g), TextualMonoid s) => m g s s
+   default identifier :: (LexicalConstraint m g s, Monad (m g s), Alternative (m g s),
+                           MonoidParsing (m g), TextualMonoid s) => m g s s
    default keyword :: (LexicalConstraint m g s,
                        Parsing (m g s), MonoidParsing (m g), Show s, TextualMonoid s) => s -> m g s ()
    default symbol :: (LexicalConstraint m g s,
@@ -197,7 +198,10 @@ class Lexical (g :: (* -> *) -> *) where
    lexicalToken p = p <* lexicalWhiteSpace
    identifierStart = satisfyCharInput isLetter
    identifierRest = satisfyCharInput (\c-> isAlphaNum c || c == '_')
-   verifyIdentifier = pure
-   identifier = (liftA2 (<>) identifierStart identifierRest >>= verifyIdentifier) <* lexicalWhiteSpace
+   verifyIdentifier = const True
+   identifier = do result <- liftA2 (<>) identifierStart identifierRest
+                   guard (verifyIdentifier @g result)
+                   lexicalWhiteSpace
+                   return result
    keyword s = string s *> notFollowedBy identifierRest *> lexicalWhiteSpace
    symbol s = string s *> lexicalWhiteSpace
