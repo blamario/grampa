@@ -146,7 +146,7 @@ class AmbiguousParsing m where
 -- | If a grammar is 'Lexical', its parsers can instantiate the 'TokenParsing' class.
 class Lexical (g :: (* -> *) -> *) where
    type LexicalConstraint (m :: ((* -> *) -> *) -> * -> * -> *) g s :: Constraint
-   -- | Always succceeds, consuming all white space and comments
+   -- | Always succeeds, consuming all white space and comments
    lexicalWhiteSpace :: LexicalConstraint m g s => m g s ()
    -- | Consumes all whitespace and comments, failing if there are none
    someLexicalSpace :: LexicalConstraint m g s => m g s ()
@@ -158,15 +158,17 @@ class Lexical (g :: (* -> *) -> *) where
    lexicalSemicolon :: LexicalConstraint m g s => m g s Char
    -- | Applies the argument parser and consumes the trailing 'lexicalWhitespace'
    lexicalToken :: LexicalConstraint m g s => m g s a -> m g s a
-   -- | Parses the initial part of an identifier
-   identifierStart :: LexicalConstraint m g s => m g s s
-   -- | Parses the remaining part of an identifier
-   identifierRest :: LexicalConstraint m g s => m g s s
-   -- | Determines whether a parsed identifier is legal — not a reserved word, in particular
-   verifyIdentifier :: s -> Bool
+   -- | Determines whether the given character can start an identifier token, allows only a letter or underscore by
+   -- default
+   isIdentifierStartChar :: Char -> Bool
+   -- | Determines whether the given character can be any part of an identifier token, also allows numbers
+   isIdentifierFollowChar :: Char -> Bool
+   -- | Determines whether a parsed identifier is legal — in particular, not a reserved word
+   isIdentifierLegal :: s -> Bool
    -- | Parses a valid identifier and consumes the trailing 'lexicalWhitespace'
    identifier :: LexicalConstraint m g s => m g s s
-   -- | Parses the argument word whole, not followed by 'identifierRest', and consumes the trailing 'lexicalWhitespace'
+   -- | Parses the argument word whole, not followed by any identifier character, and consumes the trailing
+   -- 'lexicalWhitespace'
    keyword :: LexicalConstraint m g s => s -> m g s ()
    -- | Parses the argument textual symbol and consumes the trailing 'lexicalWhitespace'
    symbol :: LexicalConstraint m g s => s -> m g s ()
@@ -175,33 +177,32 @@ class Lexical (g :: (* -> *) -> *) where
                                             CharParsing (m g s), MonoidParsing (m g),
                                             Show s, TextualMonoid s)
    default lexicalComment :: Alternative (m g s) => m g s ()
-   default lexicalWhiteSpace :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s) =>
-                                m g s ()
-   default someLexicalSpace :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s) =>
-                               m g s ()
-   default lexicalSemicolon :: (LexicalConstraint m g s, CharParsing (m g s), MonoidParsing (m g), TextualMonoid s) =>
-                               m g s Char
-   default lexicalToken ::  (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s) =>
-                            m g s a -> m g s a
-   default identifierStart :: (LexicalConstraint m g s, MonoidParsing (m g), TextualMonoid s) => m g s s
-   default identifierRest :: (LexicalConstraint m g s, MonoidParsing (m g), TextualMonoid s) => m g s s
+   default lexicalWhiteSpace :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s)
+                             => m g s ()
+   default someLexicalSpace :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s)
+                            => m g s ()
+   default lexicalSemicolon :: (LexicalConstraint m g s, CharParsing (m g s), MonoidParsing (m g), TextualMonoid s)
+                            => m g s Char
+   default lexicalToken :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s)
+                        => m g s a -> m g s a
    default identifier :: (LexicalConstraint m g s, Monad (m g s), Alternative (m g s),
-                           MonoidParsing (m g), TextualMonoid s) => m g s s
-   default keyword :: (LexicalConstraint m g s,
-                       Parsing (m g s), MonoidParsing (m g), Show s, TextualMonoid s) => s -> m g s ()
-   default symbol :: (LexicalConstraint m g s,
-                      Parsing (m g s), MonoidParsing (m g), Show s, TextualMonoid s) => s -> m g s ()
+                          MonoidParsing (m g), TextualMonoid s) => m g s s
+   default keyword :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), Show s, TextualMonoid s)
+                   => s -> m g s ()
+   default symbol :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), Show s, TextualMonoid s)
+                  => s -> m g s ()
    lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> lexicalWhiteSpace)
    someLexicalSpace = takeCharsWhile1 isSpace *> skipMany (lexicalComment *> lexicalWhiteSpace)
    lexicalComment = empty
-   lexicalSemicolon = char ';' <* lexicalWhiteSpace
+   lexicalSemicolon = lexicalToken (char ';')
    lexicalToken p = p <* lexicalWhiteSpace
-   identifierStart = satisfyCharInput isLetter
-   identifierRest = satisfyCharInput (\c-> isAlphaNum c || c == '_')
-   verifyIdentifier = const True
-   identifier = do result <- liftA2 (<>) identifierStart identifierRest
-                   guard (verifyIdentifier @g result)
-                   lexicalWhiteSpace
+   isIdentifierStartChar c = isLetter c || c == '_'
+   isIdentifierFollowChar c = isAlphaNum c || c == '_'
+   isIdentifierLegal = const True
+   identifier = lexicalToken $
+                do result <- liftA2 (<>) (satisfyCharInput (isIdentifierStartChar @g))
+                                         (takeCharsWhile (isIdentifierFollowChar @g))
+                   guard (isIdentifierLegal @g result)
                    return result
-   keyword s = string s *> notFollowedBy identifierRest *> lexicalWhiteSpace
+   keyword s = lexicalToken (string s *> notSatisfyChar (isIdentifierFollowChar @g))
    symbol s = string s *> lexicalWhiteSpace
