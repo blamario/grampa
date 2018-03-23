@@ -6,7 +6,6 @@ where
 
 import Control.Applicative
 import Control.Monad (Monad(..), MonadPlus(..))
-import Data.Char (isSpace)
 import Data.Function (on)
 import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
@@ -214,7 +213,6 @@ instance MonoidParsing (Parser g) where
          | s `isPrefixOf` s' = ResultList (Leaf $ ResultInfo l (Factorial.drop l rest) s) mempty
       p rest = ResultList mempty (FailureInfo 1 (genericLength rest) ["string " ++ show s])
       l = Factorial.length s
-   whiteSpace = () <$ takeCharsWhile isSpace
    concatMany p = go
       where go = mempty <|> mappend <$> p <*> go
    notSatisfy predicate = Parser p

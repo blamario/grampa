@@ -131,8 +131,6 @@ class MonoidParsing m where
    -- | Specialization of 'takeWhile1' on 'TextualMonoid' inputs, accepting the longest sequence of input characters
    -- that match the given predicate; an optimized version of 'fmap fromString  . some . satisfyChar'.
    takeCharsWhile1 :: TextualMonoid s => (Char -> Bool) -> m s s
-   -- | Consume all whitespace characters.
-   whiteSpace :: TextualMonoid s => m s ()
    -- | Zero or more argument occurrences like 'many', with concatenated monoidal results.
    concatMany :: Monoid a => m s a -> m s a
 
@@ -170,8 +168,6 @@ class Lexical (g :: (* -> *) -> *) where
    -- | Parses the argument word whole, not followed by any identifier character, and consumes the trailing
    -- 'lexicalWhitespace'
    keyword :: LexicalConstraint m g s => s -> m g s ()
-   -- | Parses the argument textual symbol and consumes the trailing 'lexicalWhitespace'
-   symbol :: LexicalConstraint m g s => s -> m g s ()
 
    type instance LexicalConstraint m g s = (Applicative (m g ()), Monad (m g s),
                                             CharParsing (m g s), MonoidParsing (m g),
@@ -189,8 +185,6 @@ class Lexical (g :: (* -> *) -> *) where
                           MonoidParsing (m g), TextualMonoid s) => m g s s
    default keyword :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), Show s, TextualMonoid s)
                    => s -> m g s ()
-   default symbol :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), Show s, TextualMonoid s)
-                  => s -> m g s ()
    lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> lexicalWhiteSpace)
    someLexicalSpace = takeCharsWhile1 isSpace *> skipMany (lexicalComment *> lexicalWhiteSpace)
    lexicalComment = empty
@@ -205,4 +199,3 @@ class Lexical (g :: (* -> *) -> *) where
                    guard (isIdentifierLegal @g result)
                    return result
    keyword s = lexicalToken (string s *> notSatisfyChar (isIdentifierFollowChar @g))
-   symbol s = string s *> lexicalWhiteSpace

@@ -5,7 +5,6 @@ module Text.Grampa.PEG.Packrat (Parser(..), Result(..)) where
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
 import Control.Monad (Monad(..), MonadPlus(..))
 
-import Data.Char (isSpace)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List (genericLength, nub)
@@ -190,7 +189,6 @@ instance MonoidParsing (Parser g) where
       p rest@((s', _) : _)
          | Cancellative.isPrefixOf s s' = Parsed s (Factorial.drop (Factorial.length s) rest)
       p rest = NoParse (FailureInfo 1 (genericLength rest) ["string " ++ show s])
-   whiteSpace = () <$ takeCharsWhile isSpace
    concatMany p = go
       where go = mappend <$> p <*> go <|> mempty
 

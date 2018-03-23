@@ -5,7 +5,6 @@ module Text.Grampa.PEG.Continued (Parser(..), Result(..), alt) where
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
 import Control.Monad (Monad(..), MonadPlus(..))
 
-import Data.Char (isSpace)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List (nub)
@@ -208,7 +207,6 @@ instance MonoidParsing (Parser g) where
       p s' success failure
          | Just suffix <- Cancellative.stripPrefix s s' = success s suffix
          | otherwise = failure (FailureInfo 1 (fromIntegral $ Factorial.length s') ["string " ++ show s])
-   whiteSpace = () <$ takeCharsWhile isSpace
    concatMany :: forall s a. Monoid a => Parser g s a -> Parser g s a
    concatMany (Parser p) = Parser q
       where q :: forall x. s -> (a -> s -> x) -> (FailureInfo -> x) -> x

@@ -6,6 +6,7 @@ import Control.Applicative
 import qualified Data.Bool
 import Data.Char (isSpace)
 import Data.Monoid ((<>))
+import Text.Parser.Token (TokenParsing, symbol)
 
 import qualified Rank2.TH
 
@@ -48,7 +49,7 @@ $(Rank2.TH.deriveAll ''Boolean)
 
 boolean :: forall e p (g :: (* -> *) -> *).
            (Lexical g, LexicalConstraint p g String,
-            BooleanDomain e, Alternative (p g String), Parsing (p g String), MonoidParsing (p g)) =>
+            BooleanDomain e, TokenParsing (p g String), MonoidParsing (p g)) =>
            p g String e -> Boolean e (p g String) -> Boolean e (p g String)
 boolean p Boolean{..} = Boolean{
    expr= term

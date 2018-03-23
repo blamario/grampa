@@ -6,6 +6,7 @@ import Control.Applicative
 import Data.Char (isAlphaNum, isLetter)
 import Data.Map (Map, insert, (!))
 import Data.Monoid ((<>))
+import Text.Parser.Token (symbol, whiteSpace)
 
 import qualified Rank2
 import qualified Rank2.TH

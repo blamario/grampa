@@ -5,6 +5,7 @@ import Control.Applicative
 import Data.Char (isDigit)
 import Data.Functor.Compose (Compose(..))
 import Data.Monoid ((<>))
+import Text.Parser.Token (symbol)
 
 import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive (Parser)

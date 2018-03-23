@@ -5,7 +5,6 @@ where
 
 import Control.Applicative
 import Control.Monad (Monad(..), MonadPlus(..))
-import Data.Char (isSpace)
 import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
@@ -186,7 +185,6 @@ instance MonoidParsing (Parser g) where
    string s = Parser p where
       p s' | Just suffix <- Cancellative.stripPrefix s s' = ResultList (Leaf $ ResultInfo suffix s) mempty
            | otherwise = ResultList mempty (FailureInfo 1 (Factorial.length s') ["string " ++ show s])
-   whiteSpace = () <$ takeCharsWhile isSpace
    concatMany (Parser p) = Parser q
       where q s = ResultList (Leaf $ ResultInfo s mempty) failure <> foldMap continue rs
                where ResultList rs failure = p s

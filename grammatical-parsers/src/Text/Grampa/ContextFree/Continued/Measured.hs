@@ -5,7 +5,6 @@ module Text.Grampa.ContextFree.Continued.Measured (Parser(..), Result(..), alt) 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
 import Control.Monad (Monad(..), MonadPlus(..))
 
-import Data.Char (isSpace)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List (nub)
@@ -223,7 +222,6 @@ instance MonoidParsing (Parser g) where
       p s' success failure
          | Just suffix <- Cancellative.stripPrefix s s', !len <- Factorial.length s = success s len suffix failure
          | otherwise = failure (FailureInfo 1 (fromIntegral $ Factorial.length s') ["string " ++ show s])
-   whiteSpace = () <$ takeCharsWhile isSpace
    concatMany :: forall s a. Monoid a => Parser g s a -> Parser g s a
    concatMany (Parser p) = Parser q
       where q :: forall x. s -> (a -> Int -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x

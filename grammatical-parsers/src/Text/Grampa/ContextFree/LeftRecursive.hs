@@ -10,7 +10,6 @@ import Control.Applicative
 import Control.Monad (Monad(..), MonadPlus(..))
 import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
 
-import Data.Char (isSpace)
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (isJust)
@@ -449,7 +448,6 @@ instance MonoidParsing (Fixed Memoizing.Parser g) where
    takeCharsWhile predicate = primitive "takeCharsWhile" (mempty <$ notSatisfyChar predicate)
                                                          (takeCharsWhile1 predicate) (takeCharsWhile predicate)
    takeCharsWhile1 predicate = positivePrimitive "takeCharsWhile1" (takeCharsWhile1 predicate)
-   whiteSpace = primitive "whiteSpace" (notSatisfyChar isSpace) (satisfyChar isSpace *> whiteSpace) whiteSpace
    concatMany p@PositiveDirectParser{} = DirectParser{
       complete= cmp,
       direct0= d0,
@@ -502,7 +500,6 @@ instance MonoidParsing (Fixed Backtrack.Parser g) where
    takeCharsWhile predicate = primitive "takeCharsWhile" (mempty <$ notSatisfyChar predicate)
                                                          (takeCharsWhile1 predicate) (takeCharsWhile predicate)
    takeCharsWhile1 predicate = positivePrimitive "takeCharsWhile1" (takeCharsWhile1 predicate)
-   whiteSpace = primitive "whiteSpace" (notSatisfyChar isSpace) (satisfyChar isSpace *> whiteSpace) whiteSpace
    concatMany p@PositiveDirectParser{} = DirectParser{
       complete= cmp,
       direct0= d0,
@@ -538,14 +535,17 @@ instance (Parsing (p g s), MonoidParsing (Fixed p g), Show s, TextualMonoid s) =
    anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance (Lexical g, LexicalConstraint (Fixed p) g s, 
-          TokenParsing (p g s), MonoidParsing (p g), MonoidParsing (Fixed p g), Show s, TextualMonoid s) =>
-         TokenParsing (Fixed p g s) where
-   someSpace = positivePrimitive "someSpace" Token.someSpace
-   semi = primitive "semi" (noSemi *> Token.semi) (notFollowedBy noSemi *> Token.semi) Token.semi
-      where mayBeSemi c = c == ';' || isSpace c
-            noSemi = notSatisfyChar mayBeSemi
-   token p = lexicalToken p
+instance (Lexical g, LexicalConstraint (Fixed Backtrack.Parser) g s, Show s, TextualMonoid s) =>
+         TokenParsing (Fixed Backtrack.Parser g s) where
+   someSpace = someLexicalSpace
+   semi = lexicalSemicolon
+   token = lexicalToken
+
+instance (Lexical g, LexicalConstraint (Fixed Memoizing.Parser) g s, Show s, TextualMonoid s) =>
+         TokenParsing (Fixed Memoizing.Parser g s) where
+   someSpace = someLexicalSpace
+   semi = lexicalSemicolon
+   token = lexicalToken
 
 instance AmbiguousParsing (Fixed Memoizing.Parser g s) where
    ambiguous (PositiveDirectParser p) = PositiveDirectParser (ambiguous p)

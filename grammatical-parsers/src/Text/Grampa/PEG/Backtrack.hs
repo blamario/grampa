@@ -5,7 +5,6 @@ module Text.Grampa.PEG.Backtrack (Parser(..), Result(..), alt) where
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
 import Control.Monad (Monad(..), MonadPlus(..))
 
-import Data.Char (isSpace)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List (nub)
@@ -174,7 +173,6 @@ instance MonoidParsing (Parser g) where
    string s = Parser p where
       p s' | Just suffix <- Cancellative.stripPrefix s s' = Parsed s suffix
            | otherwise = NoParse (FailureInfo 1 (fromIntegral $ Factorial.length s') ["string " ++ show s])
-   whiteSpace = () <$ takeCharsWhile isSpace
    concatMany (Parser p) = Parser q
       where q rest = case p rest
                      of Parsed prefix suffix -> let Parsed prefix' suffix' = q suffix

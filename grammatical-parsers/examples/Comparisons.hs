@@ -3,6 +3,7 @@ module Comparisons where
 
 import Control.Applicative
 import Data.Monoid ((<>))
+import Text.Parser.Token (TokenParsing, symbol)
 
 import qualified Rank2
 import Text.Grampa
@@ -62,7 +63,7 @@ instance Rank2.Traversable (Comparisons c e) where
                   <*> f (term g)
 
 comparisons :: (Lexical g, LexicalConstraint p g String,
-                ComparisonDomain c e, Alternative (p g String), MonoidParsing (p g)) =>
+                ComparisonDomain c e, TokenParsing (p g String), MonoidParsing (p g)) =>
                GrammarBuilder (Comparisons c e) g p String
 comparisons Comparisons{..} =
    Comparisons{

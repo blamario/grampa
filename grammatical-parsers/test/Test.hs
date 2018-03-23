@@ -17,6 +17,7 @@ import Data.Word (Word8, Word64)
 
 import Data.Functor.Compose (Compose(..))
 import Text.Parser.Combinators (sepBy1, skipMany)
+import Text.Parser.Token (whiteSpace)
 
 import Test.Feat (Enumerable(..), Enumerate, FreePair(Free), consts, shared, unary, uniform)
 import Test.Feat.Enumerate (pay)
@@ -43,6 +44,8 @@ data Recursive f = Recursive{start :: f String,
                              next :: f String}
 deriving instance (Show (f String), Show (f [String])) => Show (Recursive f)
 
+instance Lexical Recursive
+
 $(Rank2.TH.deriveAll ''Recursive)
 
 recursiveManyGrammar Recursive{..} = Recursive{
@@ -56,7 +59,7 @@ nameListGrammar = fixGrammar nameListGrammarBuilder
 nameListGrammarBuilder g@Recursive{..} = Recursive{
    start= pure (const . unwords) <*> rec <*> (True <$ symbol "," <* symbol "..." <|> pure False) <|>
           pure id <*> symbol "..." <?> "start",
-   rec= sepBy1 one (ignorable *> string "," <* whiteSpace <?> "comma") <?> "rec",
+   rec= sepBy1 one (ignorable *> string "," <?> "comma") <?> "rec",
    one= do ignorable
            identifier <- ((:) <$> satisfyChar isLetter <*> (toString (const "") <$> takeCharsWhile isLetter))
            guard (identifier /= "reserved")
