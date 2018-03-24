@@ -427,7 +427,6 @@ instance MonoidParsing (Fixed Memoizing.Parser g) where
    endOfInput = primitive "endOfInput" endOfInput empty endOfInput
    getInput = primitive "getInput" (endOfInput *> getInput) (notFollowedBy endOfInput *> getInput) getInput
    anyToken = positivePrimitive "anyToken" anyToken
-   token x = positivePrimitive "token" (token x)
    satisfy predicate = positivePrimitive "satisfy" (satisfy predicate)
    satisfyChar predicate = positivePrimitive "satisfyChar" (satisfyChar predicate)
    satisfyCharInput predicate = positivePrimitive "satisfyCharInput" (satisfyCharInput predicate)
@@ -479,7 +478,6 @@ instance MonoidParsing (Fixed Backtrack.Parser g) where
    endOfInput = primitive "endOfInput" endOfInput empty endOfInput
    getInput = primitive "getInput" (endOfInput *> getInput) (notFollowedBy endOfInput *> getInput) getInput
    anyToken = positivePrimitive "anyToken" anyToken
-   token x = positivePrimitive "token" (token x)
    satisfy predicate = positivePrimitive "satisfy" (satisfy predicate)
    satisfyChar predicate = positivePrimitive "satisfyChar" (satisfyChar predicate)
    satisfyCharInput predicate = positivePrimitive "satisfyCharInput" (satisfyCharInput predicate)

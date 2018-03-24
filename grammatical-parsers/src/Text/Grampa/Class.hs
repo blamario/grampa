@@ -83,8 +83,6 @@ class MonoidParsing m where
 
    -- | A parser that accepts any single input atom.
    anyToken :: FactorialMonoid s => m s s
-   -- | A parser that accepts a specific input atom.
-   token :: (Eq s, FactorialMonoid s) => s -> m s s
    -- | A parser that accepts an input atom only if it satisfies the given predicate.
    satisfy :: FactorialMonoid s => (s -> Bool) -> m s s
    -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting and returning an input character only if it
@@ -133,8 +131,6 @@ class MonoidParsing m where
    takeCharsWhile1 :: TextualMonoid s => (Char -> Bool) -> m s s
    -- | Zero or more argument occurrences like 'many', with concatenated monoidal results.
    concatMany :: Monoid a => m s a -> m s a
-
-   token x = satisfy (== x)
 
 -- | Parsers that can produce alternative parses and collect them into an 'Ambiguous' node
 class AmbiguousParsing m where

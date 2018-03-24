@@ -96,11 +96,6 @@ tests = testGroup "Grampa" [
              [testProperty "anyToken mempty" $ simpleParse anyToken "" == Left (ParseFailure 0 ["anyToken"]),
               testProperty "anyToken list" $
                 \(x::Word8) xs-> simpleParse anyToken (x:xs) == Right [(xs, [x])],
-              testProperty "token success" $
-                \(x::Word8) xs-> simpleParse (token [x]) (x:xs) == Right [(xs, [x])],
-              testProperty "token failure" $ \(x::Word8) y xs->
-                   x /= y ==> results (simpleParse (token [y]) (x:xs)) == [],
-              testProperty "token mempty" $ \x-> results (simpleParse (token [x]) "") == [],
               testProperty "satisfy success" $ \bools->
                    simpleParse (satisfy head) (True:bools) == Right [(bools, [True])],
               testProperty "satisfy failure" $ \bools-> results (simpleParse (satisfy head) (False:bools)) == [],
@@ -208,7 +203,6 @@ instance forall s. (FactorialMonoid s, LeftReductiveMonoid s, Ord s, Typeable s,
                                  DescribedParser "getInput" getInput,
                                  DescribedParser "empty" empty,
                                  DescribedParser "mempty" mempty])
-               <> pay (unary $ \t-> DescribedParser "token" (token t))
                <> pay (unary $ \s-> DescribedParser "string" (string s))
                <> pay (unary $ \pred-> DescribedParser "satisfy" (satisfy pred))
                <> pay (unary $ \pred-> DescribedParser "takeWhile" (takeWhile pred))
