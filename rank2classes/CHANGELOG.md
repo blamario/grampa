@@ -1,6 +1,8 @@
 Version 1.1
 ---------------
 * Replaced own `Product` data type by the one from `Data.Functor.Product`
+* Removed the TH generation of partial Apply and Distributive instances
+* Added instances of `Data.Functor.Sum`
 
 Version 1.0.2
 ---------------

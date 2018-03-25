@@ -83,13 +83,13 @@ genFmap :: [Con] -> Q Dec
 genFmap cs = funD '(Rank2.<$>) (map genFmapClause cs)
 
 genAp :: [Con] -> Q Dec
-genAp cs = funD '(Rank2.<*>) (map genApClause cs)
+genAp [con] = funD '(Rank2.<*>) [genApClause con]
 
 genLiftA2 :: [Con] -> Q Dec
-genLiftA2 cs = funD 'Rank2.liftA2 (map genLiftA2Clause cs)
+genLiftA2 [con] = funD 'Rank2.liftA2 [genLiftA2Clause con]
 
 genLiftA3 :: [Con] -> Q Dec
-genLiftA3 cs = funD 'Rank2.liftA3 (map genLiftA3Clause cs)
+genLiftA3 [con] = funD 'Rank2.liftA3 [genLiftA3Clause con]
 
 genPure :: [Con] -> Q Dec
 genPure cs = funD 'Rank2.pure (map genPureClause cs)
@@ -101,10 +101,10 @@ genTraverse :: [Con] -> Q Dec
 genTraverse cs = funD 'Rank2.traverse (map genTraverseClause cs)
 
 genCotraverse :: [Con] -> Q Dec
-genCotraverse cs = funD 'Rank2.cotraverse (map genCotraverseClause cs)
+genCotraverse [con] = funD 'Rank2.cotraverse [genCotraverseClause con]
 
 genCotraverseTraversable :: [Con] -> Q Dec
-genCotraverseTraversable cs = funD 'Rank2.cotraverseTraversable (map genCotraverseTraversableClause cs)
+genCotraverseTraversable [con] = funD 'Rank2.cotraverseTraversable [genCotraverseTraversableClause con]
 
 genFmapClause :: Con -> Q Clause
 genFmapClause (NormalC name fieldTypes) = do
