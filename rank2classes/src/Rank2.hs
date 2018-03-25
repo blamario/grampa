@@ -14,7 +14,7 @@ module Rank2 (
 -- * Rank 2 data types
    Compose(..), Empty(..), Only(..), Identity(..), Product(..), Sum(..), Arrow(..), type (~>),
 -- * Method synonyms and helper functions
-   ap, fmap, liftA4, liftA5,
+   fst, snd, ap, fmap, liftA4, liftA5,
    fmapTraverse, liftA2Traverse1, liftA2Traverse2, liftA2TraverseBoth,
    distributeWith, distributeWithTraversable)
 where
@@ -26,9 +26,16 @@ import qualified Data.Traversable as Rank1
 import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(..))
 import Data.Functor.Compose (Compose(..))
+import Data.Functor.Product (Product(..))
 import Data.Functor.Sum (Sum(..))
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
+
+-- | Helper function for accessing the first field of a 'Pair'
+fst (Pair x _) = x
+
+-- | Helper function for accessing the second field of a 'Pair'
+snd (Pair _ y) = y
 
 -- | Equivalent of 'Functor' for rank 2 data types, satisfying the usual functor laws
 --
@@ -159,10 +166,6 @@ newtype Only a f = Only {fromOnly :: f a} deriving (Eq, Ord, Show)
 -- | Equivalent of 'Data.Functor.Identity' for rank 2 data types
 newtype Identity g f = Identity {runIdentity :: g f} deriving (Eq, Ord, Show)
 
--- | Equivalent of 'Data.Functor.Product' for rank 2 data types
-data Product g h f = Pair {fst :: g f, snd :: h f}
-                               deriving (Eq, Ord, Show)
-
 newtype Flip g a f = Flip (g (f a)) deriving (Eq, Ord, Show)
 
 instance Semigroup (g (f a)) => Semigroup (Flip g a f) where
@@ -197,7 +200,7 @@ instance Functor g => Functor (Identity g) where
    f <$> Identity g = Identity (f <$> g)
 
 instance (Functor g, Functor h) => Functor (Product g h) where
-   f <$> g = Pair (f <$> fst g) (f <$> snd g)
+   f <$> ~(Pair a b) = Pair (f <$> a) (f <$> b)
 
 instance (Functor g, Functor h) => Functor (Sum g h) where
    f <$> InL g = InL (f <$> g)
@@ -248,8 +251,8 @@ instance Apply g => Apply (Identity g) where
    liftA2 f (Identity g) (Identity h) = Identity (liftA2 f g h)
 
 instance (Apply g, Apply h) => Apply (Product g h) where
-   gf <*> gx = Pair (fst gf <*> fst gx) (snd gf <*> snd gx)
-   liftA2 f ~(Pair g1 g2) ~(Pair h1 h2) = Pair (liftA2 f g1 h1) (liftA2 f g2 h2)
+   ~(Pair gf hf) <*> ~(Pair gx hx) = Pair (gf <*> gx) (hf <*> hx)
+   liftA2 f ~(Pair g1 h1) ~(Pair g2 h2) = Pair (liftA2 f g1 g2) (liftA2 f h1 h2)
 
 instance Applicative Empty where
    pure = const Empty
@@ -282,4 +285,3 @@ instance Distributive g => Distributive (Identity g) where
 
 instance (Distributive g, Distributive h) => Distributive (Product g h) where
    cotraverse w f = Pair (cotraverse w $ Rank1.fmap fst f) (cotraverse w $ Rank1.fmap snd f)
-

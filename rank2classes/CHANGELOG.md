@@ -1,8 +1,12 @@
+Version 1.1
+---------------
+* Replaced own `Product` data type by the one from `Data.Functor.Product`
+
 Version 1.0.2
 ---------------
-* Fixed the bounds and Semigroup to compile with GHC 8.4.1
+* Fixed the bounds and `Semigroup` to compile with GHC 8.4.1
 * Added the ~> type synonym
-* Fixed deriveFunctor for record fields with concrete types - PR by Tom Smalley
+* Fixed `deriveFunctor` for record fields with concrete types - PR by Tom Smalley
 
 Version 1.0.1
 ---------------
@@ -10,7 +14,7 @@ Version 1.0.1
 
 Version 1.0
 ---------------
-* Swapped distributeWith with cotraverse
+* Swapped `distributeWith` with `cotraverse`
 * Documentation improvements
 
 Version 0.2.1.1
