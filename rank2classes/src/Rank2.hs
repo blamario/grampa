@@ -12,7 +12,7 @@ module Rank2 (
    Functor(..), Apply(..), Applicative(..),
    Foldable(..), Traversable(..), Distributive(..), DistributiveTraversable(..), distributeJoin,
 -- * Rank 2 data types
-   Compose(..), Empty(..), Only(..), Identity(..), Product(..), Arrow(..), type (~>),
+   Compose(..), Empty(..), Only(..), Identity(..), Product(..), Sum(..), Arrow(..), type (~>),
 -- * Method synonyms and helper functions
    ap, fmap, liftA4, liftA5,
    fmapTraverse, liftA2Traverse1, liftA2Traverse2, liftA2TraverseBoth,
@@ -26,6 +26,7 @@ import qualified Data.Traversable as Rank1
 import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(..))
 import Data.Functor.Compose (Compose(..))
+import Data.Functor.Sum (Sum(..))
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
@@ -198,6 +199,10 @@ instance Functor g => Functor (Identity g) where
 instance (Functor g, Functor h) => Functor (Product g h) where
    f <$> g = Pair (f <$> fst g) (f <$> snd g)
 
+instance (Functor g, Functor h) => Functor (Sum g h) where
+   f <$> InL g = InL (f <$> g)
+   f <$> InR h = InR (f <$> h)
+
 instance Foldable Empty where
    foldMap _ _ = mempty
 
@@ -210,6 +215,10 @@ instance Foldable g => Foldable (Identity g) where
 instance (Foldable g, Foldable h) => Foldable (Product g h) where
    foldMap f ~(Pair g h) = foldMap f g `mappend` foldMap f h
 
+instance (Foldable g, Foldable h) => Foldable (Sum g h) where
+   foldMap f (InL g) = foldMap f g
+   foldMap f (InR h) = foldMap f h
+
 instance Traversable Empty where
    traverse _ _ = Rank1.pure Empty
 
@@ -221,6 +230,10 @@ instance Traversable g => Traversable (Identity g) where
 
 instance (Traversable g, Traversable h) => Traversable (Product g h) where
    traverse f ~(Pair g h) = Rank1.liftA2 Pair (traverse f g) (traverse f h)
+
+instance (Traversable g, Traversable h) => Traversable (Sum g h) where
+   traverse f (InL g) = InL Rank1.<$> traverse f g
+   traverse f (InR h) = InR Rank1.<$> traverse f h
 
 instance Apply Empty where
    _ <*> _ = Empty
