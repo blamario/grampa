@@ -104,7 +104,7 @@ genCotraverse :: [Con] -> Q Dec
 genCotraverse cs = funD 'Rank2.cotraverse (map genCotraverseClause cs)
 
 genCotraverseTraversable :: [Con] -> Q Dec
-genCotraverseTraversable cs = funD 'Rank2.cotraverse (map genCotraverseTraversableClause cs)
+genCotraverseTraversable cs = funD 'Rank2.cotraverseTraversable (map genCotraverseTraversableClause cs)
 
 genFmapClause :: Con -> Q Clause
 genFmapClause (NormalC name fieldTypes) = do
