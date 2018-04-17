@@ -4,7 +4,7 @@
 module Text.Grampa (
    -- * Parsing methods
    MultiParsing(..),
-   simply,
+   showFailure, simply,
    -- * Types
    Grammar, GrammarBuilder, ParseResults, ParseFailure(..), Ambiguous(..),
    -- * Parser combinators and primitives
@@ -14,6 +14,9 @@ module Text.Grampa (
    module Text.Parser.LookAhead)
 where
 
+import Data.List (intercalate)
+import Data.Monoid ((<>))
+import Data.Monoid.Textual (TextualMonoid, toString)
 import Text.Parser.Char (CharParsing(char, notChar, anyChar))
 import Text.Parser.Combinators (Parsing((<?>), notFollowedBy, skipMany, skipSome, unexpected))
 import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
@@ -36,3 +39,24 @@ type GrammarBuilder (g  :: (* -> *) -> *)
 -- | Apply the given 'parse' function to the given grammar-free parser and its input.
 simply :: (Rank2.Only r (p (Rank2.Only r) s) -> s -> Rank2.Only r f) -> p (Rank2.Only r) s r -> s -> f r
 simply parseGrammar p input = Rank2.fromOnly (parseGrammar (Rank2.Only p) input)
+
+-- | Given the textual parse input, the parse failure on the input, and the number of lines preceding the failure to
+-- show, produce a human-readable failure description.
+showFailure :: TextualMonoid s => s -> ParseFailure -> Int -> String
+showFailure input (ParseFailure pos expected) preceding =
+   unlines prevLines <> replicate column ' ' <> "^\n"
+   <> "at line " <> show (length allPrevLines) <> ", column " <> show column <> "\n"
+   <> "expected " <> intercalate ", " (onLast ("or " <>) expected)
+   where onLast _ [] = []
+         onLast _ [x] = [x]
+         onLast f [x, y] = [x, f y]
+         onLast f (x:xs) = x : onLast f xs
+         (allPrevLines, column) = context [] pos (lines $ toString (const mempty) input)
+         prevLines = reverse (take (succ preceding) allPrevLines)
+         context revLines restCount []
+            | restCount > 0 = (["Error: the failure position is beyond the input length"], -1)
+            | otherwise = (revLines, restCount)
+         context revLines restCount (next:rest)
+            | restCount < nextLength = (next:revLines, restCount)
+            | otherwise = context (next:revLines) (restCount - nextLength - 1) rest
+            where nextLength = length next
