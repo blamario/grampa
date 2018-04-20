@@ -46,10 +46,13 @@ showFailure :: TextualMonoid s => s -> ParseFailure -> Int -> String
 showFailure input (ParseFailure pos expected) preceding =
    unlines prevLines <> replicate column ' ' <> "^\n"
    <> "at line " <> show (length allPrevLines) <> ", column " <> show column <> "\n"
-   <> "expected " <> intercalate ", " (onLast ("or " <>) expected)
-   where onLast _ [] = []
-         onLast _ [x] = [x]
-         onLast f [x, y] = [x, f y]
+   <> "expected " <> oxfordComma expected
+   where oxfordComma [] = []
+         oxfordComma [x] = x
+         oxfordComma [x, y] = x <> " or " <> y
+         oxfordComma (x:y:rest) = intercalate ", " (x : y : onLast ("or " <>) rest)
+         onLast _ [] = []
+         onLast f [x] = [f x]
          onLast f (x:xs) = x : onLast f xs
          (allPrevLines, column) = context [] pos (lines $ toString (const mempty) input)
          prevLines = reverse (take (succ preceding) allPrevLines)

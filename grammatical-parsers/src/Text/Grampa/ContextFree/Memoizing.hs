@@ -230,8 +230,11 @@ instance MonoidParsing (Parser g) where
 instance MonoidNull s => Parsing (Parser g s) where
    try (Parser p) = Parser (weakenResults . p)
       where weakenResults (ResultList rl (FailureInfo s pos msgs)) = ResultList rl (FailureInfo (pred s) pos msgs)
-   Parser p <?> msg  = Parser (strengthenResults . p)
-      where strengthenResults (ResultList rl (FailureInfo s pos _msgs)) = ResultList rl (FailureInfo (succ s) pos [msg])
+   Parser p <?> msg  = Parser q
+      where q rest = strengthenResults rest (p rest)
+            strengthenResults rest (ResultList EmptyTree (FailureInfo s _pos _msgs)) =
+               ResultList EmptyTree (FailureInfo (succ s) (genericLength rest) [msg])
+            strengthenResults _ rl = rl
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t (ResultList EmptyTree _) = ResultList (Leaf $ ResultInfo 0 t ()) mempty
             rewind t ResultList{} = ResultList mempty (FailureInfo 1 (genericLength t) ["notFollowedBy"])

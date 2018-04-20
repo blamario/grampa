@@ -17,7 +17,7 @@ import qualified Data.Monoid.Null as Null
 import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
-import Text.Parser.Combinators (Parsing(notFollowedBy), skipMany, skipSome)
+import Text.Parser.Combinators (Parsing(notFollowedBy, (<?>)), skipMany, skipSome)
 import Text.Parser.Char (CharParsing(char))
 import Text.Parser.Token (TokenParsing, IdentifierStyle)
 import GHC.Exts (Constraint)
@@ -195,4 +195,4 @@ class Lexical (g :: (* -> *) -> *) where
    identifier = identifierToken (liftA2 (<>) (satisfyCharInput (isIdentifierStartChar @g))
                                              (takeCharsWhile (isIdentifierFollowChar @g)))
    identifierToken = lexicalToken
-   keyword s = lexicalToken (string s *> notSatisfyChar (isIdentifierFollowChar @g))
+   keyword s = lexicalToken (string s *> notSatisfyChar (isIdentifierFollowChar @g)) <?> ("keyword " <> show s)
