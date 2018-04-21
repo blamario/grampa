@@ -90,8 +90,17 @@ instance Monoid x => Monoid (Parser g s x) where
    mappend = liftA2 mappend
 
 instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
-   try = id
-   (<?>) = const
+   try :: forall a. Parser g s a -> Parser g s a
+   try (Parser p) = Parser q
+      where q :: forall x. s -> (a -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
+            q input success failure = p input success (failure . weakenFailure)
+            weakenFailure (FailureInfo s pos msgs) = FailureInfo (pred s) pos msgs
+   (<?>) :: forall a. Parser g s a -> String -> Parser g s a
+   Parser p <?> msg  = Parser q
+      where q :: forall x. s -> (a -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
+            q input success failure = p input success (failure . strengthenFailure)
+               where strengthenFailure (FailureInfo s _pos _msgs) =
+                        FailureInfo (succ s) (fromIntegral $ Factorial.length input) [msg]
    eof = endOfInput
    unexpected msg = Parser (\t _ failure -> failure $ FailureInfo 0 (fromIntegral $ Factorial.length t) [msg])
    notFollowedBy (Parser p) = Parser q

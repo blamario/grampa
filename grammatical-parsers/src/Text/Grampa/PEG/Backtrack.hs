@@ -88,8 +88,14 @@ instance Monoid x => Monoid (Parser g s x) where
    mappend = liftA2 mappend
 
 instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
-   try = id
-   (<?>) = const
+   try (Parser p) = Parser (weakenFailure . p)
+      where weakenFailure (NoParse (FailureInfo s pos msgs)) = NoParse (FailureInfo (pred s) pos msgs)
+            weakenFailure r = r
+   Parser p <?> msg  = Parser q
+      where q rest = strengthenFailure rest (p rest)
+            strengthenFailure rest (NoParse (FailureInfo s _pos _msgs)) =
+               NoParse (FailureInfo (succ s) (fromIntegral $ Factorial.length rest) [msg])
+            strengthenFailure _ r = r
    eof = endOfInput
    unexpected msg = Parser (\t-> NoParse $ FailureInfo 0 (fromIntegral $ Factorial.length t) [msg])
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
