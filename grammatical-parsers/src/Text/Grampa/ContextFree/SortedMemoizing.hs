@@ -57,7 +57,7 @@ instance Applicative (Parser g i) where
    {-# INLINABLE (<*>) #-}
 
 instance Alternative (Parser g i) where
-   empty = Parser (\rest-> ResultList mempty $ FailureInfo 0 (genericLength rest) ["empty"])
+   empty = Parser (\rest-> ResultList mempty $ FailureInfo (genericLength rest) ["empty"])
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
    {-# INLINABLE (<|>) #-}
@@ -94,7 +94,7 @@ instance GrammarParsing Parser where
    type GrammarFunctor Parser = ResultList
    nonTerminal f = Parser p where
       p ((_, d) : _) = f d
-      p _ = ResultList mempty (FailureInfo 1 0 ["NonTerminal at endOfInput"])
+      p _ = ResultList mempty (FailureInfo 0 ["NonTerminal at endOfInput"])
    {-# INLINE nonTerminal #-}
 
 -- | Memoizing parser guarantees O(n²) performance for grammars with unambiguous productions, but provides no left
@@ -133,26 +133,26 @@ instance MonoidParsing (Parser g) where
    anyToken = Parser p
       where p rest@((s, _):t) = case splitPrimePrefix s
                                 of Just (first, _) -> ResultList [ResultsOfLength 1 t (first:|[])] mempty
-                                   _ -> ResultList mempty (FailureInfo 1 (genericLength rest) ["anyToken"])
-            p [] = ResultList mempty (FailureInfo 1 0 ["anyToken"])
+                                   _ -> ResultList mempty (FailureInfo (genericLength rest) ["anyToken"])
+            p [] = ResultList mempty (FailureInfo 0 ["anyToken"])
    satisfy predicate = Parser p
       where p rest@((s, _):t) =
                case splitPrimePrefix s
                of Just (first, _) | predicate first -> ResultList [ResultsOfLength 1 t (first:|[])] mempty
-                  _ -> ResultList mempty (FailureInfo 1 (genericLength rest) ["satisfy"])
-            p [] = ResultList mempty (FailureInfo 1 0 ["satisfy"])
+                  _ -> ResultList mempty (FailureInfo (genericLength rest) ["satisfy"])
+            p [] = ResultList mempty (FailureInfo 0 ["satisfy"])
    satisfyChar predicate = Parser p
       where p rest@((s, _):t) =
                case Textual.characterPrefix s
                of Just first | predicate first -> ResultList [ResultsOfLength 1 t (first:|[])] mempty
-                  _ -> ResultList mempty (FailureInfo 1 (genericLength rest) ["satisfyChar"])
-            p [] = ResultList mempty (FailureInfo 1 0 ["satisfyChar"])
+                  _ -> ResultList mempty (FailureInfo (genericLength rest) ["satisfyChar"])
+            p [] = ResultList mempty (FailureInfo 0 ["satisfyChar"])
    satisfyCharInput predicate = Parser p
       where p rest@((s, _):t) =
                case Textual.characterPrefix s
                of Just first | predicate first -> ResultList [ResultsOfLength 1 t (Factorial.primePrefix s:|[])] mempty
-                  _ -> ResultList mempty (FailureInfo 1 (genericLength rest) ["satisfyCharInput"])
-            p [] = ResultList mempty (FailureInfo 1 0 ["satisfyCharInput"])
+                  _ -> ResultList mempty (FailureInfo (genericLength rest) ["satisfyCharInput"])
+            p [] = ResultList mempty (FailureInfo 0 ["satisfyCharInput"])
    scan s0 f = Parser (p s0)
       where p s rest@((i, _) : _) = ResultList [ResultsOfLength l (drop l rest) (prefix:|[])] mempty
                where (prefix, _, _) = Factorial.spanMaybe' s f i
@@ -172,7 +172,7 @@ instance MonoidParsing (Parser g) where
       where p rest@((s, _) : _)
                | x <- Factorial.takeWhile predicate s, l <- Factorial.length x, l > 0 =
                     ResultList [ResultsOfLength l (drop l rest) (x:|[])] mempty
-            p rest = ResultList mempty (FailureInfo 1 (genericLength rest) ["takeWhile1"])
+            p rest = ResultList mempty (FailureInfo (genericLength rest) ["takeWhile1"])
    takeCharsWhile predicate = Parser p
       where p rest@((s, _) : _)
                | x <- Textual.takeWhile_ False predicate s, l <- Factorial.length x =
@@ -182,44 +182,46 @@ instance MonoidParsing (Parser g) where
       where p rest@((s, _) : _)
                | x <- Textual.takeWhile_ False predicate s, l <- Factorial.length x, l > 0 =
                     ResultList [ResultsOfLength l (drop l rest) (x:|[])] mempty
-            p rest = ResultList mempty (FailureInfo 1 (genericLength rest) ["takeCharsWhile1"])
+            p rest = ResultList mempty (FailureInfo (genericLength rest) ["takeCharsWhile1"])
    string s = Parser p where
       p rest@((s', _) : _)
          | s `isPrefixOf` s' = ResultList [ResultsOfLength l (Factorial.drop l rest) (s:|[])] mempty
-      p rest = ResultList mempty (FailureInfo 1 (genericLength rest) ["string " ++ show s])
+      p rest = ResultList mempty (FailureInfo (genericLength rest) ["string " ++ show s])
       l = Factorial.length s
    concatMany p = go
       where go = mempty <|> mappend <$> p <*> go
    notSatisfy predicate = Parser p
       where p rest@((s, _):_)
                | Just (first, _) <- splitPrimePrefix s, 
-                 predicate first = ResultList mempty (FailureInfo 1 (genericLength rest) ["notSatisfy"])
+                 predicate first = ResultList mempty (FailureInfo (genericLength rest) ["notSatisfy"])
             p rest = ResultList [ResultsOfLength 0 rest (():|[])] mempty
    notSatisfyChar predicate = Parser p
       where p rest@((s, _):_)
                | Just first <- Textual.characterPrefix s, 
-                 predicate first = ResultList mempty (FailureInfo 1 (genericLength rest) ["notSatisfyChar"])
+                 predicate first = ResultList mempty (FailureInfo (genericLength rest) ["notSatisfyChar"])
             p rest = ResultList [ResultsOfLength 0 rest (():|[])] mempty
    {-# INLINABLE string #-}
 
 instance MonoidNull s => Parsing (Parser g s) where
-   try (Parser p) = Parser (weakenFailure . p)
-      where weakenFailure (ResultList rl (FailureInfo s pos msgs)) = ResultList rl (FailureInfo (pred s) pos msgs)
+   try (Parser p) = Parser q
+      where q rest = rewindFailure (p rest)
+               where rewindFailure (ResultList rl (FailureInfo _pos _msgs)) =
+                        ResultList rl (FailureInfo (genericLength rest) [])
    Parser p <?> msg  = Parser q
-      where q rest = strengthenFailure rest (p rest)
-            strengthenFailure rest (ResultList [] (FailureInfo s _pos _msgs)) =
-               ResultList [] (FailureInfo (succ s) (genericLength rest) [msg])
-            strengthenFailure _ rl = rl
+      where q rest = replaceFailure (p rest)
+               where replaceFailure (ResultList [] (FailureInfo pos msgs)) =
+                        ResultList [] (FailureInfo pos $ if pos == genericLength rest then [msg] else msgs)
+                     replaceFailure rl = rl
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t (ResultList [] _) = ResultList [ResultsOfLength 0 t (():|[])] mempty
-            rewind t ResultList{} = ResultList mempty (FailureInfo 1 (genericLength t) ["notFollowedBy"])
+            rewind t ResultList{} = ResultList mempty (FailureInfo (genericLength t) ["notFollowedBy"])
    skipMany p = go
       where go = pure () <|> p *> go
-   unexpected msg = Parser (\t-> ResultList mempty $ FailureInfo 0 (genericLength t) [msg])
+   unexpected msg = Parser (\t-> ResultList mempty $ FailureInfo (genericLength t) [msg])
    eof = Parser f
       where f rest@((s, _):_)
                | null s = ResultList [ResultsOfLength 0 rest (():|[])] mempty
-               | otherwise = ResultList mempty (FailureInfo 1 (genericLength rest) ["endOfInput"])
+               | otherwise = ResultList mempty (FailureInfo (genericLength rest) ["endOfInput"])
             f [] = ResultList [ResultsOfLength 0 [] (():|[])] mempty
 
 instance MonoidNull s => LookAheadParsing (Parser g s) where

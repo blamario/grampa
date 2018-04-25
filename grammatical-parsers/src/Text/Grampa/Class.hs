@@ -19,7 +19,7 @@ import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 import Text.Parser.Combinators (Parsing(notFollowedBy, (<?>)), skipMany, skipSome)
 import Text.Parser.Char (CharParsing(char))
-import Text.Parser.Token (TokenParsing, IdentifierStyle)
+import Text.Parser.Token (TokenParsing)
 import GHC.Exts (Constraint)
 
 import qualified Rank2
@@ -181,7 +181,7 @@ class Lexical (g :: (* -> *) -> *) where
    default identifierToken :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s)
                            => m g s s -> m g s s
    default identifier :: (LexicalConstraint m g s, Monad (m g s), Alternative (m g s),
-                          MonoidParsing (m g), TextualMonoid s) => m g s s
+                          Parsing (m g s), MonoidParsing (m g), TextualMonoid s) => m g s s
    default keyword :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), Show s, TextualMonoid s)
                    => s -> m g s ()
    lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> takeCharsWhile isSpace)
@@ -193,6 +193,6 @@ class Lexical (g :: (* -> *) -> *) where
    isIdentifierStartChar c = isLetter c || c == '_'
    isIdentifierFollowChar c = isAlphaNum c || c == '_'
    identifier = identifierToken (liftA2 (<>) (satisfyCharInput (isIdentifierStartChar @g))
-                                             (takeCharsWhile (isIdentifierFollowChar @g)))
+                                             (takeCharsWhile (isIdentifierFollowChar @g))) <?> "an identifier"
    identifierToken = lexicalToken
    keyword s = lexicalToken (string s *> notSatisfyChar (isIdentifierFollowChar @g)) <?> ("keyword " <> show s)

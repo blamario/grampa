@@ -14,7 +14,7 @@ import Text.Grampa.Class (ParseFailure(..), ParseResults)
 
 import Prelude hiding (length, showList)
 
-data FailureInfo = FailureInfo !Int Word64 [String] deriving (Eq, Show)
+data FailureInfo = FailureInfo Word64 [String] deriving (Eq, Show)
 
 data ResultsOfLength g s r = ResultsOfLength !Int ![(s, g (ResultList g s))] !(NonEmpty r)
 
@@ -26,23 +26,20 @@ data BinTree a = Fork !(BinTree a) !(BinTree a)
                deriving (Show)
 
 fromResultList :: FactorialMonoid s => s -> ResultList g s r -> ParseResults [(s, r)]
-fromResultList s (ResultList [] (FailureInfo _ pos msgs)) =
+fromResultList s (ResultList [] (FailureInfo pos msgs)) =
    Left (ParseFailure (length s - fromIntegral pos + 1) (nub msgs))
 fromResultList _ (ResultList rl _failure) = Right (foldMap f rl)
    where f (ResultsOfLength _ ((s, _):_) r) = (,) s <$> toList r
          f (ResultsOfLength _ [] r) = (,) mempty <$> toList r
 
 instance Semigroup FailureInfo where
-   f1@(FailureInfo s1 pos1 exp1) <> f2@(FailureInfo s2 pos2 exp2)
-      | s1 < s2 = f2
-      | s1 > s2 = f1
-      | otherwise = FailureInfo s1 pos' exp'
+   f1@(FailureInfo pos1 exp1) <> f2@(FailureInfo pos2 exp2) = FailureInfo pos' exp'
       where (pos', exp') | pos1 < pos2 = (pos1, exp1)
                          | pos1 > pos2 = (pos2, exp2)
                          | otherwise = (pos1, exp1 <> exp2)
 
 instance Monoid FailureInfo where
-   mempty = FailureInfo 0 maxBound []
+   mempty = FailureInfo maxBound []
    mappend = (<>)
 
 instance Show r => Show (ResultList g s r) where
