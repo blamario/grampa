@@ -213,8 +213,6 @@ instance MonoidParsing (Parser g) where
          | s `isPrefixOf` s' = ResultList (Leaf $ ResultInfo l (Factorial.drop l rest) s) mempty
       p rest = ResultList mempty (FailureInfo (genericLength rest) ["string " ++ show s])
       l = Factorial.length s
-   concatMany p = go
-      where go = mempty <|> mappend <$> p <*> go
    notSatisfy predicate = Parser p
       where p rest@((s, _):_)
                | Just (first, _) <- splitPrimePrefix s, 

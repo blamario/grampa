@@ -66,7 +66,7 @@ instance Monoid (ResultList s r) where
    mappend = (<>)
 
 instance Semigroup FailureInfo where
-   f1@(FailureInfo pos1 exp1) <> f2@(FailureInfo pos2 exp2) = FailureInfo pos' exp'
+   FailureInfo pos1 exp1 <> FailureInfo pos2 exp2 = FailureInfo pos' exp'
       where (pos', exp') | pos1 < pos2 = (pos1, exp1)
                          | pos1 > pos2 = (pos2, exp2)
                          | otherwise = (pos1, exp1 <> exp2)

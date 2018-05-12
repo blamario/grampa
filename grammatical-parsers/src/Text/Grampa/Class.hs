@@ -4,7 +4,6 @@ module Text.Grampa.Class (MultiParsing(..), AmbiguousParsing(..), GrammarParsing
                           ParseResults, ParseFailure(..), Ambiguous(..), completeParser) where
 
 import Control.Applicative (Alternative(empty), liftA2, (<|>))
-import Control.Monad (guard)
 import Data.Char (isAlphaNum, isLetter, isSpace)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
@@ -17,7 +16,7 @@ import qualified Data.Monoid.Null as Null
 import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
-import Text.Parser.Combinators (Parsing(notFollowedBy, (<?>)), skipMany, skipSome)
+import Text.Parser.Combinators (Parsing(notFollowedBy, (<?>)), skipMany)
 import Text.Parser.Char (CharParsing(char))
 import Text.Parser.Token (TokenParsing)
 import GHC.Exts (Constraint)
@@ -131,6 +130,9 @@ class MonoidParsing m where
    takeCharsWhile1 :: TextualMonoid s => (Char -> Bool) -> m s s
    -- | Zero or more argument occurrences like 'many', with concatenated monoidal results.
    concatMany :: Monoid a => m s a -> m s a
+   default concatMany :: (Monoid a, Alternative (m s)) => m s a -> m s a
+   concatMany p = go
+      where go = mappend <$> p <*> go <|> pure mempty
 
 -- | Parsers that can produce alternative parses and collect them into an 'Ambiguous' node
 class AmbiguousParsing m where
