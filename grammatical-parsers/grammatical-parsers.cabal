@@ -24,6 +24,7 @@ source-repository head
 library
   hs-source-dirs:      src
   exposed-modules:     Text.Grampa,
+                       Text.Grampa.Combinators,
                        Text.Grampa.PEG.Backtrack, Text.Grampa.PEG.Packrat,
                        Text.Grampa.ContextFree.Continued, Text.Grampa.ContextFree.Parallel,
                        Text.Grampa.ContextFree.Memoizing, Text.Grampa.ContextFree.SortedMemoizing,
