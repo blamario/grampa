@@ -1,6 +1,6 @@
 name:                grammatical-parsers
 version:             0.3.1
-synopsis:            parsers that can combine into grammars
+synopsis:            parsers that combine into grammars
 description:
   /Gram/matical-/pa/rsers, or Grampa for short, is a library of parser types whose values are meant to be assigned
   to grammar record fields. All parser types support the same set of parser combinators, but have different semantics

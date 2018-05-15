@@ -92,12 +92,12 @@ some input.
 --   product=Compose (Left (ParseFailure 1 ["endOfInput"])),
 --   factor=Compose (Left (ParseFailure 1 ["endOfInput"])),
 --   number=Compose (Left (ParseFailure 1 ["endOfInput"]))}
--- >>> parsePrefix grammar "1+2*3"
+-- >>> parsePrefix grammar "1+2*3 apples"
 -- Arithmetic{
---   sum=Compose (Compose (Right [("+2*3",1),("*3",3),("",7)])),
---   product=Compose (Compose (Right [("+2*3",1)])),
---   factor=Compose (Compose (Right [("+2*3",1)])),
---   number=Compose (Compose (Right [("+2*3","1")]))}
+--   sum=Compose (Compose (Right [("+2*3 apples",1),("*3 apples",3),(" apples",7)])),
+--   product=Compose (Compose (Right [("+2*3 apples",1)])),
+--   factor=Compose (Compose (Right [("+2*3 apples",1)])),
+--   number=Compose (Compose (Right [("+2*3 apples","1")]))}
 ~~~
 
 To see more grammar examples, go straight to the
@@ -105,5 +105,5 @@ To see more grammar examples, go straight to the
 smaller grammars and combines them all together in the
 [Combined](https://github.com/blamario/grampa/blob/master/grammatical-parsers/examples/Combined.hs) module.
 
-For more conventional tastes there is a monolithic
-[Lua grammar](https://github.com/blamario/language-lua2/blob/master/src/Language/Lua/Grammar.hs) example as well.
+For more conventional tastes there are monolithic examples of
+[Lua](https://github.com/blamario/language-lua2/blob/master/src/Language/Lua/Grammar.hs) and [Oberon](http://hackage.haskell.org/package/language-oberon) grammars as well.
