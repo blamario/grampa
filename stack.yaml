@@ -42,13 +42,16 @@ packages:
 - ../monoid-subclasses/
 - rank2classes/
 - grammatical-parsers/
+- ../language/language-oberon/
 # - ../language-lua/
-- ../language-lua2/
-- ../language-webidl-hs/
+# - ../language-lua2/
+# - ../language-webidl-hs/
 
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
-extra-deps: []
+extra-deps:
+- either-5
+- repr-tree-syb-0.1.1
 
 # Override default flag values for local packages and extra-deps
 flags: {}
