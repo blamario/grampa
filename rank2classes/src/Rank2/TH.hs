@@ -14,7 +14,9 @@ module Rank2.TH (deriveAll, deriveFunctor, deriveApply, deriveApplicative,
                  deriveFoldable, deriveTraversable, deriveDistributive, deriveDistributiveTraversable)
 where
 
+import Control.Applicative (liftA2, liftA3)
 import Control.Monad (replicateM)
+import Data.Distributive (cotraverse)
 import Data.Monoid ((<>))
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax (BangType, VarBangType, getQ, putQ)
@@ -113,7 +115,7 @@ genFmapClause (NormalC name fieldTypes) = do
    let pats = [varP f, tildeP (conP name $ map varP fieldNames)]
        body = normalB $ appsE $ conE name : zipWith newField fieldNames fieldTypes
        newField :: Name -> BangType -> Q Exp
-       newField x (_, fieldType) = genFmapField f fieldType (varE x) id
+       newField x (_, fieldType) = genFmapField (varE f) fieldType (varE x) id
    clause pats body []
 genFmapClause (RecC name fields) = do
    f <- newName "f"
@@ -121,16 +123,19 @@ genFmapClause (RecC name fields) = do
    let body = normalB $ recConE name $ map newNamedField fields
        newNamedField :: VarBangType -> Q (Name, Exp)
        newNamedField (fieldName, _, fieldType) =
-          genFmapField f fieldType (appE (varE fieldName) (varE x)) (fieldExp fieldName)
+          fieldExp fieldName (genFmapField (varE f) fieldType (appE (varE fieldName) (varE x)) id)
    clause [varP f, varP x] body []
 
-genFmapField :: Name -> Type -> Q Exp -> (Q Exp -> Q a) -> Q a
-genFmapField funcName fieldType fieldAccess cont = do
+genFmapField :: Q Exp -> Type -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
+genFmapField fun fieldType fieldAccess wrap = do
    Just (Deriving _ typeVar) <- getQ
    case fieldType of
-     AppT ty _ | ty == VarT typeVar -> cont (appE (varE funcName) fieldAccess)
-     AppT _ ty | ty == VarT typeVar -> cont [| Rank2.fmap $(varE funcName) $(fieldAccess) |]
-     _ -> cont fieldAccess
+     AppT ty _  | ty == VarT typeVar -> appE (wrap fun) fieldAccess
+     AppT _ ty  | ty == VarT typeVar -> appE (wrap [| ($fun Rank2.<$>) |]) fieldAccess
+     AppT t1 t2 | t1 /= VarT typeVar -> genFmapField fun t2 fieldAccess (wrap . appE (varE '(<$>)))
+     SigT ty _kind -> genFmapField fun ty fieldAccess wrap
+     ParensT ty -> genFmapField fun ty fieldAccess wrap
+     _ -> fieldAccess
 
 genLiftA2Clause :: Con -> Q Clause
 genLiftA2Clause (NormalC name fieldTypes) = do
@@ -140,7 +145,7 @@ genLiftA2Clause (NormalC name fieldTypes) = do
    let pats = [varP f, tildeP (conP name $ map varP fieldNames1), tildeP (conP name $ map varP fieldNames2)]
        body = normalB $ appsE $ conE name : zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
        newField :: (Name, Name) -> BangType -> Q Exp
-       newField (x, y) (_, fieldType) = genLiftA2Field f fieldType (varE x) (varE y) id
+       newField (x, y) (_, fieldType) = genLiftA2Field (varE f) fieldType (varE x) (varE y) id
    clause pats body []
 genLiftA2Clause (RecC name fields) = do
    f <- newName "f"
@@ -149,18 +154,19 @@ genLiftA2Clause (RecC name fields) = do
    let body = normalB $ recConE name $ map newNamedField fields
        newNamedField :: VarBangType -> Q (Name, Exp)
        newNamedField (fieldName, _, fieldType) =
-          genLiftA2Field f fieldType (getFieldOf x) (getFieldOf y) (fieldExp fieldName)
+          fieldExp fieldName (genLiftA2Field (varE f) fieldType (getFieldOf x) (getFieldOf y) id)
           where getFieldOf = appE (varE fieldName) . varE
    clause [varP f, varP x, varP y] body []
 
-genLiftA2Field :: Name -> Type -> Q Exp -> Q Exp -> (Q Exp -> Q a) -> Q a
-genLiftA2Field funcName fieldType field1Access field2Access cont = do
+genLiftA2Field :: Q Exp -> Type -> Q Exp -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
+genLiftA2Field fun fieldType field1Access field2Access wrap = do
    Just (Deriving _ typeVar) <- getQ
    case fieldType of
-     AppT ty _
-        | ty == VarT typeVar -> cont [| $(varE funcName) $(field1Access) $(field2Access) |]
-     AppT _ ty
-        | ty == VarT typeVar -> cont [| Rank2.liftA2 $(varE funcName) $(field1Access) $(field2Access) |]
+     AppT ty _ | ty == VarT typeVar -> [| $(wrap fun) $field1Access $field2Access |]
+     AppT _ ty | ty == VarT typeVar -> [| $(wrap $ appE (varE 'Rank2.liftA2) fun) $field1Access $field2Access |]
+     AppT t1 t2 | t1 /= VarT typeVar -> genLiftA2Field fun t2 field1Access field2Access (appE (varE 'liftA2) . wrap)
+     SigT ty _kind -> genLiftA2Field fun ty field1Access field2Access wrap
+     ParensT ty -> genLiftA2Field fun ty field1Access field2Access wrap
      _ -> error ("Cannot apply liftA2 to field of type " <> show fieldType)
 
 genLiftA3Clause :: Con -> Q Clause
@@ -173,7 +179,7 @@ genLiftA3Clause (NormalC name fieldTypes) = do
                tildeP (conP name $ map varP fieldNames3)]
        body = normalB $ appsE $ conE name : zipWith newField (zip3 fieldNames1 fieldNames2 fieldNames3) fieldTypes
        newField :: (Name, Name, Name) -> BangType -> Q Exp
-       newField (x, y, z) (_, fieldType) = genLiftA3Field f fieldType (varE x) (varE y) (varE z) id
+       newField (x, y, z) (_, fieldType) = genLiftA3Field (varE f) fieldType (varE x) (varE y) (varE z) id
    clause pats body []
 genLiftA3Clause (RecC name fields) = do
    f <- newName "f"
@@ -183,18 +189,23 @@ genLiftA3Clause (RecC name fields) = do
    let body = normalB $ recConE name $ map newNamedField fields
        newNamedField :: VarBangType -> Q (Name, Exp)
        newNamedField (fieldName, _, fieldType) =
-          genLiftA3Field f fieldType (getFieldOf x) (getFieldOf y) (getFieldOf z) (fieldExp fieldName)
+          fieldExp fieldName (genLiftA3Field (varE f) fieldType (getFieldOf x) (getFieldOf y) (getFieldOf z) id)
           where getFieldOf = appE (varE fieldName) . varE
    clause [varP f, varP x, varP y, varP z] body []
 
-genLiftA3Field :: Name -> Type -> Q Exp -> Q Exp -> Q Exp -> (Q Exp -> Q a) -> Q a
-genLiftA3Field funcName fieldType field1Access field2Access field3Access cont = do
+genLiftA3Field :: Q Exp -> Type -> Q Exp -> Q Exp -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
+genLiftA3Field fun fieldType field1Access field2Access field3Access wrap = do
    Just (Deriving _ typeVar) <- getQ
    case fieldType of
      AppT ty _
-        | ty == VarT typeVar -> cont [| $(varE funcName) $(field1Access) $(field2Access) $(field3Access) |]
+        | ty == VarT typeVar -> [| $(wrap fun) $(field1Access) $(field2Access) $(field3Access) |]
      AppT _ ty
-        | ty == VarT typeVar -> cont [| Rank2.liftA3 $(varE funcName) $(field1Access) $(field2Access) $(field3Access) |]
+        | ty == VarT typeVar -> [| $(wrap $ appE (varE 'Rank2.liftA3) fun) $(field1Access) $(field2Access) $(field3Access) |]
+     AppT t1 t2
+        | t1 /= VarT typeVar
+          -> genLiftA3Field fun t2 field1Access field2Access field3Access (appE (varE 'liftA3) . wrap)
+     SigT ty _kind -> genLiftA3Field fun ty field1Access field2Access field3Access wrap
+     ParensT ty -> genLiftA3Field fun ty field1Access field2Access field3Access wrap
      _ -> error ("Cannot apply liftA3 to field of type " <> show fieldType)
 
 genApClause :: Con -> Q Clause
@@ -211,18 +222,20 @@ genApClause (RecC name fields) = do
    y <- newName "y"
    let body = normalB $ recConE name $ map newNamedField fields
        newNamedField :: VarBangType -> Q (Name, Exp)
-       newNamedField (fieldName, _, fieldType) = genApField fieldType (getFieldOf x) (getFieldOf y) (fieldExp fieldName)
+       newNamedField (fieldName, _, fieldType) =
+          fieldExp fieldName (genApField fieldType (getFieldOf x) (getFieldOf y) id)
           where getFieldOf = appE (varE fieldName) . varE
    clause [varP x, varP y] body []
 
-genApField :: Type -> Q Exp -> Q Exp -> (Q Exp -> Q a) -> Q a
-genApField fieldType field1Access field2Access cont = do
+genApField :: Type -> Q Exp -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
+genApField fieldType field1Access field2Access wrap = do
    Just (Deriving _ typeVar) <- getQ
    case fieldType of
-     AppT ty _
-        | ty == VarT typeVar -> cont [| Rank2.apply $(field1Access) $(field2Access) |]
-     AppT _ ty
-        | ty == VarT typeVar -> cont [| Rank2.ap $(field1Access) $(field2Access) |]
+     AppT ty _ | ty == VarT typeVar -> [| $(wrap (varE 'Rank2.apply)) $(field1Access) $(field2Access) |]
+     AppT _ ty | ty == VarT typeVar -> [| $(wrap (varE 'Rank2.ap)) $(field1Access) $(field2Access) |]
+     AppT t1 t2 | t1 /= VarT typeVar -> genApField t2 field1Access field2Access (appE (varE 'liftA2) . wrap)
+     SigT ty _kind -> genApField ty field1Access field2Access wrap
+     ParensT ty -> genApField ty field1Access field2Access wrap
      _ -> error ("Cannot apply ap to field of type " <> show fieldType)
 
 genPureClause :: Con -> Q Clause
@@ -236,15 +249,18 @@ genPureClause (RecC name fields) = do
    argName <- newName "f"
    let body = normalB $ recConE name $ map newNamedField fields
        newNamedField :: VarBangType -> Q (Name, Exp)
-       newNamedField (fieldName, _, fieldType) = genPureField fieldType (varE argName) (fieldExp fieldName)
+       newNamedField (fieldName, _, fieldType) = fieldExp fieldName (genPureField fieldType (varE argName) id)
    clause [varP argName] body []
 
-genPureField :: Type -> Q Exp -> (Q Exp -> Q a) -> Q a
-genPureField fieldType pureValue cont = do
+genPureField :: Type -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
+genPureField fieldType pureValue wrap = do
    Just (Deriving _ typeVar) <- getQ
    case fieldType of
-     AppT ty _ | ty == VarT typeVar -> cont pureValue
-     AppT _ ty | ty == VarT typeVar -> cont (appE (varE 'Rank2.pure) pureValue)
+     AppT ty _ | ty == VarT typeVar -> wrap pureValue
+     AppT _ ty | ty == VarT typeVar -> wrap (appE (varE 'Rank2.pure) pureValue)
+     AppT t1 t2 | t1 /= VarT typeVar -> genPureField t2 pureValue (wrap . appE (varE 'pure))
+     SigT ty _kind -> genPureField ty pureValue wrap
+     ParensT ty -> genPureField ty pureValue wrap
      _ -> error ("Cannot create a pure field of type " <> show fieldType)
 
 genFoldMapClause :: Con -> Q Clause
@@ -255,7 +271,7 @@ genFoldMapClause (NormalC name fieldTypes) = do
        body = normalB $ foldr1 append $ zipWith newField fieldNames fieldTypes
        append a b = [| $(a) <> $(b) |]
        newField :: Name -> BangType -> Q Exp
-       newField x (_, fieldType) = genFoldMapField f fieldType (varE x)
+       newField x (_, fieldType) = genFoldMapField f fieldType (varE x) id
    clause pats body []
 genFoldMapClause (RecC _name fields) = do
    f <- newName "f"
@@ -263,15 +279,18 @@ genFoldMapClause (RecC _name fields) = do
    let body = normalB $ foldr1 append $ map newField fields
        append a b = [| $(a) <> $(b) |]
        newField :: VarBangType -> Q Exp
-       newField (fieldName, _, fieldType) = genFoldMapField f fieldType (appE (varE fieldName) (varE x))
+       newField (fieldName, _, fieldType) = genFoldMapField f fieldType (appE (varE fieldName) (varE x)) id
    clause [varP f, varP x] body []
 
-genFoldMapField :: Name -> Type -> Q Exp -> Q Exp
-genFoldMapField funcName fieldType fieldAccess = do
+genFoldMapField :: Name -> Type -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
+genFoldMapField funcName fieldType fieldAccess wrap = do
    Just (Deriving _ typeVar) <- getQ
    case fieldType of
-     AppT ty _ | ty == VarT typeVar -> appE (varE funcName) fieldAccess
-     AppT _ ty | ty == VarT typeVar -> [| Rank2.foldMap $(varE funcName) $(fieldAccess) |]
+     AppT ty _ | ty == VarT typeVar -> appE (wrap $ varE funcName) fieldAccess
+     AppT _ ty | ty == VarT typeVar -> appE (wrap $ appE (varE 'Rank2.foldMap) (varE funcName)) fieldAccess
+     AppT t1 t2 | t1 /= VarT typeVar -> genFoldMapField funcName t2 fieldAccess (wrap . appE (varE 'foldMap))
+     SigT ty _kind -> genFoldMapField funcName ty fieldAccess wrap
+     ParensT ty -> genFoldMapField funcName ty fieldAccess wrap
      _ -> fieldAccess
 
 genTraverseClause :: Con -> Q Clause
@@ -283,7 +302,7 @@ genTraverseClause (NormalC name fieldTypes) = do
        apply (a, False) b = ([| $(a) <$> $(b) |], True)
        apply (a, True) b = ([| $(a) <*> $(b) |], True)
        newField :: Name -> BangType -> Q Exp
-       newField x (_, fieldType) = genTraverseField f fieldType (varE x)
+       newField x (_, fieldType) = genTraverseField (varE f) fieldType (varE x) id
    clause pats body []
 genTraverseClause (RecC name fields) = do
    f <- newName "f"
@@ -292,15 +311,18 @@ genTraverseClause (RecC name fields) = do
        apply (a, False) b = ([| $(a) <$> $(b) |], True)
        apply (a, True) b = ([| $(a) <*> $(b) |], True)
        newField :: VarBangType -> Q Exp
-       newField (fieldName, _, fieldType) = genTraverseField f fieldType (appE (varE fieldName) (varE x))
+       newField (fieldName, _, fieldType) = genTraverseField (varE f) fieldType (appE (varE fieldName) (varE x)) id
    clause [varP f, varP x] body []
 
-genTraverseField :: Name -> Type -> Q Exp -> Q Exp
-genTraverseField funcName fieldType fieldAccess = do
+genTraverseField :: Q Exp -> Type -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
+genTraverseField fun fieldType fieldAccess wrap = do
    Just (Deriving _ typeVar) <- getQ
    case fieldType of
-     AppT ty _ | ty == VarT typeVar -> appE (varE funcName) fieldAccess
-     AppT _ ty | ty == VarT typeVar -> [| Rank2.traverse $(varE funcName) $(fieldAccess) |]
+     AppT ty _ | ty == VarT typeVar -> appE (wrap fun) fieldAccess
+     AppT _ ty | ty == VarT typeVar -> appE (wrap [| Rank2.traverse $fun |]) fieldAccess
+     AppT t1 t2 | t1 /= VarT typeVar -> genTraverseField fun t2 fieldAccess (wrap . appE (varE 'traverse))
+     SigT ty _kind -> genTraverseField fun ty fieldAccess wrap
+     ParensT ty -> genTraverseField fun ty fieldAccess wrap
      _ -> fieldAccess
 
 genCotraverseClause :: Con -> Q Clause
@@ -309,14 +331,9 @@ genCotraverseClause (RecC name fields) = do
    argName <- newName "f"
    let body = normalB $ recConE name $ map newNamedField fields
        newNamedField :: VarBangType -> Q (Name, Exp)
-       newNamedField (fieldName, _, fieldType) = do
-          Just (Deriving _ typeVar) <- getQ
-          case fieldType of
-             AppT ty _
-                | ty == VarT typeVar -> fieldExp fieldName [| $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
-             AppT _ ty
-                | ty == VarT typeVar ->
-                  fieldExp fieldName [| Rank2.cotraverse $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
+       newNamedField (fieldName, _, fieldType) =
+          fieldExp fieldName (genCotraverseField (varE 'Rank2.cotraverse) (varE withName) fieldType
+                              [| $(varE fieldName) <$> $(varE argName) |] id)
    clause [varP withName, varP argName] body []
 
 genCotraverseTraversableClause :: Con -> Q Clause
@@ -325,12 +342,17 @@ genCotraverseTraversableClause (RecC name fields) = do
    argName <- newName "f"
    let body = normalB $ recConE name $ map newNamedField fields
        newNamedField :: VarBangType -> Q (Name, Exp)
-       newNamedField (fieldName, _, fieldType) = do
-          Just (Deriving _ typeVar) <- getQ
-          case fieldType of
-             AppT ty _
-                | ty == VarT typeVar -> fieldExp fieldName [| $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
-             AppT _ ty
-                | ty == VarT typeVar ->
-                  fieldExp fieldName [| Rank2.cotraverseTraversable $(varE withName) ($(varE fieldName) <$> $(varE argName)) |]
+       newNamedField (fieldName, _, fieldType) =
+          fieldExp fieldName (genCotraverseField (varE 'Rank2.cotraverseTraversable) (varE withName) fieldType
+                              [| $(varE fieldName) <$> $(varE argName) |] id)
    clause [varP withName, varP argName] body []
+
+genCotraverseField :: Q Exp -> Q Exp -> Type -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
+genCotraverseField method fun fieldType fieldAccess wrap = do
+   Just (Deriving _ typeVar) <- getQ
+   case fieldType of
+     AppT ty _ | ty == VarT typeVar -> appE (wrap fun) fieldAccess
+     AppT _ ty | ty == VarT typeVar -> appE (wrap $ appE method fun) fieldAccess
+     AppT t1 t2 | t1 /= VarT typeVar -> genCotraverseField method fun t2 fieldAccess (wrap . appE (varE 'cotraverse))
+     SigT ty _kind -> genCotraverseField method fun ty fieldAccess wrap
+     ParensT ty -> genCotraverseField method fun ty fieldAccess wrap
