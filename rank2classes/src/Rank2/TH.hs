@@ -268,7 +268,7 @@ genFoldMapClause (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
    let pats = [varP f, tildeP (conP name $ map varP fieldNames)]
-       body = normalB $ foldr1 append $ zipWith newField fieldNames fieldTypes
+       body = normalB $ foldr append [| mempty |] $ zipWith newField fieldNames fieldTypes
        append a b = [| $(a) <> $(b) |]
        newField :: Name -> BangType -> Q Exp
        newField x (_, fieldType) = genFoldMapField f fieldType (varE x) id
@@ -276,7 +276,7 @@ genFoldMapClause (NormalC name fieldTypes) = do
 genFoldMapClause (RecC _name fields) = do
    f <- newName "f"
    x <- newName "x"
-   let body = normalB $ foldr1 append $ map newField fields
+   let body = normalB $ foldr append [| mempty |] $ map newField fields
        append a b = [| $(a) <> $(b) |]
        newField :: VarBangType -> Q Exp
        newField (fieldName, _, fieldType) = genFoldMapField f fieldType (appE (varE fieldName) (varE x)) id
@@ -294,6 +294,8 @@ genFoldMapField funcName fieldType fieldAccess wrap = do
      _ -> fieldAccess
 
 genTraverseClause :: Con -> Q Clause
+genTraverseClause (NormalC name []) =
+   clause [wildP, wildP] (normalB [| pure $(conE name) |]) []
 genTraverseClause (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
@@ -326,6 +328,7 @@ genTraverseField fun fieldType fieldAccess wrap = do
      _ -> fieldAccess
 
 genCotraverseClause :: Con -> Q Clause
+genCotraverseClause (NormalC name []) = genCotraverseClause (RecC name [])
 genCotraverseClause (RecC name fields) = do
    withName <- newName "w"
    argName <- newName "f"
@@ -337,6 +340,7 @@ genCotraverseClause (RecC name fields) = do
    clause [varP withName, varP argName] body []
 
 genCotraverseTraversableClause :: Con -> Q Clause
+genCotraverseTraversableClause (NormalC name []) = genCotraverseTraversableClause (RecC name [])
 genCotraverseTraversableClause (RecC name fields) = do
    withName <- newName "w"
    argName <- newName "f"
