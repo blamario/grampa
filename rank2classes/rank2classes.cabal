@@ -22,18 +22,26 @@ source-repository head
   type:              git
   location:          https://github.com/blamario/grampa
 
+flag use-template-haskell
+  description: Enable the compilation of the Rank2.TH module
+  default: True
+  manual: True
+
 library
   hs-source-dirs:      src
-  exposed-modules:     Rank2, Rank2.TH
+  exposed-modules:     Rank2
   default-language:    Haskell2010
   -- other-modules:
   ghc-options:         -Wall
   build-depends:       base >=4.9 && <5,
-                       template-haskell >= 2.11 && < 2.14,
                        transformers >= 0.5 && < 0.6,
                        distributive == 0.5.*
   -- hs-source-dirs:      
   default-language:    Haskell2010
+
+  if flag(use-template-haskell)
+    build-depends: template-haskell >= 2.11 && < 2.14
+    exposed-modules: Rank2.TH
 
 test-suite doctests
   type:                exitcode-stdio-1.0
@@ -44,6 +52,8 @@ test-suite doctests
   build-depends:       base, rank2classes, doctest >= 0.8
 
 test-suite TH
+  if !flag(use-template-haskell)
+    buildable: False
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   default-language:    Haskell2010
