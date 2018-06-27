@@ -32,9 +32,11 @@ import Data.Functor.Sum (Sum(..))
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
 -- | Helper function for accessing the first field of a 'Pair'
+fst :: Product g h p -> g p
 fst (Pair x _) = x
 
 -- | Helper function for accessing the second field of a 'Pair'
+snd :: Product g h p -> h p
 snd (Pair _ y) = y
 
 -- | Equivalent of 'Functor' for rank 2 data types, satisfying the usual functor laws
