@@ -26,6 +26,7 @@ import qualified Data.Traversable as Rank1
 import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(..))
 import Data.Functor.Compose (Compose(..))
+import Data.Functor.Const (Const(..))
 import Data.Functor.Product (Product(..))
 import Data.Functor.Sum (Sum(..))
 
@@ -195,6 +196,9 @@ instance Rank1.Traversable g => Rank2.Traversable (Flip g a) where
 instance Functor Empty where
    _ <$> _ = Empty
 
+instance Functor (Const a) where
+   _ <$> Const a = Const a
+
 instance Functor (Only a) where
    f <$> Only a = Only (f a)
 
@@ -209,6 +213,9 @@ instance (Functor g, Functor h) => Functor (Sum g h) where
    f <$> InR h = InR (f <$> h)
 
 instance Foldable Empty where
+   foldMap _ _ = mempty
+
+instance Foldable (Const x) where
    foldMap _ _ = mempty
 
 instance Foldable (Only x) where
@@ -226,6 +233,9 @@ instance (Foldable g, Foldable h) => Foldable (Sum g h) where
 
 instance Traversable Empty where
    traverse _ _ = Rank1.pure Empty
+
+instance Traversable (Const x) where
+   traverse _ (Const x) = Rank1.pure (Const x)
 
 instance Traversable (Only x) where
    traverse f (Only x) = Only Rank1.<$> f x
