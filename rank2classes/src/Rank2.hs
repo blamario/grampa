@@ -23,6 +23,7 @@ import qualified Control.Applicative as Rank1
 import qualified Control.Monad as Rank1
 import qualified Data.Foldable as Rank1
 import qualified Data.Traversable as Rank1
+import Data.Coerce (coerce)
 import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(..))
 import Data.Functor.Compose (Compose(..))
@@ -254,6 +255,10 @@ instance Apply Empty where
    _ <*> _ = Empty
    liftA2 _ _ _ = Empty
 
+instance Semigroup x => Apply (Const x) where
+   Const x <*> Const y = Const (x <> y)
+   liftA2 _ (Const x) (Const y) = Const (x <> y)
+
 instance Apply (Only x) where
    Only f <*> Only x = Only (apply f x)
    liftA2 f (Only x) (Only y) = Only (f x y)
@@ -268,6 +273,9 @@ instance (Apply g, Apply h) => Apply (Product g h) where
 
 instance Applicative Empty where
    pure = const Empty
+
+instance (Semigroup x, Monoid x) => Applicative (Const x) where
+   pure = const (Const mempty)
 
 instance Applicative (Only x) where
    pure = Only
@@ -288,6 +296,9 @@ instance (DistributiveTraversable g, DistributiveTraversable h) => DistributiveT
 
 instance Distributive Empty where
    cotraverse _ _ = Empty
+
+instance Monoid x => DistributiveTraversable (Const x) where
+   cotraverseTraversable _ f = coerce (Rank1.fold f)
 
 instance Distributive (Only x) where
    cotraverse w f = Only (w $ Rank1.fmap fromOnly f)
