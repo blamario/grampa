@@ -1,5 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, RankNTypes, ScopedTypeVariables,
-             TypeApplications, TypeFamilies, DeriveDataTypeable, DeriveFunctor #-}
+             TypeApplications, TypeFamilies, DeriveDataTypeable, DeriveFoldable, DeriveFunctor #-}
 module Text.Grampa.Class (MultiParsing(..), AmbiguousParsing(..), GrammarParsing(..), MonoidParsing(..), Lexical(..),
                           ParseResults, ParseFailure(..), Ambiguous(..), completeParser) where
 
@@ -30,7 +30,7 @@ data ParseFailure = ParseFailure Int [String] deriving (Eq, Show)
 
 -- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of alternative
 -- results.
-newtype Ambiguous a = Ambiguous (NonEmpty a) deriving (Data, Eq, Functor, Ord, Show, Typeable)
+newtype Ambiguous a = Ambiguous (NonEmpty a) deriving (Data, Eq, Foldable, Functor, Ord, Show, Typeable)
 
 instance Show1 Ambiguous where
    liftShowsPrec sp sl d (Ambiguous (h :| l)) t
