@@ -1,5 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, RankNTypes, ScopedTypeVariables,
-             TypeApplications, TypeFamilies, DeriveDataTypeable, DeriveFoldable, DeriveFunctor #-}
+             TypeApplications, TypeFamilies, DeriveDataTypeable #-}
 module Text.Grampa.Class (MultiParsing(..), AmbiguousParsing(..), GrammarParsing(..), MonoidParsing(..), Lexical(..),
                           ParseResults, ParseFailure(..), Ambiguous(..), completeParser) where
 
@@ -30,12 +30,25 @@ data ParseFailure = ParseFailure Int [String] deriving (Eq, Show)
 
 -- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of alternative
 -- results.
-newtype Ambiguous a = Ambiguous (NonEmpty a) deriving (Data, Eq, Foldable, Functor, Ord, Show, Typeable)
+newtype Ambiguous a = Ambiguous (NonEmpty a) deriving (Data, Eq, Ord, Show, Typeable)
 
 instance Show1 Ambiguous where
    liftShowsPrec sp sl d (Ambiguous (h :| l)) t
       | d > 5 = "(Ambiguous $ " <> sp 0 h (" :| " <> sl l (')' : t))
       | otherwise = "Ambiguous (" <> sp 0 h (" :| " <> sl l (')' : t))
+
+instance Functor Ambiguous where
+   fmap f (Ambiguous a) = Ambiguous (fmap f a)
+
+instance Applicative Ambiguous where
+   pure a = Ambiguous (pure a)
+   Ambiguous f <*> Ambiguous a = Ambiguous (f <*> a)
+
+instance Foldable Ambiguous where
+   foldMap f (Ambiguous a) = foldMap f a
+
+instance Traversable Ambiguous where
+   traverse f (Ambiguous a) = Ambiguous <$> traverse f a
 
 completeParser :: MonoidNull s => Compose ParseResults (Compose [] ((,) s)) r -> Compose ParseResults [] r
 completeParser (Compose (Left failure)) = Compose (Left failure)
