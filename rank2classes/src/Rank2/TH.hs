@@ -2,7 +2,7 @@
 -- use it would be
 --
 -- > import qualified Rank2.TH
--- > data MyDataType = ...
+-- > data MyDataType f = ...
 -- > $(Rank2.TH.deriveAll ''MyDataType)
 --
 -- or, if you're picky, you can invoke only 'deriveFunctor' and whichever other instances you need instead.
@@ -291,7 +291,7 @@ genFoldMapField funcName fieldType fieldAccess wrap = do
      AppT t1 t2 | t1 /= VarT typeVar -> genFoldMapField funcName t2 fieldAccess (wrap . appE (varE 'foldMap))
      SigT ty _kind -> genFoldMapField funcName ty fieldAccess wrap
      ParensT ty -> genFoldMapField funcName ty fieldAccess wrap
-     _ -> fieldAccess
+     _ -> [| mempty |]
 
 genTraverseClause :: Con -> Q Clause
 genTraverseClause (NormalC name []) =
@@ -325,7 +325,7 @@ genTraverseField fun fieldType fieldAccess wrap = do
      AppT t1 t2 | t1 /= VarT typeVar -> genTraverseField fun t2 fieldAccess (wrap . appE (varE 'traverse))
      SigT ty _kind -> genTraverseField fun ty fieldAccess wrap
      ParensT ty -> genTraverseField fun ty fieldAccess wrap
-     _ -> fieldAccess
+     _ -> [| pure $fieldAccess |]
 
 genCotraverseClause :: Con -> Q Clause
 genCotraverseClause (NormalC name []) = genCotraverseClause (RecC name [])

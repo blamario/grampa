@@ -38,7 +38,7 @@ library
                        distributive < 0.7
 
   if flag(use-template-haskell)
-    build-depends: template-haskell >= 2.11 && < 2.14
+    build-depends: template-haskell >= 2.11 && < 2.15
     exposed-modules: Rank2.TH
 
 test-suite doctests
