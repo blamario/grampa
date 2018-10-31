@@ -268,19 +268,21 @@ genFoldMapClause (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
    let pats = [varP f, tildeP (conP name $ map varP fieldNames)]
-       body = normalB $ foldr append [| mempty |] $ zipWith newField fieldNames fieldTypes
+       body | null fieldNames = [| mempty |]
+            | otherwise = foldr1 append $ zipWith newField fieldNames fieldTypes
        append a b = [| $(a) <> $(b) |]
        newField :: Name -> BangType -> Q Exp
        newField x (_, fieldType) = genFoldMapField f fieldType (varE x) id
-   clause pats body []
+   clause pats (normalB body) []
 genFoldMapClause (RecC _name fields) = do
    f <- newName "f"
    x <- newName "x"
-   let body = normalB $ foldr append [| mempty |] $ map newField fields
+   let body | null fields = [| mempty |]
+            | otherwise = foldr1 append $ map newField fields
        append a b = [| $(a) <> $(b) |]
        newField :: VarBangType -> Q Exp
        newField (fieldName, _, fieldType) = genFoldMapField f fieldType (appE (varE fieldName) (varE x)) id
-   clause [varP f, varP x] body []
+   clause [varP f, varP x] (normalB body) []
 
 genFoldMapField :: Name -> Type -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
 genFoldMapField funcName fieldType fieldAccess wrap = do
