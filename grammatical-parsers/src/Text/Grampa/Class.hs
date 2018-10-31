@@ -10,12 +10,13 @@ import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Data (Data)
 import Data.Typeable (Typeable)
-import Data.Monoid (Monoid, (<>))
+import Data.Monoid (Monoid(mempty, mappend))
 import Data.Monoid.Cancellative (LeftReductiveMonoid)
 import qualified Data.Monoid.Null as Null
 import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
+import Data.Semigroup (Semigroup((<>)))
 import Text.Parser.Combinators (Parsing(notFollowedBy, (<?>)), skipMany)
 import Text.Parser.Char (CharParsing(char))
 import Text.Parser.Token (TokenParsing)
@@ -49,6 +50,13 @@ instance Foldable Ambiguous where
 
 instance Traversable Ambiguous where
    traverse f (Ambiguous a) = Ambiguous <$> traverse f a
+
+instance Semigroup a => Semigroup (Ambiguous a) where
+   Ambiguous xs <> Ambiguous ys = Ambiguous (liftA2 (<>) xs ys)
+
+instance Monoid a => Monoid (Ambiguous a) where
+   mempty = Ambiguous (mempty :| [])
+   Ambiguous xs `mappend` Ambiguous ys = Ambiguous (liftA2 mappend xs ys)
 
 completeParser :: MonoidNull s => Compose ParseResults (Compose [] ((,) s)) r -> Compose ParseResults [] r
 completeParser (Compose (Left failure)) = Compose (Left failure)
@@ -207,7 +215,7 @@ class Lexical (g :: (* -> *) -> *) where
    lexicalToken p = p <* lexicalWhiteSpace
    isIdentifierStartChar c = isLetter c || c == '_'
    isIdentifierFollowChar c = isAlphaNum c || c == '_'
-   identifier = identifierToken (liftA2 (<>) (satisfyCharInput (isIdentifierStartChar @g))
-                                             (takeCharsWhile (isIdentifierFollowChar @g))) <?> "an identifier"
+   identifier = identifierToken (liftA2 mappend (satisfyCharInput (isIdentifierStartChar @g))
+                                                (takeCharsWhile (isIdentifierFollowChar @g))) <?> "an identifier"
    identifierToken = lexicalToken
    keyword s = lexicalToken (string s *> notSatisfyChar (isIdentifierFollowChar @g)) <?> ("keyword " <> show s)
