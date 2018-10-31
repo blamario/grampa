@@ -697,7 +697,8 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
          maybeDependency _ = Rank2.Pair (Const Nothing) (Rank2.Arrow (Rank2.Arrow . (<>)))
 
          fixRecursive s parsedTail initial =
-            foldr1 whileAnyContinues (iterate (recurseOnce s parsedTail) initial)
+            Rank2.snd Rank2.<$> maybeDependencies Rank2.<*> initial Rank2.<*>
+            recurseOnce s parsedTail (foldr1 whileAnyContinues $ iterate (recurseOnce s parsedTail) initial)
 
          whileAnyContinues g1 g2 = Rank2.liftA3 choiceWhile maybeDependencies g1 g2
             where choiceWhile :: Rank2.Product (Const (Maybe (g (Const Bool)))) (ResultAppend g s) x
@@ -706,7 +707,7 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                   choiceWhile (Rank2.Pair (Const Nothing) _) r1 _ = r1
                   choiceWhile (Rank2.Pair (Const (Just deps)) append) r1 r2
                      | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps g1)) =
-                       append `Rank2.apply` r1 `Rank2.apply` r2
+                          append `Rank2.apply` r1 `Rank2.apply` r2
                      | otherwise = r1
                   combine (Const False) _ = Const False
                   combine (Const True) (ResultList [] _) = Const False

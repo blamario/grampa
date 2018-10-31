@@ -7,6 +7,7 @@ import Control.Arrow (first)
 import Control.Monad (MonadPlus(mzero, mplus), guard, liftM, liftM2, void)
 import Data.Char (isSpace, isLetter)
 import Data.List (find, minimumBy, nub, sort)
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Monoid (Monoid(..), Product(..), (<>))
 import Data.Monoid.Cancellative (LeftReductiveMonoid(..))
 import Data.Monoid.Null (MonoidNull(null))
@@ -34,6 +35,7 @@ import Text.Grampa hiding (symbol)
 import qualified Text.Grampa.ContextFree.Parallel as Parallel
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 
+import qualified Test.Ambiguous
 import qualified Test.Examples
 
 import Prelude hiding (null, takeWhile)
@@ -87,6 +89,28 @@ tests = testGroup "Grampa" [
                testProperty "bracketed" $ start (parseComplete g "[()]") == Compose (Right [""]),
                testProperty "name list" $
                  start (parseComplete nameListGrammar "foo, bar") == Compose (Right ["foo bar"])],
+           testGroup "ambiguous"
+             [testProperty "complete" $
+              Test.Ambiguous.amb (parseComplete (fixGrammar Test.Ambiguous.grammar) "xyz")
+              == Compose (Right [pure (Test.Ambiguous.Xyz (Ambiguous $
+                                                           Test.Ambiguous.Xy1 "x" "y"
+                                                           :| [Test.Ambiguous.Xy2
+                                                                (pure $ Test.Ambiguous.Xy1 "x" "")
+                                                                "y"])
+                                                          "z")]),
+              testProperty "prefix" $
+              Test.Ambiguous.amb (parsePrefix (fixGrammar Test.Ambiguous.grammar) "xyz")
+              == Compose (Compose (Right [("yz", pure (Test.Ambiguous.Xy1 "x" "")),
+                                          ("z", Ambiguous (Test.Ambiguous.Xy1 "x" "y" :|
+                                                           [Test.Ambiguous.Xy2
+                                                            (pure (Test.Ambiguous.Xy1 "x" ""))
+                                                            "y"])),
+                                          ("", pure (Test.Ambiguous.Xyz
+                                                     (Ambiguous (Test.Ambiguous.Xy1 "x" "y" :|
+                                                                 [Test.Ambiguous.Xy2
+                                                                  (pure (Test.Ambiguous.Xy1 "x" ""))
+                                                                  "y"]))
+                                                     "z"))]))],
            testGroup "arithmetic"
              [testProperty "arithmetic"   $ Test.Examples.parseArithmetical,
               testProperty "comparisons"  $ Test.Examples.parseComparison,
