@@ -1,3 +1,8 @@
+Version 1.2
+---------------
+* Added the class instances for Data.Functor.Const
+* Fixed and optimized the Foldable/Traversable instance code generated for bare fields in Rank2.TH
+
 Version 1.1
 ---------------
 * Replaced own `Product` data type by the one from `Data.Functor.Product`
