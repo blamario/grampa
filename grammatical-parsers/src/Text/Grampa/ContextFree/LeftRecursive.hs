@@ -684,34 +684,48 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                   f (FrontParser p) _ = Memoizing.applyParser p ((s,d''):parsedTail)
                   f _ result = result
          fixRecursive :: s -> [(s, g (ResultList g s))] -> g (ResultList g s) -> g (ResultList g s)
-         whileAnyContinues :: g (ResultList g s) -> g (ResultList g s) -> g (ResultList g s)
-         recurseOnce :: s -> [(s, g (ResultList g s))] -> g (ResultList g s) -> g (ResultList g s)
+         whileAnyContinues :: (g (Rank2.Product (ResultList g s) (ResultList g s))
+                               -> g (Rank2.Product (ResultList g s) (ResultList g s)))
+                           -> g (Rank2.Product (ResultList g s) (ResultList g s))
+                           -> g (Rank2.Product (ResultList g s) (ResultList g s))
+         recurseOnce :: s -> g (ResultList g s Rank2.~> ResultList g s)  -> [(s, g (ResultList g s))]
+                     -> g (Rank2.Product (ResultList g s) (ResultList g s))
+                     -> g (Rank2.Product (ResultList g s) (ResultList g s))
          maybeDependencies :: g (Rank2.Product (Const (Maybe (g (Const Bool)))) (ResultAppend g s))
+         appends :: g (ResultAppend g s)
          maybeDependency :: SeparatedParser Memoizing.Parser g s r
                          -> Rank2.Product (Const (Maybe (g (Const Bool)))) (ResultAppend g s) r
 
          directs = Rank2.fmap backParser parsers
          indirects = Rank2.fmap (\p-> case p of {CycleParser{}-> cycleParser p; _ -> empty}) parsers
+         appends = Rank2.fmap Rank2.snd maybeDependencies
          maybeDependencies = Rank2.fmap maybeDependency parsers
          maybeDependency p@CycleParser{} = Rank2.Pair (Const $ Just $ dependencies p) (appendResultsArrow p)
          maybeDependency _ = Rank2.Pair (Const Nothing) (Rank2.Arrow (Rank2.Arrow . (<>)))
 
          fixRecursive s parsedTail initial =
-            Rank2.snd Rank2.<$> maybeDependencies Rank2.<*> initial Rank2.<*>
-            recurseOnce s parsedTail (foldr1 whileAnyContinues $ iterate (recurseOnce s parsedTail) initial)
+            Rank2.fst Rank2.<$> (whileAnyContinues (recurseOnce s (appends Rank2.<*> initial) parsedTail)
+                                 $ Rank2.liftA2 Rank2.Pair initial initial)
 
-         whileAnyContinues g1 g2 = Rank2.liftA3 choiceWhile maybeDependencies g1 g2
+         whileAnyContinues f g = Rank2.liftA3 choiceWhile maybeDependencies g (whileAnyContinues f (f g))
             where choiceWhile :: Rank2.Product (Const (Maybe (g (Const Bool)))) (ResultAppend g s) x
-                              -> ResultList g s x -> ResultList g s x -> ResultList g s x
-                  combine :: Const Bool x -> ResultList g s x -> Const Bool x
+                              -> Rank2.Product (ResultList g s) (ResultList g s) x
+                              -> Rank2.Product (ResultList g s) (ResultList g s) x
+                              -> Rank2.Product (ResultList g s) (ResultList g s) x
+                  combine :: Const Bool x -> Rank2.Product (ResultList g s) (ResultList g s) x -> Const Bool x
                   choiceWhile (Rank2.Pair (Const Nothing) _) r1 _ = r1
-                  choiceWhile (Rank2.Pair (Const (Just deps)) append) r1 r2
-                     | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps g1)) =
-                          append `Rank2.apply` r1 `Rank2.apply` r2
+                  choiceWhile (Rank2.Pair (Const (Just deps)) _) r1 r2
+                     | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps g)) = r2
                      | otherwise = r1
                   combine (Const False) _ = Const False
-                  combine (Const True) (ResultList [] _) = Const False
+                  combine (Const True) (Rank2.Pair _ (ResultList [] _)) = Const False
                   combine (Const True) _ = Const True
 
-         recurseOnce s parsedTail initial = Rank2.fmap (($ parsed) . Memoizing.applyParser) indirects
-            where parsed = (s, initial):parsedTail
+         recurseOnce s initialAppends parsedTail results = Rank2.liftA2 reparse initialAppends indirects
+            where total :: g (ResultList g s)
+                  reparse :: (ResultList g s Rank2.~> ResultList g s) a -> Memoizing.Parser g s a
+                          -> Rank2.Product (ResultList g s) (ResultList g s) a
+                  total = Rank2.fst Rank2.<$> results
+                  reparse append p = Rank2.Pair
+                                (Rank2.apply append $ Memoizing.applyParser p ((s, total) : parsedTail))
+                                (Memoizing.applyParser p $ (s, Rank2.snd Rank2.<$> results) : parsedTail)

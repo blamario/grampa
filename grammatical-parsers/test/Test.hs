@@ -91,31 +91,30 @@ tests = testGroup "Grampa" [
                  start (parseComplete nameListGrammar "foo, bar") == Compose (Right ["foo bar"])],
            testGroup "ambiguous"
              [testProperty "complete" $
-              Test.Ambiguous.amb (parseComplete (fixGrammar Test.Ambiguous.grammar) "xyz")
-              == Compose (Right [pure (Test.Ambiguous.Xyz (Ambiguous $
-                                                           Test.Ambiguous.Xy1 "x" "y"
-                                                           :| [Test.Ambiguous.Xy2
-                                                                (pure $ Test.Ambiguous.Xy1 "x" "")
-                                                                "y"])
-                                                          "z")]),
+              Test.Ambiguous.amb (parseComplete (fixGrammar Test.Ambiguous.grammar) "xyzw")
+              == Compose (Right [pure (flip Test.Ambiguous.Xyzw "w" $ Ambiguous $ pure $
+                                       flip Test.Ambiguous.Xyz "z" $ Ambiguous $
+                                       Test.Ambiguous.Xy1 "x" "y"
+                                       :| [Test.Ambiguous.Xy2
+                                           (pure $ Test.Ambiguous.Xy1 "x" "") "y"])]),
               testProperty "prefix" $
-              Test.Ambiguous.amb (parsePrefix (fixGrammar Test.Ambiguous.grammar) "xyz")
-              == Compose (Compose (Right [("yz", pure (Test.Ambiguous.Xy1 "x" "")),
-                                          ("z", Ambiguous (Test.Ambiguous.Xy1 "x" "y" :|
-                                                           [Test.Ambiguous.Xy2
-                                                            (pure (Test.Ambiguous.Xy1 "x" ""))
-                                                            "y"])),
-                                          ("", pure (Test.Ambiguous.Xyz
-                                                     (Ambiguous (Test.Ambiguous.Xy1 "x" "y" :|
-                                                                 [Test.Ambiguous.Xy2
-                                                                  (pure (Test.Ambiguous.Xy1 "x" ""))
-                                                                  "y"]))
-                                                     "z"))]))],
-           testGroup "arithmetic"
-             [testProperty "arithmetic"   $ Test.Examples.parseArithmetical,
-              testProperty "comparisons"  $ Test.Examples.parseComparison,
-              testProperty "boolean"      $ Test.Examples.parseBoolean,
-              testProperty "conditionals" $ Test.Examples.parseConditional],
+              Test.Ambiguous.amb (parsePrefix (fixGrammar Test.Ambiguous.grammar) "xyzw")
+              == Compose (Compose (Right [("yzw", pure (Test.Ambiguous.Xy1 "x" "")),
+                                          ("zw", Ambiguous (Test.Ambiguous.Xy1 "x" "y" :|
+                                                            [Test.Ambiguous.Xy2
+                                                             (pure (Test.Ambiguous.Xy1 "x" ""))
+                                                             "y"])),
+                                          ("w", pure (Test.Ambiguous.Xyz
+                                                      (Ambiguous (Test.Ambiguous.Xy1 "x" "y" :|
+                                                                  [Test.Ambiguous.Xy2
+                                                                   (pure (Test.Ambiguous.Xy1 "x" ""))
+                                                                   "y"]))
+                                                      "z")),
+                                          ("", pure (flip Test.Ambiguous.Xyzw "w" $ Ambiguous $ pure $
+                                                     flip Test.Ambiguous.Xyz "z" $ Ambiguous $
+                                                     Test.Ambiguous.Xy1 "x" "y"
+                                                     :| [Test.Ambiguous.Xy2
+                                                         (pure $ Test.Ambiguous.Xy1 "x" "") "y"]))]))],
            testGroup "primitives"
              [testProperty "anyToken mempty" $ simpleParse anyToken "" == Left (ParseFailure 0 ["anyToken"]),
               testProperty "anyToken list" $

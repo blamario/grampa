@@ -15,6 +15,7 @@ import Debug.Trace
 data Amb = Xy1 String String
          | Xy2 (Ambiguous Amb) String
          | Xyz (Ambiguous Amb) String
+         | Xyzw (Ambiguous Amb) String
          deriving (Eq, Show)
 
 data Test p = Test{
@@ -25,7 +26,8 @@ grammar :: Test (Parser Test String) -> Test (Parser Test String)
 grammar Test{..} = Test{
    amb = ambiguous (Xy1 <$> string "x" <*> moptional (string "y")
                     <|> Xy2 <$> amb <*> string "y"
-                    <|> Xyz <$> amb <*> string "z")
+                    <|> Xyz <$> amb <*> string "z"
+                    <|> Xyzw <$> amb <*> string "w")
    }
 
 instance Lexical Test
