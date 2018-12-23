@@ -8,7 +8,8 @@ import Control.Monad (MonadPlus(mzero, mplus), guard, liftM, liftM2, void)
 import Data.Char (isSpace, isLetter)
 import Data.List (find, minimumBy, nub, sort)
 import Data.List.NonEmpty (NonEmpty((:|)))
-import Data.Monoid (Monoid(..), Product(..), (<>))
+import Data.Semigroup (Semigroup, (<>))
+import Data.Monoid (Monoid(..), Product(..))
 import Data.Monoid.Cancellative (LeftReductiveMonoid(..))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid(factors))
@@ -229,7 +230,7 @@ instance (Show s, FactorialMonoid s) => MonadPlus (DescribedParser s) where
    mzero = DescribedParser "mzero" mzero
    DescribedParser d1 p1 `mplus` DescribedParser d2 p2 = DescribedParser (d1 ++ " `mplus` " ++ d2) (mplus p1 p2)
 
-instance forall s. (FactorialMonoid s, LeftReductiveMonoid s, Ord s, Typeable s, Show s, Enumerable s) =>
+instance forall s. (Semigroup s, FactorialMonoid s, LeftReductiveMonoid s, Ord s, Typeable s, Show s, Enumerable s) =>
          Enumerable (DescribedParser s s) where
    enumerate = share (choice [c0 (DescribedParser "anyToken" anyToken),
                               c0 (DescribedParser "getInput" getInput),
@@ -243,14 +244,14 @@ instance forall s. (FactorialMonoid s, LeftReductiveMonoid s, Ord s, Typeable s,
                               binary " <> " (<>),
                               binary " <|> " (<|>)])
 
-instance forall s r. (Ord s, FactorialMonoid s, LeftReductiveMonoid s, Show s, Enumerable s) =>
+instance forall s r. (Ord s, Semigroup s, FactorialMonoid s, LeftReductiveMonoid s, Show s, Enumerable s) =>
          Enumerable (DescribedParser s ()) where
    enumerate = share (choice [c0 (DescribedParser "endOfInput" endOfInput),
                               pay (c1 $ \(DescribedParser d p :: DescribedParser s s)-> DescribedParser ("void " <> d) (void p)),
                               pay (c1 $ \(DescribedParser d p :: DescribedParser s s)->
                                     DescribedParser ("(notFollowedBy " <> d <> ")") (notFollowedBy p))])
 
-instance forall s r. (Show s, FactorialMonoid s, Typeable s) => Enumerable (DescribedParser s [Bool]) where
+instance forall s r. (Show s, Semigroup s, FactorialMonoid s, Typeable s) => Enumerable (DescribedParser s [Bool]) where
    enumerate = share (choice [c0 (DescribedParser "empty" empty),
                               c0 (DescribedParser "mempty" mempty),
                               pay (c1 $ \r-> DescribedParser ("(pure " ++ shows r ")") (pure r)),
@@ -259,7 +260,8 @@ instance forall s r. (Show s, FactorialMonoid s, Typeable s) => Enumerable (Desc
                               binary " <> " (<>),
                               binary " <|> " (<|>)])
 
-instance forall s r. (Show s, FactorialMonoid s, Typeable s) => Enumerable (DescribedParser s ([Bool] -> [Bool])) where
+instance forall s r. (Show s, Semigroup s, FactorialMonoid s, Typeable s) =>
+         Enumerable (DescribedParser s ([Bool] -> [Bool])) where
    enumerate = share (choice [c0 (DescribedParser "empty" empty),
                               c0 (DescribedParser "mempty" mempty),
                               pay (c1 $ \r-> DescribedParser ("(pure " ++ shows r ")") (pure r)),
