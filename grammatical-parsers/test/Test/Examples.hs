@@ -1,13 +1,16 @@
-{-# Language FlexibleInstances, RankNTypes, ScopedTypeVariables #-}
+{-# Language FlexibleInstances, MultiParamTypeClasses, RankNTypes, ScopedTypeVariables #-}
 module Test.Examples where
 
 import Control.Applicative (empty, (<|>))
 import Data.Functor.Compose (Compose(..))
 import Data.Monoid (Monoid(..), (<>))
 import Data.Monoid.Factorial (FactorialMonoid)
+import Text.Parser.Combinators (choice)
 
-import Test.Feat (Enumerable(..), Enumerate, FreePair(Free), consts, shared, unary, uniform)
+import Control.Enumerable (share)
+import Test.Feat (Enumerable(..), Enumerate, c0, c1, c2, c3, uniform)
 import Test.Feat.Enumerate (pay)
+import Test.Feat.Modifiers (Nat(..))
 import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Positive(..), Property, testProperty, (===), (==>), (.&&.),
                               forAll, mapSize, oneof, resize, sized, whenFail)
 import Data.Word (Word8)
@@ -20,109 +23,128 @@ import qualified Comparisons
 import qualified Boolean
 import qualified Conditionals
 
-parseArithmetical :: Sum -> Bool
-parseArithmetical (Sum s) = f s' == s'
+parseArithmetical :: ArithmeticTree -> Bool
+parseArithmetical tree = f (show tree) == tree
    where f = uniqueParse (fixGrammar Arithmetic.arithmetic) Arithmetic.expr
-         s' = f s
 
-parseComparison :: Comparison -> Bool
-parseComparison (Comparison s) = f s' == s'
-   where f = uniqueParse (fixGrammar comparisons) (Comparisons.test . Rank2.snd)
-         s' = f s
+parseBoolean :: BooleanTree -> Bool
+parseBoolean tree = f (show tree) == tree
+   where f :: String -> BooleanTree
+         f = uniqueParse (fixGrammar boolean) (Boolean.expr . Rank2.snd)
 
 comparisons :: (Rank2.Functor g, Lexical g, LexicalConstraint Parser g String) =>
                GrammarBuilder ArithmeticComparisons g Parser String
 comparisons (Rank2.Pair a c) =
    Rank2.Pair (Arithmetic.arithmetic a) (Comparisons.comparisons c){Comparisons.term= Arithmetic.expr a}
 
-parseBoolean :: Disjunction -> Bool
-parseBoolean (Disjunction s) = f s' == s'
-   where f = uniqueParse (fixGrammar boolean) (Boolean.expr . Rank2.snd)
-         s' = f s
-
 boolean :: (Rank2.Functor g, Lexical g, LexicalConstraint Parser g String) =>
            GrammarBuilder ArithmeticComparisonsBoolean g Parser String
 boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Comparisons.test $ Rank2.snd ac) b)
 
-parseConditional :: Conditional -> Bool
-parseConditional (Conditional s) = f s' == s'
+parseConditional :: ConditionalTree ArithmeticTree -> Bool
+parseConditional tree = f (show tree) == tree
    where f = uniqueParse (fixGrammar conditionals) (Conditionals.expr . Rank2.snd)
-         s' = f s
 
 conditionals :: (Rank2.Functor g, Lexical g, LexicalConstraint Parser g String) => GrammarBuilder ACBC g Parser String
 conditionals (Rank2.Pair acb c) =
    boolean acb `Rank2.Pair`
    Conditionals.conditionals c{Conditionals.test= Boolean.expr (Rank2.snd acb),
-                               Conditionals.term= Arithmetic.expr (Rank2.fst $ Rank2.fst acb)}
+                               Conditionals.term= Unconditional <$> Arithmetic.expr (Rank2.fst $ Rank2.fst acb)}
 
-type ArithmeticComparisons = Rank2.Product (Arithmetic.Arithmetic String) (Comparisons.Comparisons String String)
-type ArithmeticComparisonsBoolean = Rank2.Product ArithmeticComparisons (Boolean.Boolean String)
-type ACBC = Rank2.Product ArithmeticComparisonsBoolean (Conditionals.Conditionals String String)
+type ArithmeticComparisons = Rank2.Product (Arithmetic.Arithmetic ArithmeticTree) (Comparisons.Comparisons ArithmeticTree BooleanTree)
+type ArithmeticComparisonsBoolean = Rank2.Product ArithmeticComparisons (Boolean.Boolean BooleanTree)
+type ACBC = Rank2.Product ArithmeticComparisonsBoolean (Conditionals.Conditionals BooleanTree
+                                                        (ConditionalTree ArithmeticTree))
 
-newtype Factor      = Factor {factorString :: String}           deriving (Show)
-newtype Product     = Product {productString :: String}         deriving (Show)
-newtype Sum         = Sum {sumString :: String}                 deriving (Show)
-newtype Comparison  = Comparison {compString :: String}         deriving (Show)
-newtype Truth       = Truth {truthString :: String}             deriving (Show)
-newtype Conjunction = Conjunction {conjunctionString :: String} deriving (Show)
-newtype Disjunction = Disjunction {disjunctionString :: String} deriving (Show)
-newtype Conditional = Conditional {conditionalString :: String} deriving (Show)
+data ArithmeticTree = Number (Nat Int)
+                   | Add ArithmeticTree ArithmeticTree
+                   | Multiply ArithmeticTree ArithmeticTree
+                   | Negate ArithmeticTree
+                   | Subtract ArithmeticTree ArithmeticTree
+                   | Divide ArithmeticTree ArithmeticTree
+                   deriving Eq
 
-instance Arbitrary Factor where
+data BooleanTree = BooleanConstant Bool
+                 | Comparison ArithmeticTree Relation ArithmeticTree
+                 | Not BooleanTree
+                 | And BooleanTree BooleanTree
+                 | Or BooleanTree BooleanTree
+                 deriving Eq
+
+data ConditionalTree a = If BooleanTree (ConditionalTree a) (ConditionalTree a)
+                       | Unconditional a
+                       deriving Eq
+
+newtype Relation = Relation String deriving Eq
+
+instance Show ArithmeticTree where
+   showsPrec p (Add l r) rest | p < 1 = showsPrec 0 l (" + " <> showsPrec 1 r rest)
+   showsPrec p (Subtract l r) rest | p < 1 = showsPrec 0 l (" - " <> showsPrec 1 r rest)
+   showsPrec p (Negate e) rest | p < 1 = "- " <> showsPrec 1 e rest
+   showsPrec p (Multiply l r) rest | p < 2 = showsPrec 1 l (" * " <> showsPrec 2 r rest)
+   showsPrec p (Divide l r) rest | p < 2 = showsPrec 1 l (" / " <> showsPrec 2 r rest)
+   showsPrec _ (Number (Nat n)) rest = shows n rest
+   showsPrec p e rest = "(" <> showsPrec 0 e (")" <> rest)
+
+instance Show BooleanTree where
+   showsPrec p (Or l r) rest | p < 1 = showsPrec 1 l (" || " <> showsPrec 0 r rest)
+   showsPrec p (And l r) rest | p < 2 = showsPrec 2 l (" && " <> showsPrec 1 r rest)
+   showsPrec p (Not e) rest | p < 3 = "not " <> showsPrec 3 e rest
+   showsPrec p (Comparison l rel r) rest | p < 3 = showsPrec 0 l (" " <> show rel <> " " <> showsPrec 0 r rest)
+   showsPrec _ (BooleanConstant b) rest = shows b rest
+   showsPrec p e rest = "(" <> showsPrec 0 e (")" <> rest)
+
+instance Show a => Show (ConditionalTree a) where
+   show (Unconditional a) = show a
+   show (If test true false) = "if " <> show test <> " then " <> show true <> " else " <> show false
+
+instance Show Relation where
+   show (Relation rel) = rel
+
+instance Arithmetic.ArithmeticDomain ArithmeticTree where
+   number = Number . Nat
+   add = Add
+   multiply = Multiply
+   negate = Negate
+   subtract = Subtract
+   divide = Divide
+
+instance Boolean.BooleanDomain BooleanTree where
+   true = BooleanConstant True
+   false = BooleanConstant False
+   and = And
+   or = Or
+   not = Not
+
+instance Comparisons.ComparisonDomain ArithmeticTree BooleanTree where
+   lessThan = flip Comparison (Relation "<")
+   lessOrEqual = flip Comparison (Relation "<=")
+   equal = flip Comparison (Relation "==")
+   greaterOrEqual = flip Comparison (Relation ">=")
+   greaterThan = flip Comparison (Relation ">")
+
+instance Conditionals.ConditionalDomain BooleanTree (ConditionalTree ArithmeticTree) where
+   ifThenElse = If
+
+instance Arbitrary ArithmeticTree where
    arbitrary = sized uniform
-instance Arbitrary Product where
+instance Arbitrary BooleanTree where
    arbitrary = sized uniform
-instance Arbitrary Sum where
-   arbitrary = sized uniform
-instance Arbitrary Comparison where
-   arbitrary = sized uniform
-instance Arbitrary Truth where
-   arbitrary = sized uniform
-instance Arbitrary Conjunction where
-   arbitrary = sized uniform
-instance Arbitrary Disjunction where
-   arbitrary = sized uniform
-instance Arbitrary Conditional where
+instance Arbitrary (ConditionalTree ArithmeticTree) where
    arbitrary = sized uniform
 
-instance Enumerable Factor where
-   enumerate = unary (Factor . (show :: Word8 -> String))
-               <> pay (unary $ Factor . (\s-> "(" <> s <> ")") . productString)
+instance Enumerable ArithmeticTree where
+   enumerate = share (choice $ pay <$> [c1 (Number . (Nat . fromIntegral . nat :: Nat Integer -> Nat Int)), 
+                                        c2 Add, c2 Multiply, c1 Negate, c2 Subtract, c2 Divide])
 
-instance Enumerable Product where
-   enumerate = unary (Product . factorString)
-               <> (Product <$> (\(Free (Product a, Factor b))-> a <> "*" <> b) <$> pay enumerate)
-               <> (Product <$> (\(Free (Product a, Factor b))-> a <> "/" <> b) <$> pay enumerate)
+instance Enumerable BooleanTree where
+   enumerate = share $ choice $ pay <$> [c1 BooleanConstant, c3 Comparison, c2 And, c2 Or]
 
-instance Enumerable Sum where
-   enumerate = unary (Sum . productString)
-               <> (Sum <$> (\(Free (Sum a, Product b))-> a <> "+" <> b) <$> pay enumerate)
-               <> (Sum <$> (\(Free (Sum a, Product b))-> a <> "-" <> b) <$> pay enumerate)
+instance Enumerable a => Enumerable (ConditionalTree a) where
+   enumerate = share (pay $ c3 $ \test true false-> If test (Unconditional true) (Unconditional false))
 
-instance Enumerable Comparison where
-   enumerate = Comparison <$> (((\(Free (Sum a, Sum b))-> a <> "<" <> b) <$> pay enumerate)
-                               <> ((\(Free (Sum a, Sum b))-> a <> "<=" <> b) <$> pay enumerate)
-                               <> ((\(Free (Sum a, Sum b))-> a <> "==" <> b) <$> pay enumerate)
-                               <> ((\(Free (Sum a, Sum b))-> a <> ">=" <> b) <$> pay enumerate)
-                               <> ((\(Free (Sum a, Sum b))-> a <> ">" <> b) <$> pay enumerate))
-
-instance Enumerable Truth where
-   enumerate = Truth <$> (consts [pure "False", pure "True"]
-                          <> pay (unary $ ("not " <>) . truthString)
-                          <> pay (unary $ (\s-> "(" <> s <> ")") . disjunctionString))
-
-instance Enumerable Conjunction where
-   enumerate = unary (Conjunction . truthString)
-               <> (Conjunction <$> (\(Free (Conjunction a, Truth b))-> a <> "&&" <> b) <$> pay enumerate)
-
-instance Enumerable Disjunction where
-   enumerate = unary (Disjunction . conjunctionString)
-               <> (Disjunction <$> (\(Free (Disjunction a, Conjunction b))-> a <> "||" <> b) <$> pay enumerate)
-
-instance Enumerable Conditional where
-   enumerate = Conditional
-               <$> (\(Free (Disjunction a, Free (Sum b, Sum c)))-> "if " <> a <> " then " <> b <> " else " <> c)
-               <$> pay enumerate
+instance Enumerable Relation where
+   enumerate = share (choice $ pay . pure . Relation <$> ["<", "<=", "==", ">=", ">"])
 
 uniqueParse :: (Eq s, FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g) =>
                Grammar g Parser s -> (forall f. g f -> f r) -> s -> r

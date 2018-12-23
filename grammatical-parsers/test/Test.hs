@@ -1,5 +1,5 @@
-{-# Language FlexibleContexts, FlexibleInstances, RankNTypes, RecordWildCards, ScopedTypeVariables, 
-             StandaloneDeriving, TemplateHaskell, UndecidableInstances #-}
+{-# Language FlexibleContexts, FlexibleInstances, RankNTypes, RecordWildCards, 
+             ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, UndecidableInstances #-}
 module Main where
 
 import Control.Applicative (Applicative, Alternative, Const(..), pure, empty, many, optional, (<*>), (*>), (<|>))
@@ -17,14 +17,16 @@ import Data.Typeable (Typeable)
 import Data.Word (Word8, Word64)
 
 import Data.Functor.Compose (Compose(..))
-import Text.Parser.Combinators (sepBy1, skipMany)
+import Text.Parser.Combinators (choice, sepBy1, skipMany)
 import Text.Parser.Token (whiteSpace)
 
-import Test.Feat (Enumerable(..), Enumerate, FreePair(Free), consts, shared, unary, uniform)
+import Control.Enumerable (Shareable, Sized, share)
+import Test.Feat (Enumerable(..), c0, c1, uniform)
 import Test.Feat.Enumerate (pay)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Positive(..), Property,
                               (===), (==>), (.&&.), forAll, property, sized, testProperty, within)
+import Test.QuickCheck (verbose)
 import Test.QuickCheck.Checkers (Binop, EqProp(..), TestBatch, unbatch)
 import Test.QuickCheck.Classes (functor, monad, monoid, applicative, alternative,
                                 monadFunctor, monadApplicative, monadOr, monadPlus)
@@ -89,6 +91,10 @@ tests = testGroup "Grampa" [
                testProperty "bracketed" $ start (parseComplete g "[()]") == Compose (Right [""]),
                testProperty "name list" $
                  start (parseComplete nameListGrammar "foo, bar") == Compose (Right ["foo bar"])],
+           testGroup "arithmetic"
+             [testProperty "arithmetic"   $ Test.Examples.parseArithmetical,
+              testProperty "boolean"      $ Test.Examples.parseBoolean,
+              testProperty "conditionals" $ Test.Examples.parseConditional],
            testGroup "ambiguous"
              [testProperty "complete" $
               Test.Ambiguous.amb (parseComplete (fixGrammar Test.Ambiguous.grammar) "xyzw")
@@ -184,6 +190,9 @@ data DescribedParser s r = DescribedParser String (forall g. (Typeable g, Rank2.
 instance Show (DescribedParser s r) where
    show (DescribedParser d _) = d
 
+instance (Show s, MonoidNull s, Semigroup r) => Semigroup (DescribedParser s r) where
+   DescribedParser d1 p1 <> DescribedParser d2 p2 = DescribedParser (d1 ++ " <> " ++ d2) (p1 <> p2)
+
 instance (Show s, MonoidNull s, Monoid r) => Monoid (DescribedParser s r) where
    mempty = DescribedParser "mempty" mempty
    DescribedParser d1 p1 `mappend` DescribedParser d2 p2 = DescribedParser (d1 ++ " <> " ++ d2) (mappend p1 p2)
@@ -222,66 +231,55 @@ instance (Show s, FactorialMonoid s) => MonadPlus (DescribedParser s) where
 
 instance forall s. (FactorialMonoid s, LeftReductiveMonoid s, Ord s, Typeable s, Show s, Enumerable s) =>
          Enumerable (DescribedParser s s) where
-   enumerate = consts (pure <$> [DescribedParser "anyToken" anyToken,
-                                 DescribedParser "getInput" getInput,
-                                 DescribedParser "empty" empty,
-                                 DescribedParser "mempty" mempty])
-               <> pay (unary $ \s-> DescribedParser "string" (string s))
-               <> pay (unary $ \pred-> DescribedParser "satisfy" (satisfy pred))
-               <> pay (unary $ \pred-> DescribedParser "takeWhile" (takeWhile pred))
-               <> pay (unary $ \pred-> DescribedParser "takeWhile1" (takeWhile1 pred))
-               <> binary " *> " (*>)
-               <> binary " <> " (<>)
-               <> binary " <|> " (<|>)
-      where binary :: String -> (forall g. Rank2.Functor g => Parser g s s -> Parser g s s -> Parser g s s)
-                   -> Enumerate (DescribedParser s s)
-            binary nm op = (\(Free (DescribedParser d1 p1, DescribedParser d2 p2))-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
-                           <$> pay enumerate
+   enumerate = share (choice [c0 (DescribedParser "anyToken" anyToken),
+                              c0 (DescribedParser "getInput" getInput),
+                              c0 (DescribedParser "empty" empty),
+                              c0 (DescribedParser "mempty" mempty),
+                              pay (c1 $ \s-> DescribedParser "string" (string s)),
+                              pay (c1 $ \pred-> DescribedParser "satisfy" (satisfy pred)),
+                              pay (c1 $ \pred-> DescribedParser "takeWhile" (takeWhile pred)),
+                              pay (c1 $ \pred-> DescribedParser "takeWhile1" (takeWhile1 pred)),
+                              binary " *> " (*>),
+                              binary " <> " (<>),
+                              binary " <|> " (<|>)])
 
 instance forall s r. (Ord s, FactorialMonoid s, LeftReductiveMonoid s, Show s, Enumerable s) =>
          Enumerable (DescribedParser s ()) where
-   enumerate = consts (pure <$> [DescribedParser "endOfInput" endOfInput])
-               <> pay (unary $ \(DescribedParser d p :: DescribedParser s s)-> DescribedParser ("void " <> d) (void p))
-               <> pay (unary $ \(DescribedParser d p :: DescribedParser s s)->
-                                  DescribedParser ("(notFollowedBy " <> d <> ")") (notFollowedBy p))
+   enumerate = share (choice [c0 (DescribedParser "endOfInput" endOfInput),
+                              pay (c1 $ \(DescribedParser d p :: DescribedParser s s)-> DescribedParser ("void " <> d) (void p)),
+                              pay (c1 $ \(DescribedParser d p :: DescribedParser s s)->
+                                    DescribedParser ("(notFollowedBy " <> d <> ")") (notFollowedBy p))])
 
 instance forall s r. (Show s, FactorialMonoid s, Typeable s) => Enumerable (DescribedParser s [Bool]) where
-   enumerate = consts (pure <$> [DescribedParser "empty" empty,
-                                 DescribedParser "mempty" mempty])
-               <> pay (unary $ \r-> DescribedParser ("(pure " ++ shows r ")") (pure r))
-               <> pay (unary $ \(DescribedParser d p)-> DescribedParser ("(lookAhead " <> d <> ")") (lookAhead p))
-               <> binary " *> " (*>)
-               <> binary " <> " (<>)
-               <> binary " <|> " (<|>)
-      where binary :: String
-                   -> (forall g. Rank2.Functor g => Parser g s [Bool] -> Parser g s [Bool] -> Parser g s [Bool])
-                   -> Enumerate (DescribedParser s [Bool])
-            binary nm op = (\(Free (DescribedParser d1 p1, DescribedParser d2 p2))-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
-                           <$> pay enumerate
+   enumerate = share (choice [c0 (DescribedParser "empty" empty),
+                              c0 (DescribedParser "mempty" mempty),
+                              pay (c1 $ \r-> DescribedParser ("(pure " ++ shows r ")") (pure r)),
+                              pay (c1 $ \(DescribedParser d p)-> DescribedParser ("(lookAhead " <> d <> ")") (lookAhead p)),
+                              binary " *> " (*>),
+                              binary " <> " (<>),
+                              binary " <|> " (<|>)])
 
 instance forall s r. (Show s, FactorialMonoid s, Typeable s) => Enumerable (DescribedParser s ([Bool] -> [Bool])) where
-   enumerate = consts (pure <$> [DescribedParser "empty" empty,
-                                 DescribedParser "mempty" mempty])
-               <> pay (unary $ \r-> DescribedParser ("(pure " ++ shows r ")") (pure r))
-               <> pay (unary $ \(DescribedParser d p)-> DescribedParser ("(lookAhead " <> d <> ")") (lookAhead p))
-               <> binary " *> " (*>)
-               <> binary " <> " (<>)
-               <> binary " <|> " (<|>)
-      where binary :: String
-                   -> (forall g. Rank2.Functor g => Parser g s ([Bool] -> [Bool]) -> Parser g s ([Bool] -> [Bool])
-                                                    -> Parser g s ([Bool] -> [Bool]))
-                   -> Enumerate (DescribedParser s ([Bool] -> [Bool]))
-            binary nm op = (\(Free (DescribedParser d1 p1, DescribedParser d2 p2))-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
-                           <$> pay enumerate
+   enumerate = share (choice [c0 (DescribedParser "empty" empty),
+                              c0 (DescribedParser "mempty" mempty),
+                              pay (c1 $ \r-> DescribedParser ("(pure " ++ shows r ")") (pure r)),
+                              pay (c1 $ \(DescribedParser d p)-> DescribedParser ("(lookAhead " <> d <> ")") (lookAhead p)),
+                              binary " *> " (*>),
+                              binary " <> " (<>),
+                              binary " <|> " (<|>)])
 
-instance (Ord s, Enumerable s) => Enumerable (s -> Bool) where
-   enumerate = pay (unary (<=))
-               <> pay (unary const)
+binary :: forall f s a. (Typeable f, Sized f, Enumerable (DescribedParser s a))
+       => String
+       -> (forall g. Rank2.Functor g => Parser g s a -> Parser g s a -> Parser g s a)
+       -> Shareable f (DescribedParser s a)
+binary nm op = pay $ c1 (\(DescribedParser d1 p1, DescribedParser d2 p2)-> 
+                          DescribedParser (d1 <> nm <> d2) (op p1 p2))
 
-instance Enumerable ([Bool] -> [Bool]) where
-   enumerate = consts [pure id,
-                       pure (map not)]
-               <> pay (unary const)
+instance {-# OVERLAPS #-} (Ord s, Enumerable s) => Enumerable (s -> Bool) where
+   enumerate = share (pay (c1 (<=)) <|> pay (c1 const))
+
+-- instance Enumerable ([Bool] -> [Bool]) where
+--    enumerate = share (choice [c0 id, c0 (map not), pay (c1 const)])
 
 instance EqProp Word64 where
    a =-= b = property (a == b)

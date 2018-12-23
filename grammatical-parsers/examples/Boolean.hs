@@ -53,9 +53,9 @@ boolean :: forall e p (g :: (* -> *) -> *).
            p g String e -> Boolean e (p g String) -> Boolean e (p g String)
 boolean p Boolean{..} = Boolean{
    expr= term
-         <|> or <$> expr <* symbol "||" <*> term,
+         <|> or <$> term <* symbol "||" <*> expr,
    term= factor
-         <|> and <$> term <* symbol "&&" <*> factor,
+         <|> and <$> factor <* symbol "&&" <*> term,
    factor= keyword "True" *> pure true
            <|> keyword "False" *> pure false
            <|> keyword "not" *> takeCharsWhile isSpace *> (not <$> factor)

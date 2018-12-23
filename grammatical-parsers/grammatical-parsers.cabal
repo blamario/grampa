@@ -60,10 +60,11 @@ test-suite           quicktests
   build-depends:     base >=4.9 && < 5, containers >= 0.5.7.0 && < 0.7,
                      monoid-subclasses < 0.5, parsers < 0.13,
                      rank2classes >= 1.0.2 && < 1.3, grammatical-parsers,
-                     QuickCheck >= 2 && < 3, checkers >= 0.4.6 && < 0.5, testing-feat < 0.5,
+                     QuickCheck >= 2 && < 3, checkers >= 0.4.6 && < 0.5, size-based < 0.2, testing-feat < 1.2,
                      tasty >= 0.7, tasty-quickcheck >= 0.7
   main-is:           Test.hs
-  other-modules:     Test.Examples, Arithmetic, Boolean, Combined, Comparisons, Conditionals, Lambda, Utilities
+  other-modules:     Test.Ambiguous, Test.Examples,
+                     Arithmetic, Boolean, Combined, Comparisons, Conditionals, Lambda, Utilities
   default-language:  Haskell2010
 
 test-suite           doctests
