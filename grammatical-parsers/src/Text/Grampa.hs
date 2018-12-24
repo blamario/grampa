@@ -45,7 +45,7 @@ simply parseGrammar p input = Rank2.fromOnly (parseGrammar (Rank2.Only p) input)
 showFailure :: TextualMonoid s => s -> ParseFailure -> Int -> String
 showFailure input (ParseFailure pos expected) preceding =
    unlines prevLines <> replicate column ' ' <> "^\n"
-   <> "at line " <> show (length allPrevLines) <> ", column " <> show column <> "\n"
+   <> "at line " <> show (length allPrevLines) <> ", column " <> show (column+1) <> "\n"
    <> "expected " <> oxfordComma expected
    where oxfordComma [] = []
          oxfordComma [x] = x
@@ -60,6 +60,7 @@ showFailure input (ParseFailure pos expected) preceding =
             | restCount > 0 = (["Error: the failure position is beyond the input length"], -1)
             | otherwise = (revLines, restCount)
          context revLines restCount (next:rest)
-            | restCount < nextLength = (next:revLines, restCount)
-            | otherwise = context (next:revLines) (restCount - nextLength - 1) rest
+            | restCount' < 0 = (next:revLines, restCount)
+            | otherwise = context (next:revLines) restCount' rest
             where nextLength = length next
+                  restCount' = restCount - nextLength - 1

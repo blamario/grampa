@@ -4,7 +4,7 @@ module Test.Examples where
 import Control.Applicative (empty, (<|>))
 import Data.Functor.Compose (Compose(..))
 import Data.Monoid (Monoid(..), (<>))
-import Data.Monoid.Factorial (FactorialMonoid)
+import Data.Monoid.Textual (TextualMonoid)
 import Text.Parser.Combinators (choice)
 
 import Control.Enumerable (share)
@@ -23,14 +23,11 @@ import qualified Comparisons
 import qualified Boolean
 import qualified Conditionals
 
-parseArithmetical :: ArithmeticTree -> Bool
-parseArithmetical tree = f (show tree) == tree
-   where f = uniqueParse (fixGrammar Arithmetic.arithmetic) Arithmetic.expr
+parseArithmetical :: String -> Either String ArithmeticTree   
+parseArithmetical = uniqueParse (fixGrammar Arithmetic.arithmetic) Arithmetic.expr
 
-parseBoolean :: BooleanTree -> Bool
-parseBoolean tree = f (show tree) == tree
-   where f :: String -> BooleanTree
-         f = uniqueParse (fixGrammar boolean) (Boolean.expr . Rank2.snd)
+parseBoolean :: String -> Either String BooleanTree
+parseBoolean = uniqueParse (fixGrammar boolean) (Boolean.expr . Rank2.snd)
 
 comparisons :: (Rank2.Functor g, Lexical g, LexicalConstraint Parser g String) =>
                GrammarBuilder ArithmeticComparisons g Parser String
@@ -41,9 +38,8 @@ boolean :: (Rank2.Functor g, Lexical g, LexicalConstraint Parser g String) =>
            GrammarBuilder ArithmeticComparisonsBoolean g Parser String
 boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Comparisons.test $ Rank2.snd ac) b)
 
-parseConditional :: ConditionalTree ArithmeticTree -> Bool
-parseConditional tree = f (show tree) == tree
-   where f = uniqueParse (fixGrammar conditionals) (Conditionals.expr . Rank2.snd)
+parseConditional :: String -> Either String (ConditionalTree ArithmeticTree)
+parseConditional = uniqueParse (fixGrammar conditionals) (Conditionals.expr . Rank2.snd)
 
 conditionals :: (Rank2.Functor g, Lexical g, LexicalConstraint Parser g String) => GrammarBuilder ACBC g Parser String
 conditionals (Rank2.Pair acb c) =
@@ -146,13 +142,13 @@ instance Enumerable a => Enumerable (ConditionalTree a) where
 instance Enumerable Relation where
    enumerate = share (choice $ pay . pure . Relation <$> ["<", "<=", "==", ">=", ">"])
 
-uniqueParse :: (Eq s, FactorialMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g) =>
-               Grammar g Parser s -> (forall f. g f -> f r) -> s -> r
+uniqueParse :: (Eq s, TextualMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g) =>
+               Grammar g Parser s -> (forall f. g f -> f r) -> s -> Either String r
 uniqueParse g p s = case getCompose (p $ parseComplete g s)
-                    of Right [r] -> r
-                       Right [] -> error "Unparseable"
-                       Right _ -> error "Ambiguous"
-                       Left (ParseFailure pos exp) -> error ("At " <> show pos <> " expected one of " <> show exp)
+                    of Right [r] -> Right r
+                       Right [] -> Left "Unparseable"
+                       Right _ -> Left "Ambiguous"
+                       Left err -> Left (showFailure s err 3)
 
 instance Lexical ArithmeticComparisons
 instance Lexical ArithmeticComparisonsBoolean

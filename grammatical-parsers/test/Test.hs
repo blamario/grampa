@@ -93,9 +93,9 @@ tests = testGroup "Grampa" [
                testProperty "name list" $
                  start (parseComplete nameListGrammar "foo, bar") == Compose (Right ["foo bar"])],
            testGroup "arithmetic"
-             [testProperty "arithmetic"   $ Test.Examples.parseArithmetical,
-              testProperty "boolean"      $ Test.Examples.parseBoolean,
-              testProperty "conditionals" $ Test.Examples.parseConditional],
+             [testProperty "arithmetic"   $ \tree-> Test.Examples.parseArithmetical (show tree) === Right tree,
+              testProperty "boolean"      $ \tree-> Test.Examples.parseBoolean (show tree) === Right tree,
+              testProperty "conditionals" $ \tree-> Test.Examples.parseConditional (show tree) === Right tree],
            testGroup "ambiguous"
              [testProperty "complete" $
               Test.Ambiguous.amb (parseComplete (fixGrammar Test.Ambiguous.grammar) "xyzw")
@@ -153,8 +153,17 @@ tests = testGroup "Grampa" [
               testBatch $ monadFunctor parser2s,
               testBatch $ monadApplicative parser2s,
               -- testBatch $ monadOr parser2s,
-              testBatch $ monadPlus parser2s
-             ]]
+              testBatch $ monadPlus parser2s],
+           testGroup "errors"
+             [testProperty "start" (Test.Examples.parseArithmetical ":4" 
+                                    === Left ":4\n^\nat line 1, column 1\nexpected empty or string \"-\""),
+              testProperty "middle" (Test.Examples.parseArithmetical "4 - :3" 
+                                     === Left "4 - :3\n    ^\nat line 1, column 5\nexpected empty"),
+              testProperty "middle line" (Test.Examples.parseArithmetical "4 -\n :3\n+ 2"
+                                           === Left "4 -\n :3\n ^\nat line 2, column 2\nexpected empty"),
+              testProperty "missing" (Test.Examples.parseArithmetical "4 - " 
+                                      === Left "4 - \n    ^\nat line 1, column 5\nexpected empty")]
+           ]
    where lookAheadP :: String -> DescribedParser String [Bool] -> Bool
          lookAheadConsumeP :: DescribedParser String [Bool] -> Property
          lookAheadOrNotP :: DescribedParser String () -> Property
