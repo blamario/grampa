@@ -57,7 +57,7 @@ instance Applicative (Parser g i) where
    {-# INLINABLE (<*>) #-}
 
 instance Alternative (Parser g i) where
-   empty = Parser (\rest-> ResultList mempty $ FailureInfo (genericLength rest) ["empty"])
+   empty = Parser (\rest-> ResultList mempty $ FailureInfo (genericLength rest) [])
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
    {-# INLINABLE (<|>) #-}
