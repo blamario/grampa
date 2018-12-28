@@ -156,7 +156,7 @@ tests = testGroup "Grampa" [
               testBatch $ monadPlus parser2s],
            testGroup "errors"
              [testProperty "start" (Test.Examples.parseArithmetical ":4" 
-                                    === Left ":4\n^\nat line 1, column 1\nexpected string \"-\", digits, or string \"(\""),
+                                    === Left ":4\n^\nat line 1, column 1\nexpected digits, string \"(\", or string \"-\""),
               testProperty "middle" (Test.Examples.parseArithmetical "4 - :3" 
                                      === Left "4 - :3\n    ^\nat line 1, column 5\nexpected digits or string \"(\""),
               testProperty "middle line" (Test.Examples.parseArithmetical "4 -\n :3\n+ 2"

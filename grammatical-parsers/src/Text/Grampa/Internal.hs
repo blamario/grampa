@@ -36,7 +36,13 @@ instance Semigroup FailureInfo where
    f1@(FailureInfo pos1 exp1) <> f2@(FailureInfo pos2 exp2) = FailureInfo pos' exp'
       where (pos', exp') | pos1 < pos2 = (pos1, exp1)
                          | pos1 > pos2 = (pos2, exp2)
-                         | otherwise = (pos1, exp1 <> exp2)
+                         | otherwise = (pos1, merge exp1 exp2)
+            merge [] exps = exps
+            merge exps [] = exps
+            merge xs@(x:xs') ys@(y:ys')
+               | x < y = x : merge xs' ys
+               | x > y = y : merge xs ys'
+               | otherwise = x : merge xs' ys'
 
 instance Monoid FailureInfo where
    mempty = FailureInfo maxBound []
