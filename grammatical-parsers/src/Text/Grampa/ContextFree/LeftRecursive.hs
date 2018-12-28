@@ -720,13 +720,21 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                   choiceWhile (Const Nothing) t _ = t
                   choiceWhile (Const (Just deps)) t t'
                      | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps marginal)) = t'
+                     | ResultList [] (Memoizing.FailureInfo _ expected) <- t =
+                        let ResultList _ (Memoizing.FailureInfo pos expected') =
+                               if getAny (Rank2.foldMap (Any . getConst) $
+                                          Rank2.liftA2 (combineFailures expected) deps marginal)
+                                  then t' else t
+                        in ResultList [] (Memoizing.FailureInfo pos expected')
                      | otherwise = t
                      where combine :: Const Bool x -> ResultList g s x -> Const Bool x
+                           combineFailures :: [String] -> Const Bool x -> ResultList g s x -> Const Bool x
                            combine (Const False) _ = Const False
-                           combine (Const True) (ResultList [] ~(Memoizing.FailureInfo _ msgs))
-                              | ResultList [] (Memoizing.FailureInfo _ msgs') <- t = Const (any (`notElem` msgs') msgs)
-                              | otherwise = Const False
+                           combine (Const True) (ResultList [] _) = Const False
                            combine (Const True) _ = Const True
+                           combineFailures _ (Const False) _ = Const False
+                           combineFailures expected (Const True) (ResultList _ (Memoizing.FailureInfo _ expected'))
+                              = Const (any (`notElem` expected) expected')
 
          recurseTotal s initialAppends parsedTail total = Rank2.liftA2 reparse initialAppends indirects
             where reparse :: (ResultList g s Rank2.~> ResultList g s) a -> Memoizing.Parser g s a -> ResultList g s a
