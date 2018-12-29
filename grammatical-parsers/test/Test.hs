@@ -157,12 +157,14 @@ tests = testGroup "Grampa" [
            testGroup "errors"
              [testProperty "start" (Test.Examples.parseArithmetical ":4" 
                                     === Left ":4\n^\nat line 1, column 1\nexpected digits, string \"(\", or string \"-\""),
-              testProperty "middle" (Test.Examples.parseArithmetical "4 - :3" 
+              testProperty "middle" (Test.Examples.parseArithmetical "4 - :3"
                                      === Left "4 - :3\n    ^\nat line 1, column 5\nexpected digits or string \"(\""),
               testProperty "middle line" (Test.Examples.parseArithmetical "4 -\n :3\n+ 2"
                                            === Left "4 -\n :3\n ^\nat line 2, column 2\nexpected digits or string \"(\""),
               testProperty "missing" (Test.Examples.parseArithmetical "4 - " 
-                                      === Left "4 - \n    ^\nat line 1, column 5\nexpected digits or string \"(\"")]
+                                      === Left "4 - \n    ^\nat line 1, column 5\nexpected digits or string \"(\""),
+              testProperty "missing" (Test.Examples.parseArithmetical "4 -\n" 
+                                      === Left "4 -\n\n^\nat line 2, column 1\nexpected digits or string \"(\"")]
            ]
    where lookAheadP :: String -> DescribedParser String [Bool] -> Bool
          lookAheadConsumeP :: DescribedParser String [Bool] -> Property

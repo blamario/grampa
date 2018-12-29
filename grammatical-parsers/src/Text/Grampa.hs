@@ -1,6 +1,6 @@
 -- | Collection of parsing algorithms with a common interface, operating on grammars represented as records with rank-2
 -- field types.
-{-# LANGUAGE FlexibleContexts, KindSignatures, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, KindSignatures, OverloadedStrings, RankNTypes, ScopedTypeVariables #-}
 module Text.Grampa (
    -- * Parsing methods
    MultiParsing(..),
@@ -16,6 +16,7 @@ where
 
 import Data.List (intercalate)
 import Data.Monoid ((<>))
+import qualified Data.Monoid.Factorial as Factorial
 import Data.Monoid.Textual (TextualMonoid, toString)
 import Text.Parser.Char (CharParsing(char, notChar, anyChar))
 import Text.Parser.Combinators (Parsing((<?>), notFollowedBy, skipMany, skipSome, unexpected))
@@ -42,9 +43,9 @@ simply parseGrammar p input = Rank2.fromOnly (parseGrammar (Rank2.Only p) input)
 
 -- | Given the textual parse input, the parse failure on the input, and the number of lines preceding the failure to
 -- show, produce a human-readable failure description.
-showFailure :: TextualMonoid s => s -> ParseFailure -> Int -> String
+showFailure :: (Eq s, TextualMonoid s) => s -> ParseFailure -> Int -> String
 showFailure input (ParseFailure pos expected) preceding =
-   unlines prevLines <> replicate column ' ' <> "^\n"
+   unlines (toString mempty <$> prevLines) <> replicate column ' ' <> "^\n"
    <> "at line " <> show (length allPrevLines) <> ", column " <> show (column+1) <> "\n"
    <> "expected " <> oxfordComma expected
    where oxfordComma [] = []
@@ -54,7 +55,7 @@ showFailure input (ParseFailure pos expected) preceding =
          onLast _ [] = []
          onLast f [x] = [f x]
          onLast f (x:xs) = x : onLast f xs
-         (allPrevLines, column) = context [] pos (lines $ toString (const mempty) input)
+         (allPrevLines, column) = context [] pos (Factorial.split (== "\n") input)
          prevLines = reverse (take (succ preceding) allPrevLines)
          context revLines restCount []
             | restCount > 0 = (["Error: the failure position is beyond the input length"], -1)
@@ -62,5 +63,5 @@ showFailure input (ParseFailure pos expected) preceding =
          context revLines restCount (next:rest)
             | restCount' < 0 = (next:revLines, restCount)
             | otherwise = context (next:revLines) restCount' rest
-            where nextLength = length next
+            where nextLength = Factorial.length next
                   restCount' = restCount - nextLength - 1
