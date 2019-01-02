@@ -10,7 +10,7 @@
 {-# Language TemplateHaskell #-}
 -- Adapted from https://wiki.haskell.org/A_practical_Template_Haskell_Tutorial
 
-module Rank2.TH (deriveAll, deriveFunctor, deriveApply, deriveApplicative,
+module Rank2.TH (deriveAll, deriveFunctor, deriveApply, unsafeDeriveApply, deriveApplicative,
                  deriveFoldable, deriveTraversable, deriveDistributive, deriveDistributiveTraversable)
 where
 
@@ -39,6 +39,11 @@ deriveApply :: Name -> Q [Dec]
 deriveApply ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Apply ty
    sequence [instanceD (return []) instanceType [genAp cs, genLiftA2 cs, genLiftA3 cs]]
+
+unsafeDeriveApply :: Name -> Q [Dec]
+unsafeDeriveApply ty = do
+   (instanceType, cs) <- reifyConstructors ''Rank2.Apply ty
+   sequence [instanceD (return []) instanceType [genApUnsafely cs, genLiftA2Unsafely cs, genLiftA3Unsafely cs]]
 
 deriveApplicative :: Name -> Q [Dec]
 deriveApplicative ty = do
@@ -85,13 +90,22 @@ genFmap :: [Con] -> Q Dec
 genFmap cs = funD '(Rank2.<$>) (map genFmapClause cs)
 
 genAp :: [Con] -> Q Dec
-genAp [con] = funD '(Rank2.<*>) [genApClause con]
+genAp [con] = funD '(Rank2.<*>) [genApClause False con]
 
 genLiftA2 :: [Con] -> Q Dec
-genLiftA2 [con] = funD 'Rank2.liftA2 [genLiftA2Clause con]
+genLiftA2 [con] = funD 'Rank2.liftA2 [genLiftA2Clause False con]
 
 genLiftA3 :: [Con] -> Q Dec
-genLiftA3 [con] = funD 'Rank2.liftA3 [genLiftA3Clause con]
+genLiftA3 [con] = funD 'Rank2.liftA3 [genLiftA3Clause False con]
+
+genApUnsafely :: [Con] -> Q Dec
+genApUnsafely cons = funD '(Rank2.<*>) (genApClause True <$> cons)
+
+genLiftA2Unsafely :: [Con] -> Q Dec
+genLiftA2Unsafely cons = funD 'Rank2.liftA2 (genLiftA2Clause True <$> cons)
+
+genLiftA3Unsafely :: [Con] -> Q Dec
+genLiftA3Unsafely cons = funD 'Rank2.liftA3 (genLiftA3Clause True <$> cons)
 
 genPure :: [Con] -> Q Dec
 genPure cs = funD 'Rank2.pure (map genPureClause cs)
@@ -137,40 +151,42 @@ genFmapField fun fieldType fieldAccess wrap = do
      ParensT ty -> genFmapField fun ty fieldAccess wrap
      _ -> fieldAccess
 
-genLiftA2Clause :: Con -> Q Clause
-genLiftA2Clause (NormalC name fieldTypes) = do
+genLiftA2Clause :: Bool -> Con -> Q Clause
+genLiftA2Clause unsafely (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames1 <- replicateM (length fieldTypes) (newName "x")
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
    let pats = [varP f, tildeP (conP name $ map varP fieldNames1), tildeP (conP name $ map varP fieldNames2)]
        body = normalB $ appsE $ conE name : zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
        newField :: (Name, Name) -> BangType -> Q Exp
-       newField (x, y) (_, fieldType) = genLiftA2Field (varE f) fieldType (varE x) (varE y) id
+       newField (x, y) (_, fieldType) = genLiftA2Field unsafely (varE f) fieldType (varE x) (varE y) id
    clause pats body []
-genLiftA2Clause (RecC name fields) = do
+genLiftA2Clause unsafely (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
    y <- newName "y"
    let body = normalB $ recConE name $ map newNamedField fields
        newNamedField :: VarBangType -> Q (Name, Exp)
        newNamedField (fieldName, _, fieldType) =
-          fieldExp fieldName (genLiftA2Field (varE f) fieldType (getFieldOf x) (getFieldOf y) id)
+          fieldExp fieldName (genLiftA2Field unsafely (varE f) fieldType (getFieldOf x) (getFieldOf y) id)
           where getFieldOf = appE (varE fieldName) . varE
    clause [varP f, varP x, varP y] body []
 
-genLiftA2Field :: Q Exp -> Type -> Q Exp -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
-genLiftA2Field fun fieldType field1Access field2Access wrap = do
+genLiftA2Field :: Bool -> Q Exp -> Type -> Q Exp -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
+genLiftA2Field unsafely fun fieldType field1Access field2Access wrap = do
    Just (Deriving _ typeVar) <- getQ
    case fieldType of
      AppT ty _ | ty == VarT typeVar -> [| $(wrap fun) $field1Access $field2Access |]
      AppT _ ty | ty == VarT typeVar -> [| $(wrap $ appE (varE 'Rank2.liftA2) fun) $field1Access $field2Access |]
-     AppT t1 t2 | t1 /= VarT typeVar -> genLiftA2Field fun t2 field1Access field2Access (appE (varE 'liftA2) . wrap)
-     SigT ty _kind -> genLiftA2Field fun ty field1Access field2Access wrap
-     ParensT ty -> genLiftA2Field fun ty field1Access field2Access wrap
-     _ -> error ("Cannot apply liftA2 to field of type " <> show fieldType)
+     AppT t1 t2 
+        | t1 /= VarT typeVar -> genLiftA2Field unsafely fun t2 field1Access field2Access (appE (varE 'liftA2) . wrap)
+     SigT ty _kind -> genLiftA2Field unsafely fun ty field1Access field2Access wrap
+     ParensT ty -> genLiftA2Field unsafely fun ty field1Access field2Access wrap
+     _ | unsafely -> [| error "Cannot apply liftA2 to field" |]
+       | otherwise -> error ("Cannot apply liftA2 to field of type " <> show fieldType)
 
-genLiftA3Clause :: Con -> Q Clause
-genLiftA3Clause (NormalC name fieldTypes) = do
+genLiftA3Clause :: Bool -> Con -> Q Clause
+genLiftA3Clause unsafely (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames1 <- replicateM (length fieldTypes) (newName "x")
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
@@ -179,9 +195,9 @@ genLiftA3Clause (NormalC name fieldTypes) = do
                tildeP (conP name $ map varP fieldNames3)]
        body = normalB $ appsE $ conE name : zipWith newField (zip3 fieldNames1 fieldNames2 fieldNames3) fieldTypes
        newField :: (Name, Name, Name) -> BangType -> Q Exp
-       newField (x, y, z) (_, fieldType) = genLiftA3Field (varE f) fieldType (varE x) (varE y) (varE z) id
+       newField (x, y, z) (_, fieldType) = genLiftA3Field unsafely (varE f) fieldType (varE x) (varE y) (varE z) id
    clause pats body []
-genLiftA3Clause (RecC name fields) = do
+genLiftA3Clause unsafely (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
    y <- newName "y"
@@ -189,12 +205,12 @@ genLiftA3Clause (RecC name fields) = do
    let body = normalB $ recConE name $ map newNamedField fields
        newNamedField :: VarBangType -> Q (Name, Exp)
        newNamedField (fieldName, _, fieldType) =
-          fieldExp fieldName (genLiftA3Field (varE f) fieldType (getFieldOf x) (getFieldOf y) (getFieldOf z) id)
+          fieldExp fieldName (genLiftA3Field unsafely (varE f) fieldType (getFieldOf x) (getFieldOf y) (getFieldOf z) id)
           where getFieldOf = appE (varE fieldName) . varE
    clause [varP f, varP x, varP y, varP z] body []
 
-genLiftA3Field :: Q Exp -> Type -> Q Exp -> Q Exp -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
-genLiftA3Field fun fieldType field1Access field2Access field3Access wrap = do
+genLiftA3Field :: Bool -> Q Exp -> Type -> Q Exp -> Q Exp -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
+genLiftA3Field unsafely fun fieldType field1Access field2Access field3Access wrap = do
    Just (Deriving _ typeVar) <- getQ
    case fieldType of
      AppT ty _
@@ -203,40 +219,42 @@ genLiftA3Field fun fieldType field1Access field2Access field3Access wrap = do
         | ty == VarT typeVar -> [| $(wrap $ appE (varE 'Rank2.liftA3) fun) $(field1Access) $(field2Access) $(field3Access) |]
      AppT t1 t2
         | t1 /= VarT typeVar
-          -> genLiftA3Field fun t2 field1Access field2Access field3Access (appE (varE 'liftA3) . wrap)
-     SigT ty _kind -> genLiftA3Field fun ty field1Access field2Access field3Access wrap
-     ParensT ty -> genLiftA3Field fun ty field1Access field2Access field3Access wrap
-     _ -> error ("Cannot apply liftA3 to field of type " <> show fieldType)
+          -> genLiftA3Field unsafely fun t2 field1Access field2Access field3Access (appE (varE 'liftA3) . wrap)
+     SigT ty _kind -> genLiftA3Field unsafely fun ty field1Access field2Access field3Access wrap
+     ParensT ty -> genLiftA3Field unsafely fun ty field1Access field2Access field3Access wrap
+     _ | unsafely -> [| error "Cannot apply liftA3 to field" |]
+       | otherwise -> error ("Cannot apply liftA3 to field of type " <> show fieldType)
 
-genApClause :: Con -> Q Clause
-genApClause (NormalC name fieldTypes) = do
+genApClause :: Bool -> Con -> Q Clause
+genApClause unsafely (NormalC name fieldTypes) = do
    fieldNames1 <- replicateM (length fieldTypes) (newName "x")
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
    let pats = [tildeP (conP name $ map varP fieldNames1), tildeP (conP name $ map varP fieldNames2)]
        body = normalB $ appsE $ conE name : zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
        newField :: (Name, Name) -> BangType -> Q Exp
-       newField (x, y) (_, fieldType) = genApField fieldType (varE x) (varE y) id
+       newField (x, y) (_, fieldType) = genApField unsafely fieldType (varE x) (varE y) id
    clause pats body []
-genApClause (RecC name fields) = do
+genApClause unsafely (RecC name fields) = do
    x <- newName "x"
    y <- newName "y"
    let body = normalB $ recConE name $ map newNamedField fields
        newNamedField :: VarBangType -> Q (Name, Exp)
        newNamedField (fieldName, _, fieldType) =
-          fieldExp fieldName (genApField fieldType (getFieldOf x) (getFieldOf y) id)
+          fieldExp fieldName (genApField unsafely fieldType (getFieldOf x) (getFieldOf y) id)
           where getFieldOf = appE (varE fieldName) . varE
    clause [varP x, varP y] body []
 
-genApField :: Type -> Q Exp -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
-genApField fieldType field1Access field2Access wrap = do
+genApField :: Bool -> Type -> Q Exp -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
+genApField unsafely fieldType field1Access field2Access wrap = do
    Just (Deriving _ typeVar) <- getQ
    case fieldType of
      AppT ty _ | ty == VarT typeVar -> [| $(wrap (varE 'Rank2.apply)) $(field1Access) $(field2Access) |]
      AppT _ ty | ty == VarT typeVar -> [| $(wrap (varE 'Rank2.ap)) $(field1Access) $(field2Access) |]
-     AppT t1 t2 | t1 /= VarT typeVar -> genApField t2 field1Access field2Access (appE (varE 'liftA2) . wrap)
-     SigT ty _kind -> genApField ty field1Access field2Access wrap
-     ParensT ty -> genApField ty field1Access field2Access wrap
-     _ -> error ("Cannot apply ap to field of type " <> show fieldType)
+     AppT t1 t2 | t1 /= VarT typeVar -> genApField unsafely t2 field1Access field2Access (appE (varE 'liftA2) . wrap)
+     SigT ty _kind -> genApField unsafely ty field1Access field2Access wrap
+     ParensT ty -> genApField unsafely ty field1Access field2Access wrap
+     _ | unsafely -> [| error "Cannot apply ap to field" |]
+       | otherwise -> error ("Cannot apply ap to field of type " <> show fieldType)
 
 genPureClause :: Con -> Q Clause
 genPureClause (NormalC name fieldTypes) = do
