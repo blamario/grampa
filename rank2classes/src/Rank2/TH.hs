@@ -156,7 +156,9 @@ genLiftA2Clause unsafely (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames1 <- replicateM (length fieldTypes) (newName "x")
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
-   let pats = [varP f, tildeP (conP name $ map varP fieldNames1), tildeP (conP name $ map varP fieldNames2)]
+   let pats = [varP f,
+               (if unsafely then id else tildeP) (conP name $ map varP fieldNames1),
+               tildeP (conP name $ map varP fieldNames2)]
        body = normalB $ appsE $ conE name : zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
        newField :: (Name, Name) -> BangType -> Q Exp
        newField (x, y) (_, fieldType) = genLiftA2Field unsafely (varE f) fieldType (varE x) (varE y) id
@@ -191,7 +193,9 @@ genLiftA3Clause unsafely (NormalC name fieldTypes) = do
    fieldNames1 <- replicateM (length fieldTypes) (newName "x")
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
    fieldNames3 <- replicateM (length fieldTypes) (newName "z")
-   let pats = [varP f, tildeP (conP name $ map varP fieldNames1), tildeP (conP name $ map varP fieldNames2), 
+   let pats = [varP f,
+               (if unsafely then id else tildeP) (conP name $ map varP fieldNames1),
+               tildeP (conP name $ map varP fieldNames2), 
                tildeP (conP name $ map varP fieldNames3)]
        body = normalB $ appsE $ conE name : zipWith newField (zip3 fieldNames1 fieldNames2 fieldNames3) fieldTypes
        newField :: (Name, Name, Name) -> BangType -> Q Exp
@@ -229,7 +233,8 @@ genApClause :: Bool -> Con -> Q Clause
 genApClause unsafely (NormalC name fieldTypes) = do
    fieldNames1 <- replicateM (length fieldTypes) (newName "x")
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
-   let pats = [tildeP (conP name $ map varP fieldNames1), tildeP (conP name $ map varP fieldNames2)]
+   let pats = [(if unsafely then id else tildeP) (conP name $ map varP fieldNames1),
+               tildeP (conP name $ map varP fieldNames2)]
        body = normalB $ appsE $ conE name : zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
        newField :: (Name, Name) -> BangType -> Q Exp
        newField (x, y) (_, fieldType) = genApField unsafely fieldType (varE x) (varE y) id
@@ -253,7 +258,7 @@ genApField unsafely fieldType field1Access field2Access wrap = do
      AppT t1 t2 | t1 /= VarT typeVar -> genApField unsafely t2 field1Access field2Access (appE (varE 'liftA2) . wrap)
      SigT ty _kind -> genApField unsafely ty field1Access field2Access wrap
      ParensT ty -> genApField unsafely ty field1Access field2Access wrap
-     _ | unsafely -> [| error "Cannot apply ap to field" |]
+     _ | unsafely -> [| error ("Cannot apply ap to field" <> $(pure $ LitE $ StringL $ show fieldType)) |]
        | otherwise -> error ("Cannot apply ap to field of type " <> show fieldType)
 
 genPureClause :: Con -> Q Clause
