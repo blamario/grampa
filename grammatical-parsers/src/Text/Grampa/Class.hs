@@ -1,7 +1,8 @@
-{-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, RankNTypes, ScopedTypeVariables,
-             TypeApplications, TypeFamilies, DeriveDataTypeable #-}
-module Text.Grampa.Class (MultiParsing(..), AmbiguousParsing(..), GrammarParsing(..), MonoidParsing(..), Lexical(..),
-                          ParseResults, ParseFailure(..), Ambiguous(..), completeParser) where
+{-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, OverloadedStrings, RankNTypes,
+             ScopedTypeVariables, TypeApplications, TypeFamilies, DeriveDataTypeable #-}
+module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), AmbiguousParsing(..), MonoidParsing(..), Lexical(..),
+                          ParseResults, ParseFailure(..), Ambiguous(..), Position(..),
+                          completeParser) where
 
 import Control.Applicative (Alternative(empty), liftA2, (<|>))
 import Data.Char (isAlphaNum, isLetter, isSpace)
@@ -14,6 +15,7 @@ import Data.Monoid (Monoid(mempty, mappend))
 import Data.Monoid.Cancellative (LeftReductiveMonoid)
 import qualified Data.Monoid.Null as Null
 import Data.Monoid.Null (MonoidNull)
+import qualified Data.Monoid.Factorial as Factorial
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 import Data.Semigroup (Semigroup((<>)))
@@ -26,8 +28,13 @@ import qualified Rank2
 
 type ParseResults = Either ParseFailure
 
--- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset. 
+-- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset.
 data ParseFailure = ParseFailure Int [String] deriving (Eq, Show)
+
+-- | Opaque data type that represents an input position.
+newtype Position s = Position{
+  -- | The position offset from the beginning of the full input.
+  positionOffset :: s -> Int}
 
 -- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of
 -- alternative results.
@@ -100,6 +107,8 @@ class MonoidParsing m where
    endOfInput :: FactorialMonoid s => m s ()
    -- | Always sucessful parser that returns the remaining input without consuming it.
    getInput :: FactorialMonoid s => m s s
+   -- | Retrieve the 'Position' the parser has reached in the input source.
+   getSourcePos :: FactorialMonoid s => m s (Position s)
 
    -- | A parser that accepts any single input atom.
    anyToken :: FactorialMonoid s => m s s
@@ -151,9 +160,12 @@ class MonoidParsing m where
    takeCharsWhile1 :: TextualMonoid s => (Char -> Bool) -> m s s
    -- | Zero or more argument occurrences like 'many', with concatenated monoidal results.
    concatMany :: Monoid a => m s a -> m s a
+
    default concatMany :: (Monoid a, Alternative (m s)) => m s a -> m s a
    concatMany p = go
       where go = mappend <$> p <*> go <|> pure mempty
+   default getSourcePos :: (FactorialMonoid s, Functor (m s)) => m s (Position s)
+   getSourcePos = Position . (\rest fullInput-> Factorial.length fullInput - Factorial.length rest) <$> getInput
 
 -- | Parsers that can produce alternative parses and collect them into an 'Ambiguous' node
 class AmbiguousParsing m where

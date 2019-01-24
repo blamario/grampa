@@ -4,7 +4,7 @@ module Test.Examples where
 import Control.Applicative (empty, (<|>))
 import Data.Functor.Compose (Compose(..))
 import Data.Monoid (Monoid(..), (<>))
-import Data.Monoid.Textual (TextualMonoid)
+import Data.Monoid.Textual (TextualMonoid, toString)
 import Text.Parser.Combinators (choice)
 
 import Control.Enumerable (share)
@@ -148,7 +148,7 @@ uniqueParse g p s = case getCompose (p $ parseComplete g s)
                     of Right [r] -> Right r
                        Right [] -> Left "Unparseable"
                        Right _ -> Left "Ambiguous"
-                       Left err -> Left (showFailure s err 3)
+                       Left err -> Left (toString mempty $ failureDescription s err 3)
 
 instance Lexical ArithmeticComparisons
 instance Lexical ArithmeticComparisonsBoolean

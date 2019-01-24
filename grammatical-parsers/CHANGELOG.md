@@ -1,3 +1,8 @@
+Version 0.4
+---------------
+* Added `Position` and related functions
+* Renamed `showFailure` to `failureDescription`
+
 Version 0.3.2
 ---------------
 * Improved error reporting
