@@ -74,7 +74,7 @@ test-suite           doctests
   default-language:  Haskell2010
   main-is:           Doctest.hs
   ghc-options:       -threaded -pgmL markdown-unlit
-  build-depends:     base, rank2classes, doctest >= 0.8
+  build-depends:     base, rank2classes, grammatical-parsers, parsers, doctest >= 0.8
 
 benchmark            benchmarks
   type:              exitcode-stdio-1.0
