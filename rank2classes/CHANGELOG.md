@@ -1,3 +1,7 @@
+Version 1.2.1
+---------------
+* Added unsafeDeriveApply
+
 Version 1.2
 ---------------
 * Added the class instances for Data.Functor.Const
