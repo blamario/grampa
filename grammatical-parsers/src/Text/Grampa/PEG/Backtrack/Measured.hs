@@ -133,7 +133,7 @@ instance MonoidParsing (Parser g) where
                | Null.null rest = Parsed 0 () rest
                | otherwise = NoParse (FailureInfo (fromIntegral $ Factorial.length rest) ["endOfInput"])
    getInput = Parser p
-      where p rest = Parsed (Factorial.length rest) rest mempty
+      where p rest = Parsed 0 rest rest
    anyToken = Parser p
       where p rest = case Factorial.splitPrimePrefix rest
                      of Just (first, suffix) -> Parsed 1 first suffix

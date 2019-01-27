@@ -14,7 +14,7 @@ import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Cancellative (LeftReductiveMonoid (isPrefixOf))
 import Data.Monoid.Null (MonoidNull(null))
-import Data.Monoid.Factorial (FactorialMonoid(length, splitPrimePrefix))
+import Data.Monoid.Factorial (FactorialMonoid(splitPrimePrefix))
 import Data.Monoid.Textual (TextualMonoid)
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
@@ -128,7 +128,7 @@ reparseTails final parsed@((s, _):_) = (s, gd):parsed
 instance MonoidParsing (Parser g) where
    endOfInput = eof
    getInput = Parser p
-      where p rest@((s, _):_) = ResultList [ResultsOfLength (length rest) [last rest] (s:|[])] mempty
+      where p rest@((s, _):_) = ResultList [ResultsOfLength 0 rest (s:|[])] mempty
             p [] = ResultList [ResultsOfLength 0 [] (mempty:|[])] mempty
    anyToken = Parser p
       where p rest@((s, _):t) = case splitPrimePrefix s

@@ -134,7 +134,7 @@ instance MonoidParsing (Parser g) where
                | Null.null rest = success () rest
                | otherwise = failure (FailureInfo (fromIntegral $ Factorial.length rest) ["endOfInput"])
    getInput = Parser p
-      where p rest success _ = success rest mempty
+      where p rest success _ = success rest rest
    anyToken = Parser p
       where p rest success failure =
                case Factorial.splitPrimePrefix rest

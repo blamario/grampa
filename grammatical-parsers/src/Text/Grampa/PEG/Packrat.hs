@@ -130,7 +130,7 @@ instance MonoidParsing (Parser g) where
                | not (Null.null s) = NoParse (FailureInfo (genericLength rest) ["endOfInput"])
             p rest = Parsed () rest
    getInput = Parser p
-      where p rest@((s, _):_) = Parsed s [last rest]
+      where p rest@((s, _):_) = Parsed s rest
             p [] = Parsed mempty []
    anyToken = Parser p
       where p rest@((s, _):t) = case Factorial.splitPrimePrefix s

@@ -425,7 +425,7 @@ instance (LookAheadParsing (p g s), MonoidParsing (Fixed p g)) => LookAheadParsi
 
 instance MonoidParsing (Fixed Memoizing.Parser g) where
    endOfInput = primitive "endOfInput" endOfInput empty endOfInput
-   getInput = primitive "getInput" (endOfInput *> getInput) (notFollowedBy endOfInput *> getInput) getInput
+   getInput = primitive "getInput" getInput empty getInput
    anyToken = positivePrimitive "anyToken" anyToken
    satisfy predicate = positivePrimitive "satisfy" (satisfy predicate)
    satisfyChar predicate = positivePrimitive "satisfyChar" (satisfyChar predicate)
@@ -476,7 +476,7 @@ instance MonoidParsing (Fixed Memoizing.Parser g) where
 
 instance MonoidParsing (Fixed Backtrack.Parser g) where
    endOfInput = primitive "endOfInput" endOfInput empty endOfInput
-   getInput = primitive "getInput" (endOfInput *> getInput) (notFollowedBy endOfInput *> getInput) getInput
+   getInput = primitive "getInput" getInput empty getInput
    anyToken = positivePrimitive "anyToken" anyToken
    satisfy predicate = positivePrimitive "satisfy" (satisfy predicate)
    satisfyChar predicate = positivePrimitive "satisfyChar" (satisfyChar predicate)

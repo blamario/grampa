@@ -153,7 +153,7 @@ reparseTails final parsed@((s, _):_) = (s, gd):parsed
 instance MonoidParsing (Parser g) where
    endOfInput = eof
    getInput = Parser p
-      where p rest@((s, _):_) = ResultList (Leaf $ ResultInfo (length rest) [last rest] s) mempty
+      where p rest@((s, _):_) = ResultList (Leaf $ ResultInfo 0 rest s) mempty
             p [] = ResultList (Leaf $ ResultInfo 0 [] mempty) mempty
    anyToken = Parser p
       where p rest@((s, _):t) = case splitPrimePrefix s

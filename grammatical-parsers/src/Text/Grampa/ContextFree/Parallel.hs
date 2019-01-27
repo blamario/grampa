@@ -129,7 +129,7 @@ instance MonoidParsing (Parser g) where
       where f s | null s = ResultList (Leaf $ ResultInfo s ()) mempty
                 | otherwise = ResultList mempty (FailureInfo (Factorial.length s) ["endOfInput"])
    getInput = Parser p
-      where p s = ResultList (Leaf $ ResultInfo mempty s) mempty
+      where p s = ResultList (Leaf $ ResultInfo s s) mempty
    anyToken = Parser p
       where p s = case Factorial.splitPrimePrefix s
                   of Just (first, rest) -> ResultList (Leaf $ ResultInfo rest first) mempty

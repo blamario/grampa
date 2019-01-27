@@ -29,8 +29,8 @@ type ParseResults = Either ParseFailure
 -- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset. 
 data ParseFailure = ParseFailure Int [String] deriving (Eq, Show)
 
--- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of alternative
--- results.
+-- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of
+-- alternative results.
 newtype Ambiguous a = Ambiguous (NonEmpty a) deriving (Data, Eq, Ord, Show, Typeable)
 
 instance Show1 Ambiguous where
