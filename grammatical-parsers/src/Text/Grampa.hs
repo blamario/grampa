@@ -4,9 +4,9 @@
 module Text.Grampa (
    -- * Parsing methods
    MultiParsing(..),
-   offsetContext, offsetLineAndColumn, failureDescription, simply,
+   offsetContext, offsetLineAndColumn, positionOffset, mapPositionOffsets, failureDescription, simply,
    -- * Types
-   Grammar, GrammarBuilder, ParseResults, ParseFailure(..), Ambiguous(..), Position(..),
+   Grammar, GrammarBuilder, ParseResults, ParseFailure(..), Ambiguous(..), Position,
    -- * Parser combinators and primitives
    GrammarParsing(..), MonoidParsing(..), AmbiguousParsing(..), Lexical(..),
    module Text.Parser.Char,
@@ -25,7 +25,7 @@ import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 
 import qualified Rank2
 import Text.Grampa.Class (Lexical(..), MultiParsing(..), GrammarParsing(..), MonoidParsing(..), AmbiguousParsing(..),
-                          Ambiguous(..), ParseResults, ParseFailure(..), Position(..))
+                          Ambiguous(..), ParseResults, ParseFailure(..), Position, positionOffset, mapPositionOffsets)
 
 -- | A type synonym for a fixed grammar record type @g@ with a given parser type @p@ on input streams of type @s@
 type Grammar (g  :: (* -> *) -> *) p s = g (p g s)
