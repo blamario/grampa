@@ -1,8 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, OverloadedStrings, RankNTypes,
              ScopedTypeVariables, TypeApplications, TypeFamilies, DeriveDataTypeable #-}
 module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), AmbiguousParsing(..), MonoidParsing(..), Lexical(..),
-                          ParseResults, ParseFailure(..), Ambiguous(..), Position, positionOffset, mapPositionOffsets,
-                          completeParser) where
+                          ParseResults, ParseFailure(..), Ambiguous(..), Position, positionOffset, completeParser) where
 
 import Control.Applicative (Alternative(empty), liftA2, (<|>))
 import Data.Char (isAlphaNum, isLetter, isSpace)
@@ -36,15 +35,11 @@ newtype Position s = Position{
   -- | The length of the input from the position to end.
   remainderLength :: Int}
 
--- | Map each position into corresponsing offset from the beginning of the full input.
-mapPositionOffsets :: (Functor f, FactorialMonoid s) => s -> f (Position s) -> f Int
-mapPositionOffsets wholeInput f = offset <$> f
-   where offset (Position pos) = wholeLength - pos
-         wholeLength = Factorial.length wholeInput
-
 -- | Map the position into its offset from the beginning of the full input.
-positionOffset :: FactorialMonoid s => Position s -> s -> Int
-positionOffset pos wholeInput = Factorial.length wholeInput - remainderLength pos
+positionOffset :: FactorialMonoid s => s -> Position s -> Int
+positionOffset wholeInput = (wholeLength -) . remainderLength
+   where wholeLength = Factorial.length wholeInput
+{-# INLINE positionOffset #-}
 
 -- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of
 -- alternative results.
