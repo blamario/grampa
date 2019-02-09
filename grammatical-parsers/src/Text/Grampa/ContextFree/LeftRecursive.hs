@@ -126,11 +126,13 @@ instance MultiParsing (Fixed Memoizing.Parser) where
                   g (Parser g s) -> s -> g (Compose (Compose ParseResults []) ((,) s))
    parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input)
                                     (snd $ head $ parseRecursive g input)
+   {-# INLINE parsePrefix #-}
    parseComplete :: (FactorialMonoid s, Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
                     g (Parser g s) -> s -> g (Compose ParseResults [])
    parseComplete g input = Rank2.fmap ((snd <$>) . Compose . fromResultList input)
                                       (snd $ head $ Memoizing.reparseTails close $ parseRecursive g input)
       where close = Rank2.fmap (<* endOfInput) selfReferring
+   {-# INLINE parseComplete #-}
 
 instance GrammarParsing (Fixed Memoizing.Parser) where
    type GrammarFunctor (Fixed Memoizing.Parser) = ParserFunctor
@@ -358,9 +360,11 @@ primitive :: String -> p g s a -> p g s a -> p g s a -> Fixed p g s a
 primitive _name d0 d1 d = DirectParser{complete= d,
                                        direct0= d0,
                                        direct1= d1}
+{-# INLINE primitive #-}
 
 positivePrimitive :: String -> p g s a -> Fixed p g s a
 positivePrimitive _name p = PositiveDirectParser{complete= p}
+{-# INLINE positivePrimitive #-}
 
 instance (Parsing (p g s), MonoidParsing (Fixed p g)) => Parsing (Fixed p g s) where
    eof = primitive "eof" eof empty eof
@@ -473,6 +477,7 @@ instance MonoidParsing (Fixed Memoizing.Parser g) where
             d1 = mappend <$> direct1 p <*> cmp
             cmp = concatMany (complete p)
    {-# INLINABLE string #-}
+   {-# INLINABLE concatMany #-}
 
 instance MonoidParsing (Fixed Backtrack.Parser g) where
    endOfInput = primitive "endOfInput" endOfInput empty endOfInput
@@ -524,6 +529,7 @@ instance MonoidParsing (Fixed Backtrack.Parser g) where
             d1 = mappend <$> direct1 p <*> cmp
             cmp = concatMany (complete p)
    {-# INLINABLE string #-}
+   {-# INLINABLE concatMany #-}
 
 instance (Parsing (p g s), MonoidParsing (Fixed p g), Show s, TextualMonoid s) => CharParsing (Fixed p g s) where
    satisfy = satisfyChar
@@ -567,6 +573,7 @@ instance AmbiguousParsing (Fixed Memoizing.Parser g s) where
                  Ambiguous ar2 :| [] <- r2 =
                     ResultsOfLength l1 s1 (Ambiguous (ar1 <> ar2) :| []) : join rest1 rest2
                | otherwise = error "Ambiguous results should be grouped as a single value"
+   {-# INLINABLE ambiguous #-}
 
 -- | Turns a context-free parser into a backtracking PEG parser that consumes the longest possible prefix of the list
 -- of input tails, opposite of 'peg'
@@ -614,6 +621,7 @@ terminalPEG p@Parser{} = Parser{complete= Memoizing.terminalPEG (complete p),
 parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, FactorialMonoid s) =>
                   g (Parser g s) -> s -> [(s, g (ResultList g s))]
 parseRecursive = parseSeparated . separated
+{-# INLINE parseRecursive #-}
 
 separated :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
              g (Parser g s) -> g (SeparatedParser Memoizing.Parser g s)
@@ -641,6 +649,7 @@ separated g = Rank2.liftA4 reseparate circulars cycleFollowers descendants g
          leftRecursiveDeps (Const True) (Const flags) = Const (dependsOn flags)
          leftRecursiveDeps (Const False) (Const flags) = Const (Rank2.fmap (const $ Const False) (dependsOn flags))
          intersection (Const a) (Const b) = Const (a && b)
+{-# INLINABLE separated #-}
 
 fixDescendants :: forall g. (Rank2.Apply g, Rank2.Traversable g)
                      => g (Const (g (Const (ParserFlags g)) -> (ParserFlags g))) -> g (Const (ParserFlags g))
@@ -657,6 +666,7 @@ fixDescendants gf = go initial
             Const (ParserFlags n $ Rank2.liftA2 union old new)
          initial = Rank2.liftA2 (\_ (Const n)-> Const (ParserFlags n (const (Const False) Rank2.<$> gf))) gf nullabilities
          nullabilities = fixNullabilities gf
+{-# INLINABLE fixDescendants #-}
 
 fixNullabilities :: forall g. (Rank2.Apply g, Rank2.Traversable g)
                     => g (Const (g (Const (ParserFlags g)) -> (ParserFlags g))) -> g (Const Bool)
@@ -668,6 +678,7 @@ fixNullabilities gf = Rank2.fmap (Const . nullable . getConst) (go initial)
             where cd' = Rank2.fmap (\(Const f)-> Const (f cd)) gf
          agree (Const flags1) (Const flags2) = Const (nullable flags1 == nullable flags2)
          initial = const (Const (ParserFlags True (const (Const False) Rank2.<$> gf))) Rank2.<$> gf
+{-# INLINABLE fixNullabilities #-}
 
 -- | Parse the given input using a context-free grammar separated into two parts: the first specifying all the
 -- left-recursive productions, the second all others. The first function argument specifies the left-recursive

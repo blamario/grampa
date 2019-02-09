@@ -33,37 +33,42 @@ deriveAll ty = foldr f (pure []) [deriveFunctor, deriveApply, deriveApplicative,
 deriveFunctor :: Name -> Q [Dec]
 deriveFunctor ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Functor ty
-   sequence [instanceD (return []) instanceType [genFmap cs]]
+   sequence [instanceD (return []) instanceType [genFmap cs,
+                                                 pragInlD '(Rank2.<$>) Inline FunLike AllPhases]]
 
 deriveApply :: Name -> Q [Dec]
 deriveApply ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Apply ty
-   sequence [instanceD (return []) instanceType [genAp cs, genLiftA2 cs, genLiftA3 cs]]
+   sequence [instanceD (return []) instanceType [genAp cs, genLiftA2 cs, genLiftA3 cs,
+                                                 pragInlD '(Rank2.<*>) Inlinable FunLike AllPhases,
+                                                 pragInlD 'Rank2.liftA2 Inlinable FunLike AllPhases]]
 
 unsafeDeriveApply :: Name -> Q [Dec]
 unsafeDeriveApply ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Apply ty
-   sequence [instanceD (return []) instanceType [genApUnsafely cs, genLiftA2Unsafely cs, genLiftA3Unsafely cs]]
+   sequence [instanceD (return []) instanceType [genApUnsafely cs, genLiftA2Unsafely cs, genLiftA3Unsafely cs,
+                                                 pragInlD '(Rank2.<*>) Inlinable FunLike AllPhases,
+                                                 pragInlD 'Rank2.liftA2 Inlinable FunLike AllPhases]]
 
 deriveApplicative :: Name -> Q [Dec]
 deriveApplicative ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Applicative ty
-   sequence [instanceD (return []) instanceType [genPure cs]]
+   sequence [instanceD (return []) instanceType [genPure cs, pragInlD 'Rank2.pure Inline FunLike AllPhases]]
 
 deriveFoldable :: Name -> Q [Dec]
 deriveFoldable ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Foldable ty
-   sequence [instanceD (return []) instanceType [genFoldMap cs]]
+   sequence [instanceD (return []) instanceType [genFoldMap cs, pragInlD 'Rank2.foldMap Inlinable FunLike AllPhases]]
 
 deriveTraversable :: Name -> Q [Dec]
 deriveTraversable ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Traversable ty
-   sequence [instanceD (return []) instanceType [genTraverse cs]]
+   sequence [instanceD (return []) instanceType [genTraverse cs, pragInlD 'Rank2.traverse Inlinable FunLike AllPhases]]
 
 deriveDistributive :: Name -> Q [Dec]
 deriveDistributive ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Distributive ty
-   sequence [instanceD (return []) instanceType [genCotraverse cs]]
+   sequence [instanceD (return []) instanceType [genCotraverse cs, pragInlD 'Rank2.cotraverse Inline FunLike AllPhases]]
 
 deriveDistributiveTraversable :: Name -> Q [Dec]
 deriveDistributiveTraversable ty = do

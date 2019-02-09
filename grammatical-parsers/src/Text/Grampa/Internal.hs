@@ -61,9 +61,11 @@ instance Show r => Show (ResultsOfLength g s r) where
 
 instance Functor (ResultsOfLength g s) where
    fmap f (ResultsOfLength l t r) = ResultsOfLength l t (f <$> r)
+   {-# INLINE fmap #-}
 
 instance Functor (ResultList g s) where
    fmap f (ResultList l failure) = ResultList ((f <$>) <$> l) failure
+   {-# INLINE fmap #-}
 
 instance Semigroup (ResultList g s r) where
    ResultList rl1 f1 <> ResultList rl2 f2 = ResultList (join rl1 rl2) (f1 <> f2)

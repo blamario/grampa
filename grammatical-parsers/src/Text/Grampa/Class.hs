@@ -103,7 +103,9 @@ class MultiParsing m => GrammarParsing m where
    recursive :: m g s a -> m g s a
 
    selfReferring = Rank2.cotraverse nonTerminal id
+   {-# INLINE selfReferring #-}
    fixGrammar = ($ selfReferring)
+   {-# INLINE fixGrammar #-}
    recursive = id
 
 -- | Methods for parsing monoidal inputs
@@ -171,6 +173,8 @@ class MonoidParsing m where
       where go = mappend <$> p <*> go <|> pure mempty
    default getSourcePos :: (FactorialMonoid s, Functor (m s)) => m s (Position s)
    getSourcePos = Position . Factorial.length <$> getInput
+   {-# INLINE concatMany #-}
+   {-# INLINE getSourcePos #-}
 
 -- | Parsers that can produce alternative parses and collect them into an 'Ambiguous' node
 class AmbiguousParsing m where

@@ -43,7 +43,7 @@ newtype Parser g s r = Parser{applyParser :: [(s, g (ResultList g s))] -> Result
 
 instance Functor (Parser g i) where
    fmap f (Parser p) = Parser (fmap f . p)
-   {-# INLINABLE fmap #-}
+   {-# INLINE fmap #-}
 
 instance Applicative (Parser g i) where
    pure a = Parser (\rest-> ResultList [ResultsOfLength 0 rest (a:|[])] mempty)
@@ -60,7 +60,8 @@ instance Alternative (Parser g i) where
    empty = Parser (\rest-> ResultList mempty $ FailureInfo (genericLength rest) [])
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
-   {-# INLINABLE (<|>) #-}
+   {-# INLINE (<|>) #-}
+   {-# INLINABLE empty #-}
 
 infixl 3 <<|>
 (<<|>) :: Parser g s a -> Parser g s a -> Parser g s a
