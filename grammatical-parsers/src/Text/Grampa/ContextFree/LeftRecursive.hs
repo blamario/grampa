@@ -129,9 +129,10 @@ instance MultiParsing (Fixed Memoizing.Parser) where
    {-# INLINE parsePrefix #-}
    parseComplete :: (FactorialMonoid s, Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
                     g (Parser g s) -> s -> g (Compose ParseResults [])
-   parseComplete g input = Rank2.fmap ((snd <$>) . Compose . fromResultList input)
-                                      (snd $ head $ Memoizing.reparseTails close $ parseRecursive g input)
-      where close = Rank2.fmap (<* endOfInput) selfReferring
+   parseComplete g = \input-> let close = Rank2.fmap (<* endOfInput) selfReferring
+                              in Rank2.fmap ((snd <$>) . Compose . fromResultList input)
+                                            (snd $ head $ Memoizing.reparseTails close $ parseSeparated g' input)
+      where g' = separated g
    {-# INLINE parseComplete #-}
 
 instance GrammarParsing (Fixed Memoizing.Parser) where
@@ -752,3 +753,4 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                   reparse append p = Rank2.apply append (Memoizing.applyParser p $ (s, total) : parsedTail)
          recurseMarginal s parsedTail marginal =
             flip Memoizing.applyParser ((s, marginal) : parsedTail) Rank2.<$> indirects
+{-# NOINLINE parseSeparated #-}
