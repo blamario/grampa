@@ -191,12 +191,12 @@ instance FactorialMonoid s => Parsing (Parser g s) where
    try (Parser p) = Parser q
       where q rest = rewindFailure (p rest)
                where rewindFailure (ResultList rl (FailureInfo _pos _msgs)) =
-                        ResultList rl (FailureInfo (fromIntegral $ Factorial.length rest) [])
+                        ResultList rl (FailureInfo (Factorial.length rest) [])
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
                where replaceFailure (ResultList EmptyTree (FailureInfo pos msgs)) =
                         ResultList EmptyTree (FailureInfo pos $
-                                              if pos == fromIntegral (Factorial.length rest) then [msg] else msgs)
+                                              if pos == Factorial.length rest then [msg] else msgs)
                      replaceFailure rl = rl
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t (ResultList EmptyTree _) = ResultList (Leaf $ ResultInfo t ()) mempty

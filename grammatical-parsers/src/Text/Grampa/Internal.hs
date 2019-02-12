@@ -6,7 +6,6 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.List (nub)
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Semigroup (Semigroup((<>)))
-import Data.Word (Word64)
 
 import Data.Monoid.Factorial (FactorialMonoid(length))
 
@@ -14,7 +13,7 @@ import Text.Grampa.Class (ParseFailure(..), ParseResults)
 
 import Prelude hiding (length, showList)
 
-data FailureInfo = FailureInfo Word64 [String] deriving (Eq, Show)
+data FailureInfo = FailureInfo Int [String] deriving (Eq, Show)
 
 data ResultsOfLength g s r = ResultsOfLength !Int ![(s, g (ResultList g s))] !(NonEmpty r)
 
@@ -27,10 +26,11 @@ data BinTree a = Fork !(BinTree a) !(BinTree a)
 
 fromResultList :: FactorialMonoid s => s -> ResultList g s r -> ParseResults [(s, r)]
 fromResultList s (ResultList [] (FailureInfo pos msgs)) =
-   Left (ParseFailure (length s - fromIntegral pos + 1) (nub msgs))
+   Left (ParseFailure (length s - pos + 1) (nub msgs))
 fromResultList _ (ResultList rl _failure) = Right (foldMap f rl)
    where f (ResultsOfLength _ ((s, _):_) r) = (,) s <$> toList r
          f (ResultsOfLength _ [] r) = (,) mempty <$> toList r
+{-# INLINABLE fromResultList #-}
 
 instance Semigroup FailureInfo where
    FailureInfo pos1 exp1 <> FailureInfo pos2 exp2 = FailureInfo pos' exp'

@@ -227,6 +227,6 @@ reparseTails final parsed@((s, _):_) = (s, gd):parsed
 
 fromResult :: FactorialMonoid s => s -> Result g s r -> ParseResults (s, r)
 fromResult s (NoParse (FailureInfo pos msgs)) =
-   Left (ParseFailure (Factorial.length s - fromIntegral pos + 1) (nub msgs))
+   Left (ParseFailure (Factorial.length s - pos + 1) (nub msgs))
 fromResult _ (Parsed prefix []) = Right (mempty, prefix)
 fromResult _ (Parsed prefix ((s, _):_)) = Right (s, prefix)

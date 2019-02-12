@@ -267,7 +267,7 @@ instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => T
 
 fromResultList :: FactorialMonoid s => s -> ResultList g s r -> ParseResults [(s, r)]
 fromResultList s (ResultList EmptyTree (FailureInfo pos msgs)) =
-   Left (ParseFailure (length s - fromIntegral pos + 1) (nub msgs))
+   Left (ParseFailure (length s - pos + 1) (nub msgs))
 fromResultList _ (ResultList rl _failure) = Right (f <$> toList rl)
    where f (ResultInfo _ ((s, _):_) r) = (s, r)
          f (ResultInfo _ [] r) = (mempty, r)

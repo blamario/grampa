@@ -59,7 +59,7 @@ instance Applicative (Parser g s) where
    {-# INLINABLE (<*>) #-}
 
 instance Factorial.FactorialMonoid s => Alternative (Parser g s) where
-   empty = Parser (\rest-> NoParse $ FailureInfo (fromIntegral $ Factorial.length rest) ["empty"])
+   empty = Parser (\rest-> NoParse $ FailureInfo (Factorial.length rest) ["empty"])
    (<|>) = alt
 
 -- | A named and unconstrained version of the '<|>' operator
@@ -91,17 +91,17 @@ instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
    try (Parser p) = Parser q
       where q rest = rewindFailure (p rest)
                where rewindFailure (NoParse (FailureInfo _pos _msgs)) =
-                        NoParse (FailureInfo (fromIntegral $ Factorial.length rest) [])
+                        NoParse (FailureInfo (Factorial.length rest) [])
                      rewindFailure parsed = parsed
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
                where replaceFailure (NoParse (FailureInfo pos msgs)) =
-                        NoParse (FailureInfo pos $ if pos == fromIntegral (Factorial.length rest) then [msg] else msgs)
+                        NoParse (FailureInfo pos $ if pos == Factorial.length rest then [msg] else msgs)
                      replaceFailure parsed = parsed
    eof = endOfInput
-   unexpected msg = Parser (\t-> NoParse $ FailureInfo (fromIntegral $ Factorial.length t) [msg])
+   unexpected msg = Parser (\t-> NoParse $ FailureInfo (Factorial.length t) [msg])
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
-      where rewind t Parsed{} = NoParse (FailureInfo (fromIntegral $ Factorial.length t) ["notFollowedBy"])
+      where rewind t Parsed{} = NoParse (FailureInfo (Factorial.length t) ["notFollowedBy"])
             rewind t NoParse{} = Parsed () t
 
 instance Factorial.FactorialMonoid s => LookAheadParsing (Parser g s) where
@@ -126,37 +126,37 @@ instance MonoidParsing (Parser g) where
    endOfInput = Parser p
       where p rest
                | Null.null rest = Parsed () rest
-               | otherwise = NoParse (FailureInfo (fromIntegral $ Factorial.length rest) ["endOfInput"])
+               | otherwise = NoParse (FailureInfo (Factorial.length rest) ["endOfInput"])
    getInput = Parser p
       where p rest = Parsed rest rest
    anyToken = Parser p
       where p rest = case Factorial.splitPrimePrefix rest
                      of Just (first, suffix) -> Parsed first suffix
-                        _ -> NoParse (FailureInfo (fromIntegral $ Factorial.length rest) ["anyToken"])
+                        _ -> NoParse (FailureInfo (Factorial.length rest) ["anyToken"])
    satisfy predicate = Parser p
       where p rest =
                case Factorial.splitPrimePrefix rest
                of Just (first, suffix) | predicate first -> Parsed first suffix
-                  _ -> NoParse (FailureInfo (fromIntegral $ Factorial.length rest) ["satisfy"])
+                  _ -> NoParse (FailureInfo (Factorial.length rest) ["satisfy"])
    satisfyChar predicate = Parser p
       where p rest =
                case Textual.splitCharacterPrefix rest
                of Just (first, suffix) | predicate first -> Parsed first suffix
-                  _ -> NoParse (FailureInfo (fromIntegral $ Factorial.length rest) ["satisfyChar"])
+                  _ -> NoParse (FailureInfo (Factorial.length rest) ["satisfyChar"])
    satisfyCharInput predicate = Parser p
       where p rest =
                case Textual.splitCharacterPrefix rest
                of Just (first, suffix) | predicate first -> Parsed (Factorial.primePrefix rest) suffix
-                  _ -> NoParse (FailureInfo (fromIntegral $ Factorial.length rest) ["satisfyChar"])
+                  _ -> NoParse (FailureInfo (Factorial.length rest) ["satisfyChar"])
    notSatisfy predicate = Parser p
       where p s = case Factorial.splitPrimePrefix s
                   of Just (first, _) 
-                        | predicate first -> NoParse (FailureInfo (fromIntegral $ Factorial.length s) ["notSatisfy"])
+                        | predicate first -> NoParse (FailureInfo (Factorial.length s) ["notSatisfy"])
                      _ -> Parsed () s
    notSatisfyChar predicate = Parser p
       where p s = case Textual.characterPrefix s
                   of Just first | predicate first 
-                                  -> NoParse (FailureInfo (fromIntegral $ Factorial.length s) ["notSatisfyChar"])
+                                  -> NoParse (FailureInfo (Factorial.length s) ["notSatisfyChar"])
                      _ -> Parsed () s
    scan s0 f = Parser (p s0)
       where p s rest = Parsed prefix suffix
@@ -169,18 +169,18 @@ instance MonoidParsing (Parser g) where
    takeWhile1 predicate = Parser p
       where p rest | (prefix, suffix) <- Factorial.span predicate rest =
                         if Null.null prefix
-                        then NoParse (FailureInfo (fromIntegral $ Factorial.length rest) ["takeWhile1"])
+                        then NoParse (FailureInfo (Factorial.length rest) ["takeWhile1"])
                         else Parsed prefix suffix
    takeCharsWhile predicate = Parser p
       where p rest | (prefix, suffix) <- Textual.span_ False predicate rest = Parsed prefix suffix
    takeCharsWhile1 predicate = Parser p
       where p rest | (prefix, suffix) <- Textual.span_ False predicate rest =
                      if Null.null prefix
-                     then NoParse (FailureInfo (fromIntegral $ Factorial.length rest) ["takeCharsWhile1"])
+                     then NoParse (FailureInfo (Factorial.length rest) ["takeCharsWhile1"])
                      else Parsed prefix suffix
    string s = Parser p where
       p s' | Just suffix <- Cancellative.stripPrefix s s' = Parsed s suffix
-           | otherwise = NoParse (FailureInfo (fromIntegral $ Factorial.length s') ["string " ++ show s])
+           | otherwise = NoParse (FailureInfo (Factorial.length s') ["string " ++ show s])
    concatMany (Parser p) = Parser q
       where q rest = case p rest
                      of Parsed prefix suffix -> let Parsed prefix' suffix' = q suffix
@@ -204,5 +204,5 @@ instance MultiParsing Parser where
 
 fromResult :: FactorialMonoid s => s -> Result g s r -> ParseResults (s, r)
 fromResult s (NoParse (FailureInfo pos msgs)) =
-   Left (ParseFailure (Factorial.length s - fromIntegral pos + 1) (nub msgs))
+   Left (ParseFailure (Factorial.length s - pos + 1) (nub msgs))
 fromResult _ (Parsed prefix suffix) = Right (suffix, prefix)
