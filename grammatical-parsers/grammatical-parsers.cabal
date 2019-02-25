@@ -13,7 +13,7 @@ license-file:        LICENSE
 author:              Mario Blažević
 maintainer:          Mario Blažević <blamario@protonmail.com>
 copyright:           (c) 2017 Mario Blažević
-category:            Text
+category:            Text, Parsing
 build-type:          Simple
 cabal-version:       >=1.10
 extra-source-files:  README.md, CHANGELOG.md
