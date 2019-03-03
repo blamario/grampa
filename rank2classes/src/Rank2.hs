@@ -26,10 +26,10 @@ import qualified Data.Traversable as Rank1
 import Data.Coerce (coerce)
 import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(..))
-import Data.Functor.Compose (Compose(..))
+import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Functor.Const (Const(..))
-import Data.Functor.Product (Product(..))
-import Data.Functor.Sum (Sum(..))
+import Data.Functor.Product (Product(Pair))
+import Data.Functor.Sum (Sum(InL, InR))
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
