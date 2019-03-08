@@ -41,7 +41,7 @@ library
                        transformers >= 0.5 && < 0.6,
                        monoid-subclasses >=0.4 && <0.5,
                        parsers < 0.13,
-                       rank2classes >= 1.0.2 && < 1.3
+                       rank2classes >= 1.0.2 && < 1.4
 
 executable             arithmetic
   hs-source-dirs:      examples
@@ -50,7 +50,7 @@ executable             arithmetic
   default-language:    Haskell2010
   build-depends:       base >=4.9 && <5, containers >= 0.5.7.0 && < 0.7,
                        parsers < 0.13,
-                       rank2classes >= 1.0.2 && < 1.3, grammatical-parsers,
+                       rank2classes >= 1.0.2 && < 1.4, grammatical-parsers,
                        monoid-subclasses >=0.4 && <0.5
 
 test-suite           quicktests
@@ -59,7 +59,7 @@ test-suite           quicktests
   x-uses-tf:         true
   build-depends:     base >=4.9 && < 5, containers >= 0.5.7.0 && < 0.7,
                      monoid-subclasses < 0.5, parsers < 0.13,
-                     rank2classes >= 1.0.2 && < 1.3, grammatical-parsers,
+                     rank2classes >= 1.0.2 && < 1.4, grammatical-parsers,
                      QuickCheck >= 2 && < 3, checkers >= 0.4.6 && < 0.5, size-based < 0.2,
                      testing-feat >= 1.1 && < 1.2,
                      tasty >= 0.7, tasty-quickcheck >= 0.7
@@ -80,7 +80,7 @@ benchmark            benchmarks
   type:              exitcode-stdio-1.0
   hs-source-dirs:    test, examples
   ghc-options:       -O2 -Wall -rtsopts -main-is Benchmark.main
-  Build-Depends:     base >=4.9 && < 5, rank2classes >= 1.0.2 && < 1.3, grammatical-parsers,
+  Build-Depends:     base >=4.9 && < 5, rank2classes >= 1.0.2 && < 1.4, grammatical-parsers,
                      monoid-subclasses >=0.4 && <0.5, parsers < 0.13,
                      criterion >= 1.0, deepseq >= 1.1, containers >= 0.5.7.0 && < 0.7, text >= 1.1
   main-is:           Benchmark.hs

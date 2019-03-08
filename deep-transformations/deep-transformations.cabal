@@ -32,6 +32,6 @@ library
   hs-source-dirs:       src
   exposed-modules:      Transformation, Transformation.Deep, Transformation.Deep.TH,
                         Transformation.Rank2, Transformation.AG
-  build-depends:        base >= 4.7 && < 5, rank2classes >= 1.2.1 && < 1.3,
+  build-depends:        base >= 4.7 && < 5, rank2classes >= 1.2.1 && < 1.4,
                         template-haskell >= 2.11 && < 2.15
   default-language:     Haskell2010

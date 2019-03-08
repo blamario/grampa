@@ -1,3 +1,9 @@
+Version 1.3
+---------------
+* Added `newtype Flip` to exports - PR by Jeremy List
+* Generating INLINE pragmas from Rank2.TH
+* Generating the proper constraints on derived instances where needed
+
 Version 1.2.1
 ---------------
 * Added unsafeDeriveApply
