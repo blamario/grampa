@@ -12,7 +12,7 @@ module Rank2 (
    Functor(..), Apply(..), Applicative(..),
    Foldable(..), Traversable(..), Distributive(..), DistributiveTraversable(..), distributeJoin,
 -- * Rank 2 data types
-   Compose(..), Empty(..), Only(..), Identity(..), Product(..), Sum(..), Arrow(..), type (~>),
+   Compose(..), Empty(..), Only(..), Flip(..), Identity(..), Product(..), Sum(..), Arrow(..), type (~>),
 -- * Method synonyms and helper functions
    fst, snd, ap, fmap, liftA4, liftA5,
    fmapTraverse, liftA2Traverse1, liftA2Traverse2, liftA2TraverseBoth,
@@ -170,7 +170,8 @@ newtype Only a f = Only {fromOnly :: f a} deriving (Eq, Ord, Show)
 -- | Equivalent of 'Data.Functor.Identity' for rank 2 data types
 newtype Identity g f = Identity {runIdentity :: g f} deriving (Eq, Ord, Show)
 
-newtype Flip g a f = Flip (g (f a)) deriving (Eq, Ord, Show)
+-- | A nested parametric type represented as a rank-2 type
+newtype Flip g a f = Flip {unFlip :: g (f a)} deriving (Eq, Ord, Show)
 
 instance Semigroup (g (f a)) => Semigroup (Flip g a f) where
    Flip x <> Flip y = Flip (x <> y)
