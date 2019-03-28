@@ -12,7 +12,9 @@
 module Transformation.Deep.TH (deriveAll, deriveFunctor, deriveFoldable, deriveDownTraversable, deriveUpTraversable)
 where
 
+import Control.Applicative (liftA2)
 import Control.Monad (replicateM)
+import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax (BangType, VarBangType, getQ, putQ)
@@ -36,11 +38,11 @@ deriveFunctor ty = do
    t <- varT <$> newName "t"
    p <- varT <$> newName "p"
    q <- varT <$> newName "q"
+   (instanceType, cs) <- reifyConstructors ty
    let deepConstraint ty = conT ''Transformation.Deep.Functor `appT` t `appT` ty `appT` p `appT` q
        shallowConstraint ty =
           conT ''Transformation.Functor `appT` t `appT` p `appT` q `appT` (ty `appT` q `appT` q)
-   (instanceType, cs) <- reifyConstructors ty
-   (constraints, dec) <- genDeepmap deepConstraint shallowConstraint cs
+   (constraints, dec) <- genDeepmap deepConstraint shallowConstraint instanceType cs
    sequence [instanceD (cxt (appT (conT ''Functor) p : map pure constraints))
                        (deepConstraint instanceType)
                        [pure dec]]
@@ -50,11 +52,11 @@ deriveFoldable ty = do
    t <- varT <$> newName "t"
    f <- varT <$> newName "f"
    m <- varT <$> newName "m"
+   (instanceType, cs) <- reifyConstructors ty
    let deepConstraint ty = conT ''Transformation.Deep.Foldable `appT` t `appT` ty `appT` f `appT` m
        shallowConstraint ty =
           conT ''Transformation.Foldable `appT` t `appT` f `appT` m `appT` (ty `appT` f `appT` f)
-   (instanceType, cs) <- reifyConstructors ty
-   (constraints, dec) <- genFoldMap deepConstraint shallowConstraint cs
+   (constraints, dec) <- genFoldMap deepConstraint shallowConstraint instanceType cs
    sequence [instanceD (cxt (appT (conT ''Monoid) m : appT (conT ''Foldable) f : map pure constraints))
                        (deepConstraint instanceType)
                        [pure dec]]
@@ -65,11 +67,11 @@ deriveDownTraversable ty = do
    p <- varT <$> newName "p"
    q <- varT <$> newName "q"
    m <- varT <$> newName "m"
+   (instanceType, cs) <- reifyConstructors ty
    let deepConstraint ty = conT ''Transformation.Deep.DownTraversable `appT` t `appT` ty `appT` p `appT` q `appT` m
        shallowConstraint ty =
           conT ''Transformation.Traversable `appT` t `appT` p `appT` q `appT` m `appT` (ty `appT` p `appT` p)
-   (instanceType, cs) <- reifyConstructors ty
-   (constraints, dec) <- genTraverseDown deepConstraint shallowConstraint cs
+   (constraints, dec) <- genTraverseDown deepConstraint shallowConstraint instanceType cs
    sequence [instanceD (cxt (appT (conT ''Monad) m : appT (conT ''Traversable) q : map pure constraints))
                        (deepConstraint instanceType)
                        [pure dec]]
@@ -80,14 +82,24 @@ deriveUpTraversable ty = do
    p <- varT <$> newName "p"
    q <- varT <$> newName "q"
    m <- varT <$> newName "m"
+   (instanceType, cs) <- reifyConstructors ty
    let deepConstraint ty = conT ''Transformation.Deep.UpTraversable `appT` t `appT` ty `appT` p `appT` q `appT` m
        shallowConstraint ty =
           conT ''Transformation.Traversable `appT` t `appT` p `appT` q `appT` m `appT` (ty `appT` q `appT` q)
-   (instanceType, cs) <- reifyConstructors ty
-   (constraints, dec) <- genTraverseUp deepConstraint shallowConstraint cs
+   (constraints, dec) <- genTraverseUp deepConstraint shallowConstraint instanceType cs
    sequence [instanceD (cxt (appT (conT ''Monad) m : appT (conT ''Traversable) p : map pure constraints))
                        (deepConstraint instanceType)
                        [pure dec]]
+
+substitute :: Type -> Q Type -> Q Type -> Q Type
+substitute resultType = liftA2 substitute'
+   where substitute' instanceType argumentType =
+            substituteVars (substitutions resultType instanceType) argumentType
+         substitutions (AppT t1 (VarT name1)) (AppT t2 (VarT name2)) = (name1, name2) : substitutions t1 t2
+         substitutions _t1 _t2 = []
+         substituteVars subs (VarT name) = VarT (fromMaybe name $ lookup name subs)
+         substituteVars subs (AppT t1 t2) = AppT (substituteVars subs t1) (substituteVars subs t2)
+         substituteVars _ t = t
 
 reifyConstructors :: Name -> Q (TypeQ, [Con])
 reifyConstructors ty = do
@@ -106,28 +118,30 @@ reifyConstructors ty = do
    putQ (Deriving tyConName tyVar' tyVar)
    return (instanceType, cs)
 
-genDeepmap :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> [Con] -> Q ([Type], Dec)
-genDeepmap deepConstraint shallowConstraint cs = do
-   (constraints, clauses) <- unzip <$> mapM (genDeepmapClause deepConstraint shallowConstraint) cs
+genDeepmap :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> Q Type -> [Con] -> Q ([Type], Dec)
+genDeepmap deepConstraint shallowConstraint instanceType cs = do
+   (constraints, clauses) <- unzip <$> mapM (genDeepmapClause deepConstraint shallowConstraint instanceType) cs
    return (concat constraints, FunD '(Transformation.Deep.<$>) clauses)
 
-genFoldMap :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> [Con] -> Q ([Type], Dec)
-genFoldMap deepConstraint shallowConstraint cs = do
-   (constraints, clauses) <- unzip <$> mapM (genFoldMapClause deepConstraint shallowConstraint) cs
+genFoldMap :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> Q Type -> [Con] -> Q ([Type], Dec)
+genFoldMap deepConstraint shallowConstraint instanceType cs = do
+   (constraints, clauses) <- unzip <$> mapM (genFoldMapClause deepConstraint shallowConstraint instanceType) cs
    return (concat constraints, FunD 'Transformation.Deep.foldMap clauses)
 
-genTraverseDown :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> [Con] -> Q ([Type], Dec)
-genTraverseDown deepConstraint shallowConstraint cs = do
-   (constraints, clauses) <- unzip <$> mapM (genTraverseClause genTraverseDownField deepConstraint shallowConstraint) cs
+genTraverseDown :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> Q Type -> [Con] -> Q ([Type], Dec)
+genTraverseDown deepConstraint shallowConstraint instanceType cs = do
+   (constraints, clauses)
+     <- unzip <$> mapM (genTraverseClause genTraverseDownField deepConstraint shallowConstraint instanceType) cs
    return (concat constraints, FunD 'Transformation.Deep.traverseDown clauses)
 
-genTraverseUp :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> [Con] -> Q ([Type], Dec)
-genTraverseUp deepConstraint shallowConstraint cs = do
-   (constraints, clauses) <- unzip <$> mapM (genTraverseClause genTraverseUpField deepConstraint shallowConstraint) cs
+genTraverseUp :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> Q Type -> [Con] -> Q ([Type], Dec)
+genTraverseUp deepConstraint shallowConstraint instanceType cs = do
+   (constraints, clauses)
+     <- unzip <$> mapM (genTraverseClause genTraverseUpField deepConstraint shallowConstraint instanceType) cs
    return (concat constraints, FunD 'Transformation.Deep.traverseUp clauses)
 
-genDeepmapClause :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> Con -> Q ([Type], Clause)
-genDeepmapClause deepConstraint shallowConstraint (NormalC name fieldTypes) = do
+genDeepmapClause :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> Q Type -> Con -> Q ([Type], Clause)
+genDeepmapClause deepConstraint shallowConstraint instanceType (NormalC name fieldTypes) = do
    t          <- newName "t"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
    let pats = [varP t, parensP (conP name $ map varP fieldNames)]
@@ -138,7 +152,7 @@ genDeepmapClause deepConstraint shallowConstraint (NormalC name fieldTypes) = do
        newField x (_, fieldType) = genDeepmapField (varE t) fieldType deepConstraint shallowConstraint (varE x) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause pats body []
-genDeepmapClause deepConstraint shallowConstraint (RecC name fields) = do
+genDeepmapClause deepConstraint shallowConstraint instanceType (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
    let body = normalB $ recConE name $ (snd <$>) <$> constraintsAndFields
@@ -149,9 +163,23 @@ genDeepmapClause deepConstraint shallowConstraint (RecC name fields) = do
           <$> genDeepmapField (varE f) fieldType deepConstraint shallowConstraint (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP f, varP x] body []
+genDeepmapClause deepConstraint shallowConstraint instanceType
+                 (GadtC [name] fieldTypes (AppT (AppT resultType (VarT tyVar')) (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar' _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar' tyVar)
+      genDeepmapClause (deepConstraint . substitute resultType instanceType)
+                       (shallowConstraint . substitute resultType instanceType) instanceType (NormalC name fieldTypes)
+genDeepmapClause deepConstraint shallowConstraint instanceType
+                 (RecGadtC [name] fields (AppT (AppT resultType (VarT tyVar')) (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar' _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar' tyVar)
+      genDeepmapClause (deepConstraint . substitute resultType instanceType)
+                       (shallowConstraint . substitute resultType instanceType) instanceType (RecC name fields)
+genDeepmapClause deepConstraint shallowConstraint instanceType (ForallC _vars _cxt con) =
+   genDeepmapClause deepConstraint shallowConstraint instanceType con
 
-genFoldMapClause :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> Con -> Q ([Type], Clause)
-genFoldMapClause deepConstraint shallowConstraint (NormalC name fieldTypes) = do
+genFoldMapClause :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> Q Type -> Con -> Q ([Type], Clause)
+genFoldMapClause deepConstraint shallowConstraint instanceType (NormalC name fieldTypes) = do
    t          <- newName "t"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
    let pats = [varP t, parensP (conP name $ map varP fieldNames)]
@@ -164,7 +192,7 @@ genFoldMapClause deepConstraint shallowConstraint (NormalC name fieldTypes) = do
        newField x (_, fieldType) = genFoldMapField (varE t) fieldType deepConstraint shallowConstraint (varE x) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause pats (normalB body) []
-genFoldMapClause deepConstraint shallowConstraint (RecC _name fields) = do
+genFoldMapClause deepConstraint shallowConstraint instanceType (RecC _name fields) = do
    t <- newName "t"
    x <- newName "x"
    let body | null fields = [| mempty |]
@@ -176,12 +204,26 @@ genFoldMapClause deepConstraint shallowConstraint (RecC _name fields) = do
           genFoldMapField (varE t) fieldType deepConstraint shallowConstraint (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP t, varP x] (normalB body) []
+genFoldMapClause deepConstraint shallowConstraint instanceType
+                 (GadtC [name] fieldTypes (AppT (AppT resultType (VarT tyVar')) (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar' _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar' tyVar)
+      genFoldMapClause (deepConstraint . substitute resultType instanceType)
+                       (shallowConstraint . substitute resultType instanceType) instanceType (NormalC name fieldTypes)
+genFoldMapClause deepConstraint shallowConstraint instanceType
+                 (RecGadtC [name] fields (AppT (AppT resultType (VarT tyVar')) (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar' _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar' tyVar)
+      genFoldMapClause (deepConstraint . substitute resultType instanceType)
+                       (shallowConstraint . substitute resultType instanceType) instanceType (RecC name fields)
+genFoldMapClause deepConstraint shallowConstraint instanceType (ForallC _vars _cxt con) =
+   genFoldMapClause deepConstraint shallowConstraint instanceType con
 
 type GenTraverseFieldType = Q Exp -> Type -> (Q Type -> Q Type) -> (Q Type -> Q Type) -> Q Exp -> (Q Exp -> Q Exp)
                             -> Q ([Type], Exp)
 
-genTraverseClause :: GenTraverseFieldType -> (Q Type -> Q Type) -> (Q Type -> Q Type) -> Con -> Q ([Type], Clause)
-genTraverseClause genTraverseField deepConstraint shallowConstraint (NormalC name fieldTypes) = do
+genTraverseClause :: GenTraverseFieldType -> (Q Type -> Q Type) -> (Q Type -> Q Type) -> Q Type -> Con -> Q ([Type], Clause)
+genTraverseClause genTraverseField deepConstraint shallowConstraint instanceType (NormalC name fieldTypes) = do
    t          <- newName "t"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
    let pats = [varP t, parensP (conP name $ map varP fieldNames)]
@@ -195,7 +237,7 @@ genTraverseClause genTraverseField deepConstraint shallowConstraint (NormalC nam
        newField x (_, fieldType) = genTraverseField (varE t) fieldType deepConstraint shallowConstraint (varE x) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause pats (normalB body) []
-genTraverseClause genTraverseField deepConstraint shallowConstraint (RecC name fields) = do
+genTraverseClause genTraverseField deepConstraint shallowConstraint instanceType (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
    let constraintsAndFields = map newNamedField fields
@@ -209,6 +251,20 @@ genTraverseClause genTraverseField deepConstraint shallowConstraint (RecC name f
           <$> genTraverseField (varE f) fieldType deepConstraint shallowConstraint (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP f, varP x] (normalB body) []
+genTraverseClause genTraverseField deepConstraint shallowConstraint instanceType
+                  (GadtC [name] fieldTypes (AppT (AppT resultType (VarT tyVar')) (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar' _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar' tyVar)
+      genTraverseClause genTraverseField (deepConstraint . substitute resultType instanceType)
+                        (shallowConstraint . substitute resultType instanceType) instanceType (NormalC name fieldTypes)
+genTraverseClause genTraverseField deepConstraint shallowConstraint instanceType
+                  (RecGadtC [name] fields (AppT (AppT resultType (VarT tyVar')) (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar' _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar' tyVar)
+      genTraverseClause genTraverseField (deepConstraint . substitute resultType instanceType)
+                        (shallowConstraint . substitute resultType instanceType) instanceType (RecC name fields)
+genTraverseClause genTraverseField deepConstraint shallowConstraint instanceType (ForallC _vars _cxt con) =
+   genTraverseClause genTraverseField deepConstraint shallowConstraint instanceType con
 
 genDeepmapField :: Q Exp -> Type -> (Q Type -> Q Type) -> (Q Type -> Q Type) -> Q Exp -> (Q Exp -> Q Exp)
                 -> Q ([Type], Exp)

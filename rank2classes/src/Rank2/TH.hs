@@ -23,7 +23,7 @@ import Language.Haskell.TH.Syntax (BangType, VarBangType, getQ, putQ)
 
 import qualified Rank2
 
-data Deriving = Deriving { _derivingConstructor :: Name, _derivingVariable :: Name }
+data Deriving = Deriving { _derivingConstructor :: Name, _derivingVariable :: Name } deriving Show
 
 deriveAll :: Name -> Q [Dec]
 deriveAll ty = foldr f (pure []) [deriveFunctor, deriveApply, deriveApplicative,
@@ -172,6 +172,15 @@ genFmapClause (RecC name fields) = do
           <$> genFmapField (varE f) fieldType (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP f, varP x] body []
+genFmapClause (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar)
+      genFmapClause (NormalC name fieldTypes)
+genFmapClause (RecGadtC [name] fields _resultType@(AppT _ (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar)
+      genFmapClause (RecC name fields)
+genFmapClause (ForallC _vars _cxt con) = genFmapClause con
 
 genFmapField :: Q Exp -> Type -> Q Exp -> (Q Exp -> Q Exp) -> Q ([Type], Exp)
 genFmapField fun fieldType fieldAccess wrap = do
@@ -286,6 +295,15 @@ genApClause unsafely (RecC name fields) = do
           where getFieldOf = appE (varE fieldName) . varE
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP x, varP y] body []
+genApClause unsafely (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar)
+      genApClause unsafely (NormalC name fieldTypes)
+genApClause unsafely (RecGadtC [name] fields _resultType@(AppT _ (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar)
+      genApClause unsafely (RecC name fields)
+genApClause unsafely (ForallC _vars _cxt con) = genApClause unsafely con
 
 genApField :: Bool -> Type -> Q Exp -> Q Exp -> (Q Exp -> Q Exp) -> Q ([Type], Exp)
 genApField unsafely fieldType field1Access field2Access wrap = do
@@ -353,6 +371,15 @@ genFoldMapClause (RecC _name fields) = do
        newField (fieldName, _, fieldType) = genFoldMapField f fieldType (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP f, varP x] (normalB body) []
+genFoldMapClause (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar)
+      genFoldMapClause (NormalC name fieldTypes)
+genFoldMapClause (RecGadtC [name] fields _resultType@(AppT _ (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar)
+      genFoldMapClause (RecC name fields)
+genFoldMapClause (ForallC _vars _cxt con) = genFoldMapClause con
 
 genFoldMapField :: Name -> Type -> Q Exp -> (Q Exp -> Q Exp) -> Q ([Type], Exp)
 genFoldMapField funcName fieldType fieldAccess wrap = do
@@ -393,6 +420,15 @@ genTraverseClause (RecC name fields) = do
        newField (fieldName, _, fieldType) = genTraverseField (varE f) fieldType (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP f, varP x] body []
+genTraverseClause (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar)
+      genTraverseClause (NormalC name fieldTypes)
+genTraverseClause (RecGadtC [name] fields _resultType@(AppT _ (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar)
+      genTraverseClause (RecC name fields)
+genTraverseClause (ForallC _vars _cxt con) = genTraverseClause con
 
 genTraverseField :: Q Exp -> Type -> Q Exp -> (Q Exp -> Q Exp) -> Q ([Type], Exp)
 genTraverseField fun fieldType fieldAccess wrap = do
