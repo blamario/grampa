@@ -30,15 +30,14 @@ import qualified Text.Parser.Token
 import Text.Grampa.Class (Lexical(..), GrammarParsing(..), MonoidParsing(..), MultiParsing(..), 
                           ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (FailureInfo(..))
-import qualified Text.Grampa.PEG.Backtrack as Backtrack (Parser)
 
 data Result g s v = Parsed{parsedPrefix :: !v, 
                            parsedSuffix :: ![(s, g (Result g s))]}
                   | NoParse FailureInfo
 
 -- | Parser type for Parsing Expression Grammars that uses an improved packrat algorithm, with O(1) performance bounds
--- but with worse constants and more memory consumption than 'Backtrack.Parser'. The 'parse' function returns an input
--- prefix parse paired with the remaining input suffix.
+-- but with worse constants and more memory consumption than the backtracking 'Text.Grampa.PEG.Backtrack.Parser'. The
+-- 'parse' function returns an input prefix parse paired with the remaining input suffix.
 newtype Parser g s r = Parser{applyParser :: [(s, g (Result g s))] -> Result g s r}
 
 instance Show1 (Result g s) where

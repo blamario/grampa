@@ -18,9 +18,8 @@ import qualified Data.Monoid.Factorial as Factorial
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 import Data.Semigroup (Semigroup((<>)))
-import Text.Parser.Combinators (Parsing(notFollowedBy, (<?>)), skipMany)
+import Text.Parser.Combinators (Parsing((<?>)), skipMany)
 import Text.Parser.Char (CharParsing(char))
-import Text.Parser.Token (TokenParsing)
 import GHC.Exts (Constraint)
 
 import qualified Rank2
@@ -128,9 +127,11 @@ class MonoidParsing m where
    -- given predicate, and returning the input atom that represents the character. A faster version of @singleton <$>
    -- satisfyChar p@ and of @satisfy (fromMaybe False p . characterPrefix)@.
    satisfyCharInput :: TextualMonoid s => (Char -> Bool) -> m s s
-   -- | A parser that succeeds exactly when satisfy doesn't, equivalent to @notFollowedBy . satisfy@
+   -- | A parser that succeeds exactly when satisfy doesn't, equivalent to
+   -- 'Text.Parser.Combinators.notFollowedBy' @. satisfy@
    notSatisfy :: FactorialMonoid s => (s -> Bool) -> m s ()
-   -- | A parser that succeeds exactly when satisfyChar doesn't, equivalent to @notFollowedBy . satisfyChar@
+   -- | A parser that succeeds exactly when satisfyChar doesn't, equivalent to
+   -- 'Text.Parser.Combinators.notFollowedBy' @. satisfyChar@
    notSatisfyChar :: TextualMonoid s => (Char -> Bool) -> m s ()
 
    -- | A stateful scanner. The predicate modifies a state argument, and each transformed state is passed to successive
@@ -181,7 +182,7 @@ class AmbiguousParsing m where
    -- | Collect all alternative parses of the same length into a 'NonEmpty' list of results.
    ambiguous :: m a -> m (Ambiguous a)
 
--- | If a grammar is 'Lexical', its parsers can instantiate the 'TokenParsing' class.
+-- | If a grammar is 'Lexical', its parsers can instantiate the 'Text.Parser.Token.TokenParsing' class.
 class Lexical (g :: (* -> *) -> *) where
    type LexicalConstraint (m :: ((* -> *) -> *) -> * -> * -> *) g s :: Constraint
    -- | Always succeeds, consuming all white space and comments
