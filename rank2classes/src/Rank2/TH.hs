@@ -153,7 +153,7 @@ genFmapClause :: Con -> Q ([Type], Clause)
 genFmapClause (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
-   let pats = [varP f, tildeP (conP name $ map varP fieldNames)]
+   let pats = [varP f, conP name (map varP fieldNames)]
        constraintsAndFields = zipWith newField fieldNames fieldTypes
        newFields = map (snd <$>) constraintsAndFields
        body = normalB $ appsE $ conE name : newFields
@@ -199,7 +199,7 @@ genLiftA2Clause unsafely (NormalC name fieldTypes) = do
    fieldNames1 <- replicateM (length fieldTypes) (newName "x")
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
    let pats = [varP f,
-               (if unsafely then id else tildeP) (conP name $ map varP fieldNames1),
+               conP name (map varP fieldNames1),
                tildeP (conP name $ map varP fieldNames2)]
        body = normalB $ appsE $ conE name : zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
        newField :: (Name, Name) -> BangType -> Q Exp
@@ -236,7 +236,7 @@ genLiftA3Clause unsafely (NormalC name fieldTypes) = do
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
    fieldNames3 <- replicateM (length fieldTypes) (newName "z")
    let pats = [varP f,
-               (if unsafely then id else tildeP) (conP name $ map varP fieldNames1),
+               conP name (map varP fieldNames1),
                tildeP (conP name $ map varP fieldNames2), 
                tildeP (conP name $ map varP fieldNames3)]
        body = normalB $ appsE $ conE name : zipWith newField (zip3 fieldNames1 fieldNames2 fieldNames3) fieldTypes
@@ -275,7 +275,7 @@ genApClause :: Bool -> Con -> Q ([Type], Clause)
 genApClause unsafely (NormalC name fieldTypes) = do
    fieldNames1 <- replicateM (length fieldTypes) (newName "x")
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
-   let pats = [(if unsafely then id else tildeP) (conP name $ map varP fieldNames1),
+   let pats = [conP name (map varP fieldNames1),
                tildeP (conP name $ map varP fieldNames2)]
        constraintsAndFields = zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
        newFields = map (snd <$>) constraintsAndFields
@@ -351,7 +351,7 @@ genFoldMapClause :: Con -> Q ([Type], Clause)
 genFoldMapClause (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
-   let pats = [varP f, tildeP (conP name $ map varP fieldNames)]
+   let pats = [varP f, conP name (map varP fieldNames)]
        constraintsAndFields = zipWith newField fieldNames fieldTypes
        body | null fieldNames = [| mempty |]
             | otherwise = foldr1 append $ (snd <$>) <$> constraintsAndFields
@@ -399,7 +399,7 @@ genTraverseClause (NormalC name []) =
 genTraverseClause (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
-   let pats = [varP f, tildeP (conP name $ map varP fieldNames)]
+   let pats = [varP f, conP name (map varP fieldNames)]
        constraintsAndFields = zipWith newField fieldNames fieldTypes
        newFields = map (snd <$>) constraintsAndFields
        body = normalB $ fst $ foldl apply (conE name, False) newFields
