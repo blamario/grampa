@@ -2,6 +2,9 @@ Version 0.4
 ---------------
 * Added `Position` and related functions
 * Renamed `showFailure` to `failureDescription`
+* Faster parsing at the cost of slower compilation
+* Replaced Word64 source positions by plain Int
+* Fixed Haddock-related compilation warnings
 
 Version 0.3.2
 ---------------
