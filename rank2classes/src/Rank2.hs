@@ -208,7 +208,7 @@ instance Functor g => Functor (Identity g) where
    f <$> Identity g = Identity (f <$> g)
 
 instance (Functor g, Functor h) => Functor (Product g h) where
-   f <$> ~(Pair a b) = Pair (f <$> a) (f <$> b)
+   f <$> Pair a b = Pair (f <$> a) (f <$> b)
 
 instance (Functor g, Functor h) => Functor (Sum g h) where
    f <$> InL g = InL (f <$> g)
@@ -227,7 +227,7 @@ instance Foldable g => Foldable (Identity g) where
    foldMap f (Identity g) = foldMap f g
 
 instance (Foldable g, Foldable h) => Foldable (Product g h) where
-   foldMap f ~(Pair g h) = foldMap f g `mappend` foldMap f h
+   foldMap f (Pair g h) = foldMap f g `mappend` foldMap f h
 
 instance (Foldable g, Foldable h) => Foldable (Sum g h) where
    foldMap f (InL g) = foldMap f g
@@ -246,7 +246,7 @@ instance Traversable g => Traversable (Identity g) where
    traverse f (Identity g) = Identity Rank1.<$> traverse f g
 
 instance (Traversable g, Traversable h) => Traversable (Product g h) where
-   traverse f ~(Pair g h) = Rank1.liftA2 Pair (traverse f g) (traverse f h)
+   traverse f (Pair g h) = Rank1.liftA2 Pair (traverse f g) (traverse f h)
 
 instance (Traversable g, Traversable h) => Traversable (Sum g h) where
    traverse f (InL g) = InL Rank1.<$> traverse f g
@@ -269,8 +269,8 @@ instance Apply g => Apply (Identity g) where
    liftA2 f (Identity g) (Identity h) = Identity (liftA2 f g h)
 
 instance (Apply g, Apply h) => Apply (Product g h) where
-   ~(Pair gf hf) <*> ~(Pair gx hx) = Pair (gf <*> gx) (hf <*> hx)
-   liftA2 f ~(Pair g1 h1) ~(Pair g2 h2) = Pair (liftA2 f g1 g2) (liftA2 f h1 h2)
+   Pair gf hf <*> ~(Pair gx hx) = Pair (gf <*> gx) (hf <*> hx)
+   liftA2 f (Pair g1 h1) ~(Pair g2 h2) = Pair (liftA2 f g1 g2) (liftA2 f h1 h2)
 
 instance Applicative Empty where
    pure = const Empty
