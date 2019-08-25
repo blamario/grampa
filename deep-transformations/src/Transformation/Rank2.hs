@@ -1,11 +1,10 @@
-{-# Language FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes #-}
+{-# Language FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, UndecidableInstances #-}
 
 module Transformation.Rank2 where
 
 import qualified Transformation as Shallow
 import qualified Transformation.Deep as Deep
-
-import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
+import qualified Transformation.Full as Full
 
 newtype Map p q = Map (forall x. p x -> q x)
 
@@ -28,8 +27,15 @@ instance Shallow.Traversable (Traversal p q m) p q m x where
 foldMap :: (Deep.Foldable (Fold p m) g p m, Monoid m) => (forall a. p a -> m) -> g p p -> m
 foldMap f = Deep.foldMap (Fold f)
 
-traverseDown :: Deep.DownTraversable (Traversal p q m) g p q m => (forall a. p a -> m (q a)) -> g p p -> m (g q q)
-traverseDown f = Deep.traverseDown (Traversal f)
+traverse :: Deep.Traversable (Traversal p q m) g p q m => (forall a. p a -> m (q a)) -> g p p -> m (g q q)
+traverse f = Deep.traverse (Traversal f)
 
-traverseUp :: Deep.UpTraversable (Traversal p q m) g p q m => (forall a. p a -> m (q a)) -> g p p -> m (g q q)
-traverseUp f = Deep.traverseUp (Traversal f)
+instance (Deep.Functor (Map p q) g p q, Functor p) => Full.Functor (Map p q) g p q where
+  (<$>) = Full.mapUpDefault
+
+instance (Deep.Foldable (Fold p m) g p m, Monoid m, Foldable p) => Full.Foldable (Fold p m) g p m where
+  foldMap = Full.foldMapDefault
+
+instance (Deep.Traversable (Traversal p q m) g p q m, Monad m, Traversable p) =>
+         Full.Traversable (Traversal p q m) g p q m where
+  traverse = Full.traverseUpDefault

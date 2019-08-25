@@ -14,7 +14,7 @@ description:
 
 homepage:            https://github.com/blamario/grampa/deep-transformations
 bug-reports:         https://github.com/blamario/grampa/issues
-license:             
+license:             BSD3
 license-file:        LICENSE
 author:              Mario Blažević
 maintainer:          blamario@protonmail.com
@@ -25,12 +25,10 @@ cabal-version:       >=1.10
 source-repository head
   type:              git
   location:          https://github.com/blamario/grampa
-license:             BSD3
-license-file:        ../LICENSE
 
 library
   hs-source-dirs:       src
-  exposed-modules:      Transformation, Transformation.Deep, Transformation.Deep.TH,
+  exposed-modules:      Transformation, Transformation.Deep, Transformation.Deep.TH, Transformation.Full,
                         Transformation.Rank2, Transformation.AG
   build-depends:        base >= 4.7 && < 5, rank2classes >= 1.2.1 && < 1.4,
                         template-haskell >= 2.11 && < 2.15
