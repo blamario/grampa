@@ -42,7 +42,7 @@ deriveFunctor ty = do
    let deepConstraint ty = conT ''Transformation.Deep.Functor `appT` t `appT` ty `appT` p `appT` q
        fullConstraint ty = conT ''Transformation.Full.Functor `appT` t `appT` ty `appT` p `appT` q
    (constraints, dec) <- genDeepmap deepConstraint fullConstraint instanceType cs
-   sequence [instanceD (cxt (appT (conT ''Functor) p : map pure constraints))
+   sequence [instanceD (cxt $ map pure constraints)
                        (deepConstraint instanceType)
                        [pure dec]]
 
@@ -55,7 +55,7 @@ deriveFoldable ty = do
    let deepConstraint ty = conT ''Transformation.Deep.Foldable `appT` t `appT` ty `appT` f `appT` m
        fullConstraint ty = conT ''Transformation.Full.Foldable `appT` t `appT` ty `appT` f `appT` m
    (constraints, dec) <- genFoldMap deepConstraint fullConstraint instanceType cs
-   sequence [instanceD (cxt (appT (conT ''Monoid) m : appT (conT ''Foldable) f : map pure constraints))
+   sequence [instanceD (cxt (appT (conT ''Monoid) m : map pure constraints))
                        (deepConstraint instanceType)
                        [pure dec]]
 
@@ -69,7 +69,7 @@ deriveTraversable ty = do
    let deepConstraint ty = conT ''Transformation.Deep.Traversable `appT` t `appT` ty `appT` p `appT` q `appT` m
        fullConstraint ty = conT ''Transformation.Full.Traversable `appT` t `appT` ty `appT` p `appT` q `appT` m
    (constraints, dec) <- genTraverse deepConstraint fullConstraint instanceType cs
-   sequence [instanceD (cxt (appT (conT ''Monad) m : appT (conT ''Traversable) p : map pure constraints))
+   sequence [instanceD (cxt (appT (conT ''Monad) m : map pure constraints))
                        (deepConstraint instanceType)
                        [pure dec]]
 
