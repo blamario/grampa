@@ -14,13 +14,13 @@ import {-# SOURCE #-} qualified Transformation.Deep as Deep
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
-class Deep.Functor t g p q => Functor t g p q where
+class Functor t g p q where
    (<$>) :: t -> p (g p p) -> q (g q q)
 
-class Deep.Foldable t g p m => Foldable t g p m where
+class Foldable t g p m where
    foldMap :: t -> p (g p p) -> m
 
-class Deep.Traversable t g p q m => Traversable t g p q m where
+class Traversable t g p q m where
    traverse :: t -> p (g p p) -> m (q (g q q))
 
 fmap :: Functor t g p q => t -> p (g p p) -> q (g q q)
