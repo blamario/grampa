@@ -15,7 +15,7 @@ maintainer:          Mario Blažević <blamario@protonmail.com>
 copyright:           (c) 2017 Mario Blažević
 category:            Control, Data, Generics
 build-type:          Simple
--- extra-source-files:  
+-- extra-source-files:
 cabal-version:       >=1.10
 extra-source-files:  README.md, CHANGELOG.md, test/README.lhs
 source-repository head
@@ -48,6 +48,7 @@ test-suite doctests
   main-is:             Doctest.hs
   ghc-options:         -threaded -pgmL markdown-unlit
   build-depends:       base, rank2classes, doctest >= 0.8
+  build-tool-depends:  markdown-unlit:markdown-unlit >= 0.5 && < 0.6
 
 test-suite TH
   if !flag(use-template-haskell)
@@ -59,3 +60,4 @@ test-suite TH
   ghc-options:         -threaded -pgmL markdown-unlit
   build-depends:       base, rank2classes, distributive < 0.7,
                        tasty < 2, tasty-hunit < 1
+  build-tool-depends:  markdown-unlit:markdown-unlit >= 0.5 && < 0.6
