@@ -1,3 +1,8 @@
+Version 1.3.1
+---------------
+* Added missing markdown-unlit dependency
+* Strictified one argument of Rank2.<$> and Rank2.<*>
+
 Version 1.3
 ---------------
 * Added `newtype Flip` to exports - PR by Jeremy List
