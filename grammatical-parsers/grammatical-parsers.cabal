@@ -1,5 +1,5 @@
 name:                grammatical-parsers
-version:             0.4
+version:             0.4.0.1
 synopsis:            parsers that combine into grammars
 description:
   /Gram/matical-/pa/rsers, or Grampa for short, is a library of parser types whose values are meant to be assigned

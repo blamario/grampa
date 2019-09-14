@@ -1,3 +1,7 @@
+Version 0.4.0.1
+---------------
+* Added missing markdown-unlit dependency
+
 Version 0.4
 ---------------
 * Added `Position` and related functions
