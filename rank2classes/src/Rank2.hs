@@ -271,6 +271,7 @@ instance Apply g => Apply (Identity g) where
 instance (Apply g, Apply h) => Apply (Product g h) where
    Pair gf hf <*> ~(Pair gx hx) = Pair (gf <*> gx) (hf <*> hx)
    liftA2 f (Pair g1 h1) ~(Pair g2 h2) = Pair (liftA2 f g1 g2) (liftA2 f h1 h2)
+   liftA3 f (Pair g1 h1) ~(Pair g2 h2) ~(Pair g3 h3) = Pair (liftA3 f g1 g2 g3) (liftA3 f h1 h2 h3)
 
 instance Applicative Empty where
    pure = const Empty
