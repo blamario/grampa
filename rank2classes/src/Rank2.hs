@@ -7,6 +7,7 @@
 -- the two less standard classes 'Apply' and 'Distributive'.
 {-# LANGUAGE DefaultSignatures, InstanceSigs, KindSignatures, PolyKinds, Rank2Types #-}
 {-# LANGUAGE ScopedTypeVariables, TypeOperators #-}
+{-# LANGUAGE EmptyCase #-}
 module Rank2 (
 -- * Rank 2 classes
    Functor(..), Apply(..), Applicative(..),
@@ -30,6 +31,7 @@ import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Functor.Const (Const(..))
 import Data.Functor.Product (Product(Pair))
 import Data.Functor.Sum (Sum(InL, InR))
+import qualified GHC.Generics as Generics
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
@@ -214,6 +216,31 @@ instance (Functor g, Functor h) => Functor (Sum g h) where
    f <$> InL g = InL (f <$> g)
    f <$> InR h = InR (f <$> h)
 
+instance Functor Generics.V1 where
+   (<$>) _ = coerce
+   
+instance Functor Generics.U1 where
+   (<$>) _ = coerce
+
+instance Functor (Generics.K1 i c) where
+   (<$>) _ = coerce
+
+instance Functor f => Functor (Generics.M1 i c f) where
+   f <$> Generics.M1 x = Generics.M1 (f <$> x)
+
+instance Functor f => Functor (Generics.Rec1 f) where
+   f <$> Generics.Rec1 x = Generics.Rec1 (f <$> x)
+
+-- instance (Rank1.Functor f, Functor g) => Functor ((Generics.:.:) f g) where
+--    f <$> Generics.Comp1 x = Generics.Comp1 (Rank1.fmap (f <$>) x)
+
+instance (Functor f, Functor g) => Functor ((Generics.:+:) f g) where
+   f <$> Generics.L1 x = Generics.L1 (f <$> x)
+   f <$> Generics.R1 x = Generics.R1 (f <$> x)
+
+instance (Functor f, Functor g) => Functor ((Generics.:*:) f g) where
+   f <$> (x Generics.:*: y) = f <$> x Generics.:*: f <$> y
+
 instance Foldable Empty where
    foldMap _ _ = mempty
 
@@ -233,6 +260,28 @@ instance (Foldable g, Foldable h) => Foldable (Sum g h) where
    foldMap f (InL g) = foldMap f g
    foldMap f (InR h) = foldMap f h
 
+instance Foldable Generics.V1 where
+   foldMap _ v = case v of {}
+   
+instance Foldable Generics.U1 where
+   foldMap _ _ = mempty
+
+instance Foldable (Generics.K1 i c) where
+   foldMap _ _ = mempty
+
+instance Foldable f => Foldable (Generics.M1 i c f) where
+   foldMap f (Generics.M1 x) = foldMap f x
+
+instance Foldable f => Foldable (Generics.Rec1 f) where
+   foldMap f (Generics.Rec1 x) = foldMap f x
+
+instance (Foldable f, Foldable g) => Foldable ((Generics.:+:) f g) where
+   foldMap f (Generics.L1 x) = foldMap f x
+   foldMap f (Generics.R1 x) = foldMap f x
+
+instance (Foldable f, Foldable g) => Foldable ((Generics.:*:) f g) where
+   foldMap f (x Generics.:*: y) = foldMap f x <> foldMap f y
+
 instance Traversable Empty where
    traverse _ _ = Rank1.pure Empty
 
@@ -251,6 +300,28 @@ instance (Traversable g, Traversable h) => Traversable (Product g h) where
 instance (Traversable g, Traversable h) => Traversable (Sum g h) where
    traverse f (InL g) = InL Rank1.<$> traverse f g
    traverse f (InR h) = InR Rank1.<$> traverse f h
+
+instance Traversable Generics.V1 where
+   traverse _ = Rank1.pure . coerce
+   
+instance Traversable Generics.U1 where
+   traverse _ = Rank1.pure . coerce
+
+instance Traversable (Generics.K1 i c) where
+   traverse _ = Rank1.pure . coerce
+
+instance Traversable f => Traversable (Generics.M1 i c f) where
+   traverse f (Generics.M1 x) = Rank1.fmap Generics.M1 (traverse f x)
+
+instance Traversable f => Traversable (Generics.Rec1 f) where
+   traverse f (Generics.Rec1 x) = Rank1.fmap Generics.Rec1 (traverse f x)
+
+instance (Traversable f, Traversable g) => Traversable ((Generics.:+:) f g) where
+   traverse f (Generics.L1 x) = Rank1.fmap Generics.L1 (traverse f x)
+   traverse f (Generics.R1 x) = Rank1.fmap Generics.R1 (traverse f x)
+
+instance (Traversable f, Traversable g) => Traversable ((Generics.:*:) f g) where
+   traverse f (x Generics.:*: y) = Rank1.liftA2 (Generics.:*:) (traverse f x) (traverse f y)
 
 instance Apply Empty where
    _ <*> _ = Empty
@@ -273,6 +344,24 @@ instance (Apply g, Apply h) => Apply (Product g h) where
    liftA2 f (Pair g1 h1) ~(Pair g2 h2) = Pair (liftA2 f g1 g2) (liftA2 f h1 h2)
    liftA3 f (Pair g1 h1) ~(Pair g2 h2) ~(Pair g3 h3) = Pair (liftA3 f g1 g2 g3) (liftA3 f h1 h2 h3)
 
+instance Apply Generics.V1 where
+   (<*>) _ = coerce
+   
+instance Apply Generics.U1 where
+   (<*>) _ = coerce
+
+instance Semigroup c => Apply (Generics.K1 i c) where
+   Generics.K1 x <*> Generics.K1 y = Generics.K1 (x <> y)
+
+instance Apply f => Apply (Generics.M1 i c f) where
+   Generics.M1 f <*> Generics.M1 x = Generics.M1 (f <*> x)
+
+instance Apply f => Apply (Generics.Rec1 f) where
+   Generics.Rec1 f <*> Generics.Rec1 x = Generics.Rec1 (f <*> x)
+
+instance (Apply f, Apply g) => Apply ((Generics.:*:) f g) where
+   (x1 Generics.:*: y1) <*> (x2 Generics.:*: y2) = (x1 <*> x2) Generics.:*: (y1 <*> y2)
+
 instance Applicative Empty where
    pure = const Empty
 
@@ -288,6 +377,18 @@ instance Applicative g => Applicative (Identity g) where
 instance (Applicative g, Applicative h) => Applicative (Product g h) where
    pure f = Pair (pure f) (pure f)
 
+instance (Semigroup c, Monoid c) => Applicative (Generics.K1 i c) where
+   pure _ = Generics.K1 mempty
+
+instance Applicative f => Applicative (Generics.M1 i c f) where
+   pure f = Generics.M1 (pure f)
+
+instance Applicative f => Applicative (Generics.Rec1 f) where
+   pure f = Generics.Rec1 (pure f)
+
+instance (Applicative f, Applicative g) => Applicative ((Generics.:*:) f g) where
+   pure f = pure f Generics.:*: pure f
+   
 instance DistributiveTraversable Empty
 instance DistributiveTraversable (Only x)
 instance DistributiveTraversable g => DistributiveTraversable (Identity g) where
@@ -295,6 +396,13 @@ instance DistributiveTraversable g => DistributiveTraversable (Identity g) where
 instance (DistributiveTraversable g, DistributiveTraversable h) => DistributiveTraversable (Product g h) where
    cotraverseTraversable w f = Pair (cotraverseTraversable w $ Rank1.fmap fst f) 
                                     (cotraverseTraversable w $ Rank1.fmap snd f)
+
+instance DistributiveTraversable f => DistributiveTraversable (Generics.M1 i c f) where
+   cotraverseTraversable w f = Generics.M1 (cotraverseTraversable w (Rank1.fmap Generics.unM1 f))
+instance DistributiveTraversable f => DistributiveTraversable (Generics.Rec1 f) where
+   cotraverseTraversable w f = Generics.Rec1 (cotraverseTraversable w (Rank1.fmap Generics.unRec1 f))
+instance (DistributiveTraversable f, DistributiveTraversable g) => DistributiveTraversable ((Generics.:*:) f g) where
+   cotraverseTraversable w f = cotraverseTraversable w (Rank1.fmap (\(a Generics.:*: _) -> a) f) Generics.:*: cotraverseTraversable w (Rank1.fmap (\(_ Generics.:*: b) -> b) f)
 
 instance Distributive Empty where
    cotraverse _ _ = Empty
@@ -310,3 +418,13 @@ instance Distributive g => Distributive (Identity g) where
 
 instance (Distributive g, Distributive h) => Distributive (Product g h) where
    cotraverse w f = Pair (cotraverse w $ Rank1.fmap fst f) (cotraverse w $ Rank1.fmap snd f)
+
+instance Monoid c => DistributiveTraversable (Generics.K1 i c) where
+   cotraverseTraversable _ f = coerce (Rank1.fold f)
+
+instance Distributive f => Distributive (Generics.M1 i c f) where
+   cotraverse w f = Generics.M1 (cotraverse w (Rank1.fmap Generics.unM1 f))
+instance Distributive f => Distributive (Generics.Rec1 f) where
+   cotraverse w f = Generics.Rec1 (cotraverse w (Rank1.fmap Generics.unRec1 f))
+instance (Distributive f, Distributive g) => Distributive ((Generics.:*:) f g) where
+   cotraverse w f = cotraverse w (Rank1.fmap (\(a Generics.:*: _) -> a) f) Generics.:*: cotraverse w (Rank1.fmap (\(_ Generics.:*: b) -> b) f)
