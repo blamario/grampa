@@ -31,6 +31,7 @@ import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Functor.Const (Const(..))
 import Data.Functor.Product (Product(Pair))
 import Data.Functor.Sum (Sum(InL, InR))
+import Data.Proxy (Proxy(..))
 import qualified GHC.Generics as Generics
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
@@ -200,6 +201,9 @@ instance Rank1.Traversable g => Rank2.Traversable (Flip g a) where
 instance Functor Empty where
    _ <$> _ = Empty
 
+instance Functor Proxy where
+   _ <$> _ = Proxy
+
 instance Functor (Const a) where
    _ <$> Const a = Const a
 
@@ -244,6 +248,9 @@ instance (Functor f, Functor g) => Functor ((Generics.:*:) f g) where
 instance Foldable Empty where
    foldMap _ _ = mempty
 
+instance Foldable Proxy where
+   foldMap _ _ = mempty
+
 instance Foldable (Const x) where
    foldMap _ _ = mempty
 
@@ -284,6 +291,9 @@ instance (Foldable f, Foldable g) => Foldable ((Generics.:*:) f g) where
 
 instance Traversable Empty where
    traverse _ _ = Rank1.pure Empty
+
+instance Traversable Proxy where
+   traverse _ _ = Rank1.pure Proxy
 
 instance Traversable (Const x) where
    traverse _ (Const x) = Rank1.pure (Const x)
@@ -327,6 +337,10 @@ instance Apply Empty where
    _ <*> _ = Empty
    liftA2 _ _ _ = Empty
 
+instance Apply Proxy where
+   _ <*> _ = Proxy
+   liftA2 _ _ _ = Proxy
+
 instance Semigroup x => Apply (Const x) where
    Const x <*> Const y = Const (x <> y)
    liftA2 _ (Const x) (Const y) = Const (x <> y)
@@ -365,6 +379,9 @@ instance (Apply f, Apply g) => Apply ((Generics.:*:) f g) where
 instance Applicative Empty where
    pure = const Empty
 
+instance Applicative Proxy where
+   pure = const Proxy
+
 instance (Semigroup x, Monoid x) => Applicative (Const x) where
    pure = const (Const mempty)
 
@@ -390,6 +407,7 @@ instance (Applicative f, Applicative g) => Applicative ((Generics.:*:) f g) wher
    pure f = pure f Generics.:*: pure f
    
 instance DistributiveTraversable Empty
+instance DistributiveTraversable Proxy
 instance DistributiveTraversable (Only x)
 instance DistributiveTraversable g => DistributiveTraversable (Identity g) where
    cotraverseTraversable w f = Identity (cotraverseTraversable w $ Rank1.fmap runIdentity f)
@@ -406,6 +424,9 @@ instance (DistributiveTraversable f, DistributiveTraversable g) => DistributiveT
 
 instance Distributive Empty where
    cotraverse _ _ = Empty
+
+instance Distributive Proxy where
+   cotraverse _ _ = Proxy
 
 instance Monoid x => DistributiveTraversable (Const x) where
    cotraverseTraversable _ f = coerce (Rank1.fold f)
