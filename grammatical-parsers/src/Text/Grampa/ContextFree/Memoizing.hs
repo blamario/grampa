@@ -13,9 +13,9 @@ import Data.Functor.Compose (Compose(..))
 import Data.List (genericLength, maximumBy, nub)
 import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(mappend, mempty))
-import Data.Monoid.Cancellative (LeftReductiveMonoid (isPrefixOf))
+import Data.Monoid.Cancellative (LeftReductiveMonoid, isPrefixOf)
 import Data.Monoid.Null (MonoidNull(null))
-import Data.Monoid.Factorial (FactorialMonoid(length, splitPrimePrefix))
+import Data.Monoid.Factorial (FactorialMonoid, length, splitPrimePrefix)
 import Data.Monoid.Textual (TextualMonoid)
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual

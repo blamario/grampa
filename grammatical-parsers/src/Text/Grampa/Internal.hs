@@ -7,7 +7,7 @@ import Data.List (nub)
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Semigroup (Semigroup((<>)))
 
-import Data.Monoid.Factorial (FactorialMonoid(length))
+import Data.Monoid.Factorial (FactorialMonoid, length)
 
 import Text.Grampa.Class (ParseFailure(..), ParseResults)
 
