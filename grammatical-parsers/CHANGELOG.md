@@ -1,3 +1,7 @@
+Version 0.4.1.1
+---------------
+* Fixed the doctests after cabal get
+
 Version 0.4.1
 ---------------
 * Adjustments for monoid-subclasses-1.0

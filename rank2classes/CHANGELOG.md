@@ -1,3 +1,7 @@
+Version 1.3.1.1
+---------------
+* Fixed the doctests after cabal get
+
 Version 1.3.1
 ---------------
 * Added missing markdown-unlit dependency
