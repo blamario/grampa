@@ -1,4 +1,4 @@
-{-# Language FlexibleInstances, MultiParamTypeClasses, RankNTypes #-}
+{-# Language FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes #-}
 
 module Transformation.Full where
 
@@ -10,37 +10,38 @@ import qualified Data.Foldable
 import qualified Data.Functor
 import qualified Data.Traversable
 import qualified Transformation as Shallow
+import           Transformation (Transformation, Domain, Codomain)
 import {-# SOURCE #-} qualified Transformation.Deep as Deep
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
-class Functor t g p q where
-   (<$>) :: t -> p (g p p) -> q (g q q)
+class Transformation t => Functor t g where
+   (<$>) :: t -> Domain t (g (Domain t) (Domain t)) -> Codomain t (g (Codomain t) (Codomain t))
 
-class Foldable t g p m where
-   foldMap :: t -> p (g p p) -> m
+class Transformation t => Foldable t g m where
+   foldMap :: t -> Domain t (g (Domain t) (Domain t)) -> m
 
-class Traversable t g p q m where
-   traverse :: t -> p (g p p) -> m (q (g q q))
+class Transformation t => Traversable t g m where
+   traverse :: t -> Domain t (g (Domain t) (Domain t)) -> m (Codomain t (g (Codomain t) (Codomain t)))
 
-fmap :: Functor t g p q => t -> p (g p p) -> q (g q q)
+fmap :: Functor t g => t -> Domain t (g (Domain t) (Domain t)) -> Codomain t (g (Codomain t) (Codomain t))
 fmap = (<$>)
 
-mapDownDefault :: (Deep.Functor t g p q, Shallow.Functor t p q (g p p), Data.Functor.Functor q)
-               => t -> p (g p p) -> q (g q q)
-mapUpDefault   :: (Deep.Functor t g p q, Shallow.Functor t p q (g q q), Data.Functor.Functor p)
-               => t -> p (g p p) -> q (g q q)
+mapDownDefault :: (Deep.Functor t g, Shallow.Functor t (g (Domain t) (Domain t)), Data.Functor.Functor (Codomain t))
+               => t -> Domain t (g (Domain t) (Domain t)) -> Codomain t (g (Codomain t) (Codomain t))
+mapUpDefault   :: (Deep.Functor t g, Shallow.Functor t (g (Codomain t) (Codomain t)), Data.Functor.Functor (Domain t))
+               => t -> Domain t (g (Domain t) (Domain t)) -> Codomain t (g (Codomain t) (Codomain t))
 mapDownDefault t x = (t Deep.<$>) Data.Functor.<$> (t Shallow.<$> x)
 mapUpDefault   t x = t Shallow.<$> ((t Deep.<$>) Data.Functor.<$> x)
 
-foldMapDefault :: (Deep.Foldable t g p m, Data.Foldable.Foldable p, Monoid m) => t -> p (g p p) -> m
+foldMapDefault :: (Deep.Foldable t g m, Data.Foldable.Foldable (Domain t), Monoid m) => t -> Domain t (g (Domain t) (Domain t)) -> m
 foldMapDefault t x = Data.Foldable.foldMap (Deep.foldMap t) x
 
-traverseDownDefault :: (Deep.Traversable t g p q m, Shallow.Traversable t p q m (g p p),
-                        Data.Traversable.Traversable q, Monad m)
-                    => t -> p (g p p) -> m (q (g q q))
-traverseUpDefault   :: (Deep.Traversable t g p q m, Shallow.Traversable t p q m (g q q),
-                        Data.Traversable.Traversable p, Monad m)
-                    => t -> p (g p p) -> m (q (g q q))
+traverseDownDefault :: (Deep.Traversable t g m, Shallow.Traversable t m (g (Domain t) (Domain t)),
+                        Data.Traversable.Traversable (Codomain t), Monad m)
+                    => t -> Domain t (g (Domain t) (Domain t)) -> m (Codomain t (g (Codomain t) (Codomain t)))
+traverseUpDefault   :: (Deep.Traversable t g m, Shallow.Traversable t m (g (Codomain t) (Codomain t)),
+                        Data.Traversable.Traversable (Domain t), Monad m)
+                    => t -> Domain t (g (Domain t) (Domain t)) -> m (Codomain t (g (Codomain t) (Codomain t)))
 traverseDownDefault t x = Shallow.traverse t x >>= Data.Traversable.traverse (Deep.traverse t)
 traverseUpDefault   t x = Data.Traversable.traverse (Deep.traverse t) x >>= Shallow.traverse t

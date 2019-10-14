@@ -36,40 +36,37 @@ deriveAll ty = foldr f (pure []) [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldabl
 deriveFunctor :: Name -> Q [Dec]
 deriveFunctor ty = do
    t <- varT <$> newName "t"
-   p <- varT <$> newName "p"
-   q <- varT <$> newName "q"
    (instanceType, cs) <- reifyConstructors ty
-   let deepConstraint ty = conT ''Transformation.Deep.Functor `appT` t `appT` ty `appT` p `appT` q
-       fullConstraint ty = conT ''Transformation.Full.Functor `appT` t `appT` ty `appT` p `appT` q
+   let deepConstraint ty = conT ''Transformation.Deep.Functor `appT` t `appT` ty
+       fullConstraint ty = conT ''Transformation.Full.Functor `appT` t `appT` ty
    (constraints, dec) <- genDeepmap deepConstraint fullConstraint instanceType cs
-   sequence [instanceD (cxt $ map pure constraints)
+   sequence [instanceD (cxt $ appT (conT ''Transformation.Transformation) t : map pure constraints)
                        (deepConstraint instanceType)
                        [pure dec]]
 
 deriveFoldable :: Name -> Q [Dec]
 deriveFoldable ty = do
    t <- varT <$> newName "t"
-   f <- varT <$> newName "f"
    m <- varT <$> newName "m"
    (instanceType, cs) <- reifyConstructors ty
-   let deepConstraint ty = conT ''Transformation.Deep.Foldable `appT` t `appT` ty `appT` f `appT` m
-       fullConstraint ty = conT ''Transformation.Full.Foldable `appT` t `appT` ty `appT` f `appT` m
+   let deepConstraint ty = conT ''Transformation.Deep.Foldable `appT` t `appT` ty `appT` m
+       fullConstraint ty = conT ''Transformation.Full.Foldable `appT` t `appT` ty `appT` m
    (constraints, dec) <- genFoldMap deepConstraint fullConstraint instanceType cs
-   sequence [instanceD (cxt (appT (conT ''Monoid) m : map pure constraints))
+   sequence [instanceD (cxt (appT (conT ''Monoid) m
+                             : appT (conT ''Transformation.Transformation) t : map pure constraints))
                        (deepConstraint instanceType)
                        [pure dec]]
 
 deriveTraversable :: Name -> Q [Dec]
 deriveTraversable ty = do
    t <- varT <$> newName "t"
-   p <- varT <$> newName "p"
-   q <- varT <$> newName "q"
    m <- varT <$> newName "m"
    (instanceType, cs) <- reifyConstructors ty
-   let deepConstraint ty = conT ''Transformation.Deep.Traversable `appT` t `appT` ty `appT` p `appT` q `appT` m
-       fullConstraint ty = conT ''Transformation.Full.Traversable `appT` t `appT` ty `appT` p `appT` q `appT` m
+   let deepConstraint ty = conT ''Transformation.Deep.Traversable `appT` t `appT` ty `appT` m
+       fullConstraint ty = conT ''Transformation.Full.Traversable `appT` t `appT` ty `appT` m
    (constraints, dec) <- genTraverse deepConstraint fullConstraint instanceType cs
-   sequence [instanceD (cxt (appT (conT ''Monad) m : map pure constraints))
+   sequence [instanceD (cxt (appT (conT ''Monad) m
+                             : appT (conT ''Transformation.Transformation) t : map pure constraints))
                        (deepConstraint instanceType)
                        [pure dec]]
 
