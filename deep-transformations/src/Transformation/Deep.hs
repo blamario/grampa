@@ -5,13 +5,11 @@ module Transformation.Deep where
 
 import Control.Applicative (Applicative, (<*>), liftA2)
 import Data.Data (Data, Typeable)
-import Data.Monoid (Monoid, (<>))
+import Data.Kind (Type)
 import qualified Rank2
-import qualified Data.Foldable
 import qualified Data.Functor
-import qualified Data.Traversable
 import qualified Transformation as Shallow
-import           Transformation (Transformation, Domain, Codomain)
+import           Transformation (Transformation, TraversableTransformation, Domain, Codomain, Algebra)
 import qualified Transformation.Full as Full
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
@@ -19,11 +17,8 @@ import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(.
 class (Transformation t, Rank2.Functor (g (Domain t))) => Functor t g where
    (<$>) :: t -> g (Domain t) (Domain t) -> g (Codomain t) (Codomain t)
 
-class (Transformation t, Rank2.Foldable (g (Domain t))) => Foldable t g m where
-   foldMap :: t -> g (Domain t) (Domain t) -> m
-
-class (Transformation t, Rank2.Traversable (g (Domain t))) => Traversable t g m where
-   traverse :: t -> g (Domain t) (Domain t) -> m (g (Codomain t) (Codomain t))
+class (TraversableTransformation t, Rank2.Traversable (g (Domain t))) => Traversable t g where
+   traverse :: t -> g (Domain t) (Domain t) -> Algebra t (g (Codomain t) (Codomain t))
 
 data Product g1 g2 (p :: * -> *) (q :: * -> *) = Pair{fst :: q (g1 p p),
                                                       snd :: q (g2 p p)}
@@ -53,11 +48,7 @@ instance Rank2.Distributive (Product g h p) where
 instance (Full.Functor t g, Full.Functor t h) => Functor t (Product g h) where
    t <$> Pair left right = Pair (t Full.<$> left) (t Full.<$> right)
 
-instance (Monoid m, Full.Foldable t g m, Full.Foldable t h m) => Foldable t (Product g h) m where
-   foldMap t (Pair left right) = Full.foldMap t left <> Full.foldMap t right
-
-instance (Applicative m, Full.Traversable t g m, Full.Traversable t h m) =>
-         Traversable t (Product g h) m where
+instance (Full.Traversable t g, Full.Traversable t h, Applicative (Algebra t)) => Traversable t (Product g h) where
    traverse t (Pair left right) = liftA2 Pair (Full.traverse t left) (Full.traverse t right)
 
 deriving instance (Typeable p, Typeable q, Typeable g1, Typeable g2,
