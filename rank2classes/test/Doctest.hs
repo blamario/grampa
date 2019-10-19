@@ -1,3 +1,3 @@
 import Test.DocTest
 
-main = doctest ["-pgmL", "markdown-unlit", "-isrc", "test/README.lhs"]
+main = doctest ["-pgmL", "markdown-unlit", "-isrc", "test/MyModule.lhs"]
