@@ -1,3 +1,8 @@
+Version 1.3.1.2
+---------------
+* Fixed doctest module name issue
+* Incremented the lower bound of base dependency
+
 Version 1.3.1.1
 ---------------
 * Fixed the doctests after cabal get
