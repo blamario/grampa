@@ -26,11 +26,11 @@ knit r chSem = Rank2.Arrow knit'
             where (syn, chInh) = r (inh, chSyn)
                   chSyn = chSem Rank2.<*> chInh
 
-class Attribution t g local where
-   attribution :: t -> local -> Rule t g
+class Attribution t g f where
+   attribution :: t -> f (g (Semantics t) (Semantics t)) -> Rule t g
 
 -- | Drop-in implementation of 'Transformation.<$>'
-mapDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g local)
-           => (p x -> local) -> (p x -> x) -> t -> p x -> q x
-mapDefault getLocal getSemantics t x = knit (attribution t $ getLocal x) (getSemantics x)
+mapDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g p)
+           => (p x -> x) -> t -> p x -> q x
+mapDefault getSemantics t x = knit (attribution t x) (getSemantics x)
 {-# INLINE mapDefault #-}
