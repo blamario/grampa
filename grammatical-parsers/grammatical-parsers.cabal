@@ -14,13 +14,18 @@ author:              Mario Blažević
 maintainer:          Mario Blažević <blamario@protonmail.com>
 copyright:           (c) 2017 Mario Blažević
 category:            Text, Parsing
-build-type:          Simple
+build-type:          Custom
 cabal-version:       >=1.10
 extra-source-files:  README.md, CHANGELOG.md
 source-repository head
   type:              git
   location:          https://github.com/blamario/grampa
-
+custom-setup
+ setup-depends:
+   base >= 4 && <5,
+   Cabal,
+   cabal-doctest >= 1 && <1.1
+ 
 library
   hs-source-dirs:      src
   exposed-modules:     Text.Grampa,
@@ -75,7 +80,7 @@ test-suite            doctests
   main-is:            Doctest.hs
   other-modules:      README
   ghc-options:        -threaded -pgmL markdown-unlit
-  build-depends:      base, rank2classes, grammatical-parsers, parsers, doctest >= 0.8
+  build-depends:      base, rank2classes, grammatical-parsers, monoid-subclasses, parsers, doctest >= 0.8
   build-tool-depends: markdown-unlit:markdown-unlit >= 0.5 && < 0.6
 
 benchmark            benchmarks

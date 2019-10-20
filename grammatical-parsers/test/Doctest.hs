@@ -1,3 +1,5 @@
-import Test.DocTest
+import Build_doctests (flags, pkgs, module_sources)
+import Test.DocTest (doctest)
 
-main = doctest ["-pgmL", "markdown-unlit", "-isrc", "test/README.lhs"]
+main :: IO ()
+main = doctest (flags ++ pkgs ++ module_sources)
