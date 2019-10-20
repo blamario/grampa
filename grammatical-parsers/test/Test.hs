@@ -145,7 +145,7 @@ tests = testGroup "Grampa" [
               testProperty "not not" lookAheadNotNotP,
               testProperty "lookAhead anyToken" lookAheadTokenP],
            testGroup "classes"
-             [testBatch (((mapSize (min 300) <$>) <$>) <$> monoid parser3s),
+             [testBatch (((mapSize (min 10) <$>) <$>) <$> monoid parser3s),
               testBatch (functor parser3s),
               testBatch (applicative parser3s),
               testBatch (alternative parser2s),
