@@ -1,3 +1,8 @@
+Version 0.4.1.2
+---------------
+* Fixed the doctests using cabal-doctest
+* Fixed a QuickCheck timeout, issue #20
+
 Version 0.4.1.1
 ---------------
 * Fixed the doctests after cabal get

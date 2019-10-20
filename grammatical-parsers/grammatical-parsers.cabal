@@ -1,5 +1,5 @@
 name:                grammatical-parsers
-version:             0.4.1.1
+version:             0.4.1.2
 synopsis:            parsers that combine into grammars
 description:
   /Gram/matical-/pa/rsers, or Grampa for short, is a library of parser types whose values are meant to be assigned
@@ -80,7 +80,7 @@ test-suite            doctests
   main-is:            Doctest.hs
   other-modules:      README
   ghc-options:        -threaded -pgmL markdown-unlit
-  build-depends:      base, rank2classes, grammatical-parsers, monoid-subclasses, parsers, doctest >= 0.8
+  build-depends:      base, rank2classes, grammatical-parsers, doctest >= 0.8
   build-tool-depends: markdown-unlit:markdown-unlit >= 0.5 && < 0.6
 
 benchmark            benchmarks
