@@ -26,7 +26,7 @@ import Test.Feat (Enumerable(..), c0, c1, uniform)
 import Test.Feat.Enumerate (pay)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Positive(..), Property,
-                              (===), (==>), (.&&.), forAll, property, sized, testProperty, within)
+                              (===), (==>), (.&&.), forAll, mapSize, property, sized, testProperty, within)
 import Test.QuickCheck (verbose)
 import Test.QuickCheck.Checkers (Binop, EqProp(..), TestBatch, unbatch)
 import Test.QuickCheck.Classes (functor, monad, monoid, applicative, alternative,
@@ -145,7 +145,7 @@ tests = testGroup "Grampa" [
               testProperty "not not" lookAheadNotNotP,
               testProperty "lookAhead anyToken" lookAheadTokenP],
            testGroup "classes"
-             [testBatch (monoid parser3s),
+             [testBatch (((mapSize (min 300) <$>) <$>) <$> monoid parser3s),
               testBatch (functor parser3s),
               testBatch (applicative parser3s),
               testBatch (alternative parser2s),
@@ -189,7 +189,7 @@ instance Enumerable (DescribedParser s r) => Arbitrary (DescribedParser s r) whe
    arbitrary = sized uniform
 
 testBatch :: TestBatch -> TestTree
-testBatch (label, tests) = testGroup label (uncurry testProperty . (within 1000000 <$>) <$> tests)
+testBatch (label, tests) = testGroup label (uncurry testProperty . (within 5000000 <$>) <$> tests)
 
 parser2s :: DescribedParser ([Bool], [Bool]) ([Bool], [Bool])
 parser2s = undefined
