@@ -134,22 +134,22 @@ distributeJoin :: (Distributive g, Rank1.Monad f) => f (g f) -> g f
 distributeJoin = cotraverse Rank1.join
 
 -- | Like 'fmap', but traverses over its argument
-fmapTraverse :: (DistributiveTraversable f, Rank1.Traversable g) => (forall a. g (t a) -> u a) -> g (f t) -> f u
+fmapTraverse :: (DistributiveTraversable g, Rank1.Traversable f) => (forall a. f (t a) -> u a) -> f (g t) -> g u
 fmapTraverse f x = fmap (f . getCompose) (distributeTraversable x)
 
 -- | Like 'liftA2', but traverses over its first argument
-liftA2Traverse1 :: (Apply f, DistributiveTraversable f, Rank1.Traversable g) =>
-                   (forall a. g (t a) -> u a -> v a) -> g (f t) -> f u -> f v
+liftA2Traverse1 :: (Apply g, DistributiveTraversable g, Rank1.Traversable f) =>
+                   (forall a. f (t a) -> u a -> v a) -> f (g t) -> g u -> g v
 liftA2Traverse1 f x = liftA2 (f . getCompose) (distributeTraversable x)
 
 -- | Like 'liftA2', but traverses over its second argument
-liftA2Traverse2 :: (Apply f, DistributiveTraversable f, Rank1.Traversable g) => 
-                   (forall a. t a -> g (u a) -> v a) -> f t -> g (f u) -> f v
+liftA2Traverse2 :: (Apply g, DistributiveTraversable g, Rank1.Traversable f) => 
+                   (forall a. t a -> f (u a) -> v a) -> g t -> f (g u) -> g v
 liftA2Traverse2 f x y = liftA2 (\x' y' -> f x' (getCompose y')) x (distributeTraversable y)
 
 -- | Like 'liftA2', but traverses over both its arguments
-liftA2TraverseBoth :: (Apply f, DistributiveTraversable f, Rank1.Traversable g1, Rank1.Traversable g2) =>
-                      (forall a. g1 (t a) -> g2 (u a) -> v a) -> g1 (f t) -> g2 (f u) -> f v
+liftA2TraverseBoth :: (Apply g, DistributiveTraversable g, Rank1.Traversable f1, Rank1.Traversable f2) =>
+                      (forall a. f1 (t a) -> f2 (u a) -> v a) -> f1 (g t) -> f2 (g u) -> g v
 liftA2TraverseBoth f x y = liftA2 applyCompose (distributeTraversable x) (distributeTraversable y)
    where applyCompose x' y' = f (getCompose x') (getCompose y')
 
