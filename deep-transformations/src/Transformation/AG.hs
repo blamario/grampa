@@ -28,6 +28,19 @@ knit r chSem = Rank2.Arrow knit'
 
 class Attribution t g f where
    attribution :: t -> f (g (Semantics t) (Semantics t)) -> Rule t g
+   bequest :: forall sem . sem ~ Semantics t =>
+              t -> f (g sem sem) -> Inherited t (g sem sem) -> g sem (Synthesized t)
+              -> g sem (Inherited t)
+   synthesis   :: forall sem . sem ~ Semantics t =>
+                  t -> f (g sem sem) -> Inherited t (g sem sem) -> g sem (Synthesized t)
+               -> Synthesized t (g sem sem)
+   attribution t l (i, s) = (synthesis t l i s, bequest t l i s)
+   bequest t l i s = snd (attribution t l (i, s))
+   synthesis t l i s = fst (attribution t l (i, s))
+   {-# Minimal attribution | bequest, synthesis #-}
+
+class Inheritable t g where
+   passOnInheritance :: sem ~ Semantics t => Inherited t (g sem sem) -> g sem sem -> g sem (Inherited t)
 
 -- | Drop-in implementation of 'Transformation.<$>'
 mapDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g p)
