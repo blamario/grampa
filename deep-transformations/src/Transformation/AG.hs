@@ -40,7 +40,7 @@ class Attribution t g f where
    {-# Minimal attribution | bequest, synthesis #-}
 
 class Inheritable t g where
-   passOnInheritance :: sem ~ Semantics t => Atts (Inherited t) (g sem sem) -> g sem sem -> g sem (Inherited t)
+   passDown :: sem ~ Semantics t => Atts (Inherited t) (g sem sem) -> g sem sem -> g sem (Inherited t)
 
 -- | Drop-in implementation of 'Transformation.<$>'
 mapDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g p)
