@@ -8,7 +8,6 @@ import Data.Data (Data, Typeable)
 import Data.Kind (Type)
 import qualified Rank2
 import qualified Data.Functor
-import qualified Transformation as Shallow
 import           Transformation (Transformation, TraversableTransformation, Domain, Codomain, Algebra)
 import qualified Transformation.Full as Full
 
