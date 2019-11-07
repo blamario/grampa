@@ -5,8 +5,8 @@ module Transformation.Rank2 where
 import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Functor.Const (Const(Const, getConst))
 import qualified Rank2
-import           Transformation (Transformation, TraversableTransformation, Domain, Codomain)
-import qualified Transformation as Shallow
+import           Transformation (Transformation, Domain, Codomain)
+import qualified Transformation
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 
@@ -26,19 +26,16 @@ instance Transformation (Fold p m) where
 
 instance Transformation (Traversal p q m) where
    type Domain (Traversal p q m) = p
-   type Codomain (Traversal p q m) = q
+   type Codomain (Traversal p q m) = Compose m q
 
-instance TraversableTransformation (Traversal p q m) where
-   type Algebra (Traversal p q m) = m
-
-instance Shallow.Functor (Map p q) x where
+instance Transformation.Functor (Map p q) x where
    (<$>) (Map f) = f
 
-instance Shallow.Functor (Fold p m) x where
+instance Transformation.Functor (Fold p m) x where
    (<$>) (Fold f) = Const . f
 
-instance Shallow.Traversable (Traversal p q m) x where
-   traverse (Traversal f) = f
+instance Transformation.Functor (Traversal p q m) x where
+   (<$>) (Traversal f) = Compose . f
 
 (<$>) :: Deep.Functor (Map p q) g => (forall a. p a -> q a) -> g p p -> g q q
 (<$>) f = (Deep.<$>) (Map f)

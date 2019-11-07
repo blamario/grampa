@@ -14,6 +14,7 @@ where
 
 import Control.Applicative (liftA2)
 import Control.Monad (replicateM)
+import Data.Functor.Compose (Compose)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Language.Haskell.TH
@@ -46,12 +47,16 @@ deriveFunctor ty = do
 deriveTraversable :: Name -> Q [Dec]
 deriveTraversable ty = do
    t <- varT <$> newName "t"
+   m <- varT <$> newName "m"
+   f <- varT <$> newName "f"
    (instanceType, cs) <- reifyConstructors ty
    let deepConstraint ty = conT ''Transformation.Deep.Traversable `appT` t `appT` ty
        fullConstraint ty = conT ''Transformation.Full.Traversable `appT` t `appT` ty
    (constraints, dec) <- genTraverse deepConstraint fullConstraint instanceType cs
-   sequence [instanceD (cxt (appT (conT ''Transformation.TraversableTransformation) t :
-                             appT (conT ''Monad) (appT (conT ''Transformation.Algebra) t) : map pure constraints))
+   sequence [instanceD (cxt (appT (conT ''Transformation.Transformation) t :
+                             appT (appT equalityT (conT ''Transformation.Codomain `appT` t))
+                                  (conT ''Compose `appT` m `appT` f) :
+                             appT (conT ''Applicative) m : map pure constraints))
                        (deepConstraint instanceType)
                        [pure dec]]
 
@@ -212,7 +217,7 @@ genTraverseField trans fieldType deepConstraint fullConstraint fieldAccess wrap 
         (,) <$> ((:[]) <$> fullConstraint (pure con))
             <*> appE (wrap [| Transformation.Full.traverse $trans |]) fieldAccess
      AppT ty _  | ty == VarT typeVar1 ->
-                  (,) [] <$> (wrap (varE 'Transformation.traverse `appE` trans) `appE` fieldAccess)
+                  (,) [] <$> (wrap (varE 'Transformation.fmap `appE` trans) `appE` fieldAccess)
      AppT (AppT con v1) v2 | v1 == VarT typeVarN, v2 == VarT typeVar1 ->
         (,) <$> ((:[]) <$> deepConstraint (pure con))
             <*> appE (wrap [| Transformation.Deep.traverse $trans |]) fieldAccess

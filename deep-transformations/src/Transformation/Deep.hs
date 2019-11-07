@@ -1,14 +1,15 @@
 {-# Language DeriveDataTypeable, FlexibleInstances, KindSignatures, MultiParamTypeClasses, RankNTypes,
-             StandaloneDeriving, UndecidableInstances #-}
+             StandaloneDeriving, TypeFamilies, UndecidableInstances #-}
 
 module Transformation.Deep where
 
 import Control.Applicative (Applicative, (<*>), liftA2)
 import Data.Data (Data, Typeable)
+import Data.Functor.Compose (Compose)
 import Data.Kind (Type)
 import qualified Rank2
 import qualified Data.Functor
-import           Transformation (Transformation, TraversableTransformation, Domain, Codomain, Algebra)
+import           Transformation (Transformation, Domain, Codomain)
 import qualified Transformation.Full as Full
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
@@ -16,8 +17,8 @@ import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(.
 class (Transformation t, Rank2.Functor (g (Domain t))) => Functor t g where
    (<$>) :: t -> g (Domain t) (Domain t) -> g (Codomain t) (Codomain t)
 
-class (TraversableTransformation t, Rank2.Traversable (g (Domain t))) => Traversable t g where
-   traverse :: t -> g (Domain t) (Domain t) -> Algebra t (g (Codomain t) (Codomain t))
+class (Transformation t, Rank2.Traversable (g (Domain t))) => Traversable t g where
+   traverse :: Codomain t ~ Compose m f => t -> g (Domain t) (Domain t) -> m (g f f)
 
 data Product g1 g2 (p :: * -> *) (q :: * -> *) = Pair{fst :: q (g1 p p),
                                                       snd :: q (g2 p p)}
@@ -47,7 +48,8 @@ instance Rank2.Distributive (Product g h p) where
 instance (Full.Functor t g, Full.Functor t h) => Functor t (Product g h) where
    t <$> Pair left right = Pair (t Full.<$> left) (t Full.<$> right)
 
-instance (Full.Traversable t g, Full.Traversable t h, Applicative (Algebra t)) => Traversable t (Product g h) where
+instance (Full.Traversable t g, Full.Traversable t h, Codomain t ~ Compose m f, Applicative m) =>
+         Traversable t (Product g h) where
    traverse t (Pair left right) = liftA2 Pair (Full.traverse t left) (Full.traverse t right)
 
 deriving instance (Typeable p, Typeable q, Typeable g1, Typeable g2,

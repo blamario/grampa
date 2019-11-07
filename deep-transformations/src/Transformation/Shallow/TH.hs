@@ -14,6 +14,7 @@ where
 
 import Control.Applicative (liftA2)
 import Control.Monad (replicateM)
+import Data.Functor.Compose (Compose(getCompose))
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Language.Haskell.TH
@@ -44,12 +45,16 @@ deriveFunctor ty = do
 deriveTraversable :: Name -> Q [Dec]
 deriveTraversable ty = do
    t <- varT <$> newName "t"
+   m <- varT <$> newName "m"
+   f <- varT <$> newName "f"
    (instanceType, cs) <- reifyConstructors ty
    let shallowConstraint ty = conT ''Transformation.Shallow.Traversable `appT` t `appT` ty
-       baseConstraint ty = conT ''Transformation.Traversable `appT` t `appT` ty
+       baseConstraint ty = conT ''Transformation.Functor `appT` t `appT` ty
    (constraints, dec) <- genTraverse shallowConstraint baseConstraint instanceType cs
-   sequence [instanceD (cxt (appT (conT ''Transformation.TraversableTransformation) t :
-                             appT (conT ''Monad) (appT (conT ''Transformation.Algebra) t) : map pure constraints))
+   sequence [instanceD (cxt (appT (conT ''Transformation.Transformation) t :
+                             appT (appT equalityT (conT ''Transformation.Codomain `appT` t))
+                                  (conT ''Compose `appT` m `appT` f) :
+                             appT (conT ''Applicative) m : map pure constraints))
                        (shallowConstraint instanceType)
                        [pure dec]]
 
@@ -202,7 +207,7 @@ genTraverseField trans fieldType shallowConstraint baseConstraint fieldAccess wr
    case fieldType of
      AppT ty a  | ty == VarT typeVar ->
         (,) <$> ((:[]) <$> baseConstraint (pure a))
-            <*> (wrap (varE 'Transformation.traverse `appE` trans) `appE` fieldAccess)
+            <*> (wrap (varE '(.) `appE` varE 'getCompose `appE` (varE 'Transformation.fmap `appE` trans)) `appE` fieldAccess)
      AppT t1 t2 | t1 /= VarT typeVar ->
         genTraverseField trans t2 shallowConstraint baseConstraint fieldAccess (wrap . appE (varE 'traverse))
      SigT ty _kind -> genTraverseField trans ty shallowConstraint baseConstraint fieldAccess wrap
