@@ -28,14 +28,14 @@ instance Transformation (Traversal p q m) where
    type Domain (Traversal p q m) = p
    type Codomain (Traversal p q m) = Compose m q
 
-instance Transformation.Functor (Map p q) x where
-   (<$>) (Map f) = f
+instance Transformation.At (Map p q) x where
+   apply (Map f) = f
 
-instance Transformation.Functor (Fold p m) x where
-   (<$>) (Fold f) = Const . f
+instance Transformation.At (Fold p m) x where
+   apply (Fold f) = Const . f
 
-instance Transformation.Functor (Traversal p q m) x where
-   (<$>) (Traversal f) = Compose . f
+instance Transformation.At (Traversal p q m) x where
+   apply (Traversal f) = Compose . f
 
 (<$>) :: Deep.Functor (Map p q) g => (forall a. p a -> q a) -> g p p -> g q q
 (<$>) f = (Deep.<$>) (Map f)

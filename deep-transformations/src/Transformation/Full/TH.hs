@@ -24,7 +24,7 @@ deriveDownFunctor transformation node = do
    let domain = conT ''Transformation.Domain `appT` transformation
        deepConstraint = conT ''Transformation.Deep.Functor `appT` transformation `appT` node
        fullConstraint = conT ''Transformation.Full.Functor `appT` transformation `appT` node
-       shallowConstraint = conT ''Transformation.Functor `appT` transformation `appT` (node `appT` domain `appT` domain)
+       shallowConstraint = conT ''Transformation.At `appT` transformation `appT` (node `appT` domain `appT` domain)
    sequence [instanceD (cxt [deepConstraint, shallowConstraint])
              fullConstraint
              [funD '(Transformation.Full.<$>) [clause [] (normalB $ varE 'Transformation.Full.mapDownDefault) []]]]
@@ -34,7 +34,7 @@ deriveUpFunctor transformation node = do
    let codomain = conT ''Transformation.Codomain `appT` transformation
        deepConstraint = conT ''Transformation.Deep.Functor `appT` transformation `appT` node
        fullConstraint = conT ''Transformation.Full.Functor `appT` transformation `appT` node
-       shallowConstraint = conT ''Transformation.Functor `appT` transformation `appT` (node `appT` codomain `appT` codomain)
+       shallowConstraint = conT ''Transformation.At `appT` transformation `appT` (node `appT` codomain `appT` codomain)
    sequence [instanceD (cxt [deepConstraint, shallowConstraint])
              fullConstraint
              [funD '(Transformation.Full.<$>) [clause [] (normalB $ varE 'Transformation.Full.mapUpDefault) []]]]
@@ -44,7 +44,7 @@ deriveDownTraversable transformation node = do
    let domain = conT ''Transformation.Domain `appT` transformation
        deepConstraint = conT ''Transformation.Deep.Traversable `appT` transformation `appT` node
        fullConstraint = conT ''Transformation.Full.Traversable `appT` transformation `appT` node
-       shallowConstraint = conT ''Transformation.Functor `appT` transformation `appT` (node `appT` domain `appT` domain)
+       shallowConstraint = conT ''Transformation.At `appT` transformation `appT` (node `appT` domain `appT` domain)
    sequence [instanceD (cxt [deepConstraint, shallowConstraint])
              fullConstraint
              [funD 'Transformation.Full.traverse [clause [] (normalB $ varE 'Transformation.Full.traverseDownDefault) []]]]
@@ -54,7 +54,7 @@ deriveUpTraversable transformation node = do
    let codomain = conT ''Transformation.Codomain `appT` transformation
        deepConstraint = conT ''Transformation.Deep.Traversable `appT` transformation `appT` node
        fullConstraint = conT ''Transformation.Full.Traversable `appT` transformation `appT` node
-       shallowConstraint = conT ''Transformation.Functor `appT` transformation `appT` (node `appT` codomain `appT` codomain)
+       shallowConstraint = conT ''Transformation.At `appT` transformation `appT` (node `appT` codomain `appT` codomain)
    sequence [instanceD (cxt [deepConstraint, shallowConstraint])
              fullConstraint
              [funD 'Transformation.Full.traverse [clause [] (normalB $ varE 'Transformation.Full.traverseUpDefault) []]]]

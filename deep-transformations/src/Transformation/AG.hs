@@ -46,15 +46,15 @@ instance Transformation (Inherited t a) where
    type Domain (Inherited t a) = Semantics t
    type Codomain (Inherited t a) = Inherited t
 
-instance (Atts (Inherited t) a ~ Atts (Inherited t) b) => Transformation.Functor (Inherited t a) b where
-   Inherited i <$> _ = Inherited i
+instance (Atts (Inherited t) a ~ Atts (Inherited t) b) => Transformation.At (Inherited t a) b where
+   apply (Inherited i) = const (Inherited i)
 
 passDown :: (sem ~ Semantics t, Shallow.Functor (Inherited t (g sem sem)) (g sem)) =>
             Inherited t (g sem sem) -> g sem sem -> g sem (Inherited t)
 passDown inheritance node = inheritance Shallow.<$> node
 
--- | Drop-in implementation of 'Transformation.<$>'
-mapDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g p)
+-- | Drop-in implementation of 'Transformation.apply'
+applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g p)
            => (p x -> x) -> t -> p x -> q x
-mapDefault getSemantics t x = knit (attribution t x) (getSemantics x)
-{-# INLINE mapDefault #-}
+applyDefault getSemantics t x = knit (attribution t x) (getSemantics x)
+{-# INLINE applyDefault #-}

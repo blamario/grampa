@@ -36,7 +36,7 @@ deriveFunctor ty = do
    t <- varT <$> newName "t"
    (instanceType, cs) <- reifyConstructors ty
    let shallowConstraint ty = conT ''Transformation.Shallow.Functor `appT` t `appT` ty
-       baseConstraint ty = conT ''Transformation.Functor `appT` t `appT` ty
+       baseConstraint ty = conT ''Transformation.At `appT` t `appT` ty
    (constraints, dec) <- genShallowmap shallowConstraint baseConstraint instanceType cs
    sequence [instanceD (cxt $ appT (conT ''Transformation.Transformation) t : map pure constraints)
                        (shallowConstraint instanceType)
@@ -49,7 +49,7 @@ deriveTraversable ty = do
    f <- varT <$> newName "f"
    (instanceType, cs) <- reifyConstructors ty
    let shallowConstraint ty = conT ''Transformation.Shallow.Traversable `appT` t `appT` ty
-       baseConstraint ty = conT ''Transformation.Functor `appT` t `appT` ty
+       baseConstraint ty = conT ''Transformation.At `appT` t `appT` ty
    (constraints, dec) <- genTraverse shallowConstraint baseConstraint instanceType cs
    sequence [instanceD (cxt (appT (conT ''Transformation.Transformation) t :
                              appT (appT equalityT (conT ''Transformation.Codomain `appT` t))
@@ -194,7 +194,7 @@ genShallowmapField trans fieldType shallowConstraint baseConstraint fieldAccess 
    case fieldType of
      AppT ty a | ty == VarT typeVar ->
         (,) <$> ((:[]) <$> baseConstraint (pure a))
-            <*> (wrap (varE 'Transformation.fmap `appE` trans) `appE` fieldAccess)
+            <*> (wrap (varE 'Transformation.apply `appE` trans) `appE` fieldAccess)
      AppT t1 t2 | t1 /= VarT typeVar ->
         genShallowmapField trans t2 shallowConstraint baseConstraint fieldAccess (wrap . appE (varE '(<$>)))
      SigT ty _kind -> genShallowmapField trans ty shallowConstraint baseConstraint fieldAccess wrap
@@ -207,7 +207,7 @@ genTraverseField trans fieldType shallowConstraint baseConstraint fieldAccess wr
    case fieldType of
      AppT ty a  | ty == VarT typeVar ->
         (,) <$> ((:[]) <$> baseConstraint (pure a))
-            <*> (wrap (varE '(.) `appE` varE 'getCompose `appE` (varE 'Transformation.fmap `appE` trans)) `appE` fieldAccess)
+            <*> (wrap (varE '(.) `appE` varE 'getCompose `appE` (varE 'Transformation.apply `appE` trans)) `appE` fieldAccess)
      AppT t1 t2 | t1 /= VarT typeVar ->
         genTraverseField trans t2 shallowConstraint baseConstraint fieldAccess (wrap . appE (varE 'traverse))
      SigT ty _kind -> genTraverseField trans ty shallowConstraint baseConstraint fieldAccess wrap

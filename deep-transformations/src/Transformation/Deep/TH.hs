@@ -199,7 +199,7 @@ genDeepmapField trans fieldType deepConstraint fullConstraint fieldAccess wrap =
         (,) <$> ((:[]) <$> fullConstraint (pure con))
             <*> appE (wrap [| ($trans Transformation.Full.<$>) |]) fieldAccess
      AppT ty _  | ty == VarT typeVar1 ->
-                  (,) [] <$> (wrap (varE 'Transformation.fmap `appE` trans) `appE` fieldAccess)
+                  (,) [] <$> (wrap (varE 'Transformation.apply `appE` trans) `appE` fieldAccess)
      AppT (AppT con v1) v2 | v1 == VarT typeVarN, v2 == VarT typeVar1 ->
         (,) <$> ((:[]) <$> deepConstraint (pure con))
             <*> appE (wrap [| Transformation.Deep.fmap $trans |]) fieldAccess
@@ -217,7 +217,7 @@ genTraverseField trans fieldType deepConstraint fullConstraint fieldAccess wrap 
         (,) <$> ((:[]) <$> fullConstraint (pure con))
             <*> appE (wrap [| Transformation.Full.traverse $trans |]) fieldAccess
      AppT ty _  | ty == VarT typeVar1 ->
-                  (,) [] <$> (wrap (varE 'Transformation.fmap `appE` trans) `appE` fieldAccess)
+                  (,) [] <$> (wrap (varE 'Transformation.apply `appE` trans) `appE` fieldAccess)
      AppT (AppT con v1) v2 | v1 == VarT typeVarN, v2 == VarT typeVar1 ->
         (,) <$> ((:[]) <$> deepConstraint (pure con))
             <*> appE (wrap [| Transformation.Deep.traverse $trans |]) fieldAccess
