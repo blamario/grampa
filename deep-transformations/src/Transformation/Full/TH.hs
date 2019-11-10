@@ -8,7 +8,8 @@
 
 {-# Language TemplateHaskell #-}
 
-module Transformation.Full.TH (deriveDownFunctor, deriveDownTraversable, deriveUpFunctor, deriveUpTraversable)
+module Transformation.Full.TH (deriveDownFunctor, deriveDownFoldable, deriveDownTraversable,
+                               deriveUpFunctor, deriveUpFoldable, deriveUpTraversable)
 where
 
 import qualified Data.Traversable
@@ -38,6 +39,26 @@ deriveUpFunctor transformation node = do
    sequence [instanceD (cxt [deepConstraint, shallowConstraint])
              fullConstraint
              [funD '(Transformation.Full.<$>) [clause [] (normalB $ varE 'Transformation.Full.mapUpDefault) []]]]
+
+deriveDownFoldable :: Q Type -> Q Type -> Q [Dec]
+deriveDownFoldable transformation node = do
+   let domain = conT ''Transformation.Domain `appT` transformation
+       deepConstraint = conT ''Transformation.Deep.Foldable `appT` transformation `appT` node
+       fullConstraint = conT ''Transformation.Full.Foldable `appT` transformation `appT` node
+       shallowConstraint = conT ''Transformation.At `appT` transformation `appT` (node `appT` domain `appT` domain)
+   sequence [instanceD (cxt [deepConstraint, shallowConstraint])
+             fullConstraint
+             [funD 'Transformation.Full.foldMap [clause [] (normalB $ varE 'Transformation.Full.foldMapDownDefault) []]]]
+
+deriveUpFoldable :: Q Type -> Q Type -> Q [Dec]
+deriveUpFoldable transformation node = do
+   let codomain = conT ''Transformation.Codomain `appT` transformation
+       deepConstraint = conT ''Transformation.Deep.Foldable `appT` transformation `appT` node
+       fullConstraint = conT ''Transformation.Full.Foldable `appT` transformation `appT` node
+       shallowConstraint = conT ''Transformation.At `appT` transformation `appT` (node `appT` codomain `appT` codomain)
+   sequence [instanceD (cxt [deepConstraint, shallowConstraint])
+             fullConstraint
+             [funD 'Transformation.Full.foldMap [clause [] (normalB $ varE 'Transformation.Full.foldMapUpDefault) []]]]
 
 deriveDownTraversable :: Q Type -> Q Type -> Q [Dec]
 deriveDownTraversable transformation node = do
