@@ -34,12 +34,11 @@ mapUpDefault   :: (Deep.Functor t g, t `Transformation.At` g (Codomain t) (Codom
 mapDownDefault t x = (t Deep.<$>) Data.Functor.<$> (Transformation.apply t x)
 mapUpDefault   t x = Transformation.apply t ((t Deep.<$>) Data.Functor.<$> x)
 
-foldMapDownDefault :: (t `Transformation.At` g (Domain t) (Domain t), Codomain t ~ Const m)
-                   => t -> Domain t (g (Domain t) (Domain t)) -> m
-foldMapUpDefault   :: (Deep.Foldable t g, Codomain t ~ Const m, Data.Foldable.Foldable (Domain t), Monoid m)
-                   => t -> Domain t (g (Domain t) (Domain t)) -> m
-foldMapDownDefault t x = getConst (Transformation.apply t x)
-foldMapUpDefault   t x = Data.Foldable.foldMap (Deep.foldMap t) x
+foldMapDownDefault, foldMapUpDefault :: (t `Transformation.At` g (Domain t) (Domain t), Deep.Foldable t g,
+                                         Codomain t ~ Const m, Data.Foldable.Foldable (Domain t), Monoid m)
+                                     => t -> Domain t (g (Domain t) (Domain t)) -> m
+foldMapDownDefault t x = getConst (Transformation.apply t x) <> Data.Foldable.foldMap (Deep.foldMap t) x
+foldMapUpDefault   t x = Data.Foldable.foldMap (Deep.foldMap t) x <> getConst (Transformation.apply t x)
 
 traverseDownDefault :: (Deep.Traversable t g, t `Transformation.At` g (Domain t) (Domain t),
                         Codomain t ~ Compose m f, Data.Traversable.Traversable f, Monad m)
