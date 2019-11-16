@@ -19,7 +19,14 @@ class Transformation t => At t x where
    -- | Use the transformation @t@ at type @x@ to map 'Domain' to the 'Codomain' functor.
    apply :: t -> Domain t x -> Codomain t x
 
-data ArrowPair a b = ArrowPair a b
+data Compose t u = Compose t u
+
+instance (Transformation t, Transformation u, Domain t ~ Codomain u) => Transformation (Compose t u) where
+   type Domain (Compose t u) = Domain u
+   type Codomain (Compose t u) = Codomain t
+
+instance (t `At` x, u `At` x, Domain t ~ Codomain u) => Compose t u `At` x where
+   apply (Compose t u) x = apply t (apply u x)
 
 instance Transformation (Rank2.Arrow p q x) where
    type Domain (Rank2.Arrow p q x) = p
