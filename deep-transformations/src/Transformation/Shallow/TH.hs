@@ -257,7 +257,7 @@ genShallowmapField trans fieldType shallowConstraint baseConstraint fieldAccess 
    case fieldType of
      AppT ty a | ty == VarT typeVar ->
         (,) <$> ((:[]) <$> baseConstraint (pure a))
-            <*> (wrap (varE 'Transformation.apply `appE` trans) `appE` fieldAccess)
+            <*> (wrap (varE '(Transformation.$) `appE` trans) `appE` fieldAccess)
      AppT t1 t2 | t1 /= VarT typeVar ->
         genShallowmapField trans t2 shallowConstraint baseConstraint fieldAccess (wrap . appE (varE '(<$>)))
      SigT ty _kind -> genShallowmapField trans ty shallowConstraint baseConstraint fieldAccess wrap
@@ -271,7 +271,7 @@ genFoldMapField trans fieldType shallowConstraint baseConstraint fieldAccess wra
    case fieldType of
      AppT ty a | ty == VarT typeVar ->
         (,) <$> ((:[]) <$> baseConstraint (pure a))
-            <*> (wrap (varE '(.) `appE` varE 'getConst `appE` (varE 'Transformation.apply `appE` trans))
+            <*> (wrap (varE '(.) `appE` varE 'getConst `appE` (varE '(Transformation.$) `appE` trans))
                  `appE` fieldAccess)
      AppT t1 t2 | t1 /= VarT typeVar ->
                   genFoldMapField trans t2 shallowConstraint baseConstraint fieldAccess (wrap . appE (varE 'foldMap))
@@ -285,7 +285,7 @@ genTraverseField trans fieldType shallowConstraint baseConstraint fieldAccess wr
    case fieldType of
      AppT ty a  | ty == VarT typeVar ->
         (,) <$> ((:[]) <$> baseConstraint (pure a))
-            <*> (wrap (varE '(.) `appE` varE 'getCompose `appE` (varE 'Transformation.apply `appE` trans))
+            <*> (wrap (varE '(.) `appE` varE 'getCompose `appE` (varE '(Transformation.$) `appE` trans))
                  `appE` fieldAccess)
      AppT t1 t2 | t1 /= VarT typeVar ->
         genTraverseField trans t2 shallowConstraint baseConstraint fieldAccess (wrap . appE (varE 'traverse))
