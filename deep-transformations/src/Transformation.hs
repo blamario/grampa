@@ -20,7 +20,7 @@ class Transformation t where
 class Transformation t => At t x where
    -- | Use the transformation @t@ at type @x@ to map 'Domain' to the 'Codomain' functor.
    ($) :: t -> Domain t x -> Codomain t x
-   infixr 0  $
+   infixr 0 $
 
 apply :: t `At` x => t -> Domain t x -> Codomain t x
 apply = ($)

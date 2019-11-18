@@ -15,7 +15,7 @@ module Rank2 (
 -- * Rank 2 data types
    Compose(..), Empty(..), Only(..), Flip(..), Identity(..), Product(..), Sum(..), Arrow(..), type (~>),
 -- * Method synonyms and helper functions
-   fst, snd, ap, fmap, liftA4, liftA5,
+   ($), fst, snd, ap, fmap, liftA4, liftA5,
    fmapTraverse, liftA2Traverse1, liftA2Traverse2, liftA2TraverseBoth,
    distributeWith, distributeWithTraversable)
 where
@@ -34,7 +34,7 @@ import Data.Functor.Sum (Sum(InL, InR))
 import Data.Proxy (Proxy(..))
 import qualified GHC.Generics as Generics
 
-import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
+import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), ($), (<$>), fst, snd)
 
 -- | Helper function for accessing the first field of a 'Pair'
 fst :: Product g h p -> g p
@@ -72,7 +72,10 @@ class (Functor g, Foldable g) => Traversable g where
 newtype Arrow p q a = Arrow{apply :: p a -> q a}
 
 type (~>) = Arrow
+($) :: Arrow p q a -> p a -> q a
+($) = apply
 infixr 0 ~>
+infixr 0 $
 
 -- | Subclass of 'Functor' halfway to 'Applicative', satisfying
 --
@@ -410,10 +413,10 @@ instance DistributiveTraversable Empty
 instance DistributiveTraversable Proxy
 instance DistributiveTraversable (Only x)
 instance DistributiveTraversable g => DistributiveTraversable (Identity g) where
-   cotraverseTraversable w f = Identity (cotraverseTraversable w $ Rank1.fmap runIdentity f)
+   cotraverseTraversable w f = Identity (cotraverseTraversable w (Rank1.fmap runIdentity f))
 instance (DistributiveTraversable g, DistributiveTraversable h) => DistributiveTraversable (Product g h) where
-   cotraverseTraversable w f = Pair (cotraverseTraversable w $ Rank1.fmap fst f) 
-                                    (cotraverseTraversable w $ Rank1.fmap snd f)
+   cotraverseTraversable w f = Pair (cotraverseTraversable w (Rank1.fmap fst f))
+                                    (cotraverseTraversable w (Rank1.fmap snd f))
 
 instance DistributiveTraversable f => DistributiveTraversable (Generics.M1 i c f) where
    cotraverseTraversable w f = Generics.M1 (cotraverseTraversable w (Rank1.fmap Generics.unM1 f))
@@ -432,13 +435,13 @@ instance Monoid x => DistributiveTraversable (Const x) where
    cotraverseTraversable _ f = coerce (Rank1.fold f)
 
 instance Distributive (Only x) where
-   cotraverse w f = Only (w $ Rank1.fmap fromOnly f)
+   cotraverse w f = Only (w (Rank1.fmap fromOnly f))
 
 instance Distributive g => Distributive (Identity g) where
-   cotraverse w f = Identity (cotraverse w $ Rank1.fmap runIdentity f)
+   cotraverse w f = Identity (cotraverse w (Rank1.fmap runIdentity f))
 
 instance (Distributive g, Distributive h) => Distributive (Product g h) where
-   cotraverse w f = Pair (cotraverse w $ Rank1.fmap fst f) (cotraverse w $ Rank1.fmap snd f)
+   cotraverse w f = Pair (cotraverse w (Rank1.fmap fst f)) (cotraverse w (Rank1.fmap snd f))
 
 instance Monoid c => DistributiveTraversable (Generics.K1 i c) where
    cotraverseTraversable _ f = coerce (Rank1.fold f)
