@@ -174,7 +174,7 @@ There is one last decision to make on our transformation: is it a pre-order or a
 Now the transformation is ready. We'll try it on this example:
 
 > e1 :: Expr Identity Identity
-> e1 = Let (Identity $ "x" := Identity (Con 42)) (Identity $ Add (Identity $ EVar "x") (Identity $ EVar "x"))
+> e1 = Let (Identity $ "x" := Identity (Con 42)) (Identity $ Add (Identity $ EVar "x") (Identity $ EVar "y"))
 
 Traversing
 ----------
@@ -208,15 +208,16 @@ This transformation has to work bottom-up, so we declare
 Let's build a declaration to test.
 
 > d1 :: Decl Identity Identity
-> d1 = "x" := Identity (Add (Identity $ Mul (Identity $ Con 42) (Identity $ Con 68)) (Identity $ Con 7))
+> d1 = "y" := Identity (Add (Identity $ Mul (Identity $ Con 42) (Identity $ Con 68)) (Identity $ Con 7))
 
 Attribute Grammars
 ------------------
 
-Shall we eliminate dead code, /i.e./, useless let assignments from a given expression? This is tougher than the
- previous examples. We have to first fold the body of each `Let` expression to find which variables it uses, then
- traverse its declaration and eliminate the useless ones. When it comes to situations like this, the best tool in
- compiler writer's belt is an attribute grammar. We can build one with the tools from
+All right, can we do something more complicated? How about inlining all constant let bindings? And while we're at it,
+ removing all unused declarations - also known as dead code elimination?
+
+When it comes to complex transformations like this, the best tool in compiler writer's belt is an attribute
+ grammar. We can build one with the tools from
  [`Transformation.AG`](https://hackage.haskell.org/package/deep-transformations/docs/Transformation-AG.html).
 
 First we declare another transformation, just like before. Its `Codomain` will now be something called the attribute
@@ -239,105 +240,71 @@ First we declare another transformation, just like before. Its `Codomain` will n
 We also need another bit of a boilerplate instance that can be generated
 
 > instance Rank2.Apply (Decl f') where
->   (v := e1) <*> (_ := e2) = v := (Rank2.apply e1 e2)
->   Seq x1 y1 <*> Seq x2 y2 = Seq (Rank2.apply x1 x2) (Rank2.apply y1 y2)
+>   (v := e1) <*> ~(_ := e2) = v := (Rank2.apply e1 e2)
+>   Seq x1 y1 <*> ~(Seq x2 y2) = Seq (Rank2.apply x1 x2) (Rank2.apply y1 y2)
 > 
 > instance Rank2.Apply (Expr f') where
 >   Con n <*> _  = Con n
 >   EVar v <*> _ = EVar v
->   Let d1 e1 <*> Let d2 e2 = Let (Rank2.apply d1 d2) (Rank2.apply e1 e2)
->   Add x1 y1 <*> Add x2 y2 = Add (Rank2.apply x1 x2) (Rank2.apply y1 y2)
->   Mul x1 y1 <*> Mul x2 y2 = Mul (Rank2.apply x1 x2) (Rank2.apply y1 y2)
->
-
-instance Transformation t => Shallow.Foldable t (Expr d) where
-  t `foldMap` Con n   = mempty
-  t `foldMap` Add x y = t Transformation.$ x <> t Transformation.$ y
-  t `foldMap` Mul x y = t Transformation.$ x <> t Transformation.$ y
-  t `foldMap` Let d e = t Transformation.$ d <> t Transformation.$ e
-  t `foldMap` EVar v  = mempty
-
-instance (Transformation t, Full.Functor t Decl, Full.Functor t Expr) => Deeper.Functor t Decl where
-  t <$> (v := e) = v := ((t Deep.<$>) <$> e)
-  t <$> Seq x y  = Seq ((t Deep.<$>) <$> x) ((t Deep.<$>) <$> y)
-
-instance (Transformation t, Full.Functor t Decl, Full.Functor t Expr) => Deeper.Functor t Expr where
-  t <$> Con n   = Con n
-  t <$> Add x y = Add ((t Deep.<$>) <$> x) ((t Deep.<$>) <$> y)
-  t <$> Mul x y = Mul ((t Deep.<$>) <$> x) ((t Deep.<$>) <$> y)
-  t <$> Let d e = Let ((t Deep.<$>) <$> d) ((t Deep.<$>) <$> e)
-  t <$> EVar v  = EVar v
-
-data FromSem t = FromSem
-
-instance Transformation (FromSem t) where
-  type Domain (FromSem t) = AG.Semantics t
-  type Codomain (FromSem t) = AG.Synthesized t
-
-instance FromSem t `Deeper.Functor` Expr where
-  t <$> e = coerce e
-
-data FromSyn t (f :: * -> *) = FromSyn
-
-instance Transformation (FromSyn t f) where
-  type Domain (FromSyn t f) = AG.Synthesized t
-  type Codomain (FromSyn t f) = f
-
-instance FromSyn DeadCodeEliminator Identity `Full.Functor` Expr where
-  _ <$> AG.Synthesized e = Identity e
-
-instance FromSyn DeadCodeEliminator Identity `Full.Functor` Decl where
-  _ <$> AG.Synthesized (Just d) = Identity d
-
-instance DeadCodeEliminator `At` Expr (AG.Semantics DeadCodeEliminator) (AG.Semantics DeadCodeEliminator) where
-  ($) = AG.applyDefault runIdentity
-instance DeadCodeEliminator `At` Decl (AG.Semantics DeadCodeEliminator) (AG.Semantics DeadCodeEliminator) where
-  ($) = AG.applyDefault runIdentity
+>   Let d1 e1 <*> ~(Let d2 e2) = Let (Rank2.apply d1 d2) (Rank2.apply e1 e2)
+>   Add x1 y1 <*> ~(Add x2 y2) = Add (Rank2.apply x1 x2) (Rank2.apply y1 y2)
+>   Mul x1 y1 <*> ~(Mul x2 y2) = Mul (Rank2.apply x1 x2) (Rank2.apply y1 y2)
 
 Every type of node can have different inherited and synthesized attributes, so we need to declare what they are.
-A `Decl` needs to synthesize a modified declaration without useless assignments, and to do that it must inherit the
- list of used variables. To cover the case where the whole of synthesized declaration is useless, we need to wrap it
- in a `Maybe`.
+  First, we need to keep track of the constant bindings declared in outer scopes in order to inline them. This kind of
+ *environment* is a typical example of an inherited attribute. It is also the only attribute inherited by an
+ expression. A declaration will also need to inherit the list of variables that are used at all, so it can discard
+ useless assignments.
 
-> type instance AG.Atts (AG.Inherited DeadCodeEliminator) (Decl _ _) = [Var]
-> type instance AG.Atts (AG.Synthesized DeadCodeEliminator) (Decl _ _) = Maybe (Decl Identity Identity)
+> type Env = Var -> Maybe (Expr Identity Identity)
+> type instance AG.Atts (AG.Inherited DeadCodeEliminator) (Expr _ _) = Env
+> type instance AG.Atts (AG.Inherited DeadCodeEliminator) (Decl _ _) = (Env, [Var])
+
+A `Decl` needs to synthesize the environment of constant bindings, as well as a modified declaration without useless
+ assignments. To cover the case where the whole of synthesized declaration is useless, we need to wrap it in a
+ `Maybe`.
+
+> type instance AG.Atts (AG.Synthesized DeadCodeEliminator) (Decl _ _) = (Env, Maybe (Decl Identity Identity))
 
 All declarations inside an `Expr` need to be trimmed, so the `Expr` itself may be simplified but never completely
  eliminated. The simplified exression is our one synthesized attribute. The only other thing we need to know about an
- `Expr` is the list of variables it uses. It won't need any inherited attributes to tell us that. We *could* make the
- used variable list its synththesized attribute, but it's easier to reuse the existing `GetVariables`
- transformation.
+ `Expr` is the list of variables it uses. We *could* make the used variable list its synththesized attribute, but it's
+ easier to reuse the existing `GetVariables` transformation.
 
-> type instance AG.Atts (AG.Inherited DeadCodeEliminator) (Expr _ _) = ()
 > type instance AG.Atts (AG.Synthesized DeadCodeEliminator) (Expr _ _) = Expr Identity Identity
 
 Now we need to describe how to calculate the attributes, by declaring `Attribution` instances of the node types.
 
 > instance AG.Attribution DeadCodeEliminator Expr Identity Identity where
->   bequest DeadCodeEliminator (Identity (Let decl expr)) _ _ = Let (AG.Inherited $ Deep.foldMap GetVariables $ runIdentity expr) (AG.Inherited ())
->   bequest DeadCodeEliminator _expr _inh _syn = error "no inheritance to bequest"
->   synthesis _ (Identity Let{}) () (Let (AG.Synthesized decl) (AG.Synthesized expr)) = case decl of
->     Just d -> Let (Identity d) (Identity expr)
->     Nothing -> expr
->   synthesis _ _ () (Add (AG.Synthesized e1) (AG.Synthesized e2)) = Add (Identity e1) (Identity e2)
->   synthesis _ _ () (Mul (AG.Synthesized e1) (AG.Synthesized e2)) = Mul (Identity e1) (Identity e2)
->   synthesis _ _ () (EVar v) = EVar v
->   synthesis _ _ () (Con n) = Con n
+>   attribution DeadCodeEliminator (Identity (Let _decl expr))
+>               (AG.Inherited env, (Let (AG.Synthesized ~(env', decl')) (AG.Synthesized expr'))) =
+>     (AG.Synthesized (maybe id let' decl' expr'),
+>      Let (AG.Inherited (env, Full.foldMap GetVariables expr)) (AG.Inherited $ \v-> maybe (env v) Just (env' v)))
+>     where let' d e = Let (Identity d) (Identity e)
+>   attribution DeadCodeEliminator (Identity Add{}) (inh, (Add (AG.Synthesized e1') (AG.Synthesized e2'))) =
+>     (AG.Synthesized (Add (Identity e1') (Identity e2')),
+>      Add inh inh)
+>   attribution DeadCodeEliminator (Identity Mul{}) (inh, Mul (AG.Synthesized e1') (AG.Synthesized e2')) =
+>     (AG.Synthesized (Mul (Identity e1') (Identity e2')),
+>      Mul inh inh)
+>   attribution DeadCodeEliminator (Identity e@(EVar v)) (AG.Inherited env, _) = (AG.Synthesized (maybe e id $ env v), EVar v)
+>   attribution DeadCodeEliminator (Identity e@(Con n)) (AG.Inherited env, _) = (AG.Synthesized e, Con n)
 > 
 > instance AG.Attribution DeadCodeEliminator Decl Identity Identity where
->   bequest _ (Identity (v := e)) _ _ = v := AG.Inherited ()
->   bequest _ (Identity (Seq d1 d2)) used _ = Seq (AG.Inherited used) (AG.Inherited used)
->   synthesis _ (Identity (_ := _)) used (v := AG.Synthesized e)
->     | v `elem` used = Just (v := Identity e)
->     | otherwise = Nothing
->   synthesis _ (Identity Seq{}) used (Seq (AG.Synthesized d1') (AG.Synthesized d2')) =
->     Seq <$> (Identity <$> d1') <*> (Identity <$> d2') <|> d1' <|> d2'
+>   attribution DeadCodeEliminator (Identity (v := e)) (AG.Inherited ~(env, used), (_ := AG.Synthesized e')) =
+>     (AG.Synthesized (if null (Deep.foldMap GetVariables e') then (\var-> if var == v then Just e' else Nothing, Nothing)
+>                      else (const Nothing, if v `elem` used then Just (v := Identity e') else Nothing)),
+>      v := AG.Inherited env)
+>   attribution DeadCodeEliminator (Identity Seq{}) (inh, (Seq (AG.Synthesized (env1, d1')) (AG.Synthesized (env2, d2')))) =
+>     (AG.Synthesized (\v-> maybe (env2 v) Just (env1 v),
+>                      Seq <$> (Identity <$> d1') <*> (Identity <$> d2') <|> d1' <|> d2'),
+>      Seq inh inh)
 
 
 > main = do
 >  print (Deep.foldMap GetVariables e1)
 >  print (Deep.fmap ConstantFold d1)
->  print (Full.fmap DeadCodeEliminator (Identity $ Let (Identity d1) (Identity $ Con 42)) `Rank2.apply` AG.Inherited ())
+>  print (Full.fmap ConstantFold $ Identity $ AG.syn $ Full.fmap DeadCodeEliminator (Identity $ Let (Identity d1) (Identity e1)) `Rank2.apply` AG.Inherited (const Nothing))
 
 ["x","x"]
 "x" := Identity (Con 2863)
