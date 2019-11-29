@@ -199,7 +199,21 @@ Now the transformation is ready. We'll try it on this example:
 
 ~~~ {.haskell}
 e1 :: Expr Identity Identity
-e1 = Let (Identity $ "x" := Identity (Con 42)) (Identity $ Add (Identity $ EVar "x") (Identity $ EVar "y"))
+e1 = bin Let ("x" := Identity (Con 42)) (bin Add (EVar "x") (EVar "y"))
+~~~
+
+with the help of a little combinator to shorten the construction of binary nodes:
+
+~~~ {.haskell}
+bin f a b = f (Identity a) (Identity b)
+~~~
+
+Folding the entire expression tree is as simple as applying `Deep.foldMap` at its root:
+
+~~~ {.haskell}
+-- |
+-- >>> Deep.foldMap GetVariables e1
+-- ["x","y"]
 ~~~
 
 Traversing
@@ -239,7 +253,15 @@ Let's build a declaration to test.
 
 ~~~ {.haskell}
 d1 :: Decl Identity Identity
-d1 = "y" := Identity (Add (Identity $ Mul (Identity $ Con 42) (Identity $ Con 68)) (Identity $ Con 7))
+d1 = "y" := Identity (bin Add (bin Mul (Con 42) (Con 68)) (Con 7))
+~~~
+
+As we're keeping the tree this time, instead of `Deep.foldMap` we can use `Deep.fmap`:
+
+~~~ {.haskell}
+-- |
+-- >>> Deep.fmap ConstantFold d1
+-- "y" := Identity (Con 2863)
 ~~~
 
 Attribute Grammars
@@ -286,21 +308,26 @@ instance Rank2.Apply (Expr f') where
   Mul x1 y1 <*> ~(Mul x2 y2) = Mul (Rank2.apply x1 x2) (Rank2.apply y1 y2)
 ~~~
 
-Every type of node can have different inherited and synthesized attributes, so we need to declare what they are.
-  First, we need to keep track of the constant bindings declared in outer scopes in order to inline them. This kind of
- *environment* is a typical example of an inherited attribute. It is also the only attribute inherited by an
- expression. A declaration will also need to inherit the list of variables that are used at all, so it can discard
- useless assignments.
+Every type of node can have different inherited and synthesized attributes, so we need to declare what they are. Since
+ we want to inline the constant bindings declared in outer scopes, we must keep track of all visible bindings. This
+ kind of *environment* is a typical example of an inherited attribute. It is also the only attribute inherited by an
+ expression.
 
 ~~~ {.haskell}
 type Env = Var -> Maybe (Expr Identity Identity)
 type instance AG.Atts (AG.Inherited DeadCodeEliminator) (Expr _ _) = Env
+~~~
+
+A declaration will also need to inherit the environment, if only to pass it on to the nested expressions. It will also
+need to know the list of variables that are used at all, so it can discard useless assignments.
+
+~~~ {.haskell}
 type instance AG.Atts (AG.Inherited DeadCodeEliminator) (Decl _ _) = (Env, [Var])
 ~~~
 
-A `Decl` needs to synthesize the environment of constant bindings, as well as a modified declaration without useless
- assignments. To cover the case where the whole of synthesized declaration is useless, we need to wrap it in a
- `Maybe`.
+A `Decl` needs to synthesize the environment of constant bindings it generates itself, as well as a modified
+ declaration without useless assignments. To cover the case where the whole of synthesized declaration is useless, we
+ need to wrap it in a `Maybe`.
 
 ~~~ {.haskell}
 type instance AG.Atts (AG.Synthesized DeadCodeEliminator) (Decl _ _) = (Env, Maybe (Decl Identity Identity))
@@ -308,52 +335,86 @@ type instance AG.Atts (AG.Synthesized DeadCodeEliminator) (Decl _ _) = (Env, May
 
 All declarations inside an `Expr` need to be trimmed, so the `Expr` itself may be simplified but never completely
  eliminated. The simplified exression is our one synthesized attribute. The only other thing we need to know about an
- `Expr` is the list of variables it uses. We *could* make the used variable list its synththesized attribute, but it's
+ `Expr` is the list of variables it uses. We *could* make the used variable list its synthesized attribute, but it's
  easier to reuse the existing `GetVariables` transformation.
 
 ~~~ {.haskell}
 type instance AG.Atts (AG.Synthesized DeadCodeEliminator) (Expr _ _) = Expr Identity Identity
 ~~~
 
-Now we need to describe how to calculate the attributes, by declaring `Attribution` instances of the node types.
+Now we need to describe how to calculate the attributes, by declaring `Attribution` instances of the node types. The
+ method `attribution` takes as arguments: the transformation - in this case `DeadCodeEliminator`, the node, the node's
+ inherited attributes, and the synthesized attributes of all the node's children grouped under the node
+ constructor. The last two inputs are grouped in a pair for symmetry with the function result, which is a pair of the
+ node's synthesized attributes and the inherited attributes for all the node's children grouped under the node
+ constructor. Perhaps this can be more succintly illustrated by the method's type signature:
+
+~~~ {.haskell.ignore}
+class Attribution t g deep shallow where
+   attribution :: sem ~ Inherited t Rank2.~> Synthesized t
+               => t -> shallow (g deep deep)
+               -> (Inherited   t (g sem sem), g sem (Synthesized t))
+               -> (Synthesized t (g sem sem), g sem (Inherited t))
+~~~
+
+Let's see a few simple `attribution` rules first. The rules for leaf nodes can ignore their childrens' attributes
+because they don't have any children.
 
 ~~~ {.haskell}
 instance AG.Attribution DeadCodeEliminator Expr Identity Identity where
-  attribution DeadCodeEliminator (Identity (Let _decl expr))
-              (AG.Inherited env, (Let (AG.Synthesized ~(env', decl')) (AG.Synthesized expr'))) =
-    (AG.Synthesized (maybe id let' decl' expr'),
-     Let (AG.Inherited (env, Full.foldMap GetVariables expr)) (AG.Inherited $ \v-> maybe (env v) Just (env' v)))
-    where let' d e = Let (Identity d) (Identity e)
-  attribution DeadCodeEliminator (Identity Add{}) (inh, (Add (AG.Synthesized e1') (AG.Synthesized e2'))) =
-    (AG.Synthesized (Add (Identity e1') (Identity e2')),
-     Add inh inh)
-  attribution DeadCodeEliminator (Identity Mul{}) (inh, Mul (AG.Synthesized e1') (AG.Synthesized e2')) =
-    (AG.Synthesized (Mul (Identity e1') (Identity e2')),
-     Mul inh inh)
   attribution DeadCodeEliminator (Identity e@(EVar v)) (AG.Inherited env, _) = (AG.Synthesized (maybe e id $ env v), EVar v)
   attribution DeadCodeEliminator (Identity e@(Con n)) (AG.Inherited env, _) = (AG.Synthesized e, Con n)
+~~~
 
+The `Add` and `Mul` nodes' rules need only to pass their inheritance down and to re-join the synthesized child expressions.
+
+~~~ {.haskell}
+  attribution DeadCodeEliminator (Identity Add{}) (inh, (Add (AG.Synthesized e1') (AG.Synthesized e2'))) =
+    (AG.Synthesized (bin Add e1' e2'),
+     Add inh inh)
+  attribution DeadCodeEliminator (Identity Mul{}) (inh, Mul (AG.Synthesized e1') (AG.Synthesized e2')) =
+    (AG.Synthesized (bin Mul e1' e2'),
+     Mul inh inh)
+~~~
+
+The only non-trivial rule is for the `Let` node. It needs to pass the list of variables used in its expression child
+ as an inherited attribute of its declaration child. Furthermore, in case its declaration is useless the `Let` node
+ should disappear from the synthesized expression.
+
+~~~ {.haskell}
+  attribution DeadCodeEliminator (Identity (Let _decl expr))
+              (AG.Inherited env, (Let (AG.Synthesized ~(env', decl')) (AG.Synthesized expr'))) =
+    (AG.Synthesized (maybe id (bin Let) decl' expr'),
+     Let (AG.Inherited (env, Full.foldMap GetVariables expr)) (AG.Inherited $ \v-> maybe (env v) Just (env' v)))
+~~~
+
+The rules for `Decl` are a bit more involved.
+
+~~~ {.haskell}
 instance AG.Attribution DeadCodeEliminator Decl Identity Identity where
   attribution DeadCodeEliminator (Identity (v := e)) (AG.Inherited ~(env, used), (_ := AG.Synthesized e')) =
-    (AG.Synthesized (if null (Deep.foldMap GetVariables e') then (\var-> if var == v then Just e' else Nothing, Nothing)
-                     else (const Nothing, if v `elem` used then Just (v := Identity e') else Nothing)),
+    (AG.Synthesized (if null (Deep.foldMap GetVariables e')
+                     then (\var-> if var == v then Just e' else Nothing, Nothing)  -- constant binding
+                     else (const Nothing, if v `elem` used
+                                          then Just (v := Identity e')             -- used binding
+                                          else Nothing)),                          -- unused binding
      v := AG.Inherited env)
   attribution DeadCodeEliminator (Identity Seq{}) (inh, (Seq (AG.Synthesized (env1, d1')) (AG.Synthesized (env2, d2')))) =
     (AG.Synthesized (\v-> maybe (env2 v) Just (env1 v),
-                     Seq <$> (Identity <$> d1') <*> (Identity <$> d2') <|> d1' <|> d2'),
+                     bin Seq <$> d1' <*> d2' <|> d1' <|> d2'),
      Seq inh inh)
 ~~~
 
 ~~~ {.haskell}
 -- |
--- >>> Deep.foldMap GetVariables e1
--- ["x","y"]
--- 
--- >>> Deep.fmap ConstantFold d1
--- "y" := Identity (Con 2863)
--- 
--- >>> Full.fmap ConstantFold $ Identity $ AG.syn $ Full.fmap DeadCodeEliminator (Identity $ Let (Identity d1) (Identity e1)) `Rank2.apply` AG.Inherited (const Nothing)
+-- >>> let s = Full.fmap DeadCodeEliminator (Identity $ bin Let d1 e1) `Rank2.apply` AG.Inherited (const Nothing)
+-- >>> s
+-- Synthesized {syn = Add (Identity (Con 42)) (Identity (Add (Identity (Mul (Identity (Con 42)) (Identity (Con 68)))) (Identity (Con 7))))}
+-- >>> Full.fmap ConstantFold $ Identity $ AG.syn s
 -- Identity (Con 2905)
 ~~~
 
-That's it.
+~~~ {.haskell}
+main = print $ Full.fmap ConstantFold $ Identity $ AG.syn
+     $ Full.fmap DeadCodeEliminator (Identity $ bin Let d1 e1) Rank2.$ AG.Inherited (const Nothing)
+~~~
