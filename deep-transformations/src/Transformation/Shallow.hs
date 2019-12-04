@@ -14,12 +14,15 @@ import           Transformation (Transformation, Domain, Codomain)
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
+-- | Like 'Rank2.Functor' except it takes a 'Transformation' instead of a polymorphic function
 class (Transformation t, Rank2.Functor g) => Functor t g where
    (<$>) :: t -> g (Domain t) -> g (Codomain t)
 
+-- | Like 'Rank2.Foldable' except it takes a 'Transformation' instead of a polymorphic function
 class (Transformation t, Rank2.Foldable g) => Foldable t g where
    foldMap :: (Codomain t ~ Const m, Monoid m) => t -> g (Domain t) -> m
 
+-- | Like 'Rank2.Traversable' except it takes a 'Transformation' instead of a polymorphic function
 class (Transformation t, Rank2.Traversable g) => Traversable t g where
    traverse :: Codomain t ~ Compose m f => t -> g (Domain t) -> m (g f)
 
@@ -32,5 +35,6 @@ instance (Foldable t g, Foldable t h, Codomain t ~ Const m, Monoid m) => Foldabl
 instance (Traversable t g, Traversable t h, Codomain t ~ Compose m f, Applicative m) => Traversable t (Rank2.Product g h) where
    traverse t (Rank2.Pair left right) = liftA2 Rank2.Pair (traverse t left) (traverse t right)
 
+-- | Alphabetical synonym for '<$>'
 fmap :: Functor t g => t -> g (Domain t) -> g (Codomain t)
 fmap = (<$>)

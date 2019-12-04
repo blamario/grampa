@@ -13,18 +13,22 @@ import qualified Rank2
 
 import Prelude hiding (($))
 
+-- | A 'Transformation', natural or not, maps one functor to another.
 class Transformation t where
    type Domain t :: Type -> Type
    type Codomain t :: Type -> Type
 
+-- | An unnatural 'Transformation' can behave differently at different points.
 class Transformation t => At t x where
-   -- | Use the transformation @t@ at type @x@ to map 'Domain' to the 'Codomain' functor.
+   -- | Apply the transformation @t@ at type @x@ to map 'Domain' to the 'Codomain' functor.
    ($) :: t -> Domain t x -> Codomain t x
    infixr 0 $
 
+-- | Alphabetical synonym for '$'
 apply :: t `At` x => t -> Domain t x -> Codomain t x
 apply = ($)
 
+-- | Composition of two transformations
 data Compose t u = Compose t u
 
 instance (Transformation t, Transformation u, Domain t ~ Codomain u) => Transformation (Compose t u) where

@@ -15,15 +15,19 @@ import qualified Transformation.Full as Full
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
+-- | Like 'Transformation.Shallow.Functor' except it maps all descendants and not only immediate children
 class (Transformation t, Rank2.Functor (g (Domain t))) => Functor t g where
    (<$>) :: t -> g (Domain t) (Domain t) -> g (Codomain t) (Codomain t)
 
+-- | Like 'Transformation.Shallow.Foldable' except it folds all descendants and not only immediate children
 class (Transformation t, Rank2.Foldable (g (Domain t))) => Foldable t g where
    foldMap :: (Codomain t ~ Const m, Monoid m) => t -> g (Domain t) (Domain t) -> m
 
+-- | Like 'Transformation.Shallow.Traversable' except it folds all descendants and not only immediate children
 class (Transformation t, Rank2.Traversable (g (Domain t))) => Traversable t g where
    traverse :: Codomain t ~ Compose m f => t -> g (Domain t) (Domain t) -> m (g f f)
 
+-- | Like 'Data.Functor.Product.Product' for data types with two type constructor parameters
 data Product g1 g2 (p :: * -> *) (q :: * -> *) = Pair{fst :: q (g1 p p),
                                                       snd :: q (g2 p p)}
 
@@ -60,5 +64,6 @@ deriving instance (Typeable p, Typeable q, Typeable g1, Typeable g2,
                    Data (q (g1 p p)), Data (q (g2 p p))) => Data (Product g1 g2 p q)
 deriving instance (Show (q (g1 p p)), Show (q (g2 p p))) => Show (Product g1 g2 p q)
 
+-- | Alphabetical synonym for '<$>'
 fmap :: Functor t g => t -> g (Domain t) (Domain t) -> g (Codomain t) (Codomain t)
 fmap = (<$>)

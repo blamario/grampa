@@ -15,36 +15,48 @@ import {-# SOURCE #-} qualified Transformation.Deep as Deep
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
+-- | Like 'Deep.Functor' except it maps an additional wrapper around the entire tree
 class (Transformation t, Rank2.Functor (g (Domain t))) => Functor t g where
    (<$>) :: t -> Domain t (g (Domain t) (Domain t)) -> Codomain t (g (Codomain t) (Codomain t))
 
+-- | Like 'Deep.Foldable' except the entire tree is also wrapped
 class (Transformation t, Rank2.Foldable (g (Domain t))) => Foldable t g where
    foldMap :: (Codomain t ~ Const m, Monoid m) => t -> Domain t (g (Domain t) (Domain t)) -> m
 
+-- | Like 'Deep.Traversable' except it traverses an additional wrapper around the entire tree
 class (Transformation t, Rank2.Traversable (g (Domain t))) => Traversable t g where
    traverse :: Codomain t ~ Compose m f => t -> Domain t (g (Domain t) (Domain t)) -> m (f (g f f))
 
+-- | Alphabetical synonym for '<$>'
 fmap :: Functor t g => t -> Domain t (g (Domain t) (Domain t)) -> Codomain t (g (Codomain t) (Codomain t))
 fmap = (<$>)
 
+-- | Default implementation for '<$>' that maps the wrapper and then the tree
 mapDownDefault :: (Deep.Functor t g, t `Transformation.At` g (Domain t) (Domain t), Data.Functor.Functor (Codomain t))
                => t -> Domain t (g (Domain t) (Domain t)) -> Codomain t (g (Codomain t) (Codomain t))
+mapDownDefault t x = (t Deep.<$>) Data.Functor.<$> (t Transformation.$ x)
+
+-- | Default implementation for '<$>' that maps the tree and then the wrapper
 mapUpDefault   :: (Deep.Functor t g, t `Transformation.At` g (Codomain t) (Codomain t), Data.Functor.Functor (Domain t))
                => t -> Domain t (g (Domain t) (Domain t)) -> Codomain t (g (Codomain t) (Codomain t))
-mapDownDefault t x = (t Deep.<$>) Data.Functor.<$> (t Transformation.$ x)
 mapUpDefault   t x = t Transformation.$ ((t Deep.<$>) Data.Functor.<$> x)
 
 foldMapDownDefault, foldMapUpDefault :: (t `Transformation.At` g (Domain t) (Domain t), Deep.Foldable t g,
                                          Codomain t ~ Const m, Data.Foldable.Foldable (Domain t), Monoid m)
                                      => t -> Domain t (g (Domain t) (Domain t)) -> m
+-- | Default implementation for 'foldMap' that folds the wrapper and then the tree
 foldMapDownDefault t x = getConst (t Transformation.$ x) <> Data.Foldable.foldMap (Deep.foldMap t) x
+-- | Default implementation for 'foldMap' that folds the tree and then the wrapper
 foldMapUpDefault   t x = Data.Foldable.foldMap (Deep.foldMap t) x <> getConst (t Transformation.$ x)
 
+-- | Default implementation for 'traverse' that traverses the wrapper and then the tree
 traverseDownDefault :: (Deep.Traversable t g, t `Transformation.At` g (Domain t) (Domain t),
                         Codomain t ~ Compose m f, Data.Traversable.Traversable f, Monad m)
                     => t -> Domain t (g (Domain t) (Domain t)) -> m (f (g f f))
+traverseDownDefault t x = getCompose (t Transformation.$ x) >>= Data.Traversable.traverse (Deep.traverse t)
+
+-- | Default implementation for 'traverse' that traverses the tree and then the wrapper
 traverseUpDefault   :: (Deep.Traversable t g, Codomain t ~ Compose m f, t `Transformation.At` g f f,
                         Data.Traversable.Traversable (Domain t), Monad m)
                     => t -> Domain t (g (Domain t) (Domain t)) -> m (f (g f f))
-traverseDownDefault t x = getCompose (t Transformation.$ x) >>= Data.Traversable.traverse (Deep.traverse t)
 traverseUpDefault   t x = Data.Traversable.traverse (Deep.traverse t) x >>= getCompose . (t Transformation.$)
