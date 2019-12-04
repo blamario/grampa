@@ -1,3 +1,7 @@
+Version 1.3.2
+---------------
+* Exported the `$` synonym for `apply`
+
 Version 1.3.1.2
 ---------------
 * Fixed doctest module name issue
