@@ -140,14 +140,14 @@ genShallowmapClause shallowConstraint baseConstraint instanceType (RecC name fie
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP t, varP x] body []
 genShallowmapClause shallowConstraint baseConstraint instanceType
-                    (GadtC [name] fieldTypes (AppT (AppT resultType (VarT tyVar')) (VarT tyVar))) =
+                    (GadtC [name] fieldTypes (AppT resultType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
       genShallowmapClause (shallowConstraint . substitute resultType instanceType)
                        (baseConstraint . substitute resultType instanceType)
                        instanceType (NormalC name fieldTypes)
 genShallowmapClause shallowConstraint baseConstraint instanceType
-                    (RecGadtC [name] fields (AppT (AppT resultType (VarT tyVar')) (VarT tyVar))) =
+                    (RecGadtC [name] fields (AppT resultType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
       genShallowmapClause (shallowConstraint . substitute resultType instanceType)
@@ -182,14 +182,14 @@ genFoldMapClause shallowConstraint baseConstraint instanceType (RecC _name field
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP t, bangP (varP x)] (normalB body) []
 genFoldMapClause shallowConstraint baseConstraint instanceType
-                 (GadtC [name] fieldTypes (AppT (AppT resultType (VarT tyVar')) (VarT tyVar))) =
+                 (GadtC [name] fieldTypes (AppT resultType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
       genFoldMapClause (shallowConstraint . substitute resultType instanceType)
                        (baseConstraint . substitute resultType instanceType)
                        instanceType (NormalC name fieldTypes)
 genFoldMapClause shallowConstraint baseConstraint instanceType
-                 (RecGadtC [name] fields (AppT (AppT resultType (VarT tyVar')) (VarT tyVar))) =
+                 (RecGadtC [name] fields (AppT resultType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
       genFoldMapClause (shallowConstraint . substitute resultType instanceType)
@@ -232,7 +232,7 @@ genTraverseClause genTraverseField shallowConstraint baseConstraint instanceType
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP f, varP x] (normalB body) []
 genTraverseClause genTraverseField shallowConstraint baseConstraint instanceType
-                  (GadtC [name] fieldTypes (AppT (AppT resultType (VarT tyVar')) (VarT tyVar))) =
+                  (GadtC [name] fieldTypes (AppT resultType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
       genTraverseClause genTraverseField
@@ -240,7 +240,7 @@ genTraverseClause genTraverseField shallowConstraint baseConstraint instanceType
         (baseConstraint . substitute resultType instanceType)
         instanceType (NormalC name fieldTypes)
 genTraverseClause genTraverseField shallowConstraint baseConstraint instanceType
-                  (RecGadtC [name] fields (AppT (AppT resultType (VarT tyVar')) (VarT tyVar))) =
+                  (RecGadtC [name] fields (AppT resultType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
       genTraverseClause genTraverseField
