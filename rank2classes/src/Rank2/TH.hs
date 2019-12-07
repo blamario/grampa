@@ -197,14 +197,13 @@ genLiftA2Clause :: Bool -> Con -> Q Clause
 genLiftA2Clause unsafely (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames1 <- replicateM (length fieldTypes) (newName "x")
+   y <- newName "y"
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
-   let pats = [varP f,
-               conP name (map varP fieldNames1),
-               tildeP (conP name $ map varP fieldNames2)]
+   let pats = [varP f, conP name (map varP fieldNames1), varP y]
        body = normalB $ appsE $ conE name : zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
        newField :: (Name, Name) -> BangType -> Q Exp
        newField (x, y) (_, fieldType) = genLiftA2Field unsafely (varE f) fieldType (varE x) (varE y) id
-   clause pats body []
+   clause pats body [valD (conP name $ map varP fieldNames2) (normalB $ varE y) []]
 genLiftA2Clause unsafely (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
@@ -215,6 +214,15 @@ genLiftA2Clause unsafely (RecC name fields) = do
           fieldExp fieldName (genLiftA2Field unsafely (varE f) fieldType (getFieldOf x) (getFieldOf y) id)
           where getFieldOf = appE (varE fieldName) . varE
    clause [varP f, bangP (varP x), varP y] body []
+genLiftA2Clause unsafely (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar)
+      genLiftA2Clause unsafely (NormalC name fieldTypes)
+genLiftA2Clause unsafely (RecGadtC [name] fields _resultType@(AppT _ (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar)
+      genLiftA2Clause unsafely (RecC name fields)
+genLiftA2Clause unsafely (ForallC _vars _cxt con) = genLiftA2Clause unsafely con
 
 genLiftA2Field :: Bool -> Q Exp -> Type -> Q Exp -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
 genLiftA2Field unsafely fun fieldType field1Access field2Access wrap = do
@@ -233,16 +241,16 @@ genLiftA3Clause :: Bool -> Con -> Q Clause
 genLiftA3Clause unsafely (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames1 <- replicateM (length fieldTypes) (newName "x")
+   y <- newName "y"
+   z <- newName "z"
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
    fieldNames3 <- replicateM (length fieldTypes) (newName "z")
-   let pats = [varP f,
-               conP name (map varP fieldNames1),
-               tildeP (conP name $ map varP fieldNames2), 
-               tildeP (conP name $ map varP fieldNames3)]
+   let pats = [varP f, conP name (map varP fieldNames1), varP y, varP z]
        body = normalB $ appsE $ conE name : zipWith newField (zip3 fieldNames1 fieldNames2 fieldNames3) fieldTypes
        newField :: (Name, Name, Name) -> BangType -> Q Exp
        newField (x, y, z) (_, fieldType) = genLiftA3Field unsafely (varE f) fieldType (varE x) (varE y) (varE z) id
-   clause pats body []
+   clause pats body [valD (conP name $ map varP fieldNames2) (normalB $ varE y) [],
+                     valD (conP name $ map varP fieldNames3) (normalB $ varE z) []]
 genLiftA3Clause unsafely (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
@@ -254,6 +262,15 @@ genLiftA3Clause unsafely (RecC name fields) = do
           fieldExp fieldName (genLiftA3Field unsafely (varE f) fieldType (getFieldOf x) (getFieldOf y) (getFieldOf z) id)
           where getFieldOf = appE (varE fieldName) . varE
    clause [varP f, bangP (varP x), varP y, varP z] body []
+genLiftA3Clause unsafely (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar)
+      genLiftA3Clause unsafely (NormalC name fieldTypes)
+genLiftA3Clause unsafely (RecGadtC [name] fields _resultType@(AppT _ (VarT tyVar))) =
+   do Just (Deriving tyConName _tyVar) <- getQ
+      putQ (Deriving tyConName tyVar)
+      genLiftA3Clause unsafely (RecC name fields)
+genLiftA3Clause unsafely (ForallC _vars _cxt con) = genLiftA3Clause unsafely con
 
 genLiftA3Field :: Bool -> Q Exp -> Type -> Q Exp -> Q Exp -> Q Exp -> (Q Exp -> Q Exp) -> Q Exp
 genLiftA3Field unsafely fun fieldType field1Access field2Access field3Access wrap = do
@@ -275,15 +292,15 @@ genApClause :: Bool -> Con -> Q ([Type], Clause)
 genApClause unsafely (NormalC name fieldTypes) = do
    fieldNames1 <- replicateM (length fieldTypes) (newName "x")
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
-   let pats = [conP name (map varP fieldNames1),
-               tildeP (conP name $ map varP fieldNames2)]
+   rhsName <- newName "rhs"
+   let pats = [conP name (map varP fieldNames1), varP rhsName]
        constraintsAndFields = zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
        newFields = map (snd <$>) constraintsAndFields
        body = normalB $ appsE $ conE name : newFields
        newField :: (Name, Name) -> BangType -> Q ([Type], Exp)
        newField (x, y) (_, fieldType) = genApField unsafely fieldType (varE x) (varE y) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause pats body []
+   (,) constraints <$> clause pats body [valD (conP name $ map varP fieldNames2) (normalB $ varE rhsName) []]
 genApClause unsafely (RecC name fields) = do
    x <- newName "x"
    y <- newName "y"
