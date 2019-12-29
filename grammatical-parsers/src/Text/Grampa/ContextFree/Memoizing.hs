@@ -30,7 +30,7 @@ import qualified Text.Parser.Token
 
 import qualified Rank2
 
-import Text.Grampa.Class (Lexical(..), GrammarParsing(..), InputParsing(..), MultiParsing(..), 
+import Text.Grampa.Class (Lexical(..), GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (BinTree(..), FailureInfo(..))
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
@@ -167,26 +167,9 @@ instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
                of Just (first, _) | predicate first -> ResultList (Leaf $ ResultInfo 1 t first) mempty
                   _ -> ResultList mempty (FailureInfo (genericLength rest) ["satisfy"])
             p [] = ResultList mempty (FailureInfo 0 ["satisfy"])
-   satisfyChar predicate = Parser p
-      where p rest@((s, _):t) =
-               case Textual.characterPrefix s
-               of Just first | predicate first -> ResultList (Leaf $ ResultInfo 1 t first) mempty
-                  _ -> ResultList mempty (FailureInfo (genericLength rest) ["satisfyChar"])
-            p [] = ResultList mempty (FailureInfo 0 ["satisfyChar"])
-   satisfyCharInput predicate = Parser p
-      where p rest@((s, _):t) =
-               case Textual.characterPrefix s
-               of Just first | predicate first -> ResultList (Leaf $ ResultInfo 1 t $ Factorial.primePrefix s) mempty
-                  _ -> ResultList mempty (FailureInfo (genericLength rest) ["satisfyCharInput"])
-            p [] = ResultList mempty (FailureInfo 0 ["satisfyCharInput"])
    scan s0 f = Parser (p s0)
       where p s rest@((i, _) : _) = ResultList (Leaf $ ResultInfo l (drop l rest) prefix) mempty
                where (prefix, _, _) = Factorial.spanMaybe' s f i
-                     l = Factorial.length prefix
-            p _ [] = ResultList (Leaf $ ResultInfo 0 [] mempty) mempty
-   scanChars s0 f = Parser (p s0)
-      where p s rest@((i, _) : _) = ResultList (Leaf $ ResultInfo l (drop l rest) prefix) mempty
-               where (prefix, _, _) = Textual.spanMaybe_' s f i
                      l = Factorial.length prefix
             p _ [] = ResultList (Leaf $ ResultInfo 0 [] mempty) mempty
    takeWhile predicate = Parser p
@@ -199,16 +182,6 @@ instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
                | x <- Factorial.takeWhile predicate s, l <- Factorial.length x, l > 0 =
                     ResultList (Leaf $ ResultInfo l (drop l rest) x) mempty
             p rest = ResultList mempty (FailureInfo (genericLength rest) ["takeWhile1"])
-   takeCharsWhile predicate = Parser p
-      where p rest@((s, _) : _)
-               | x <- Textual.takeWhile_ False predicate s, l <- Factorial.length x =
-                    ResultList (Leaf $ ResultInfo l (drop l rest) x) mempty
-            p [] = ResultList (Leaf $ ResultInfo 0 [] mempty) mempty
-   takeCharsWhile1 predicate = Parser p
-      where p rest@((s, _) : _)
-               | x <- Textual.takeWhile_ False predicate s, l <- Factorial.length x, l > 0 =
-                    ResultList (Leaf $ ResultInfo l (drop l rest) x) mempty
-            p rest = ResultList mempty (FailureInfo (genericLength rest) ["takeCharsWhile1"])
    string s = Parser p where
       p rest@((s', _) : _)
          | s `isPrefixOf` s' = ResultList (Leaf $ ResultInfo l (Factorial.drop l rest) s) mempty
@@ -219,12 +192,41 @@ instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
                | Just (first, _) <- splitPrimePrefix s, 
                  predicate first = ResultList mempty (FailureInfo (genericLength rest) ["notSatisfy"])
             p rest = ResultList (Leaf $ ResultInfo 0 rest ()) mempty
+   {-# INLINABLE string #-}
+
+instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
+   satisfyChar predicate = Parser p
+      where p rest@((s, _):t) =
+               case Textual.characterPrefix s
+               of Just first | predicate first -> ResultList (Leaf $ ResultInfo 1 t first) mempty
+                  _ -> ResultList mempty (FailureInfo (genericLength rest) ["satisfyChar"])
+            p [] = ResultList mempty (FailureInfo 0 ["satisfyChar"])
+   satisfyCharInput predicate = Parser p
+      where p rest@((s, _):t) =
+               case Textual.characterPrefix s
+               of Just first | predicate first -> ResultList (Leaf $ ResultInfo 1 t $ Factorial.primePrefix s) mempty
+                  _ -> ResultList mempty (FailureInfo (genericLength rest) ["satisfyCharInput"])
+            p [] = ResultList mempty (FailureInfo 0 ["satisfyCharInput"])
+   scanChars s0 f = Parser (p s0)
+      where p s rest@((i, _) : _) = ResultList (Leaf $ ResultInfo l (drop l rest) prefix) mempty
+               where (prefix, _, _) = Textual.spanMaybe_' s f i
+                     l = Factorial.length prefix
+            p _ [] = ResultList (Leaf $ ResultInfo 0 [] mempty) mempty
+   takeCharsWhile predicate = Parser p
+      where p rest@((s, _) : _)
+               | x <- Textual.takeWhile_ False predicate s, l <- Factorial.length x =
+                    ResultList (Leaf $ ResultInfo l (drop l rest) x) mempty
+            p [] = ResultList (Leaf $ ResultInfo 0 [] mempty) mempty
+   takeCharsWhile1 predicate = Parser p
+      where p rest@((s, _) : _)
+               | x <- Textual.takeWhile_ False predicate s, l <- Factorial.length x, l > 0 =
+                    ResultList (Leaf $ ResultInfo l (drop l rest) x) mempty
+            p rest = ResultList mempty (FailureInfo (genericLength rest) ["takeCharsWhile1"])
    notSatisfyChar predicate = Parser p
       where p rest@((s, _):_)
                | Just first <- Textual.characterPrefix s, 
                  predicate first = ResultList mempty (FailureInfo (genericLength rest) ["notSatisfyChar"])
             p rest = ResultList (Leaf $ ResultInfo 0 rest ()) mempty
-   {-# INLINABLE string #-}
 
 instance MonoidNull s => Parsing (Parser g s) where
    try (Parser p) = Parser q

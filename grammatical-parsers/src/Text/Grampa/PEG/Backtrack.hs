@@ -27,7 +27,8 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing)
 import qualified Text.Parser.Token
-import Text.Grampa.Class (Lexical(..), InputParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
+import Text.Grampa.Class (Lexical(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
+                          ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (FailureInfo(..))
 
 data Result (g :: (* -> *) -> *) s v = Parsed{parsedPrefix :: !v,
@@ -139,6 +140,32 @@ instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
                case Factorial.splitPrimePrefix rest
                of Just (first, suffix) | predicate first -> Parsed first suffix
                   _ -> NoParse (FailureInfo (Factorial.length rest) ["satisfy"])
+   notSatisfy predicate = Parser p
+      where p s = case Factorial.splitPrimePrefix s
+                  of Just (first, _) 
+                        | predicate first -> NoParse (FailureInfo (Factorial.length s) ["notSatisfy"])
+                     _ -> Parsed () s
+   scan s0 f = Parser (p s0)
+      where p s rest = Parsed prefix suffix
+               where (prefix, suffix, _) = Factorial.spanMaybe' s f rest
+   takeWhile predicate = Parser p
+      where p rest | (prefix, suffix) <- Factorial.span predicate rest = Parsed prefix suffix
+   takeWhile1 predicate = Parser p
+      where p rest | (prefix, suffix) <- Factorial.span predicate rest =
+                        if Null.null prefix
+                        then NoParse (FailureInfo (Factorial.length rest) ["takeWhile1"])
+                        else Parsed prefix suffix
+   string s = Parser p where
+      p s' | Just suffix <- Cancellative.stripPrefix s s' = Parsed s suffix
+           | otherwise = NoParse (FailureInfo (Factorial.length s') ["string " ++ show s])
+   concatMany (Parser p) = Parser q
+      where q rest = case p rest
+                     of Parsed prefix suffix -> let Parsed prefix' suffix' = q suffix
+                                                in Parsed (mappend prefix prefix') suffix'
+                        NoParse{} -> Parsed mempty rest
+   {-# INLINABLE string #-}
+
+instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyChar predicate = Parser p
       where p rest =
                case Textual.splitCharacterPrefix rest
@@ -149,29 +176,14 @@ instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
                case Textual.splitCharacterPrefix rest
                of Just (first, suffix) | predicate first -> Parsed (Factorial.primePrefix rest) suffix
                   _ -> NoParse (FailureInfo (Factorial.length rest) ["satisfyChar"])
-   notSatisfy predicate = Parser p
-      where p s = case Factorial.splitPrimePrefix s
-                  of Just (first, _) 
-                        | predicate first -> NoParse (FailureInfo (Factorial.length s) ["notSatisfy"])
-                     _ -> Parsed () s
    notSatisfyChar predicate = Parser p
       where p s = case Textual.characterPrefix s
                   of Just first | predicate first 
                                   -> NoParse (FailureInfo (Factorial.length s) ["notSatisfyChar"])
                      _ -> Parsed () s
-   scan s0 f = Parser (p s0)
-      where p s rest = Parsed prefix suffix
-               where (prefix, suffix, _) = Factorial.spanMaybe' s f rest
    scanChars s0 f = Parser (p s0)
       where p s rest = Parsed prefix suffix
                where (prefix, suffix, _) = Textual.spanMaybe_' s f rest
-   takeWhile predicate = Parser p
-      where p rest | (prefix, suffix) <- Factorial.span predicate rest = Parsed prefix suffix
-   takeWhile1 predicate = Parser p
-      where p rest | (prefix, suffix) <- Factorial.span predicate rest =
-                        if Null.null prefix
-                        then NoParse (FailureInfo (Factorial.length rest) ["takeWhile1"])
-                        else Parsed prefix suffix
    takeCharsWhile predicate = Parser p
       where p rest | (prefix, suffix) <- Textual.span_ False predicate rest = Parsed prefix suffix
    takeCharsWhile1 predicate = Parser p
@@ -179,15 +191,6 @@ instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
                      if Null.null prefix
                      then NoParse (FailureInfo (Factorial.length rest) ["takeCharsWhile1"])
                      else Parsed prefix suffix
-   string s = Parser p where
-      p s' | Just suffix <- Cancellative.stripPrefix s s' = Parsed s suffix
-           | otherwise = NoParse (FailureInfo (Factorial.length s') ["string " ++ show s])
-   concatMany (Parser p) = Parser q
-      where q rest = case p rest
-                     of Parsed prefix suffix -> let Parsed prefix' suffix' = q suffix
-                                                in Parsed (mappend prefix prefix') suffix'
-                        NoParse{} -> Parsed mempty rest
-   {-# INLINABLE string #-}
 
 -- | Backtracking PEG parser
 --

@@ -27,7 +27,7 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing)
 import qualified Text.Parser.Token
-import Text.Grampa.Class (Lexical(..), GrammarParsing(..), InputParsing(..), MultiParsing(..), 
+import Text.Grampa.Class (Lexical(..), GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (FailureInfo(..))
 
@@ -143,6 +143,32 @@ instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
                of Just (first, _) | predicate first -> Parsed first t
                   _ -> NoParse (FailureInfo (genericLength rest) ["satisfy"])
             p [] = NoParse (FailureInfo 0 ["satisfy"])
+   notSatisfy predicate = Parser p
+      where p rest@((s, _):_)
+               | Just (first, _) <- Factorial.splitPrimePrefix s, 
+                 predicate first = NoParse (FailureInfo (genericLength rest) ["notSatisfy"])
+            p rest = Parsed () rest
+   scan s0 f = Parser (p s0)
+      where p s ((i, _):t) = Parsed prefix (drop (Factorial.length prefix - 1) t)
+               where (prefix, _, _) = Factorial.spanMaybe' s f i
+            p _ [] = Parsed mempty []
+   takeWhile predicate = Parser p
+      where p rest@((s, _) : _)
+               | x <- Factorial.takeWhile predicate s = Parsed x (Factorial.drop (Factorial.length x) rest)
+            p [] = Parsed mempty []
+   takeWhile1 predicate = Parser p
+      where p rest@((s, _) : _)
+               | x <- Factorial.takeWhile predicate s, not (Null.null x) =
+                    Parsed x (Factorial.drop (Factorial.length x) rest)
+            p rest = NoParse (FailureInfo (genericLength rest) ["takeWhile1"])
+   string s = Parser p where
+      p rest@((s', _) : _)
+         | Cancellative.isPrefixOf s s' = Parsed s (Factorial.drop (Factorial.length s) rest)
+      p rest = NoParse (FailureInfo (genericLength rest) ["string " ++ show s])
+   concatMany p = go
+      where go = mappend <$> p <*> go <|> mempty
+
+instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyChar predicate = Parser p
       where p rest@((s, _):t) =
                case Textual.characterPrefix s
@@ -155,33 +181,15 @@ instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
                of Just first | predicate first -> Parsed (Factorial.primePrefix s) t
                   _ -> NoParse (FailureInfo (genericLength rest) ["satisfyChar"])
             p [] = NoParse (FailureInfo 0 ["satisfyChar"])
-   notSatisfy predicate = Parser p
-      where p rest@((s, _):_)
-               | Just (first, _) <- Factorial.splitPrimePrefix s, 
-                 predicate first = NoParse (FailureInfo (genericLength rest) ["notSatisfy"])
-            p rest = Parsed () rest
    notSatisfyChar predicate = Parser p
       where p rest@((s, _):_)
                | Just first <- Textual.characterPrefix s, 
                  predicate first = NoParse (FailureInfo (genericLength rest) ["notSatisfyChar"])
             p rest = Parsed () rest
-   scan s0 f = Parser (p s0)
-      where p s ((i, _):t) = Parsed prefix (drop (Factorial.length prefix - 1) t)
-               where (prefix, _, _) = Factorial.spanMaybe' s f i
-            p _ [] = Parsed mempty []
    scanChars s0 f = Parser (p s0)
       where p s ((i, _):t) = Parsed prefix (drop (Factorial.length prefix - 1) t)
                where (prefix, _, _) = Textual.spanMaybe_' s f i
             p _ [] = Parsed mempty []
-   takeWhile predicate = Parser p
-      where p rest@((s, _) : _)
-               | x <- Factorial.takeWhile predicate s = Parsed x (Factorial.drop (Factorial.length x) rest)
-            p [] = Parsed mempty []
-   takeWhile1 predicate = Parser p
-      where p rest@((s, _) : _)
-               | x <- Factorial.takeWhile predicate s, not (Null.null x) =
-                    Parsed x (Factorial.drop (Factorial.length x) rest)
-            p rest = NoParse (FailureInfo (genericLength rest) ["takeWhile1"])
    takeCharsWhile predicate = Parser p
       where p rest@((s, _) : _)
                | x <- Textual.takeWhile_ False predicate s =
@@ -192,13 +200,6 @@ instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
                | x <- Textual.takeWhile_ False predicate s, not (Null.null x) =
                     Parsed x (drop (Factorial.length x) rest)
             p rest = NoParse (FailureInfo (genericLength rest) ["takeCharsWhile1"])
-   string s = Parser p where
-      p rest@((s', _) : _)
-         | Cancellative.isPrefixOf s s' = Parsed s (Factorial.drop (Factorial.length s) rest)
-      p rest = NoParse (FailureInfo (genericLength rest) ["string " ++ show s])
-   concatMany p = go
-      where go = mappend <$> p <*> go <|> mempty
-
 
 -- | Packrat parser
 --

@@ -29,7 +29,8 @@ import qualified Text.Parser.Token
 
 import qualified Rank2
 
-import Text.Grampa.Class (Lexical(..), InputParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
+import Text.Grampa.Class (Lexical(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
+                          ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (BinTree(..))
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
@@ -139,6 +140,30 @@ instance FactorialMonoid s => InputParsing (Parser g s) where
       where p s = case Factorial.splitPrimePrefix s
                   of Just (first, rest) | predicate first -> ResultList (Leaf $ ResultInfo rest first) mempty
                      _ -> ResultList mempty (FailureInfo (Factorial.length s) ["satisfy"])
+   notSatisfy predicate = Parser p
+      where p s = case Factorial.splitPrimePrefix s
+                  of Just (first, _) 
+                        | predicate first -> ResultList mempty (FailureInfo (Factorial.length s) ["notSatisfy"])
+                     _ -> ResultList (Leaf $ ResultInfo s ()) mempty
+   scan s0 f = Parser (p s0)
+      where p s i = ResultList (Leaf $ ResultInfo suffix prefix) mempty
+               where (prefix, suffix, _) = Factorial.spanMaybe' s f i
+   takeWhile predicate = Parser p
+      where p s | (prefix, suffix) <- Factorial.span predicate s = ResultList (Leaf $ ResultInfo suffix prefix) mempty
+   takeWhile1 predicate = Parser p
+      where p s | (prefix, suffix) <- Factorial.span predicate s = 
+               if Null.null prefix
+               then ResultList mempty (FailureInfo (Factorial.length s) ["takeWhile1"])
+               else ResultList (Leaf $ ResultInfo suffix prefix) mempty
+   string s = Parser p where
+      p s' | Just suffix <- Cancellative.stripPrefix s s' = ResultList (Leaf $ ResultInfo suffix s) mempty
+           | otherwise = ResultList mempty (FailureInfo (Factorial.length s') ["string " ++ show s])
+   concatMany (Parser p) = Parser q
+      where q s = ResultList (Leaf $ ResultInfo s mempty) failure <> foldMap continue rs
+               where ResultList rs failure = p s
+            continue (ResultInfo suffix prefix) = mappend prefix <$> q suffix
+
+instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyChar predicate = Parser p
       where p s =
                case Textual.splitCharacterPrefix s
@@ -149,29 +174,14 @@ instance FactorialMonoid s => InputParsing (Parser g s) where
                case Textual.splitCharacterPrefix s
                of Just (first, rest) | predicate first -> ResultList (Leaf $ ResultInfo rest $ Factorial.primePrefix s) mempty
                   _ -> ResultList mempty (FailureInfo (Factorial.length s) ["satisfyChar"])
-   notSatisfy predicate = Parser p
-      where p s = case Factorial.splitPrimePrefix s
-                  of Just (first, _) 
-                        | predicate first -> ResultList mempty (FailureInfo (Factorial.length s) ["notSatisfy"])
-                     _ -> ResultList (Leaf $ ResultInfo s ()) mempty
    notSatisfyChar predicate = Parser p
       where p s = case Textual.characterPrefix s
                   of Just first 
                         | predicate first -> ResultList mempty (FailureInfo (Factorial.length s) ["notSatisfyChar"])
                      _ -> ResultList (Leaf $ ResultInfo s ()) mempty
-   scan s0 f = Parser (p s0)
-      where p s i = ResultList (Leaf $ ResultInfo suffix prefix) mempty
-               where (prefix, suffix, _) = Factorial.spanMaybe' s f i
    scanChars s0 f = Parser (p s0)
       where p s i = ResultList (Leaf $ ResultInfo suffix prefix) mempty
                where (prefix, suffix, _) = Textual.spanMaybe_' s f i
-   takeWhile predicate = Parser p
-      where p s | (prefix, suffix) <- Factorial.span predicate s = ResultList (Leaf $ ResultInfo suffix prefix) mempty
-   takeWhile1 predicate = Parser p
-      where p s | (prefix, suffix) <- Factorial.span predicate s = 
-               if Null.null prefix
-               then ResultList mempty (FailureInfo (Factorial.length s) ["takeWhile1"])
-               else ResultList (Leaf $ ResultInfo suffix prefix) mempty
    takeCharsWhile predicate = Parser p
       where p s | (prefix, suffix) <- Textual.span_ False predicate s = 
                ResultList (Leaf $ ResultInfo suffix prefix) mempty
@@ -180,13 +190,6 @@ instance FactorialMonoid s => InputParsing (Parser g s) where
                if null prefix
                then ResultList mempty (FailureInfo (Factorial.length s) ["takeCharsWhile1"])
                else ResultList (Leaf $ ResultInfo suffix prefix) mempty
-   string s = Parser p where
-      p s' | Just suffix <- Cancellative.stripPrefix s s' = ResultList (Leaf $ ResultInfo suffix s) mempty
-           | otherwise = ResultList mempty (FailureInfo (Factorial.length s') ["string " ++ show s])
-   concatMany (Parser p) = Parser q
-      where q s = ResultList (Leaf $ ResultInfo s mempty) failure <> foldMap continue rs
-               where ResultList rs failure = p s
-            continue (ResultInfo suffix prefix) = mappend prefix <$> q suffix
 
 instance FactorialMonoid s => Parsing (Parser g s) where
    try (Parser p) = Parser q

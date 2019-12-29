@@ -1,8 +1,9 @@
 {-# LANGUAGE FlexibleContexts, ConstrainedClassMethods, UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, OverloadedStrings, QuantifiedConstraints,
              RankNTypes, ScopedTypeVariables, TypeApplications, TypeFamilies, DeriveDataTypeable #-}
-module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), AmbiguousParsing(..), InputParsing(..), Lexical(..),
-                          ParseResults, ParseFailure(..), Ambiguous(..), Position, positionOffset, completeParser) where
+module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), AmbiguousParsing(..), InputParsing(..),
+                          InputCharParsing(..), Lexical(..), ParseResults, ParseFailure(..), Ambiguous(..), Position,
+                          positionOffset, completeParser) where
 
 import Control.Applicative (Alternative(empty), liftA2, (<|>))
 import Data.Char (isAlphaNum, isLetter, isSpace)
@@ -20,7 +21,8 @@ import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 import Data.Semigroup (Semigroup((<>)))
 import Text.Parser.Combinators (Parsing((<?>)), skipMany)
-import Text.Parser.Char (CharParsing(char))
+import Text.Parser.Char (CharParsing)
+import qualified Text.Parser.Char
 import GHC.Exts (Constraint)
 
 import qualified Rank2
@@ -122,19 +124,9 @@ class Parsing m => InputParsing m where
    anyToken :: m (ParserInput m)
    -- | A parser that accepts an input atom only if it satisfies the given predicate.
    satisfy :: ((ParserInput m) -> Bool) -> m (ParserInput m)
-   -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting and returning an input character only if it
-   -- satisfies the given predicate.
-   satisfyChar :: TextualMonoid (ParserInput m) => (Char -> Bool) -> m Char
-   -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the
-   -- given predicate, and returning the input atom that represents the character. A faster version of @singleton <$>
-   -- satisfyChar p@ and of @satisfy (fromMaybe False p . characterPrefix)@.
-   satisfyCharInput :: TextualMonoid (ParserInput m) => (Char -> Bool) -> m (ParserInput m)
    -- | A parser that succeeds exactly when satisfy doesn't, equivalent to
    -- 'Text.Parser.Combinators.notFollowedBy' @. satisfy@
    notSatisfy :: (ParserInput m -> Bool) -> m ()
-   -- | A parser that succeeds exactly when satisfyChar doesn't, equivalent to
-   -- 'Text.Parser.Combinators.notFollowedBy' @. satisfyChar@
-   notSatisfyChar :: TextualMonoid (ParserInput m) => (Char -> Bool) -> m ()
 
    -- | A stateful scanner. The predicate modifies a state argument, and each transformed state is passed to successive
    -- invocations of the predicate on each token of the input until one returns 'Nothing' or the input ends.
@@ -145,9 +137,6 @@ class Parsing m => InputParsing m where
    -- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers
    -- loop until a failure occurs.  Careless use will thus result in an infinite loop.
    scan :: ParserInput m -> (ParserInput m -> ParserInput m -> Maybe (ParserInput m)) -> m (ParserInput m)
-   -- | Stateful scanner like `scanChars`, but specialized for 'TextualMonoid' inputs.
-   scanChars :: TextualMonoid (ParserInput m) =>
-                ParserInput m -> (ParserInput m -> Char -> Maybe (ParserInput m)) -> m (ParserInput m)
    -- | A parser that consumes and returns the given prefix of the input.
    string :: (LeftReductiveMonoid (ParserInput m), Show (ParserInput m)) => ParserInput m -> m (ParserInput m)
 
@@ -160,15 +149,6 @@ class Parsing m => InputParsing m where
    -- | A parser accepting the longest non-empty sequence of input atoms that match the given predicate; an optimized
    -- version of 'concatSome . satisfy'.
    takeWhile1 :: (ParserInput m -> Bool) -> m (ParserInput m)
-   -- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
-   -- match the given predicate; an optimized version of 'fmap fromString  . many . satisfyChar'.
-   --
-   -- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers
-   -- loop until a failure occurs.  Careless use will thus result in an infinite loop.
-   takeCharsWhile :: TextualMonoid (ParserInput m) => (Char -> Bool) -> m (ParserInput m)
-   -- | Specialization of 'takeWhile1' on 'TextualMonoid' inputs, accepting the longest sequence of input characters
-   -- that match the given predicate; an optimized version of 'fmap fromString  . some . satisfyChar'.
-   takeCharsWhile1 :: TextualMonoid (ParserInput m) => (Char -> Bool) -> m (ParserInput m)
    -- | Zero or more argument occurrences like 'many', with concatenated monoidal results.
    concatMany :: Monoid a => m a -> m a
 
@@ -179,6 +159,35 @@ class Parsing m => InputParsing m where
    getSourcePos = Position . Factorial.length <$> getInput
    {-# INLINE concatMany #-}
    {-# INLINE getSourcePos #-}
+
+-- | Methods for parsing monoidal inputs
+class (CharParsing m, InputParsing m) => InputCharParsing m where
+   -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting and returning an input character only if it
+   -- satisfies the given predicate.
+   -- # DEPRECATED satisfyChar "Use 'Text.Parser.Char.satisfy' instead"
+   satisfyChar :: (Char -> Bool) -> m Char
+   -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the
+   -- given predicate, and returning the input atom that represents the character. A faster version of @singleton <$>
+   -- satisfyChar p@ and of @satisfy (fromMaybe False p . characterPrefix)@.
+   satisfyCharInput :: (Char -> Bool) -> m (ParserInput m)
+   -- | A parser that succeeds exactly when satisfy doesn't, equivalent to
+   -- 'Text.Parser.Combinators.notFollowedBy' @. satisfy@
+   notSatisfyChar :: (Char -> Bool) -> m ()
+
+   -- | Stateful scanner like `scan`, but specialized for 'TextualMonoid' inputs.
+   scanChars :: ParserInput m -> (ParserInput m -> Char -> Maybe (ParserInput m)) -> m (ParserInput m)
+
+   -- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
+   -- match the given predicate; an optimized version of 'fmap fromString  . many . satisfyChar'.
+   --
+   -- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers
+   -- loop until a failure occurs.  Careless use will thus result in an infinite loop.
+   takeCharsWhile :: (Char -> Bool) -> m (ParserInput m)
+   -- | Specialization of 'takeWhile1' on 'TextualMonoid' inputs, accepting the longest sequence of input characters
+   -- that match the given predicate; an optimized version of 'fmap fromString  . some . satisfyChar'.
+   takeCharsWhile1 :: (Char -> Bool) -> m (ParserInput m)
+
+   satisfyChar = Text.Parser.Char.satisfy
 
 -- | Parsers that can produce alternative parses and collect them into an 'Ambiguous' node
 class AmbiguousParsing m where
@@ -215,32 +224,31 @@ class Lexical (g :: (* -> *) -> *) where
    keyword :: LexicalConstraint m g s => s -> m g s ()
 
    type instance LexicalConstraint m g s = (s ~ ParserInput (m g s), Applicative (m g ()), Monad (m g s),
-                                            CharParsing (m g s), InputParsing (m g s),
-                                            Show s, TextualMonoid s)
+                                            InputCharParsing (m g s), Show s, TextualMonoid s)
    default lexicalComment :: Alternative (m g s) => m g s ()
-   default lexicalWhiteSpace :: (LexicalConstraint m g s, Parsing (m g s), InputParsing (m g s),
+   default lexicalWhiteSpace :: (LexicalConstraint m g s, InputCharParsing (m g s),
                                  ParserInput (m g s) ~ s, TextualMonoid s)
                              => m g s ()
-   default someLexicalSpace :: (LexicalConstraint m g s, Parsing (m g s), InputParsing (m g s), ParserInput (m g s) ~ s,
+   default someLexicalSpace :: (LexicalConstraint m g s, InputCharParsing (m g s), ParserInput (m g s) ~ s,
                                 TextualMonoid s)
                             => m g s ()
-   default lexicalSemicolon :: (LexicalConstraint m g s, CharParsing (m g s), InputParsing (m g s), TextualMonoid s)
+   default lexicalSemicolon :: (LexicalConstraint m g s, InputCharParsing (m g s), TextualMonoid s)
                             => m g s Char
-   default lexicalToken :: (LexicalConstraint m g s, Parsing (m g s), InputParsing (m g s), TextualMonoid s)
+   default lexicalToken :: (LexicalConstraint m g s, InputCharParsing (m g s), TextualMonoid s)
                         => m g s a -> m g s a
-   default identifierToken :: (LexicalConstraint m g s, Parsing (m g s), InputParsing (m g s), TextualMonoid s)
+   default identifierToken :: (LexicalConstraint m g s, InputCharParsing (m g s), TextualMonoid s)
                            => m g s s -> m g s s
    default identifier :: (LexicalConstraint m g s, Monad (m g s), Alternative (m g s), ParserInput (m g s) ~ s,
-                          Parsing (m g s), InputParsing (m g s), TextualMonoid s)
+                          InputCharParsing (m g s), TextualMonoid s)
                       => m g s s
-   default keyword :: (LexicalConstraint m g s, Parsing (m g s), InputParsing (m g s),
+   default keyword :: (LexicalConstraint m g s, InputCharParsing (m g s),
                        ParserInput (m g s) ~ s, Show s, TextualMonoid s)
                    => s -> m g s ()
    lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> takeCharsWhile isSpace)
    someLexicalSpace = takeCharsWhile1 isSpace *> skipMany (lexicalComment *> takeCharsWhile isSpace)
                       <|> lexicalComment *> skipMany (takeCharsWhile isSpace *> lexicalComment)
    lexicalComment = empty
-   lexicalSemicolon = lexicalToken (char ';')
+   lexicalSemicolon = lexicalToken (Text.Parser.Char.char ';')
    lexicalToken p = p <* lexicalWhiteSpace
    isIdentifierStartChar c = isLetter c || c == '_'
    isIdentifierFollowChar c = isAlphaNum c || c == '_'

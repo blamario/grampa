@@ -31,8 +31,8 @@ import Text.Parser.Token (TokenParsing)
 import qualified Text.Parser.Token as Token
 
 import qualified Rank2
-import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), MultiParsing(..), AmbiguousParsing(..),
-                          Lexical(..), Ambiguous(..), ParseResults)
+import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
+                          AmbiguousParsing(..), Lexical(..), Ambiguous(..), ParseResults)
 import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), fromResultList)
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
@@ -434,15 +434,9 @@ instance FactorialMonoid s => InputParsing (Fixed Memoizing.Parser g s) where
    getInput = primitive "getInput" getInput empty getInput
    anyToken = positivePrimitive "anyToken" anyToken
    satisfy predicate = positivePrimitive "satisfy" (satisfy predicate)
-   satisfyChar predicate = positivePrimitive "satisfyChar" (satisfyChar predicate)
-   satisfyCharInput predicate = positivePrimitive "satisfyCharInput" (satisfyCharInput predicate)
    notSatisfy predicate = primitive "notSatisfy" (notSatisfy predicate) empty (notSatisfy predicate)
-   notSatisfyChar predicate = primitive "notSatisfyChar" (notSatisfyChar predicate) empty (notSatisfyChar predicate)
    scan s0 f = primitive "scan" (mempty <$ notSatisfy test) (lookAhead (satisfy test) *> p) p
       where p = scan s0 f
-            test = isJust . f s0
-   scanChars s0 f = primitive "scanChars" (mempty <$ notSatisfyChar test) (lookAhead (satisfyChar test) *> p) p
-      where p = scanChars s0 f
             test = isJust . f s0
    string s
       | null s = primitive ("(string " ++ shows s ")") (string s) empty (string s)
@@ -450,9 +444,6 @@ instance FactorialMonoid s => InputParsing (Fixed Memoizing.Parser g s) where
    takeWhile predicate = primitive "takeWhile" (mempty <$ notSatisfy predicate)
                                                (takeWhile1 predicate) (takeWhile predicate)
    takeWhile1 predicate = positivePrimitive "takeWhile1" (takeWhile1 predicate)
-   takeCharsWhile predicate = primitive "takeCharsWhile" (mempty <$ notSatisfyChar predicate)
-                                                         (takeCharsWhile1 predicate) (takeCharsWhile predicate)
-   takeCharsWhile1 predicate = positivePrimitive "takeCharsWhile1" (takeCharsWhile1 predicate)
    concatMany p@PositiveDirectParser{} = DirectParser{
       complete= cmp,
       direct0= d0,
@@ -481,21 +472,26 @@ instance FactorialMonoid s => InputParsing (Fixed Memoizing.Parser g s) where
    {-# INLINABLE string #-}
    {-# INLINABLE concatMany #-}
 
+instance (Show s, TextualMonoid s) => InputCharParsing (Fixed Memoizing.Parser g s) where
+   satisfyChar predicate = positivePrimitive "satisfyChar" (satisfyChar predicate)
+   satisfyCharInput predicate = positivePrimitive "satisfyCharInput" (satisfyCharInput predicate)
+   notSatisfyChar predicate = primitive "notSatisfyChar" (notSatisfyChar predicate) empty (notSatisfyChar predicate)
+   scanChars s0 f = primitive "scanChars" (mempty <$ notSatisfyChar test) (lookAhead (satisfyChar test) *> p) p
+      where p = scanChars s0 f
+            test = isJust . f s0
+   takeCharsWhile predicate = primitive "takeCharsWhile" (mempty <$ notSatisfyChar predicate)
+                                                         (takeCharsWhile1 predicate) (takeCharsWhile predicate)
+   takeCharsWhile1 predicate = positivePrimitive "takeCharsWhile1" (takeCharsWhile1 predicate)
+
 instance FactorialMonoid s => InputParsing (Fixed Backtrack.Parser g s) where
    type ParserInput (Fixed Backtrack.Parser g s) = s
    endOfInput = primitive "endOfInput" endOfInput empty endOfInput
    getInput = primitive "getInput" getInput empty getInput
    anyToken = positivePrimitive "anyToken" anyToken
    satisfy predicate = positivePrimitive "satisfy" (satisfy predicate)
-   satisfyChar predicate = positivePrimitive "satisfyChar" (satisfyChar predicate)
-   satisfyCharInput predicate = positivePrimitive "satisfyCharInput" (satisfyCharInput predicate)
    notSatisfy predicate = primitive "notSatisfy" (notSatisfy predicate) empty (notSatisfy predicate)
-   notSatisfyChar predicate = primitive "notSatisfyChar" (notSatisfyChar predicate) empty (notSatisfyChar predicate)
    scan s0 f = primitive "scan" (mempty <$ notSatisfy test) (lookAhead (satisfy test) *> p) p
       where p = scan s0 f
-            test = isJust . f s0
-   scanChars s0 f = primitive "scanChars" (mempty <$ notSatisfyChar test) (lookAhead (satisfyChar test) *> p) p
-      where p = scanChars s0 f
             test = isJust . f s0
    string s
       | null s = primitive ("(string " ++ shows s ")") (string s) empty (string s)
@@ -503,9 +499,6 @@ instance FactorialMonoid s => InputParsing (Fixed Backtrack.Parser g s) where
    takeWhile predicate = primitive "takeWhile" (mempty <$ notSatisfy predicate)
                                                (takeWhile1 predicate) (takeWhile predicate)
    takeWhile1 predicate = positivePrimitive "takeWhile1" (takeWhile1 predicate)
-   takeCharsWhile predicate = primitive "takeCharsWhile" (mempty <$ notSatisfyChar predicate)
-                                                         (takeCharsWhile1 predicate) (takeCharsWhile predicate)
-   takeCharsWhile1 predicate = positivePrimitive "takeCharsWhile1" (takeCharsWhile1 predicate)
    concatMany p@PositiveDirectParser{} = DirectParser{
       complete= cmp,
       direct0= d0,
@@ -534,8 +527,19 @@ instance FactorialMonoid s => InputParsing (Fixed Backtrack.Parser g s) where
    {-# INLINABLE string #-}
    {-# INLINABLE concatMany #-}
 
-instance (Parsing (p g s), InputParsing (Fixed p g s),
-          s ~ ParserInput (Fixed p g s), Show s, TextualMonoid s) => CharParsing (Fixed p g s) where
+instance (Show s, TextualMonoid s) => InputCharParsing (Fixed Backtrack.Parser g s) where
+   satisfyChar predicate = positivePrimitive "satisfyChar" (satisfyChar predicate)
+   satisfyCharInput predicate = positivePrimitive "satisfyCharInput" (satisfyCharInput predicate)
+   notSatisfyChar predicate = primitive "notSatisfyChar" (notSatisfyChar predicate) empty (notSatisfyChar predicate)
+   scanChars s0 f = primitive "scanChars" (mempty <$ notSatisfyChar test) (lookAhead (satisfyChar test) *> p) p
+      where p = scanChars s0 f
+            test = isJust . f s0
+   takeCharsWhile predicate = primitive "takeCharsWhile" (mempty <$ notSatisfyChar predicate)
+                                                         (takeCharsWhile1 predicate) (takeCharsWhile predicate)
+   takeCharsWhile1 predicate = positivePrimitive "takeCharsWhile1" (takeCharsWhile1 predicate)
+
+instance (Parsing (p g s), InputCharParsing (Fixed p g s), TextualMonoid s,
+          s ~ ParserInput (Fixed p g s), Show s) => CharParsing (Fixed p g s) where
    satisfy = satisfyChar
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    char = satisfyChar . (==)
