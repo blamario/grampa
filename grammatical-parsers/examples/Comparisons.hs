@@ -63,7 +63,7 @@ instance Rank2.Traversable (Comparisons c e) where
                   <*> f (term g)
 
 comparisons :: (Lexical g, LexicalConstraint p g String,
-                ComparisonDomain c e, TokenParsing (p g String), MonoidParsing (p g)) =>
+                ComparisonDomain c e, TokenParsing (p g String), InputParsing (p g String)) =>
                GrammarBuilder (Comparisons c e) g p String
 comparisons Comparisons{..} =
    Comparisons{

@@ -29,7 +29,7 @@ import qualified Text.Parser.Token
 
 import qualified Rank2
 
-import Text.Grampa.Class (Lexical(..), MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
+import Text.Grampa.Class (Lexical(..), InputParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (BinTree(..))
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
@@ -124,7 +124,8 @@ instance MultiParsing Parser where
                     g (Parser g s) -> s -> g (Compose ParseResults [])
    parseComplete g input = Rank2.fmap ((snd <$>) . getCompose) (parsePrefix (Rank2.fmap (<* endOfInput) g) input)
 
-instance MonoidParsing (Parser g) where
+instance FactorialMonoid s => InputParsing (Parser g s) where
+   type ParserInput (Parser g s) = s
    endOfInput = Parser f
       where f s | null s = ResultList (Leaf $ ResultInfo s ()) mempty
                 | otherwise = ResultList mempty (FailureInfo (Factorial.length s) ["endOfInput"])

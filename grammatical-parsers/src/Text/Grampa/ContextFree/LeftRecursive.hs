@@ -31,7 +31,7 @@ import Text.Parser.Token (TokenParsing)
 import qualified Text.Parser.Token as Token
 
 import qualified Rank2
-import Text.Grampa.Class (GrammarParsing(..), MonoidParsing(..), MultiParsing(..), AmbiguousParsing(..),
+import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), MultiParsing(..), AmbiguousParsing(..),
                           Lexical(..), Ambiguous(..), ParseResults)
 import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), fromResultList)
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
@@ -367,7 +367,7 @@ positivePrimitive :: String -> p g s a -> Fixed p g s a
 positivePrimitive _name p = PositiveDirectParser{complete= p}
 {-# INLINE positivePrimitive #-}
 
-instance (Parsing (p g s), MonoidParsing (Fixed p g)) => Parsing (Fixed p g s) where
+instance (Parsing (p g s), InputParsing (Fixed p g s)) => Parsing (Fixed p g s) where
    eof = primitive "eof" eof empty eof
    try (PositiveDirectParser p) = PositiveDirectParser (try p)
    try p@DirectParser{} = DirectParser{
@@ -410,7 +410,7 @@ instance (Parsing (p g s), MonoidParsing (Fixed p g)) => Parsing (Fixed p g s) w
    unexpected msg = positivePrimitive "unexpected" (unexpected msg)
    skipMany p = concatMany (() <$ p)
 
-instance (LookAheadParsing (p g s), MonoidParsing (Fixed p g)) => LookAheadParsing (Fixed p g s) where
+instance (LookAheadParsing (p g s), InputParsing (Fixed p g s)) => LookAheadParsing (Fixed p g s) where
    lookAhead p@PositiveDirectParser{} = DirectParser{
       complete= lookAhead (complete p),
       direct0= lookAhead (complete p),
@@ -428,7 +428,8 @@ instance (LookAheadParsing (p g s), MonoidParsing (Fixed p g)) => LookAheadParsi
       indirect= lookAhead (indirect p),
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
 
-instance MonoidParsing (Fixed Memoizing.Parser g) where
+instance FactorialMonoid s => InputParsing (Fixed Memoizing.Parser g s) where
+   type ParserInput (Fixed Memoizing.Parser g s) = s
    endOfInput = primitive "endOfInput" endOfInput empty endOfInput
    getInput = primitive "getInput" getInput empty getInput
    anyToken = positivePrimitive "anyToken" anyToken
@@ -480,7 +481,8 @@ instance MonoidParsing (Fixed Memoizing.Parser g) where
    {-# INLINABLE string #-}
    {-# INLINABLE concatMany #-}
 
-instance MonoidParsing (Fixed Backtrack.Parser g) where
+instance FactorialMonoid s => InputParsing (Fixed Backtrack.Parser g s) where
+   type ParserInput (Fixed Backtrack.Parser g s) = s
    endOfInput = primitive "endOfInput" endOfInput empty endOfInput
    getInput = primitive "getInput" getInput empty getInput
    anyToken = positivePrimitive "anyToken" anyToken
@@ -532,7 +534,8 @@ instance MonoidParsing (Fixed Backtrack.Parser g) where
    {-# INLINABLE string #-}
    {-# INLINABLE concatMany #-}
 
-instance (Parsing (p g s), MonoidParsing (Fixed p g), Show s, TextualMonoid s) => CharParsing (Fixed p g s) where
+instance (Parsing (p g s), InputParsing (Fixed p g s),
+          s ~ ParserInput (Fixed p g s), Show s, TextualMonoid s) => CharParsing (Fixed p g s) where
    satisfy = satisfyChar
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    char = satisfyChar . (==)

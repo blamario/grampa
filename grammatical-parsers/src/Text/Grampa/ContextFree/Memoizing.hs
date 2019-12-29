@@ -30,7 +30,7 @@ import qualified Text.Parser.Token
 
 import qualified Rank2
 
-import Text.Grampa.Class (Lexical(..), GrammarParsing(..), MonoidParsing(..), MultiParsing(..), 
+import Text.Grampa.Class (Lexical(..), GrammarParsing(..), InputParsing(..), MultiParsing(..), 
                           ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (BinTree(..), FailureInfo(..))
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
@@ -150,7 +150,8 @@ reparseTails _ [] = []
 reparseTails final parsed@((s, _):_) = (s, gd):parsed
    where gd = Rank2.fmap (`applyParser` parsed) final
 
-instance MonoidParsing (Parser g) where
+instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
+   type ParserInput (Parser g s) = s
    endOfInput = eof
    getInput = Parser p
       where p rest@((s, _):_) = ResultList (Leaf $ ResultInfo 0 rest s) mempty

@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, RecordWildCards, TemplateHaskell, UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 
 module Combined where
 

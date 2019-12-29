@@ -27,7 +27,7 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing)
 import qualified Text.Parser.Token
-import Text.Grampa.Class (Lexical(..), GrammarParsing(..), MonoidParsing(..), MultiParsing(..), 
+import Text.Grampa.Class (Lexical(..), GrammarParsing(..), InputParsing(..), MultiParsing(..), 
                           ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (FailureInfo(..))
 
@@ -123,7 +123,8 @@ instance GrammarParsing Parser where
       p ((_, d) : _) = f d
       p _ = NoParse (FailureInfo 0 ["NonTerminal at endOfInput"])
 
-instance MonoidParsing (Parser g) where
+instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
+   type ParserInput (Parser g s) = s
    endOfInput = Parser p
       where p rest@((s, _) : _)
                | not (Null.null s) = NoParse (FailureInfo (genericLength rest) ["endOfInput"])

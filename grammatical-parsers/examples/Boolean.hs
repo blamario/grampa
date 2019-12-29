@@ -49,7 +49,7 @@ $(Rank2.TH.deriveAll ''Boolean)
 
 boolean :: forall e p (g :: (* -> *) -> *).
            (Lexical g, LexicalConstraint p g String,
-            BooleanDomain e, TokenParsing (p g String), MonoidParsing (p g)) =>
+            BooleanDomain e, TokenParsing (p g String), InputParsing (p g String), ParserInput (p g String) ~ String) =>
            p g String e -> Boolean e (p g String) -> Boolean e (p g String)
 boolean p Boolean{..} = Boolean{
    expr= term

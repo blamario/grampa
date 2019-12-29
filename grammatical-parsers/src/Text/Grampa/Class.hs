@@ -1,6 +1,7 @@
-{-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, OverloadedStrings, RankNTypes,
-             ScopedTypeVariables, TypeApplications, TypeFamilies, DeriveDataTypeable #-}
-module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), AmbiguousParsing(..), MonoidParsing(..), Lexical(..),
+{-# LANGUAGE FlexibleContexts, ConstrainedClassMethods, UndecidableInstances #-}
+{-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, OverloadedStrings, QuantifiedConstraints,
+             RankNTypes, ScopedTypeVariables, TypeApplications, TypeFamilies, DeriveDataTypeable #-}
+module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), AmbiguousParsing(..), InputParsing(..), Lexical(..),
                           ParseResults, ParseFailure(..), Ambiguous(..), Position, positionOffset, completeParser) where
 
 import Control.Applicative (Alternative(empty), liftA2, (<|>))
@@ -108,31 +109,32 @@ class MultiParsing m => GrammarParsing m where
    recursive = id
 
 -- | Methods for parsing monoidal inputs
-class MonoidParsing m where
+class Parsing m => InputParsing m where
+   type ParserInput m
    -- | A parser that fails on any input and succeeds at its end.
-   endOfInput :: FactorialMonoid s => m s ()
+   endOfInput :: m ()
    -- | Always sucessful parser that returns the remaining input without consuming it.
-   getInput :: FactorialMonoid s => m s s
+   getInput :: m (ParserInput m)
    -- | Retrieve the 'Position' the parser has reached in the input source.
-   getSourcePos :: FactorialMonoid s => m s (Position s)
+   getSourcePos :: m (Position (ParserInput m))
 
    -- | A parser that accepts any single input atom.
-   anyToken :: FactorialMonoid s => m s s
+   anyToken :: m (ParserInput m)
    -- | A parser that accepts an input atom only if it satisfies the given predicate.
-   satisfy :: FactorialMonoid s => (s -> Bool) -> m s s
+   satisfy :: ((ParserInput m) -> Bool) -> m (ParserInput m)
    -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting and returning an input character only if it
    -- satisfies the given predicate.
-   satisfyChar :: TextualMonoid s => (Char -> Bool) -> m s Char
+   satisfyChar :: TextualMonoid (ParserInput m) => (Char -> Bool) -> m Char
    -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the
    -- given predicate, and returning the input atom that represents the character. A faster version of @singleton <$>
    -- satisfyChar p@ and of @satisfy (fromMaybe False p . characterPrefix)@.
-   satisfyCharInput :: TextualMonoid s => (Char -> Bool) -> m s s
+   satisfyCharInput :: TextualMonoid (ParserInput m) => (Char -> Bool) -> m (ParserInput m)
    -- | A parser that succeeds exactly when satisfy doesn't, equivalent to
    -- 'Text.Parser.Combinators.notFollowedBy' @. satisfy@
-   notSatisfy :: FactorialMonoid s => (s -> Bool) -> m s ()
+   notSatisfy :: (ParserInput m -> Bool) -> m ()
    -- | A parser that succeeds exactly when satisfyChar doesn't, equivalent to
    -- 'Text.Parser.Combinators.notFollowedBy' @. satisfyChar@
-   notSatisfyChar :: TextualMonoid s => (Char -> Bool) -> m s ()
+   notSatisfyChar :: TextualMonoid (ParserInput m) => (Char -> Bool) -> m ()
 
    -- | A stateful scanner. The predicate modifies a state argument, and each transformed state is passed to successive
    -- invocations of the predicate on each token of the input until one returns 'Nothing' or the input ends.
@@ -142,37 +144,38 @@ class MonoidParsing m where
    --
    -- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers
    -- loop until a failure occurs.  Careless use will thus result in an infinite loop.
-   scan :: FactorialMonoid t => s -> (s -> t -> Maybe s) -> m t t
+   scan :: ParserInput m -> (ParserInput m -> ParserInput m -> Maybe (ParserInput m)) -> m (ParserInput m)
    -- | Stateful scanner like `scanChars`, but specialized for 'TextualMonoid' inputs.
-   scanChars :: TextualMonoid t => s -> (s -> Char -> Maybe s) -> m t t
+   scanChars :: TextualMonoid (ParserInput m) =>
+                ParserInput m -> (ParserInput m -> Char -> Maybe (ParserInput m)) -> m (ParserInput m)
    -- | A parser that consumes and returns the given prefix of the input.
-   string :: (FactorialMonoid s, LeftReductiveMonoid s, Show s) => s -> m s s
+   string :: (LeftReductiveMonoid (ParserInput m), Show (ParserInput m)) => ParserInput m -> m (ParserInput m)
 
    -- | A parser accepting the longest sequence of input atoms that match the given predicate; an optimized version of
    -- 'concatMany . satisfy'.
    --
    -- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers
    -- loop until a failure occurs.  Careless use will thus result in an infinite loop.
-   takeWhile :: FactorialMonoid s => (s -> Bool) -> m s s
+   takeWhile :: (ParserInput m -> Bool) -> m (ParserInput m)
    -- | A parser accepting the longest non-empty sequence of input atoms that match the given predicate; an optimized
    -- version of 'concatSome . satisfy'.
-   takeWhile1 :: FactorialMonoid s => (s -> Bool) -> m s s
+   takeWhile1 :: (ParserInput m -> Bool) -> m (ParserInput m)
    -- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
    -- match the given predicate; an optimized version of 'fmap fromString  . many . satisfyChar'.
    --
    -- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers
    -- loop until a failure occurs.  Careless use will thus result in an infinite loop.
-   takeCharsWhile :: TextualMonoid s => (Char -> Bool) -> m s s
+   takeCharsWhile :: TextualMonoid (ParserInput m) => (Char -> Bool) -> m (ParserInput m)
    -- | Specialization of 'takeWhile1' on 'TextualMonoid' inputs, accepting the longest sequence of input characters
    -- that match the given predicate; an optimized version of 'fmap fromString  . some . satisfyChar'.
-   takeCharsWhile1 :: TextualMonoid s => (Char -> Bool) -> m s s
+   takeCharsWhile1 :: TextualMonoid (ParserInput m) => (Char -> Bool) -> m (ParserInput m)
    -- | Zero or more argument occurrences like 'many', with concatenated monoidal results.
-   concatMany :: Monoid a => m s a -> m s a
+   concatMany :: Monoid a => m a -> m a
 
-   default concatMany :: (Monoid a, Alternative (m s)) => m s a -> m s a
+   default concatMany :: (Monoid a, Alternative m) => m a -> m a
    concatMany p = go
       where go = mappend <$> p <*> go <|> pure mempty
-   default getSourcePos :: (FactorialMonoid s, Functor (m s)) => m s (Position s)
+   default getSourcePos :: (FactorialMonoid (ParserInput m), Functor m) => m (Position (ParserInput m))
    getSourcePos = Position . Factorial.length <$> getInput
    {-# INLINE concatMany #-}
    {-# INLINE getSourcePos #-}
@@ -211,23 +214,27 @@ class Lexical (g :: (* -> *) -> *) where
    -- 'lexicalWhitespace'
    keyword :: LexicalConstraint m g s => s -> m g s ()
 
-   type instance LexicalConstraint m g s = (Applicative (m g ()), Monad (m g s),
-                                            CharParsing (m g s), MonoidParsing (m g),
+   type instance LexicalConstraint m g s = (s ~ ParserInput (m g s), Applicative (m g ()), Monad (m g s),
+                                            CharParsing (m g s), InputParsing (m g s),
                                             Show s, TextualMonoid s)
    default lexicalComment :: Alternative (m g s) => m g s ()
-   default lexicalWhiteSpace :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s)
+   default lexicalWhiteSpace :: (LexicalConstraint m g s, Parsing (m g s), InputParsing (m g s),
+                                 ParserInput (m g s) ~ s, TextualMonoid s)
                              => m g s ()
-   default someLexicalSpace :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s)
+   default someLexicalSpace :: (LexicalConstraint m g s, Parsing (m g s), InputParsing (m g s), ParserInput (m g s) ~ s,
+                                TextualMonoid s)
                             => m g s ()
-   default lexicalSemicolon :: (LexicalConstraint m g s, CharParsing (m g s), MonoidParsing (m g), TextualMonoid s)
+   default lexicalSemicolon :: (LexicalConstraint m g s, CharParsing (m g s), InputParsing (m g s), TextualMonoid s)
                             => m g s Char
-   default lexicalToken :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s)
+   default lexicalToken :: (LexicalConstraint m g s, Parsing (m g s), InputParsing (m g s), TextualMonoid s)
                         => m g s a -> m g s a
-   default identifierToken :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), TextualMonoid s)
+   default identifierToken :: (LexicalConstraint m g s, Parsing (m g s), InputParsing (m g s), TextualMonoid s)
                            => m g s s -> m g s s
-   default identifier :: (LexicalConstraint m g s, Monad (m g s), Alternative (m g s),
-                          Parsing (m g s), MonoidParsing (m g), TextualMonoid s) => m g s s
-   default keyword :: (LexicalConstraint m g s, Parsing (m g s), MonoidParsing (m g), Show s, TextualMonoid s)
+   default identifier :: (LexicalConstraint m g s, Monad (m g s), Alternative (m g s), ParserInput (m g s) ~ s,
+                          Parsing (m g s), InputParsing (m g s), TextualMonoid s)
+                      => m g s s
+   default keyword :: (LexicalConstraint m g s, Parsing (m g s), InputParsing (m g s),
+                       ParserInput (m g s) ~ s, Show s, TextualMonoid s)
                    => s -> m g s ()
    lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> takeCharsWhile isSpace)
    someLexicalSpace = takeCharsWhile1 isSpace *> skipMany (lexicalComment *> takeCharsWhile isSpace)

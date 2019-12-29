@@ -27,7 +27,7 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing)
 import qualified Text.Parser.Token
-import Text.Grampa.Class (Lexical(..), MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
+import Text.Grampa.Class (Lexical(..), InputParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (FailureInfo(..))
 
 data Result (g :: (* -> *) -> *) s v = Parsed{parsedPrefix :: !v,
@@ -132,7 +132,8 @@ instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => T
    semi = lexicalSemicolon
    token = lexicalToken
 
-instance MonoidParsing (Parser g) where
+instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
+   type ParserInput (Parser g s) = s
    endOfInput = Parser p
       where p rest success failure
                | Null.null rest = success () 0 rest failure
@@ -144,28 +145,28 @@ instance MonoidParsing (Parser g) where
                case Factorial.splitPrimePrefix rest
                of Just (first, suffix) -> success first 1 suffix failure
                   _ -> failure (FailureInfo (Factorial.length rest) ["anyToken"])
-   satisfy :: forall s. FactorialMonoid s => (s -> Bool) -> Parser g s s
+   satisfy :: (s -> Bool) -> Parser g s s
    satisfy predicate = Parser p
       where p :: forall x. s -> (s -> Int -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
             p rest success failure =
                case Factorial.splitPrimePrefix rest
                of Just (first, suffix) | predicate first -> success first 1 suffix failure
                   _ -> failure (FailureInfo (Factorial.length rest) ["satisfy"])
-   satisfyChar :: forall s. TextualMonoid s => (Char -> Bool) -> Parser g s Char
+   satisfyChar :: TextualMonoid s => (Char -> Bool) -> Parser g s Char
    satisfyChar predicate = Parser p
       where p :: forall x. s -> (Char -> Int -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
             p rest success failure =
                case Textual.splitCharacterPrefix rest
                of Just (first, suffix) | predicate first -> success first 1 suffix failure
                   _ -> failure (FailureInfo (Factorial.length rest) ["satisfyChar"])
-   satisfyCharInput :: forall s. TextualMonoid s => (Char -> Bool) -> Parser g s s
+   satisfyCharInput :: TextualMonoid s => (Char -> Bool) -> Parser g s s
    satisfyCharInput predicate = Parser p
       where p :: forall x. s -> (s -> Int -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
             p rest success failure =
                case Textual.splitCharacterPrefix rest
                of Just (first, suffix) | predicate first -> success (Factorial.primePrefix rest) 1 suffix failure
                   _ -> failure (FailureInfo (Factorial.length rest) ["satisfyChar"])
-   notSatisfy :: forall s. FactorialMonoid s => (s -> Bool) -> Parser g s ()
+   notSatisfy :: (s -> Bool) -> Parser g s ()
    notSatisfy predicate = Parser p
       where p :: forall x. s -> (() -> Int -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
             p rest success failure =
@@ -173,7 +174,7 @@ instance MonoidParsing (Parser g) where
                of Just (first, _)
                      | predicate first -> failure (FailureInfo (Factorial.length rest) ["notSatisfy"])
                   _ -> success () 0 rest failure
-   notSatisfyChar :: forall s. TextualMonoid s => (Char -> Bool) -> Parser g s ()
+   notSatisfyChar :: TextualMonoid s => (Char -> Bool) -> Parser g s ()
    notSatisfyChar predicate = Parser p
       where p :: forall x. s -> (() -> Int -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
             p rest success failure =
@@ -181,26 +182,26 @@ instance MonoidParsing (Parser g) where
                of Just first | predicate first
                                -> failure (FailureInfo (Factorial.length rest) ["notSatisfyChar"])
                   _ -> success () 0 rest failure
-   scan :: forall t s. FactorialMonoid t => s -> (s -> t -> Maybe s) -> Parser g t t
+   scan :: forall state. state -> (state -> s -> Maybe state) -> Parser g s s
    scan s0 f = Parser (p s0)
-      where p :: forall x. s -> t -> (t -> Int -> t -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
+      where p :: forall x. state -> s -> (s -> Int -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
             p s rest success failure = success prefix len suffix failure
                where (prefix, suffix, _) = Factorial.spanMaybe' s f rest
                      !len = Factorial.length prefix
-   scanChars :: forall t s. TextualMonoid t => s -> (s -> Char -> Maybe s) -> Parser g t t
+   scanChars :: forall state. TextualMonoid s => state -> (state -> Char -> Maybe state) -> Parser g s s
    scanChars s0 f = Parser (p s0)
-      where p :: forall x. s -> t -> (t -> Int -> t -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
+      where p :: forall x. state -> s -> (s -> Int -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
             p s rest success failure = success prefix len suffix failure
                where (prefix, suffix, _) = Textual.spanMaybe_' s f rest
                      !len = Factorial.length prefix
-   takeWhile :: forall s. FactorialMonoid s => (s -> Bool) -> Parser g s s
+   takeWhile :: (s -> Bool) -> Parser g s s
    takeWhile predicate = Parser p
       where p :: forall x. s -> (s -> Int -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
             p rest success failure 
                | (prefix, suffix) <- Factorial.span predicate rest, 
                  !len <- Factorial.length prefix = 
                     success prefix len suffix failure
-   takeWhile1 :: forall s. FactorialMonoid s => (s -> Bool) -> Parser g s s
+   takeWhile1 :: (s -> Bool) -> Parser g s s
    takeWhile1 predicate = Parser p
       where p :: forall x. s -> (s -> Int -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
             p rest success failure
@@ -209,13 +210,13 @@ instance MonoidParsing (Parser g) where
                     if len == 0
                     then failure (FailureInfo (Factorial.length rest) ["takeWhile1"])
                     else success prefix len suffix failure
-   takeCharsWhile :: forall s. TextualMonoid s => (Char -> Bool) -> Parser g s s
+   takeCharsWhile :: TextualMonoid s => (Char -> Bool) -> Parser g s s
    takeCharsWhile predicate = Parser p
       where p :: forall x. s -> (s -> Int -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
             p rest success failure
                | (prefix, suffix) <- Textual.span_ False predicate rest, 
                  !len <- Factorial.length prefix = success prefix len suffix failure
-   takeCharsWhile1 :: forall s. TextualMonoid s => (Char -> Bool) -> Parser g s s
+   takeCharsWhile1 :: TextualMonoid s => (Char -> Bool) -> Parser g s s
    takeCharsWhile1 predicate = Parser p
       where p :: forall x. s -> (s -> Int -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
             p rest success failure
@@ -223,13 +224,13 @@ instance MonoidParsing (Parser g) where
                | otherwise = len `seq` success prefix len suffix failure
                where (prefix, suffix) = Textual.span_ False predicate rest
                      len = Factorial.length prefix
-   string :: forall s. (Cancellative.LeftReductiveMonoid s, FactorialMonoid s, Show s) => s -> Parser g s s
+   string :: (Cancellative.LeftReductiveMonoid s, Show s) => s -> Parser g s s
    string s = Parser p where
       p :: forall x. s -> (s -> Int -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
       p s' success failure
          | Just suffix <- Cancellative.stripPrefix s s', !len <- Factorial.length s = success s len suffix failure
          | otherwise = failure (FailureInfo (Factorial.length s') ["string " ++ show s])
-   concatMany :: forall s a. Monoid a => Parser g s a -> Parser g s a
+   concatMany :: forall a. Monoid a => Parser g s a -> Parser g s a
    concatMany (Parser p) = Parser q
       where q :: forall x. s -> (a -> Int -> s -> (FailureInfo -> x) -> x) -> (FailureInfo -> x) -> x
             q rest success failure = p rest success' (const $ success mempty 0 rest failure)

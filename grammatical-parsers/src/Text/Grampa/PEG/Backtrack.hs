@@ -27,7 +27,7 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Token (TokenParsing)
 import qualified Text.Parser.Token
-import Text.Grampa.Class (Lexical(..), MonoidParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
+import Text.Grampa.Class (Lexical(..), InputParsing(..), MultiParsing(..), ParseResults, ParseFailure(..))
 import Text.Grampa.Internal (FailureInfo(..))
 
 data Result (g :: (* -> *) -> *) s v = Parsed{parsedPrefix :: !v,
@@ -122,7 +122,8 @@ instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => T
    semi = lexicalSemicolon
    token = lexicalToken
 
-instance MonoidParsing (Parser g) where
+instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
+   type ParserInput (Parser g s) = s
    endOfInput = Parser p
       where p rest
                | Null.null rest = Parsed () rest

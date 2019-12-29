@@ -1,5 +1,5 @@
 {-# Language FlexibleContexts, FlexibleInstances, RankNTypes, RecordWildCards, 
-             ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, UndecidableInstances #-}
+             ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 module Main where
 
 import Control.Applicative (Applicative, Alternative, Const(..), pure, empty, many, optional, (<*>), (*>), (<|>))

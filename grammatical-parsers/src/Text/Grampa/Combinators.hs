@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeFamilies #-}
+
 module Text.Grampa.Combinators (moptional, concatMany, concatSome,
                                 flag, count, upto,
                                 delimiter, operator, keyword) where
@@ -7,7 +9,7 @@ import Data.Monoid.Cancellative (LeftReductiveMonoid)
 import Data.Monoid (Monoid, (<>))
 import Data.Monoid.Factorial (FactorialMonoid)
 
-import Text.Grampa.Class (MonoidParsing(concatMany, string), 
+import Text.Grampa.Class (InputParsing(ParserInput, concatMany, string), 
                           Lexical(LexicalConstraint, lexicalToken, keyword))
 import Text.Parser.Combinators (Parsing((<?>)), count)
 
@@ -16,7 +18,7 @@ moptional :: (Monoid x, Alternative p) => p x -> p x
 moptional p = p <|> pure mempty
 
 -- | One or more argument occurrences like 'some', with concatenated monoidal results.
-concatSome :: (Monoid x, Applicative (p s), MonoidParsing p) => p s x -> p s x
+concatSome :: (Monoid x, Applicative p, InputParsing p) => p x -> p x
 concatSome p = (<>) <$> p <*> concatMany p
 
 -- | Returns 'True' if the argument parser succeeds and 'False' otherwise.
@@ -31,11 +33,11 @@ upto n p
    | otherwise = pure []
 
 -- | Parses the given delimiter, such as a comma or a brace
-delimiter :: (Show s, FactorialMonoid s, LeftReductiveMonoid s,
-              Parsing (p g s), MonoidParsing (p g), Lexical g, LexicalConstraint p g s) => s -> p g s s
+delimiter :: (Show s, FactorialMonoid s, LeftReductiveMonoid s, s ~ ParserInput (p g s),
+              Parsing (p g s), InputParsing (p g s), Lexical g, LexicalConstraint p g s) => s -> p g s s
 delimiter s = lexicalToken (string s) <?> ("delimiter " <> show s)
 
 -- | Parses the given operator symbol
-operator :: (Show s, FactorialMonoid s, LeftReductiveMonoid s,
-             Parsing (p g s), MonoidParsing (p g), Lexical g, LexicalConstraint p g s) => s -> p g s s
+operator :: (Show s, FactorialMonoid s, LeftReductiveMonoid s, s ~ ParserInput (p g s),
+             Parsing (p g s), InputParsing (p g s), Lexical g, LexicalConstraint p g s) => s -> p g s s
 operator s = lexicalToken (string s) <?> ("operator " <> show s)
