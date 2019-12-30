@@ -142,7 +142,7 @@ instance Enumerable a => Enumerable (ConditionalTree a) where
 instance Enumerable Relation where
    enumerate = share (choice $ pay . pure . Relation <$> ["<", "<=", "==", ">=", ">"])
 
-uniqueParse :: (Eq s, TextualMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g) =>
+uniqueParse :: (Ord s, TextualMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g) =>
                Grammar g Parser s -> (forall f. g f -> f r) -> s -> Either String r
 uniqueParse g p s = case getCompose (p $ parseComplete g s)
                     of Right [r] -> Right r

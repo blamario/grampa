@@ -82,7 +82,7 @@ main = defaultMain tests
 
 type Parser = Parallel.Parser
 
-simpleParse :: FactorialMonoid s => Parallel.Parser (Rank2.Only r) s r -> s -> ParseResults [(s, r)]
+simpleParse :: (Eq s, FactorialMonoid s) => Parallel.Parser (Rank2.Only r) s r -> s -> ParseResults s [(s, r)]
 simpleParse p input = getCompose . getCompose $ simply parsePrefix p input
 
 tests = testGroup "Grampa" [
@@ -123,7 +123,7 @@ tests = testGroup "Grampa" [
                                                      :| [Test.Ambiguous.Xy2
                                                          (pure $ Test.Ambiguous.Xy1 "x" "") "y"]))]))],
            testGroup "primitives"
-             [testProperty "anyToken mempty" $ simpleParse anyToken "" == Left (ParseFailure 0 ["anyToken"]),
+             [testProperty "anyToken mempty" $ simpleParse anyToken "" == Left (ParseFailure 0 [Expected "anyToken"]),
               testProperty "anyToken list" $
                 \(x::Word8) xs-> simpleParse anyToken (x:xs) == Right [(xs, [x])],
               testProperty "satisfy success" $ \bools->
@@ -133,10 +133,10 @@ tests = testGroup "Grampa" [
               testProperty "string success" $ \(xs::[Word8]) ys->
                    simpleParse (string xs) (xs <> ys) == Right [(ys, xs)],
               testProperty "string" $ \(xs::[Word8]) ys-> not (xs `isPrefixOf` ys)
-                ==> simpleParse (string xs) ys == Left (ParseFailure 0 ["string " ++ show xs]),
+                ==> simpleParse (string xs) ys == Left (ParseFailure 0 [ExpectedInput xs]),
               testProperty "endOfInput mempty" $ simpleParse endOfInput "" == Right [("", ())],
               testProperty "endOfInput failure" $ \s->
-                   s /= "" ==> simpleParse endOfInput s == Left (ParseFailure 0 ["endOfInput"])],
+                   s /= "" ==> simpleParse endOfInput s == Left (ParseFailure 0 [Expected "endOfInput"])],
            testGroup "lookAhead"
              [testProperty "lookAhead" lookAheadP,
               testProperty "lookAhead p *> p" lookAheadConsumeP,
@@ -209,14 +209,14 @@ instance (Show s, MonoidNull s, Monoid r) => Monoid (DescribedParser s r) where
    mempty = DescribedParser "mempty" mempty
    DescribedParser d1 p1 `mappend` DescribedParser d2 p2 = DescribedParser (d1 ++ " <> " ++ d2) (mappend p1 p2)
 
-instance EqProp ParseFailure where
+instance EqProp (ParseFailure s) where
    ParseFailure pos1 msg1 =-= ParseFailure pos2 msg2 = property (pos1 == pos2)
 
 instance (Ord r, Show r, EqProp r, Eq s, EqProp s, Show s, FactorialMonoid s, Arbitrary s) =>
          EqProp (Parser (Rank2.Only r) s r) where
    p1 =-= p2 = forAll arbitrary (\s-> (nub <$> simpleParse p1 s) =-= (nub <$> simpleParse p2 s))
 
-instance (FactorialMonoid s, Show s, EqProp s, Arbitrary s, Ord r, Show r, EqProp r, Typeable r) =>
+instance (Eq s, FactorialMonoid s, Show s, EqProp s, Arbitrary s, Ord r, Show r, EqProp r, Typeable r) =>
          EqProp (DescribedParser s r) where
    DescribedParser _ p1 =-= DescribedParser _ p2 = forAll arbitrary $ \s->
       simpleParse p1 s =-= simpleParse p2 s

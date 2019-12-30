@@ -6,7 +6,7 @@ module Text.Grampa (
    MultiParsing(..),
    offsetContext, offsetLineAndColumn, positionOffset, failureDescription, simply,
    -- * Types
-   Grammar, GrammarBuilder, ParseResults, ParseFailure(..), Ambiguous(..), Position,
+   Grammar, GrammarBuilder, ParseResults, ParseFailure(..), Expected(..), Ambiguous(..), Position,
    -- * Parser combinators and primitives
    GrammarParsing(..), InputParsing(..), InputCharParsing(..), AmbiguousParsing(..), Lexical(..),
    module Text.Parser.Char,
@@ -14,7 +14,7 @@ module Text.Grampa (
    module Text.Parser.LookAhead)
 where
 
-import Data.List (intersperse)
+import Data.List (intersperse, nub, sort)
 import Data.Monoid ((<>))
 import qualified Data.Monoid.Factorial as Factorial
 import Data.Monoid.Factorial (FactorialMonoid)
@@ -25,7 +25,8 @@ import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 
 import qualified Rank2
 import Text.Grampa.Class (Lexical(..), MultiParsing(..), GrammarParsing(..), InputParsing(..), InputCharParsing(..),
-                          AmbiguousParsing(..), Ambiguous(..), ParseResults, ParseFailure(..), Position, positionOffset)
+                          AmbiguousParsing(..), Ambiguous(..), ParseResults, ParseFailure(..), Expected(..), Position,
+                          positionOffset)
 
 -- | A type synonym for a fixed grammar record type @g@ with a given parser type @p@ on input streams of type @s@
 type Grammar (g  :: (* -> *) -> *) p s = g (p g s)
@@ -44,10 +45,10 @@ simply parseGrammar p input = Rank2.fromOnly (parseGrammar (Rank2.Only p) input)
 
 -- | Given the textual parse input, the parse failure on the input, and the number of lines preceding the failure to
 -- show, produce a human-readable failure description.
-failureDescription :: forall s. (Eq s, IsString s, FactorialMonoid s) => s -> ParseFailure -> Int -> s
+failureDescription :: forall s. (Ord s, IsString s, FactorialMonoid s) => s -> ParseFailure s -> Int -> s
 failureDescription input (ParseFailure pos expected) contextLineCount =
    offsetContext input pos contextLineCount
-   <> "expected " <> oxfordComma (fromString <$> expected)
+   <> "expected " <> oxfordComma (fromExpected <$> nub (sort expected))
    where oxfordComma :: [s] -> s
          oxfordComma [] = ""
          oxfordComma [x] = x
@@ -56,6 +57,8 @@ failureDescription input (ParseFailure pos expected) contextLineCount =
          onLast _ [] = []
          onLast f [x] = [f x]
          onLast f (x:xs) = x : onLast f xs
+         fromExpected (Expected s) = fromString s
+         fromExpected (ExpectedInput s) = "string \"" <> s <> "\""
 
 -- | Given the parser input, an offset within it, and desired number of context lines, returns a description of
 -- the offset position in English.

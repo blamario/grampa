@@ -32,7 +32,7 @@ import qualified Text.Parser.Token as Token
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          AmbiguousParsing(..), Lexical(..), Ambiguous(..), ParseResults)
+                          AmbiguousParsing(..), Lexical(..), Ambiguous(..), ParseResults, Expected(..))
 import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), fromResultList)
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
@@ -117,18 +117,18 @@ general' p@Parser{} = p
 --
 -- @
 -- 'parseComplete' :: ("Rank2".'Rank2.Apply' g, "Rank2".'Rank2.Traversable' g, 'FactorialMonoid' s) =>
---                  g (LeftRecursive.'Fixed g s) -> s -> g ('Compose' 'ParseResults' [])
+--                  g (LeftRecursive.'Fixed g s) -> s -> g ('Compose' ('ParseResults' s) [])
 -- @
 instance MultiParsing (Fixed Memoizing.Parser) where
    type GrammarConstraint (Fixed Memoizing.Parser) g = (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
-   type ResultFunctor (Fixed Memoizing.Parser) = Compose ParseResults []
-   parsePrefix :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, FactorialMonoid s) =>
-                  g (Parser g s) -> s -> g (Compose (Compose ParseResults []) ((,) s))
+   type ResultFunctor (Fixed Memoizing.Parser) s = Compose (ParseResults s) []
+   parsePrefix :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, Eq s, FactorialMonoid s) =>
+                  g (Parser g s) -> s -> g (Compose (Compose (ParseResults s) []) ((,) s))
    parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input)
                                     (snd $ head $ parseRecursive g input)
    {-# INLINE parsePrefix #-}
-   parseComplete :: (FactorialMonoid s, Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
-                    g (Parser g s) -> s -> g (Compose ParseResults [])
+   parseComplete :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, Eq s, FactorialMonoid s) =>
+                    g (Parser g s) -> s -> g (Compose (ParseResults s) [])
    parseComplete g = \input-> let close = Rank2.fmap (<* endOfInput) selfReferring
                               in Rank2.fmap ((snd <$>) . Compose . fromResultList input)
                                             (snd $ head $ Memoizing.reparseTails close $ parseSeparated g' input)
@@ -439,8 +439,8 @@ instance FactorialMonoid s => InputParsing (Fixed Memoizing.Parser g s) where
       where p = scan s0 f
             test = isJust . f s0
    string s
-      | null s = primitive ("(string " ++ shows s ")") (string s) empty (string s)
-      | otherwise = positivePrimitive ("(string " ++ shows s ")") (string s)
+      | null s = primitive "string" (string s) empty (string s)
+      | otherwise = positivePrimitive "string" (string s)
    takeWhile predicate = primitive "takeWhile" (mempty <$ notSatisfy predicate)
                                                (takeWhile1 predicate) (takeWhile predicate)
    takeWhile1 predicate = positivePrimitive "takeWhile1" (takeWhile1 predicate)
@@ -494,8 +494,8 @@ instance FactorialMonoid s => InputParsing (Fixed Backtrack.Parser g s) where
       where p = scan s0 f
             test = isJust . f s0
    string s
-      | null s = primitive ("(string " ++ shows s ")") (string s) empty (string s)
-      | otherwise = positivePrimitive ("(string " ++ shows s ")") (string s)
+      | null s = primitive "string" (string s) empty (string s)
+      | otherwise = positivePrimitive "string" (string s)
    takeWhile predicate = primitive "takeWhile" (mempty <$ notSatisfy predicate)
                                                (takeWhile1 predicate) (takeWhile predicate)
    takeWhile1 predicate = positivePrimitive "takeWhile1" (takeWhile1 predicate)
@@ -626,7 +626,7 @@ terminalPEG p@Parser{} = Parser{complete= Memoizing.terminalPEG (complete p),
                                 appendResults= (<>),
                                 cyclicDescendants= cyclicDescendants p}
 
-parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, FactorialMonoid s) =>
+parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, Eq s, FactorialMonoid s) =>
                   g (Parser g s) -> s -> [(s, g (ResultList g s))]
 parseRecursive = parseSeparated . separated
 {-# INLINE parseRecursive #-}
@@ -691,7 +691,7 @@ fixNullabilities gf = Rank2.fmap (Const . nullable . getConst) (go initial)
 -- | Parse the given input using a context-free grammar separated into two parts: the first specifying all the
 -- left-recursive productions, the second all others. The first function argument specifies the left-recursive
 -- dependencies among the grammar productions.
-parseSeparated :: forall g s. (Rank2.Apply g, Rank2.Foldable g, FactorialMonoid s) =>
+parseSeparated :: forall g s. (Rank2.Apply g, Rank2.Foldable g, Eq s, FactorialMonoid s) =>
                   g (SeparatedParser Memoizing.Parser g s) -> s -> [(s, g (ResultList g s))]
 parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
    where parseTail s parsedTail = parsed
@@ -733,7 +733,8 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
 
          whileAnyContinues ft fm total marginal =
             Rank2.liftA3 choiceWhile maybeDependencies total (whileAnyContinues ft fm (ft total) (fm marginal))
-            where choiceWhile :: Const (Maybe (g (Const Bool))) x
+            where choiceWhile :: Eq s =>
+                                 Const (Maybe (g (Const Bool))) x
                               -> ResultList g s x -> ResultList g s x
                               -> ResultList g s x
                   choiceWhile (Const Nothing) t _ = t
@@ -747,7 +748,7 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                         in ResultList [] (Memoizing.FailureInfo pos expected')
                      | otherwise = t
                      where combine :: Const Bool x -> ResultList g s x -> Const Bool x
-                           combineFailures :: [String] -> Const Bool x -> ResultList g s x -> Const Bool x
+                           combineFailures :: Eq s => [Expected s] -> Const Bool x -> ResultList g s x -> Const Bool x
                            combine (Const False) _ = Const False
                            combine (Const True) (ResultList [] _) = Const False
                            combine (Const True) _ = Const True

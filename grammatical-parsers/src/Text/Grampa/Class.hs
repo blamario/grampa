@@ -1,9 +1,9 @@
 {-# LANGUAGE FlexibleContexts, ConstrainedClassMethods, UndecidableInstances #-}
-{-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, OverloadedStrings, QuantifiedConstraints,
+{-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, DeriveFunctor, OverloadedStrings,
              RankNTypes, ScopedTypeVariables, TypeApplications, TypeFamilies, DeriveDataTypeable #-}
 module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), AmbiguousParsing(..), InputParsing(..),
-                          InputCharParsing(..), Lexical(..), ParseResults, ParseFailure(..), Ambiguous(..), Position,
-                          positionOffset, completeParser) where
+                          InputCharParsing(..), Lexical(..), ParseResults, ParseFailure(..), Expected(..),
+                          Ambiguous(..), Position, positionOffset, completeParser) where
 
 import Control.Applicative (Alternative(empty), liftA2, (<|>))
 import Data.Char (isAlphaNum, isLetter, isSpace)
@@ -27,10 +27,13 @@ import GHC.Exts (Constraint)
 
 import qualified Rank2
 
-type ParseResults = Either ParseFailure
+type ParseResults s = Either (ParseFailure s)
 
 -- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset.
-data ParseFailure = ParseFailure Int [String] deriving (Eq, Show)
+data ParseFailure s = ParseFailure Int [Expected s] deriving (Eq, Show)
+data Expected s = Expected String
+                | ExpectedInput s
+                deriving (Functor, Eq, Ord, Read, Show)
 
 -- | Opaque data type that represents an input position.
 newtype Position s = Position{
@@ -72,25 +75,25 @@ instance Monoid a => Monoid (Ambiguous a) where
    mempty = Ambiguous (mempty :| [])
    Ambiguous xs `mappend` Ambiguous ys = Ambiguous (liftA2 mappend xs ys)
 
-completeParser :: MonoidNull s => Compose ParseResults (Compose [] ((,) s)) r -> Compose ParseResults [] r
+completeParser :: MonoidNull s => Compose (ParseResults s) (Compose [] ((,) s)) r -> Compose (ParseResults s) [] r
 completeParser (Compose (Left failure)) = Compose (Left failure)
 completeParser (Compose (Right (Compose results))) =
    case filter (Null.null . fst) results
-   of [] -> Compose (Left $ ParseFailure 0 ["complete parse"])
+   of [] -> Compose (Left $ ParseFailure 0 [Expected "complete parse"])
       completeResults -> Compose (Right $ snd <$> completeResults)
 
 -- | Choose one of the instances of this class to parse with.
 class MultiParsing m where
    -- | Some parser types produce a single result, others a list of results.
-   type ResultFunctor m :: * -> *
+   type ResultFunctor m s :: * -> *
    type GrammarConstraint m (g :: (* -> *) -> *) :: Constraint
    type GrammarConstraint m g = Rank2.Functor g
    -- | Given a rank-2 record of parsers and input, produce a record of parses of the complete input.
-   parseComplete :: (GrammarConstraint m g, FactorialMonoid s) => g (m g s) -> s -> g (ResultFunctor m)
+   parseComplete :: (GrammarConstraint m g, Eq s, FactorialMonoid s) => g (m g s) -> s -> g (ResultFunctor m s)
    -- | Given a rank-2 record of parsers and input, produce a record of prefix parses paired with the remaining input
    -- suffix.
-   parsePrefix :: (GrammarConstraint m g, FactorialMonoid s) =>
-                  g (m g s) -> s -> g (Compose (ResultFunctor m) ((,) s))
+   parsePrefix :: (GrammarConstraint m g, Eq s, FactorialMonoid s) =>
+                  g (m g s) -> s -> g (Compose (ResultFunctor m s) ((,) s))
 
 -- | Parsers that belong to this class can memoize the parse results to avoid exponential performance complexity.
 class MultiParsing m => GrammarParsing m where
@@ -138,7 +141,7 @@ class Parsing m => InputParsing m where
    -- loop until a failure occurs.  Careless use will thus result in an infinite loop.
    scan :: ParserInput m -> (ParserInput m -> ParserInput m -> Maybe (ParserInput m)) -> m (ParserInput m)
    -- | A parser that consumes and returns the given prefix of the input.
-   string :: (LeftReductiveMonoid (ParserInput m), Show (ParserInput m)) => ParserInput m -> m (ParserInput m)
+   string :: LeftReductiveMonoid (ParserInput m) => ParserInput m -> m (ParserInput m)
 
    -- | A parser accepting the longest sequence of input atoms that match the given predicate; an optimized version of
    -- 'concatMany . satisfy'.

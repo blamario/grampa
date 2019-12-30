@@ -24,18 +24,18 @@ main = do args <- concat <$> getArgs
           -- let a = fixGrammar (Arithmetic.arithmetic (production id Arithmetic.expr a))
           -- let a = fixGrammar (Arithmetic.arithmetic (recursive $ Arithmetic.expr a))
           print (getCompose . Lambda.expr $ parseComplete (fixGrammar Lambda.lambdaCalculus) args
-                 :: ParseResults [Lambda.LambdaInitial])
-          -- print (((\f-> f (mempty :: Map String Int) [1 :: Int]) <$>) <$> parse (fixGrammar Lambda.lambdaCalculus) Lambda.expr args :: ParseResults Int)
-          print (getCompose . Arithmetic.expr $ parseComplete (fixGrammar arithmetic) args :: ParseResults [Int])
+                 :: ParseResults String [Lambda.LambdaInitial])
+          -- print (((\f-> f (mempty :: Map String Int) [1 :: Int]) <$>) <$> parse (fixGrammar Lambda.lambdaCalculus) Lambda.expr args :: ParseResults String Int)
+          print (getCompose . Arithmetic.expr $ parseComplete (fixGrammar arithmetic) args :: ParseResults String [Int])
           print (getCompose . Comparisons.test . Rank2.snd $ parseComplete (fixGrammar comparisons) args
-                 :: ParseResults [Bool])
+                 :: ParseResults String [Bool])
           print (getCompose . Boolean.expr . Rank2.snd $
-                 parseComplete (fixGrammar boolean) args :: ParseResults [Bool])
+                 parseComplete (fixGrammar boolean) args :: ParseResults String [Bool])
           print (getCompose . Conditionals.expr . Rank2.snd $ parseComplete (fixGrammar conditionals) args
-                 :: ParseResults [Int])
+                 :: ParseResults String [Int])
           print (((\f-> f (mempty :: Map String Combined.Tagged)) <$>)
                  <$> (getCompose . Combined.expr $ parseComplete (fixGrammar Combined.expression) args)
-                 :: ParseResults [Combined.Tagged])
+                 :: ParseResults String [Combined.Tagged])
 
 comparisons :: (Lexical g, LexicalConstraint Parser g String) => GrammarBuilder ArithmeticComparisons g Parser String
 comparisons (Rank2.Pair a c) =

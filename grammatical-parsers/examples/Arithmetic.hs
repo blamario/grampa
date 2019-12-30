@@ -107,4 +107,4 @@ arithmetic Arithmetic{..} = Arithmetic{
 
 main :: IO ()
 main = getContents >>=
-       print . (getCompose . expr . parseComplete (fixGrammar arithmetic) :: String -> ParseResults [Int])
+       print . (getCompose . expr . parseComplete (fixGrammar arithmetic) :: String -> ParseResults String [Int])

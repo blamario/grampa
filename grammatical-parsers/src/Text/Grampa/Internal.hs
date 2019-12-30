@@ -1,4 +1,5 @@
-module Text.Grampa.Internal (BinTree(..), FailureInfo(..), ResultList(..), ResultsOfLength(..), fromResultList) where
+module Text.Grampa.Internal (BinTree(..), FailureInfo(..), ResultList(..), ResultsOfLength(..),
+                             fromResultList, noFailure) where
 
 import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
@@ -9,22 +10,22 @@ import Data.Semigroup (Semigroup((<>)))
 
 import Data.Monoid.Factorial (FactorialMonoid, length)
 
-import Text.Grampa.Class (ParseFailure(..), ParseResults)
+import Text.Grampa.Class (Expected(..), ParseFailure(..), ParseResults)
 
 import Prelude hiding (length, showList)
 
-data FailureInfo = FailureInfo Int [String] deriving (Eq, Show)
+data FailureInfo s = FailureInfo Int [Expected s] deriving (Eq, Show)
 
 data ResultsOfLength g s r = ResultsOfLength !Int ![(s, g (ResultList g s))] !(NonEmpty r)
 
-data ResultList g s r = ResultList ![ResultsOfLength g s r] !FailureInfo
+data ResultList g s r = ResultList ![ResultsOfLength g s r] !(FailureInfo s)
 
 data BinTree a = Fork !(BinTree a) !(BinTree a)
                | Leaf !a
                | EmptyTree
                deriving (Show)
 
-fromResultList :: FactorialMonoid s => s -> ResultList g s r -> ParseResults [(s, r)]
+fromResultList :: (Eq s, FactorialMonoid s) => s -> ResultList g s r -> ParseResults s [(s, r)]
 fromResultList s (ResultList [] (FailureInfo pos msgs)) =
    Left (ParseFailure (length s - pos + 1) (nub msgs))
 fromResultList _ (ResultList rl _failure) = Right (foldMap f rl)
@@ -32,26 +33,23 @@ fromResultList _ (ResultList rl _failure) = Right (foldMap f rl)
          f (ResultsOfLength _ [] r) = (,) mempty <$> toList r
 {-# INLINABLE fromResultList #-}
 
-instance Semigroup FailureInfo where
+noFailure :: FailureInfo s
+noFailure = FailureInfo maxBound []
+
+instance Semigroup (FailureInfo s) where
    FailureInfo pos1 exp1 <> FailureInfo pos2 exp2 = FailureInfo pos' exp'
       where (pos', exp') | pos1 < pos2 = (pos1, exp1)
                          | pos1 > pos2 = (pos2, exp2)
-                         | otherwise = (pos1, merge exp1 exp2)
-            merge [] exps = exps
-            merge exps [] = exps
-            merge xs@(x:xs') ys@(y:ys')
-               | x < y = x : merge xs' ys
-               | x > y = y : merge xs ys'
-               | otherwise = x : merge xs' ys'
+                         | otherwise = (pos1, exp1 <> exp2)
 
-instance Monoid FailureInfo where
+instance Monoid (FailureInfo s) where
    mempty = FailureInfo maxBound []
    mappend = (<>)
 
-instance Show r => Show (ResultList g s r) where
+instance (Show s, Show r) => Show (ResultList g s r) where
    show (ResultList l f) = "ResultList (" ++ shows l (") (" ++ shows f ")")
 
-instance Show1 (ResultList g s) where
+instance Show s => Show1 (ResultList g s) where
    liftShowsPrec _sp showList _prec (ResultList rol f) rest = 
       "ResultList " ++ shows (simplify <$> toList rol) (shows f rest)
       where simplify (ResultsOfLength l _ r) = "ResultsOfLength " <> show l <> " _ " <> showList (toList r) ""
