@@ -138,7 +138,7 @@ class Parsing m => InputParsing m where
    --
    -- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers
    -- loop until a failure occurs.  Careless use will thus result in an infinite loop.
-   scan :: ParserInput m -> (ParserInput m -> ParserInput m -> Maybe (ParserInput m)) -> m (ParserInput m)
+   scan :: state -> (state -> ParserInput m -> Maybe state) -> m (ParserInput m)
    -- | A parser that consumes and returns the given prefix of the input.
    string :: ParserInput m -> m (ParserInput m)
 
@@ -177,7 +177,7 @@ class (CharParsing m, InputParsing m) => InputCharParsing m where
    notSatisfyChar :: (Char -> Bool) -> m ()
 
    -- | Stateful scanner like `scan`, but specialized for 'TextualMonoid' inputs.
-   scanChars :: ParserInput m -> (ParserInput m -> Char -> Maybe (ParserInput m)) -> m (ParserInput m)
+   scanChars :: state -> (state -> Char -> Maybe state) -> m (ParserInput m)
 
    -- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
    -- match the given predicate; an optimized version of 'fmap fromString  . many . satisfyChar'.
