@@ -5,7 +5,7 @@ module Text.Grampa.Combinators (moptional, concatMany, concatSome,
                                 delimiter, operator, keyword) where
 
 import Control.Applicative(Applicative(..), Alternative(..))
-import Data.Monoid.Cancellative (LeftReductiveMonoid)
+import Data.Semigroup.Cancellative (LeftReductive)
 import Data.Monoid (Monoid, (<>))
 import Data.Monoid.Factorial (FactorialMonoid)
 
@@ -33,11 +33,11 @@ upto n p
    | otherwise = pure []
 
 -- | Parses the given delimiter, such as a comma or a brace
-delimiter :: (Show s, FactorialMonoid s, LeftReductiveMonoid s, s ~ ParserInput (p g s),
+delimiter :: (Show s, FactorialMonoid s, LeftReductive s, s ~ ParserInput (p g s),
               Parsing (p g s), InputParsing (p g s), Lexical g, LexicalConstraint p g s) => s -> p g s s
 delimiter s = lexicalToken (string s) <?> ("delimiter " <> show s)
 
 -- | Parses the given operator symbol
-operator :: (Show s, FactorialMonoid s, LeftReductiveMonoid s, s ~ ParserInput (p g s),
+operator :: (Show s, FactorialMonoid s, LeftReductive s, s ~ ParserInput (p g s),
              Parsing (p g s), InputParsing (p g s), Lexical g, LexicalConstraint p g s) => s -> p g s s
 operator s = lexicalToken (string s) <?> ("operator " <> show s)

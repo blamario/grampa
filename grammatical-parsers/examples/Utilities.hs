@@ -1,11 +1,8 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, KindSignatures, RankNTypes, ScopedTypeVariables #-}
 module Utilities where
 
-import Data.Char (isAlphaNum)
 import Data.Functor.Compose (Compose(..))
-import Data.List (intercalate)
 import Data.Monoid ((<>))
-import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid, toString)
 
 import Text.Grampa

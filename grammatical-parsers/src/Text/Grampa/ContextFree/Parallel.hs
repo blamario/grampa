@@ -10,11 +10,11 @@ import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List (nub)
 import Data.Semigroup (Semigroup(..))
+import qualified Data.Semigroup.Cancellative as Cancellative
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
-import qualified Data.Monoid.Cancellative as Cancellative
 import qualified Data.Monoid.Null as Null
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
@@ -112,13 +112,11 @@ instance MultiParsing Parser where
    -- | Returns the list of all possible parses of complete input.
    parseComplete :: forall g s. (Rank2.Functor g, Eq s, FactorialMonoid s) =>
                     g (Parser g s) -> s -> g (Compose (ParseResults s) [])
-   parseComplete g input = Rank2.fmap ((snd <$>) . getCompose) (parsePrefix (Rank2.fmap (<* endOfInput) g) input)
+   parseComplete g input = Rank2.fmap ((snd <$>) . getCompose) (parsePrefix (Rank2.fmap (<* eof) g) input)
 
-instance FactorialMonoid s => InputParsing (Parser g s) where
+instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
-   endOfInput = Parser f
-      where f s | null s = ResultList (Leaf $ ResultInfo s ()) noFailure
-                | otherwise = ResultList mempty (FailureInfo (Factorial.length s) [Expected "endOfInput"])
+   endOfInput = eof
    getInput = Parser p
       where p s = ResultList (Leaf $ ResultInfo s s) noFailure
    anyToken = Parser p
@@ -152,7 +150,7 @@ instance FactorialMonoid s => InputParsing (Parser g s) where
                where ResultList rs failure = p s
             continue (ResultInfo suffix prefix) = mappend prefix <$> q suffix
 
-instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
+instance TextualMonoid s => InputCharParsing (Parser g s) where
    satisfyChar predicate = Parser p
       where p s =
                case Textual.splitCharacterPrefix s
@@ -198,14 +196,16 @@ instance FactorialMonoid s => Parsing (Parser g s) where
    skipMany p = go
       where go = pure () <|> p *> go
    unexpected msg = Parser (\t-> ResultList mempty $ FailureInfo (Factorial.length t) [Expected msg])
-   eof = endOfInput
+   eof = Parser f
+      where f s | null s = ResultList (Leaf $ ResultInfo s ()) noFailure
+                | otherwise = ResultList mempty (FailureInfo (Factorial.length s) [Expected "end of input"])
 
 instance FactorialMonoid s => LookAheadParsing (Parser g s) where
    lookAhead (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t (ResultList rl failure) = ResultList (rewindInput t <$> rl) failure
             rewindInput t (ResultInfo _ r) = ResultInfo t r
 
-instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
+instance TextualMonoid s => CharParsing (Parser g s) where
    satisfy = satisfyChar
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    char = satisfyChar . (==)

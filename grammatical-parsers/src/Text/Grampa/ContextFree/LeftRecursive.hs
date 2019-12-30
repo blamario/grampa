@@ -19,6 +19,7 @@ import Data.Monoid (Monoid(mempty), All(..), Any(..))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
+import Data.Semigroup.Cancellative (LeftReductive)
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
 import Data.String (fromString)
@@ -129,7 +130,7 @@ instance MultiParsing (Fixed Memoizing.Parser) where
    {-# INLINE parsePrefix #-}
    parseComplete :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, Eq s, FactorialMonoid s) =>
                     g (Parser g s) -> s -> g (Compose (ParseResults s) [])
-   parseComplete g = \input-> let close = Rank2.fmap (<* endOfInput) selfReferring
+   parseComplete g = \input-> let close = Rank2.fmap (<* eof) selfReferring
                               in Rank2.fmap ((snd <$>) . Compose . fromResultList input)
                                             (snd $ head $ Memoizing.reparseTails close $ parseSeparated g' input)
       where g' = separated g
@@ -428,7 +429,7 @@ instance (LookAheadParsing (p g s), InputParsing (Fixed p g s)) => LookAheadPars
       indirect= lookAhead (indirect p),
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
 
-instance FactorialMonoid s => InputParsing (Fixed Memoizing.Parser g s) where
+instance (LeftReductive s, FactorialMonoid s) => InputParsing (Fixed Memoizing.Parser g s) where
    type ParserInput (Fixed Memoizing.Parser g s) = s
    endOfInput = primitive "endOfInput" endOfInput empty endOfInput
    getInput = primitive "getInput" getInput empty getInput
@@ -483,7 +484,7 @@ instance (Show s, TextualMonoid s) => InputCharParsing (Fixed Memoizing.Parser g
                                                          (takeCharsWhile1 predicate) (takeCharsWhile predicate)
    takeCharsWhile1 predicate = positivePrimitive "takeCharsWhile1" (takeCharsWhile1 predicate)
 
-instance FactorialMonoid s => InputParsing (Fixed Backtrack.Parser g s) where
+instance (LeftReductive s, FactorialMonoid s) => InputParsing (Fixed Backtrack.Parser g s) where
    type ParserInput (Fixed Backtrack.Parser g s) = s
    endOfInput = primitive "endOfInput" endOfInput empty endOfInput
    getInput = primitive "getInput" getInput empty getInput

@@ -1,6 +1,6 @@
-{-# LANGUAGE FlexibleContexts, ConstrainedClassMethods, UndecidableInstances #-}
-{-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, DeriveFunctor, OverloadedStrings,
-             RankNTypes, ScopedTypeVariables, TypeApplications, TypeFamilies, DeriveDataTypeable #-}
+{-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, DeriveDataTypeable, DeriveFunctor,
+             FlexibleContexts, OverloadedStrings, RankNTypes, ScopedTypeVariables, TypeApplications, TypeFamilies,
+             UndecidableInstances #-}
 module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), AmbiguousParsing(..), InputParsing(..),
                           InputCharParsing(..), Lexical(..), ParseResults, ParseFailure(..), Expected(..),
                           Ambiguous(..), Position, positionOffset, completeParser) where
@@ -13,7 +13,6 @@ import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Data (Data)
 import Data.Typeable (Typeable)
 import Data.Monoid (Monoid(mempty, mappend))
-import Data.Monoid.Cancellative (LeftReductiveMonoid)
 import qualified Data.Monoid.Null as Null
 import Data.Monoid.Null (MonoidNull)
 import qualified Data.Monoid.Factorial as Factorial
@@ -141,7 +140,7 @@ class Parsing m => InputParsing m where
    -- loop until a failure occurs.  Careless use will thus result in an infinite loop.
    scan :: ParserInput m -> (ParserInput m -> ParserInput m -> Maybe (ParserInput m)) -> m (ParserInput m)
    -- | A parser that consumes and returns the given prefix of the input.
-   string :: LeftReductiveMonoid (ParserInput m) => ParserInput m -> m (ParserInput m)
+   string :: ParserInput m -> m (ParserInput m)
 
    -- | A parser accepting the longest sequence of input atoms that match the given predicate; an optimized version of
    -- 'concatMany . satisfy'.

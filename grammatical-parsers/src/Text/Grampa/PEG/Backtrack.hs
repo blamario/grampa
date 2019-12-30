@@ -14,10 +14,10 @@ import Data.Monoid.Factorial(FactorialMonoid)
 import Data.Monoid.Textual(TextualMonoid)
 import Data.String (fromString)
 
-import qualified Data.Monoid.Cancellative as Cancellative
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Null as Null
 import qualified Data.Monoid.Textual as Textual
+import qualified Data.Semigroup.Cancellative as Cancellative
 
 import qualified Rank2
 
@@ -99,7 +99,10 @@ instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
                where replaceFailure (NoParse (FailureInfo pos msgs)) =
                         NoParse (FailureInfo pos $ if pos == Factorial.length rest then [Expected msg] else msgs)
                      replaceFailure parsed = parsed
-   eof = endOfInput
+   eof = Parser p
+      where p rest
+               | Null.null rest = Parsed () rest
+               | otherwise = NoParse (FailureInfo (Factorial.length rest) [Expected "end of input"])
    unexpected msg = Parser (\t-> NoParse $ FailureInfo (Factorial.length t) [Expected msg])
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t Parsed{} = NoParse (FailureInfo (Factorial.length t) [Expected "notFollowedBy"])
@@ -123,12 +126,9 @@ instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => T
    semi = lexicalSemicolon
    token = lexicalToken
 
-instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
+instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
-   endOfInput = Parser p
-      where p rest
-               | Null.null rest = Parsed () rest
-               | otherwise = NoParse (FailureInfo (Factorial.length rest) [Expected "endOfInput"])
+   endOfInput = eof
    getInput = Parser p
       where p rest = Parsed rest rest
    anyToken = Parser p
@@ -204,7 +204,7 @@ instance MultiParsing Parser where
    -- | Returns an input prefix parse paired with the remaining input suffix.
    parsePrefix g input = Rank2.fmap (Compose . fromResult input . (`applyParser` input)) g
    parseComplete g input = Rank2.fmap ((snd <$>) . fromResult input . (`applyParser` input))
-                                      (Rank2.fmap (<* endOfInput) g)
+                                      (Rank2.fmap (<* eof) g)
 
 fromResult :: (Eq s, FactorialMonoid s) => s -> Result g s r -> ParseResults s (s, r)
 fromResult s (NoParse (FailureInfo pos msgs)) =

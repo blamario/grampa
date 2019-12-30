@@ -11,14 +11,14 @@ import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List (genericLength, maximumBy, nub)
-import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(mappend, mempty))
-import Data.Monoid.Cancellative (isPrefixOf)
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid, length, splitPrimePrefix)
 import Data.Monoid.Textual (TextualMonoid)
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
+import Data.Semigroup (Semigroup((<>)))
+import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf))
 import Data.String (fromString)
 
 import qualified Text.Parser.Char
@@ -137,7 +137,7 @@ instance MultiParsing Parser where
                     g (Parser g s) -> s -> g (Compose (ParseResults s) [])
    parseComplete g input = Rank2.fmap ((snd <$>) . Compose . fromResultList input)
                               (snd $ head $ reparseTails close $ parseTails g input)
-      where close = Rank2.fmap (<* endOfInput) g
+      where close = Rank2.fmap (<* eof) g
 
 parseTails :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> [(s, g (ResultList g s))]
 parseTails g input = foldr parseTail [] (Factorial.tails input)
@@ -150,7 +150,7 @@ reparseTails _ [] = []
 reparseTails final parsed@((s, _):_) = (s, gd):parsed
    where gd = Rank2.fmap (`applyParser` parsed) final
 
-instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
+instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
    endOfInput = eof
    getInput = Parser p

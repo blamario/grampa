@@ -8,13 +8,13 @@ import Control.Monad (Monad(..), MonadPlus(..))
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List (nub)
-import Data.Semigroup (Semigroup(..))
+import Data.Semigroup (Semigroup((<>)))
+import Data.Semigroup.Cancellative (LeftReductive(stripPrefix))
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Factorial(FactorialMonoid)
 import Data.Monoid.Textual(TextualMonoid)
 import Data.String (fromString)
 
-import qualified Data.Monoid.Cancellative as Cancellative
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Null as Null
 import qualified Data.Monoid.Textual as Textual
@@ -60,7 +60,7 @@ instance Applicative (Parser g s) where
       r rest success failure = p rest (\f rest'-> q rest' (success . f) failure) failure
    {-# INLINABLE (<*>) #-}
 
-instance Factorial.FactorialMonoid s => Alternative (Parser g s) where
+instance FactorialMonoid s => Alternative (Parser g s) where
    empty = Parser (\rest _ failure-> failure $ FailureInfo (Factorial.length rest) [Expected "empty"])
    (<|>) = alt
 
@@ -77,7 +77,7 @@ instance Monad (Parser g s) where
       r :: forall x. s -> (b -> s -> x) -> (FailureInfo s -> x) -> x
       r rest success failure = p rest (\a rest'-> applyParser (f a) rest' success failure) failure
 
-instance Factorial.FactorialMonoid s => MonadPlus (Parser g s) where
+instance FactorialMonoid s => MonadPlus (Parser g s) where
    mzero = empty
    mplus = (<|>)
 
@@ -88,7 +88,7 @@ instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
-instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
+instance FactorialMonoid s => Parsing (Parser g s) where
    try :: forall a. Parser g s a -> Parser g s a
    try (Parser p) = Parser q
       where q :: forall x. s -> (a -> s -> x) -> (FailureInfo s -> x) -> x
@@ -100,7 +100,10 @@ instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
             q input success failure = p input success (failure . replaceFailure)
                where replaceFailure (FailureInfo pos msgs) =
                         FailureInfo pos (if pos == Factorial.length input then [Expected msg] else msgs)
-   eof = endOfInput
+   eof = Parser p
+      where p rest success failure
+               | Null.null rest = success () rest
+               | otherwise = failure (FailureInfo (Factorial.length rest) [Expected "end of input"])
    unexpected msg = Parser (\t _ failure -> failure $ FailureInfo (Factorial.length t) [Expected msg])
    notFollowedBy (Parser p) = Parser q
       where q :: forall x. s -> (() -> s -> x) -> (FailureInfo s -> x) -> x
@@ -108,7 +111,7 @@ instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
                where success' _ _ = failure (FailureInfo (Factorial.length input) [Expected "notFollowedBy"])
                      failure' _ = success () input
 
-instance Factorial.FactorialMonoid s => LookAheadParsing (Parser g s) where
+instance FactorialMonoid s => LookAheadParsing (Parser g s) where
    lookAhead :: forall a. Parser g s a -> Parser g s a
    lookAhead (Parser p) = Parser q
       where q :: forall x. s -> (a -> s -> x) -> (FailureInfo s -> x) -> x
@@ -129,12 +132,9 @@ instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => T
    semi = lexicalSemicolon
    token = lexicalToken
 
-instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
+instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
-   endOfInput = Parser p
-      where p rest success failure
-               | Null.null rest = success () rest
-               | otherwise = failure (FailureInfo (Factorial.length rest) [Expected "endOfInput"])
+   endOfInput = eof
    getInput = Parser p
       where p rest success _ = success rest rest
    anyToken = Parser p
@@ -173,7 +173,7 @@ instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
    string s = Parser p where
       p :: forall x. s -> (s -> s -> x) -> (FailureInfo s -> x) -> x
       p s' success failure
-         | Just suffix <- Cancellative.stripPrefix s s' = success s suffix
+         | Just suffix <- stripPrefix s s' = success s suffix
          | otherwise = failure (FailureInfo (Factorial.length s') [ExpectedInput s])
    concatMany :: forall a. Monoid a => Parser g s a -> Parser g s a
    concatMany (Parser p) = Parser q
@@ -229,7 +229,7 @@ instance MultiParsing Parser where
    -- | Returns an input prefix parse paired with the remaining input suffix.
    parsePrefix g input = Rank2.fmap (Compose . (\p-> applyParser p input (flip $ curry Right) (Left . fromFailure input))) g
    parseComplete g input = Rank2.fmap (\p-> applyParser p input (const . Right) (Left . fromFailure input))
-                                      (Rank2.fmap (<* endOfInput) g)
+                                      (Rank2.fmap (<* eof) g)
 
 fromFailure :: (Eq s, FactorialMonoid s) => s -> FailureInfo s -> ParseFailure s
 fromFailure s (FailureInfo pos msgs) = ParseFailure (Factorial.length s - pos + 1) (nub msgs)

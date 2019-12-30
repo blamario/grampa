@@ -8,13 +8,13 @@ import Control.Monad (Monad(..), MonadPlus(..))
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List (genericLength, nub)
-import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Factorial(FactorialMonoid)
 import Data.Monoid.Textual(TextualMonoid)
+import Data.Semigroup (Semigroup(..))
+import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf))
 import Data.String (fromString)
 
-import qualified Data.Monoid.Cancellative as Cancellative
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Null as Null
 import qualified Data.Monoid.Textual as Textual
@@ -83,7 +83,7 @@ instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
-instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
+instance FactorialMonoid s => Parsing (Parser g s) where
    try (Parser p) = Parser q
       where q rest = rewindFailure (p rest)
                where rewindFailure (NoParse (FailureInfo _pos _msgs)) = NoParse (FailureInfo (genericLength rest) [])
@@ -93,13 +93,16 @@ instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
                where replaceFailure (NoParse (FailureInfo pos msgs)) =
                         NoParse (FailureInfo pos $ if pos == genericLength rest then [Expected msg] else msgs)
                      replaceFailure parsed = parsed
-   eof = endOfInput
+   eof = Parser p
+      where p rest@((s, _) : _)
+               | not (Null.null s) = NoParse (FailureInfo (genericLength rest) [Expected "end of input"])
+            p rest = Parsed () rest
    unexpected msg = Parser (\t-> NoParse $ FailureInfo (genericLength t) [Expected msg])
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t Parsed{} = NoParse (FailureInfo (genericLength t) [Expected "notFollowedBy"])
             rewind t NoParse{} = Parsed () t
 
-instance Factorial.FactorialMonoid s => LookAheadParsing (Parser g s) where
+instance FactorialMonoid s => LookAheadParsing (Parser g s) where
    lookAhead (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t (Parsed r _) = Parsed r t
             rewind _ r@NoParse{} = r
@@ -123,12 +126,9 @@ instance GrammarParsing Parser where
       p ((_, d) : _) = f d
       p _ = NoParse (FailureInfo 0 [Expected "NonTerminal at endOfInput"])
 
-instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
+instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
-   endOfInput = Parser p
-      where p rest@((s, _) : _)
-               | not (Null.null s) = NoParse (FailureInfo (genericLength rest) [Expected "endOfInput"])
-            p rest = Parsed () rest
+   endOfInput = eof
    getInput = Parser p
       where p rest@((s, _):_) = Parsed s rest
             p [] = Parsed mempty []
@@ -163,7 +163,7 @@ instance Factorial.FactorialMonoid s => InputParsing (Parser g s) where
             p rest = NoParse (FailureInfo (genericLength rest) [Expected "takeWhile1"])
    string s = Parser p where
       p rest@((s', _) : _)
-         | Cancellative.isPrefixOf s s' = Parsed s (Factorial.drop (Factorial.length s) rest)
+         | s `isPrefixOf` s' = Parsed s (Factorial.drop (Factorial.length s) rest)
       p rest = NoParse (FailureInfo (genericLength rest) [ExpectedInput s])
    concatMany p = go
       where go = mappend <$> p <*> go <|> mempty
@@ -213,7 +213,7 @@ instance MultiParsing Parser where
    parsePrefix g input = Rank2.fmap (Compose . fromResult input) (snd $ head $ parseTails g input)
    parseComplete g input = Rank2.fmap ((snd <$>) . fromResult input)
                                       (snd $ head $ reparseTails close $ parseTails g input)
-      where close = Rank2.fmap (<* endOfInput) g
+      where close = Rank2.fmap (<* eof) g
 
 parseTails :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> [(s, g (Result g s))]
 parseTails g input = foldr parseTail [] (Factorial.tails input)

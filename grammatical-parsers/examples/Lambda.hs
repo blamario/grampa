@@ -8,7 +8,6 @@ import Data.Map (Map, insert, (!))
 import Data.Monoid ((<>))
 import Text.Parser.Token (symbol, whiteSpace)
 
-import qualified Rank2
 import qualified Rank2.TH
 
 import Text.Grampa

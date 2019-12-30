@@ -136,7 +136,7 @@ tests = testGroup "Grampa" [
                 ==> simpleParse (string xs) ys == Left (ParseFailure 0 [ExpectedInput xs]),
               testProperty "endOfInput mempty" $ simpleParse endOfInput "" == Right [("", ())],
               testProperty "endOfInput failure" $ \s->
-                   s /= "" ==> simpleParse endOfInput s == Left (ParseFailure 0 [Expected "endOfInput"])],
+                   s /= "" ==> simpleParse endOfInput s == Left (ParseFailure 0 [Expected "end of input"])],
            testGroup "lookAhead"
              [testProperty "lookAhead" lookAheadP,
               testProperty "lookAhead p *> p" lookAheadConsumeP,
