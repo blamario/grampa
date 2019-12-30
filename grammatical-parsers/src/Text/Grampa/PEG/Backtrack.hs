@@ -114,11 +114,12 @@ instance Factorial.FactorialMonoid s => LookAheadParsing (Parser g s) where
             rewind _ r@NoParse{} = r
 
 instance (Show s, Textual.TextualMonoid s) => CharParsing (Parser g s) where
-   satisfy = satisfyChar
+   satisfy predicate = Parser p
+      where p rest =
+               case Textual.splitCharacterPrefix rest
+               of Just (first, suffix) | predicate first -> Parsed first suffix
+                  _ -> NoParse (FailureInfo (Factorial.length rest) [Expected "Char.satisfy"])
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
-   char = satisfyChar . (==)
-   notChar = satisfyChar . (/=)
-   anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
 instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
@@ -175,7 +176,7 @@ instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
       where p rest =
                case Textual.splitCharacterPrefix rest
                of Just (first, suffix) | predicate first -> Parsed (Factorial.primePrefix rest) suffix
-                  _ -> NoParse (FailureInfo (Factorial.length rest) [Expected "satisfyChar"])
+                  _ -> NoParse (FailureInfo (Factorial.length rest) [Expected "satisfyCharInput"])
    notSatisfyChar predicate = Parser p
       where p s = case Textual.characterPrefix s
                   of Just first | predicate first 

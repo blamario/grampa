@@ -7,6 +7,7 @@ module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), AmbiguousParsing
 
 import Control.Applicative (Alternative(empty), liftA2, (<|>))
 import Data.Char (isAlphaNum, isLetter, isSpace)
+import Data.Functor (void)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty((:|)))
@@ -19,12 +20,14 @@ import qualified Data.Monoid.Factorial as Factorial
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 import Data.Semigroup (Semigroup((<>)))
-import Text.Parser.Combinators (Parsing((<?>)), skipMany)
+import Text.Parser.Combinators (Parsing((<?>), eof, try), skipMany)
 import Text.Parser.Char (CharParsing)
 import qualified Text.Parser.Char
 import GHC.Exts (Constraint)
 
 import qualified Rank2
+
+import Prelude hiding (takeWhile)
 
 type ParseResults s = Either (ParseFailure s)
 
@@ -112,6 +115,7 @@ class MultiParsing m => GrammarParsing m where
    {-# INLINE fixGrammar #-}
    recursive = id
 
+{-# DEPRECATED endOfInput "Use 'Text.Parser.Combinators.eof' instead" #-}
 -- | Methods for parsing monoidal inputs
 class Parsing m => InputParsing m where
    type ParserInput m
@@ -154,19 +158,32 @@ class Parsing m => InputParsing m where
    -- | Zero or more argument occurrences like 'many', with concatenated monoidal results.
    concatMany :: Monoid a => m a -> m a
 
+   endOfInput = eof
+   notSatisfy predicate = try (void $ satisfy $ not . predicate) <|> eof
    default concatMany :: (Monoid a, Alternative m) => m a -> m a
    concatMany p = go
-      where go = mappend <$> p <*> go <|> pure mempty
+      where go = mappend <$> try p <*> go <|> pure mempty
    default getSourcePos :: (FactorialMonoid (ParserInput m), Functor m) => m (Position (ParserInput m))
    getSourcePos = Position . Factorial.length <$> getInput
+   default scan :: (Monad m, FactorialMonoid (ParserInput m)) =>
+                   state -> (state -> ParserInput m -> Maybe state) -> m (ParserInput m)
+   scan state f = do i <- getInput
+                     let (prefix, _suffix, _state) = Factorial.spanMaybe' state f i
+                     string prefix
+   default takeWhile :: (Monad m, FactorialMonoid (ParserInput m)) => (ParserInput m -> Bool) -> m (ParserInput m)
+   takeWhile predicate = do i <- getInput
+                            string (Factorial.takeWhile predicate i)
+   default takeWhile1 :: (Monad m, MonoidNull (ParserInput m)) => (ParserInput m -> Bool) -> m (ParserInput m)
+   takeWhile1 predicate = do x <- takeWhile predicate
+                             if Null.null x then fail "takeWhile1" else pure x
    {-# INLINE concatMany #-}
    {-# INLINE getSourcePos #-}
 
+{-# DEPRECATED satisfyChar "Use 'Text.Parser.Char.satisfy' instead" #-}
 -- | Methods for parsing monoidal inputs
 class (CharParsing m, InputParsing m) => InputCharParsing m where
    -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting and returning an input character only if it
    -- satisfies the given predicate.
-   -- # DEPRECATED satisfyChar "Use 'Text.Parser.Char.satisfy' instead"
    satisfyChar :: (Char -> Bool) -> m Char
    -- | Specialization of 'satisfy' on 'TextualMonoid' inputs, accepting an input character only if it satisfies the
    -- given predicate, and returning the input atom that represents the character. A faster version of @singleton <$>
@@ -180,13 +197,13 @@ class (CharParsing m, InputParsing m) => InputCharParsing m where
    scanChars :: state -> (state -> Char -> Maybe state) -> m (ParserInput m)
 
    -- | Specialization of 'takeWhile' on 'TextualMonoid' inputs, accepting the longest sequence of input characters that
-   -- match the given predicate; an optimized version of 'fmap fromString  . many . satisfyChar'.
+   -- match the given predicate; an optimized version of @fmap fromString  . many . char@.
    --
    -- /Note/: Because this parser does not fail, do not use it with combinators such as 'many', because such parsers
    -- loop until a failure occurs.  Careless use will thus result in an infinite loop.
    takeCharsWhile :: (Char -> Bool) -> m (ParserInput m)
    -- | Specialization of 'takeWhile1' on 'TextualMonoid' inputs, accepting the longest sequence of input characters
-   -- that match the given predicate; an optimized version of 'fmap fromString  . some . satisfyChar'.
+   -- that match the given predicate; an optimized version of @fmap fromString  . some . char@.
    takeCharsWhile1 :: (Char -> Bool) -> m (ParserInput m)
 
    satisfyChar = Text.Parser.Char.satisfy

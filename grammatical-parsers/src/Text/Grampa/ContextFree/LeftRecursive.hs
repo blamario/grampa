@@ -24,7 +24,7 @@ import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
 import Data.String (fromString)
 
-import qualified Text.Parser.Char
+import qualified Text.Parser.Char as Char
 import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
@@ -431,7 +431,6 @@ instance (LookAheadParsing (p g s), InputParsing (Fixed p g s)) => LookAheadPars
 
 instance (LeftReductive s, FactorialMonoid s) => InputParsing (Fixed Memoizing.Parser g s) where
    type ParserInput (Fixed Memoizing.Parser g s) = s
-   endOfInput = primitive "endOfInput" endOfInput empty endOfInput
    getInput = primitive "getInput" getInput empty getInput
    anyToken = positivePrimitive "anyToken" anyToken
    satisfy predicate = positivePrimitive "satisfy" (satisfy predicate)
@@ -474,10 +473,9 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Fixed Memoizing.P
    {-# INLINABLE concatMany #-}
 
 instance (Show s, TextualMonoid s) => InputCharParsing (Fixed Memoizing.Parser g s) where
-   satisfyChar predicate = positivePrimitive "satisfyChar" (satisfyChar predicate)
    satisfyCharInput predicate = positivePrimitive "satisfyCharInput" (satisfyCharInput predicate)
    notSatisfyChar predicate = primitive "notSatisfyChar" (notSatisfyChar predicate) empty (notSatisfyChar predicate)
-   scanChars s0 f = primitive "scanChars" (mempty <$ notSatisfyChar test) (lookAhead (satisfyChar test) *> p) p
+   scanChars s0 f = primitive "scanChars" (mempty <$ notSatisfyChar test) (lookAhead (Char.satisfy test) *> p) p
       where p = scanChars s0 f
             test = isJust . f s0
    takeCharsWhile predicate = primitive "takeCharsWhile" (mempty <$ notSatisfyChar predicate)
@@ -486,7 +484,6 @@ instance (Show s, TextualMonoid s) => InputCharParsing (Fixed Memoizing.Parser g
 
 instance (LeftReductive s, FactorialMonoid s) => InputParsing (Fixed Backtrack.Parser g s) where
    type ParserInput (Fixed Backtrack.Parser g s) = s
-   endOfInput = primitive "endOfInput" endOfInput empty endOfInput
    getInput = primitive "getInput" getInput empty getInput
    anyToken = positivePrimitive "anyToken" anyToken
    satisfy predicate = positivePrimitive "satisfy" (satisfy predicate)
@@ -529,23 +526,19 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Fixed Backtrack.P
    {-# INLINABLE concatMany #-}
 
 instance (Show s, TextualMonoid s) => InputCharParsing (Fixed Backtrack.Parser g s) where
-   satisfyChar predicate = positivePrimitive "satisfyChar" (satisfyChar predicate)
    satisfyCharInput predicate = positivePrimitive "satisfyCharInput" (satisfyCharInput predicate)
    notSatisfyChar predicate = primitive "notSatisfyChar" (notSatisfyChar predicate) empty (notSatisfyChar predicate)
-   scanChars s0 f = primitive "scanChars" (mempty <$ notSatisfyChar test) (lookAhead (satisfyChar test) *> p) p
+   scanChars s0 f = primitive "scanChars" (mempty <$ notSatisfyChar test) (lookAhead (Char.satisfy test) *> p) p
       where p = scanChars s0 f
             test = isJust . f s0
    takeCharsWhile predicate = primitive "takeCharsWhile" (mempty <$ notSatisfyChar predicate)
                                                          (takeCharsWhile1 predicate) (takeCharsWhile predicate)
    takeCharsWhile1 predicate = positivePrimitive "takeCharsWhile1" (takeCharsWhile1 predicate)
 
-instance (Parsing (p g s), InputCharParsing (Fixed p g s), TextualMonoid s,
+instance (CharParsing (p g s), InputCharParsing (Fixed p g s), TextualMonoid s,
           s ~ ParserInput (Fixed p g s), Show s) => CharParsing (Fixed p g s) where
-   satisfy = satisfyChar
+   satisfy predicate = positivePrimitive "Char.satisfy" (Char.satisfy predicate)
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
-   char = satisfyChar . (==)
-   notChar = satisfyChar . (/=)
-   anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
 instance (Lexical g, LexicalConstraint (Fixed Backtrack.Parser) g s, Show s, TextualMonoid s) =>

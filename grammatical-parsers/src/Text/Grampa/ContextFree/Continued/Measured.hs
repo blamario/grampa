@@ -124,11 +124,13 @@ instance Factorial.FactorialMonoid s => LookAheadParsing (Parser g s) where
                      failure' f = failure f
 
 instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
-   satisfy = satisfyChar
+   satisfy predicate = Parser p
+      where p :: forall x. s -> (Char -> Int -> s -> (FailureInfo s -> x) -> x) -> (FailureInfo s -> x) -> x
+            p rest success failure =
+               case Textual.splitCharacterPrefix rest
+               of Just (first, suffix) | predicate first -> success first 1 suffix failure
+                  _ -> failure (FailureInfo (Factorial.length rest) [Expected "Char.satisfy"])
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
-   char = satisfyChar . (==)
-   notChar = satisfyChar . (/=)
-   anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
 instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
@@ -195,12 +197,6 @@ instance (Cancellative.LeftReductive s, Factorial.FactorialMonoid s) => InputPar
    {-# INLINABLE string #-}
 
 instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
-   satisfyChar predicate = Parser p
-      where p :: forall x. s -> (Char -> Int -> s -> (FailureInfo s -> x) -> x) -> (FailureInfo s -> x) -> x
-            p rest success failure =
-               case Textual.splitCharacterPrefix rest
-               of Just (first, suffix) | predicate first -> success first 1 suffix failure
-                  _ -> failure (FailureInfo (Factorial.length rest) [Expected "satisfyChar"])
    satisfyCharInput predicate = Parser p
       where p :: forall x. s -> (s -> Int -> s -> (FailureInfo s -> x) -> x) -> (FailureInfo s -> x) -> x
             p rest success failure =

@@ -18,7 +18,8 @@ import Data.Typeable (Typeable)
 import Data.Word (Word8, Word64)
 
 import Data.Functor.Compose (Compose(..))
-import Text.Parser.Combinators (choice, sepBy1, skipMany)
+import Text.Parser.Combinators (choice, eof, sepBy1, skipMany)
+import qualified Text.Parser.Char as Char
 import Text.Parser.Token (whiteSpace)
 
 import Control.Enumerable (Shareable, Sized, share)
@@ -66,11 +67,11 @@ nameListGrammarBuilder g@Recursive{..} = Recursive{
           pure id <*> symbol "..." <?> "start",
    rec= sepBy1 one (ignorable *> string "," <?> "comma") <?> "rec",
    one= do ignorable
-           identifier <- ((:) <$> satisfyChar isLetter <*> (toString (const "") <$> takeCharsWhile isLetter))
+           identifier <- ((:) <$> Char.satisfy isLetter <*> (toString (const "") <$> takeCharsWhile isLetter))
            guard (identifier /= "reserved")
            pure id <*> pure identifier
         <?> "one",
-   next= string "--" *> (toString (const "") <$> takeCharsWhile (/= '\n') <* (void (char '\n') <|> endOfInput)) <?> "next"
+   next= string "--" *> (toString (const "") <$> takeCharsWhile (/= '\n') <* (void (char '\n') <|> eof)) <?> "next"
    }
 
 symbol s = ignorable *> string s <* ignorable
@@ -134,9 +135,9 @@ tests = testGroup "Grampa" [
                    simpleParse (string xs) (xs <> ys) == Right [(ys, xs)],
               testProperty "string" $ \(xs::[Word8]) ys-> not (xs `isPrefixOf` ys)
                 ==> simpleParse (string xs) ys == Left (ParseFailure 0 [ExpectedInput xs]),
-              testProperty "endOfInput mempty" $ simpleParse endOfInput "" == Right [("", ())],
-              testProperty "endOfInput failure" $ \s->
-                   s /= "" ==> simpleParse endOfInput s == Left (ParseFailure 0 [Expected "end of input"])],
+              testProperty "eof mempty" $ simpleParse eof "" == Right [("", ())],
+              testProperty "eof failure" $ \s->
+                   s /= "" ==> simpleParse eof s == Left (ParseFailure 0 [Expected "end of input"])],
            testGroup "lookAhead"
              [testProperty "lookAhead" lookAheadP,
               testProperty "lookAhead p *> p" lookAheadConsumeP,
@@ -257,7 +258,7 @@ instance forall s. (Semigroup s, FactorialMonoid s, LeftReductiveMonoid s, Ord s
 
 instance forall s r. (Ord s, Semigroup s, FactorialMonoid s, LeftReductiveMonoid s, Show s, Enumerable s) =>
          Enumerable (DescribedParser s ()) where
-   enumerate = share (choice [c0 (DescribedParser "endOfInput" endOfInput),
+   enumerate = share (choice [c0 (DescribedParser "eof" eof),
                               pay (c1 $ \(DescribedParser d p :: DescribedParser s s)-> DescribedParser ("void " <> d) (void p)),
                               pay (c1 $ \(DescribedParser d p :: DescribedParser s s)->
                                     DescribedParser ("(notFollowedBy " <> d <> ")") (notFollowedBy p))])

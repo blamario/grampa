@@ -151,11 +151,6 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Pars
             continue (ResultInfo suffix prefix) = mappend prefix <$> q suffix
 
 instance TextualMonoid s => InputCharParsing (Parser g s) where
-   satisfyChar predicate = Parser p
-      where p s =
-               case Textual.splitCharacterPrefix s
-               of Just (first, rest) | predicate first -> ResultList (Leaf $ ResultInfo rest first) noFailure
-                  _ -> ResultList mempty (FailureInfo (Factorial.length s) [Expected "satisfyChar"])
    satisfyCharInput predicate = Parser p
       where p s =
                case Textual.splitCharacterPrefix s
@@ -206,11 +201,12 @@ instance FactorialMonoid s => LookAheadParsing (Parser g s) where
             rewindInput t (ResultInfo _ r) = ResultInfo t r
 
 instance TextualMonoid s => CharParsing (Parser g s) where
-   satisfy = satisfyChar
+   satisfy predicate = Parser p
+      where p s =
+               case Textual.splitCharacterPrefix s
+               of Just (first, rest) | predicate first -> ResultList (Leaf $ ResultInfo rest first) noFailure
+                  _ -> ResultList mempty (FailureInfo (Factorial.length s) [Expected "Char.satisfy"])
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
-   char = satisfyChar . (==)
-   notChar = satisfyChar . (/=)
-   anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
 instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => TokenParsing (Parser g s) where

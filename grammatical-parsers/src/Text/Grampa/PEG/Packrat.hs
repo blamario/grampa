@@ -108,11 +108,13 @@ instance FactorialMonoid s => LookAheadParsing (Parser g s) where
             rewind _ r@NoParse{} = r
 
 instance (Show s, Textual.TextualMonoid s) => CharParsing (Parser g s) where
-   satisfy = satisfyChar
+   satisfy predicate = Parser p
+      where p rest@((s, _):t) =
+               case Textual.characterPrefix s
+               of Just first | predicate first -> Parsed first t
+                  _ -> NoParse (FailureInfo (genericLength rest) [Expected "Char.satisfy"])
+            p [] = NoParse (FailureInfo 0 [Expected "Char.satisfy"])
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
-   char = satisfyChar . (==)
-   notChar = satisfyChar . (/=)
-   anyChar = satisfyChar (const True)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
 instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
@@ -169,18 +171,12 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
       where go = mappend <$> p <*> go <|> mempty
 
 instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
-   satisfyChar predicate = Parser p
-      where p rest@((s, _):t) =
-               case Textual.characterPrefix s
-               of Just first | predicate first -> Parsed first t
-                  _ -> NoParse (FailureInfo (genericLength rest) [Expected "satisfyChar"])
-            p [] = NoParse (FailureInfo 0 [Expected "satisfyChar"])
    satisfyCharInput predicate = Parser p
       where p rest@((s, _):t) =
                case Textual.characterPrefix s
                of Just first | predicate first -> Parsed (Factorial.primePrefix s) t
-                  _ -> NoParse (FailureInfo (genericLength rest) [Expected "satisfyChar"])
-            p [] = NoParse (FailureInfo 0 [Expected "satisfyChar"])
+                  _ -> NoParse (FailureInfo (genericLength rest) [Expected "satisfyCharInput"])
+            p [] = NoParse (FailureInfo 0 [Expected "satisfyCharInput"])
    notSatisfyChar predicate = Parser p
       where p rest@((s, _):_)
                | Just first <- Textual.characterPrefix s, 

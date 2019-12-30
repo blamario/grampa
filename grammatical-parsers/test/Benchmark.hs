@@ -13,6 +13,7 @@ import Criterion.Main (bench, bgroup, defaultMain, nf)
 import qualified Rank2
 import qualified Rank2.TH
 
+import Text.Parser.Combinators (eof)
 import Text.Grampa
 import Text.Grampa.ContextFree.Parallel (Parser)
 import qualified Arithmetic
@@ -27,7 +28,7 @@ $(Rank2.TH.deriveAll ''Recursive)
 
 recursiveManyGrammar :: Recursive (Parser g String) -> Recursive (Parser g String)
 recursiveManyGrammar Recursive{..} = Recursive{
-   start= rec <* endOfInput,
+   start= rec <* eof,
    rec= many (char ';') <* optional next,
    next= string "END"}
 
