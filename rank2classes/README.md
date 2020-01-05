@@ -22,12 +22,13 @@ import Data.List (find)
 ~~~
 
 The `Rank2` import will make available the following type classes:
-  * [Rank2.Functor](http://hackage.haskell.org/packages/rank2/doc/html/Rank2.html#t:Functor)
-  * [Rank2.Apply](http://hackage.haskell.org/packages/rank2/doc/html/Rank2.html#t:Apply)
-  * [Rank2.Applicative](http://hackage.haskell.org/packages/rank2/doc/html/Rank2.html#t:Applicative)
-  * [Rank2.Foldable](http://hackage.haskell.org/packages/archive/doc/html/Rank2.html#t:Foldable)
-  * [Rank2.Traversable](http://hackage.haskell.org/packages/archive/doc/html/Rank2.html#t:Traversable)
-  * [Rank2.Distributive](http://hackage.haskell.org/packages/archive/doc/html/Rank2.html#t:Distributive)
+
+  * [Rank2.Functor](http://hackage.haskell.org/package/rank2classes/docs/Rank2.html#t:Functor)
+  * [Rank2.Apply](http://hackage.haskell.org/package/rank2classes/docs/Rank2.html#t:Apply)
+  * [Rank2.Applicative](http://hackage.haskell.org/package/rank2classes/docs/Rank2.html#t:Applicative)
+  * [Rank2.Foldable](http://hackage.haskell.org/package/rank2classes/docs/Rank2.html#t:Foldable)
+  * [Rank2.Traversable](http://hackage.haskell.org/package/rank2classes/docs/Rank2.html#t:Traversable)
+  * [Rank2.Distributive](http://hackage.haskell.org/package/rank2classes/docs/Rank2.html#t:Distributive)
 
 The methods of these type classes all have rank-2 types. The class instances are data types of kind `(k -> *) -> *`,
 one example of which would be a database record with different field types but all wrapped by the same type
@@ -111,8 +112,8 @@ personChecker db =
           father= Rank2.Arrow (personByName db . getConst)}
 ~~~
 
-We can apply it using the [Rank2.<*>](http://hackage.haskell.org/packages/rank2/doc/html/Rank2.html#v:-60--42--62-)
-method of the [Rank2.Apply](http://hackage.haskell.org/packages/rank2/doc/html/Rank2.html#t:Apply) type class to a bunch
+We can apply it using the [Rank2.<*>](http://hackage.haskell.org/package/rank2classes/docs/Rank2.html#v:-60--42--62-)
+method of the [Rank2.Apply](http://hackage.haskell.org/package/rank2classes/docs/Rank2.html#t:Apply) type class to a bunch
 of textual fields for `Person`, and get back either errors or proper field values:
 
 ~~~ {.haskell}
@@ -121,7 +122,7 @@ verify db person = personChecker db Rank2.<*> person
 ~~~
 
 If there are no errors, we can get a fully verified record by applying
-[Rank2.traverse](http://hackage.haskell.org/packages/rank2/doc/html/Rank2.html#v:traverse) to the result:
+[Rank2.traverse](http://hackage.haskell.org/package/rank2classes/docs/Rank2.html#v:traverse) to the result:
 
 ~~~ {.haskell}
 completeVerified :: PersonWithErrors -> Either String PersonVerified
@@ -129,7 +130,7 @@ completeVerified = Rank2.traverse (Identity <$>)
 ~~~
 
 or we can go in the opposite direction with
-[Rank2.<$>](http://hackage.haskell.org/packages/rank2/doc/html/Rank2.html#v:-60--36--62-):
+[Rank2.<$>](http://hackage.haskell.org/package/rank2classes/docs/Rank2.html#v:-60--36--62-):
 
 ~~~ {.haskell}
 uncompleteVerified :: PersonVerified -> PersonWithErrors
@@ -137,7 +138,7 @@ uncompleteVerified = Rank2.fmap (Right . runIdentity)
 ~~~
 
 If on the other hand there *are* errors, we can collect them using
-[Rank2.foldMap](http://hackage.haskell.org/packages/rank2/doc/html#v:foldMap):
+[Rank2.foldMap](http://hackage.haskell.org/package/rank2classes/docs/Rank2.html#v:foldMap):
 
 ~~~ {.haskell}
 verificationErrors :: PersonWithErrors -> [String]
