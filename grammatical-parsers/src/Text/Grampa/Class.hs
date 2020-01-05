@@ -1,11 +1,12 @@
 {-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, DeriveDataTypeable, DeriveFunctor,
-             FlexibleContexts, OverloadedStrings, RankNTypes, ScopedTypeVariables, TypeApplications, TypeFamilies,
-             UndecidableInstances #-}
+             FlexibleContexts, FlexibleInstances, OverloadedStrings, RankNTypes, ScopedTypeVariables, TypeApplications,
+             TypeFamilies, TypeSynonymInstances, UndecidableInstances #-}
 module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), AmbiguousParsing(..), InputParsing(..),
                           InputCharParsing(..), Lexical(..), ParseResults, ParseFailure(..), Expected(..),
                           Ambiguous(..), Position, positionOffset, completeParser) where
 
 import Control.Applicative (Alternative(empty), liftA2, (<|>))
+import Data.ByteString (ByteString, singleton)
 import Data.Char (isAlphaNum, isLetter, isSpace)
 import Data.Functor (void)
 import Data.Functor.Classes (Show1(..))
@@ -20,10 +21,17 @@ import qualified Data.Monoid.Factorial as Factorial
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 import Data.Semigroup (Semigroup((<>)))
+import qualified Data.Semigroup.Cancellative as Cancellative
+import Text.ParserCombinators.ReadP (ReadP)
+import qualified Text.ParserCombinators.Incremental as Incremental
 import Text.Parser.Combinators (Parsing((<?>), eof, try), skipMany)
 import Text.Parser.Char (CharParsing)
+import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 import qualified Text.Parser.Char
 import GHC.Exts (Constraint)
+
+import qualified Data.Attoparsec.ByteString as Attoparsec
+import qualified Text.ParserCombinators.ReadP as ReadP
 
 import qualified Rank2
 
@@ -117,7 +125,7 @@ class MultiParsing m => GrammarParsing m where
 
 {-# DEPRECATED endOfInput "Use 'Text.Parser.Combinators.eof' instead" #-}
 -- | Methods for parsing monoidal inputs
-class Parsing m => InputParsing m where
+class LookAheadParsing m => InputParsing m where
    type ParserInput m
    -- | A parser that fails on any input and succeeds at its end.
    endOfInput :: m ()
@@ -275,3 +283,28 @@ class Lexical (g :: (* -> *) -> *) where
                                                 (takeCharsWhile (isIdentifierFollowChar @g))) <?> "an identifier"
    identifierToken = lexicalToken
    keyword s = lexicalToken (string s *> notSatisfyChar (isIdentifierFollowChar @g)) <?> ("keyword " <> show s)
+
+instance InputParsing ReadP where
+   type ParserInput ReadP = String
+   getInput = ReadP.look
+   anyToken = pure <$> ReadP.get
+   satisfy predicate = pure <$> ReadP.satisfy (predicate . pure)
+   string = ReadP.string
+
+instance InputParsing Attoparsec.Parser where
+   type ParserInput Attoparsec.Parser = ByteString
+   getInput = lookAhead Attoparsec.takeByteString
+   anyToken = Attoparsec.take 1
+   satisfy predicate = Attoparsec.satisfyWith singleton predicate
+   string = Attoparsec.string
+
+instance (FactorialMonoid s, Cancellative.LeftReductive s, LookAheadParsing (Incremental.Parser t s)) =>
+         InputParsing (Incremental.Parser t s) where
+   type ParserInput (Incremental.Parser t s) = s
+   getInput = lookAhead Incremental.acceptAll
+   anyToken = Incremental.anyToken
+   satisfy = Incremental.satisfy
+   string = Incremental.string
+   takeWhile = Incremental.takeWhile
+   takeWhile1 = Incremental.takeWhile1
+   concatMany = Incremental.concatMany

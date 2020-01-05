@@ -1,5 +1,5 @@
 name:                grammatical-parsers
-version:             0.4.1.3
+version:             0.5
 synopsis:            parsers that combine into grammars
 description:
   /Gram/matical-/pa/rsers, or Grampa for short, is a library of parser types whose values are meant to be assigned
@@ -39,13 +39,15 @@ library
                        Text.Grampa.PEG.Continued, Text.Grampa.PEG.Continued.Measured,
                        Text.Grampa.ContextFree.Continued.Measured
   default-language:    Haskell2010
-  -- other-modules:
   ghc-options:         -Wall
   build-depends:       base >=4.9 && <5,
+                       bytestring >= 0.10 && < 0.11,
                        containers >= 0.4 && < 0.7,
                        transformers >= 0.5 && < 0.6,
                        monoid-subclasses >=1.0 && <1.1,
                        parsers < 0.13,
+                       attoparsec >= 0.13 && < 0.14,
+                       incremental-parser >= 0.3.4 && < 0.4,
                        rank2classes >= 1.0.2 && < 1.5
 
 executable             arithmetic
