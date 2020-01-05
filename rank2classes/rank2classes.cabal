@@ -14,13 +14,18 @@ author:              Mario Blažević
 maintainer:          Mario Blažević <blamario@protonmail.com>
 copyright:           (c) 2017 Mario Blažević
 category:            Control, Data, Generics
-build-type:          Simple
+build-type:          Custom
 -- extra-source-files:
 cabal-version:       >=1.10
 extra-source-files:  README.md, CHANGELOG.md, test/MyModule.lhs
 source-repository head
   type:              git
   location:          https://github.com/blamario/grampa
+custom-setup
+ setup-depends:
+   base >= 4 && <5,
+   Cabal,
+   cabal-doctest >= 1 && <1.1
 
 flag use-template-haskell
   description: Enable the compilation of the Rank2.TH module
