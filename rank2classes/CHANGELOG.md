@@ -1,3 +1,7 @@
+Version 1.3.2.1
+---------------
+* Incremented the upper bound of the template-haskell dependency
+
 Version 1.3.2
 ---------------
 * Exported the `$` synonym for `apply`
