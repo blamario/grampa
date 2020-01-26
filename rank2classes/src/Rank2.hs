@@ -290,7 +290,7 @@ instance (Foldable f, Foldable g) => Foldable ((Generics.:+:) f g) where
    foldMap f (Generics.R1 x) = foldMap f x
 
 instance (Foldable f, Foldable g) => Foldable ((Generics.:*:) f g) where
-   foldMap f (x Generics.:*: y) = foldMap f x <> foldMap f y
+   foldMap f (x Generics.:*: y) = foldMap f x `mappend` foldMap f y
 
 instance Traversable Empty where
    traverse _ _ = Rank1.pure Empty
@@ -444,7 +444,7 @@ instance (Distributive g, Distributive h) => Distributive (Product g h) where
    cotraverse w f = Pair (cotraverse w (Rank1.fmap fst f)) (cotraverse w (Rank1.fmap snd f))
 
 instance Monoid c => DistributiveTraversable (Generics.K1 i c) where
-   cotraverseTraversable _ f = coerce (Rank1.fold f)
+   cotraverseTraversable _ f = coerce (Rank1.foldMap Generics.unK1 f)
 
 instance Distributive f => Distributive (Generics.M1 i c f) where
    cotraverse w f = Generics.M1 (cotraverse w (Rank1.fmap Generics.unM1 f))
