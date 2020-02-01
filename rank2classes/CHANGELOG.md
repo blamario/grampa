@@ -1,3 +1,8 @@
+Version 1.4
+---------------
+* Matched the precedence of <$> and <*> operators with Prelude
+* Relaxed the lower bound of base dependency to 4.10
+
 Version 1.3.2.1
 ---------------
 * Incremented the upper bound of the template-haskell dependency

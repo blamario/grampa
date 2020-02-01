@@ -50,6 +50,7 @@ snd (Pair _ y) = y
 -- > (p . q) <$> g == p <$> (q <$> g)
 class Functor g where
    (<$>) :: (forall a. p a -> q a) -> g p -> g q
+infixl 4 <$>
 
 -- | Alphabetical synonym for '<$>'
 fmap :: Functor g => (forall a. p a -> q a) -> g p -> g q
@@ -92,6 +93,7 @@ class Functor g => Apply g where
    (<*>) = liftA2 apply
    liftA2 f g h = (Arrow . f) <$> g <*> h
    liftA3 f g h i = liftA2 (\p q-> Arrow (f p q)) g h <*> i
+infixl 4 <*>
 
 liftA4 :: Apply g => (forall a. p a -> q a -> r a -> s a -> t a) -> g p -> g q -> g r -> g s -> g t
 liftA4 f g h i j = liftA3 (\p q r-> Arrow (f p q r)) g h i <*> j
@@ -246,7 +248,7 @@ instance (Functor f, Functor g) => Functor ((Generics.:+:) f g) where
    f <$> Generics.R1 x = Generics.R1 (f <$> x)
 
 instance (Functor f, Functor g) => Functor ((Generics.:*:) f g) where
-   f <$> (x Generics.:*: y) = f <$> x Generics.:*: f <$> y
+   f <$> (x Generics.:*: y) = (f <$> x) Generics.:*: (f <$> y)
 
 instance Foldable Empty where
    foldMap _ _ = mempty
