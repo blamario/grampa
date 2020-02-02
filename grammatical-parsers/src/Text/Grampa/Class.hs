@@ -24,7 +24,7 @@ import Data.Semigroup (Semigroup((<>)))
 import qualified Data.Semigroup.Cancellative as Cancellative
 import Text.ParserCombinators.ReadP (ReadP)
 import qualified Text.ParserCombinators.Incremental as Incremental
-import Text.Parser.Combinators (Parsing((<?>), eof, try), skipMany)
+import Text.Parser.Combinators (Parsing((<?>), eof, try), skipMany, unexpected)
 import Text.Parser.Char (CharParsing)
 import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 import qualified Text.Parser.Char
@@ -95,27 +95,28 @@ completeParser (Compose (Right (Compose results))) =
 -- | Choose one of the instances of this class to parse with.
 class MultiParsing m where
    -- | Some parser types produce a single result, others a list of results.
-   type ResultFunctor m s :: * -> *
+   type ResultFunctor m :: * -> *
    type GrammarConstraint m (g :: (* -> *) -> *) :: Constraint
    type GrammarConstraint m g = Rank2.Functor g
    -- | Given a rank-2 record of parsers and input, produce a record of parses of the complete input.
-   parseComplete :: (GrammarConstraint m g, Eq s, FactorialMonoid s) => g (m g s) -> s -> g (ResultFunctor m s)
+   parseComplete :: (ParserInput m ~ s, GrammarConstraint m g, Eq s, FactorialMonoid s) =>
+                    g m -> s -> g (ResultFunctor m)
    -- | Given a rank-2 record of parsers and input, produce a record of prefix parses paired with the remaining input
    -- suffix.
-   parsePrefix :: (GrammarConstraint m g, Eq s, FactorialMonoid s) =>
-                  g (m g s) -> s -> g (Compose (ResultFunctor m s) ((,) s))
+   parsePrefix :: (ParserInput m ~ s, GrammarConstraint m g, Eq s, FactorialMonoid s) =>
+                  g m -> s -> g (Compose (ResultFunctor m) ((,) s))
 
 -- | Parsers that belong to this class can memoize the parse results to avoid exponential performance complexity.
 class MultiParsing m => GrammarParsing m where
-   type GrammarFunctor m :: ((* -> *) -> *) -> * -> * -> *
+   type GrammarFunctor m :: * -> *
    -- | Used to reference a grammar production, only necessary from outside the grammar itself
-   nonTerminal :: GrammarConstraint m g => (g (GrammarFunctor m g s) -> GrammarFunctor m g s a) -> m g s a
+   nonTerminal :: GrammarConstraint m g => (g (GrammarFunctor m) -> GrammarFunctor m a) -> m a
    -- | Construct a grammar whose every production refers to itself.
-   selfReferring :: (GrammarConstraint m g, Rank2.Distributive g) => g (m g s)
+   selfReferring :: (GrammarConstraint m g, Rank2.Distributive g) => g m
    -- | Convert a self-referring grammar function to a grammar.
-   fixGrammar :: forall g s. (GrammarConstraint m g, Rank2.Distributive g) => (g (m g s) -> g (m g s)) -> g (m g s)
+   fixGrammar :: forall g s. (GrammarConstraint m g, Rank2.Distributive g) => (g m -> g m) -> g m
    -- | Mark a parser that relies on primitive recursion to prevent an infinite loop in 'fixGrammar'.
-   recursive :: m g s a -> m g s a
+   recursive :: m a -> m a
 
    selfReferring = Rank2.cotraverse nonTerminal id
    {-# INLINE selfReferring #-}
@@ -183,7 +184,7 @@ class LookAheadParsing m => InputParsing m where
                             string (Factorial.takeWhile predicate i)
    default takeWhile1 :: (Monad m, MonoidNull (ParserInput m)) => (ParserInput m -> Bool) -> m (ParserInput m)
    takeWhile1 predicate = do x <- takeWhile predicate
-                             if Null.null x then fail "takeWhile1" else pure x
+                             if Null.null x then unexpected "takeWhile1" else pure x
    {-# INLINE concatMany #-}
    {-# INLINE getSourcePos #-}
 

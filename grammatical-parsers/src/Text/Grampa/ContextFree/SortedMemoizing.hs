@@ -90,8 +90,9 @@ instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
-instance GrammarParsing Parser where
-   type GrammarFunctor Parser = ResultList
+instance GrammarParsing (Parser g s) where
+   type GrammarFunctor (Parser g s) = ResultList g s
+   nonTerminal :: (Rank2.Functor g, ParserInput (Parser g s) ~ s) => (g (ResultList g s) -> ResultList g s a) -> Parser g s a
    nonTerminal f = Parser p where
       p ((_, d) : _) = f d
       p _ = ResultList mempty (FailureInfo 0 [Expected "NonTerminal at endOfInput"])
@@ -104,11 +105,12 @@ instance GrammarParsing Parser where
 -- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>
 --                  g (Memoizing.'Parser' g s) -> s -> g ('Compose' ('ParseResults' s) [])
 -- @
-instance MultiParsing Parser where
-   type ResultFunctor Parser s = Compose (ParseResults s) []
+instance MultiParsing (Parser g s) where
+   type GrammarConstraint (Parser g s) g' = (g ~ g', Rank2.Functor g)
+   type ResultFunctor (Parser g s) = Compose (ParseResults s) []
    -- | Returns the list of all possible input prefix parses paired with the remaining input suffix.
    parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input) (snd $ head $ parseTails g input)
-   parseComplete :: forall g s. (Rank2.Functor g, Eq s, FactorialMonoid s) =>
+   parseComplete :: (ParserInput (Parser g s) ~ s, Rank2.Functor g, Eq s, FactorialMonoid s) =>
                     g (Parser g s) -> s -> g (Compose (ParseResults s) [])
    parseComplete g input = Rank2.fmap ((snd <$>) . Compose . fromResultList input)
                               (snd $ head $ reparseTails close $ parseTails g input)

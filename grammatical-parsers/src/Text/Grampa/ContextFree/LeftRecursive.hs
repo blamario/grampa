@@ -120,9 +120,9 @@ general' p@Parser{} = p
 -- 'parseComplete' :: ("Rank2".'Rank2.Apply' g, "Rank2".'Rank2.Traversable' g, 'FactorialMonoid' s) =>
 --                  g (LeftRecursive.'Fixed g s) -> s -> g ('Compose' ('ParseResults' s) [])
 -- @
-instance MultiParsing (Fixed Memoizing.Parser) where
-   type GrammarConstraint (Fixed Memoizing.Parser) g = (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
-   type ResultFunctor (Fixed Memoizing.Parser) s = Compose (ParseResults s) []
+instance MultiParsing (Fixed Memoizing.Parser g s) where
+   type GrammarConstraint (Fixed Memoizing.Parser g s) g' = (g ~ g', Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
+   type ResultFunctor (Fixed Memoizing.Parser g s) = Compose (ParseResults s) []
    parsePrefix :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, Eq s, FactorialMonoid s) =>
                   g (Parser g s) -> s -> g (Compose (Compose (ParseResults s) []) ((,) s))
    parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input)
@@ -136,10 +136,10 @@ instance MultiParsing (Fixed Memoizing.Parser) where
       where g' = separated g
    {-# INLINE parseComplete #-}
 
-instance GrammarParsing (Fixed Memoizing.Parser) where
-   type GrammarFunctor (Fixed Memoizing.Parser) = ParserFunctor
-   nonTerminal :: forall g s a. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
-                  => (g (ParserFunctor g s) -> ParserFunctor g s a) -> Parser g s a
+instance GrammarParsing (Fixed Memoizing.Parser g s) where
+   type GrammarFunctor (Fixed Memoizing.Parser g s) = ParserFunctor g s
+   nonTerminal :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
+                  (g (ParserFunctor g s) -> ParserFunctor g s a) -> Parser g s a
    nonTerminal f = Parser{
       complete= ind,
       direct= empty,

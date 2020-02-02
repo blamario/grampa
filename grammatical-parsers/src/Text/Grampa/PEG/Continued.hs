@@ -220,8 +220,8 @@ instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
 -- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>
 --                  g (Continued.'Parser' g s) -> s -> g ('ParseResults' s)
 -- @
-instance MultiParsing Parser where
-   type ResultFunctor Parser s = ParseResults s
+instance MultiParsing (Parser g s) where
+   type ResultFunctor (Parser g s) = ParseResults s
    -- | Returns an input prefix parse paired with the remaining input suffix.
    parsePrefix g input = Rank2.fmap (Compose . (\p-> applyParser p input (flip $ curry Right) (Left . fromFailure input))) g
    parseComplete g input = Rank2.fmap (\p-> applyParser p input (const . Right) (Left . fromFailure input))
