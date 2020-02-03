@@ -93,7 +93,7 @@ completeParser (Compose (Right (Compose results))) =
       completeResults -> Compose (Right $ snd <$> completeResults)
 
 -- | Choose one of the instances of this class to parse with.
-class MultiParsing m where
+class InputParsing m => MultiParsing m where
    -- | Some parser types produce a single result, others a list of results.
    type ResultFunctor m :: * -> *
    type GrammarConstraint m (g :: (* -> *) -> *) :: Constraint

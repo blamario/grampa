@@ -120,7 +120,7 @@ general' p@Parser{} = p
 -- 'parseComplete' :: ("Rank2".'Rank2.Apply' g, "Rank2".'Rank2.Traversable' g, 'FactorialMonoid' s) =>
 --                  g (LeftRecursive.'Fixed g s) -> s -> g ('Compose' ('ParseResults' s) [])
 -- @
-instance MultiParsing (Fixed Memoizing.Parser g s) where
+instance (LeftReductive s, FactorialMonoid s) => MultiParsing (Fixed Memoizing.Parser g s) where
    type GrammarConstraint (Fixed Memoizing.Parser g s) g' = (g ~ g', Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
    type ResultFunctor (Fixed Memoizing.Parser g s) = Compose (ParseResults s) []
    parsePrefix :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, Eq s, FactorialMonoid s) =>
@@ -136,7 +136,7 @@ instance MultiParsing (Fixed Memoizing.Parser g s) where
       where g' = separated g
    {-# INLINE parseComplete #-}
 
-instance GrammarParsing (Fixed Memoizing.Parser g s) where
+instance (LeftReductive s, FactorialMonoid s) => GrammarParsing (Fixed Memoizing.Parser g s) where
    type GrammarFunctor (Fixed Memoizing.Parser g s) = ParserFunctor g s
    nonTerminal :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
                   (g (ParserFunctor g s) -> ParserFunctor g s a) -> Parser g s a

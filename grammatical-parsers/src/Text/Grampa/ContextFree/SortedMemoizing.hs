@@ -90,7 +90,7 @@ instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
-instance GrammarParsing (Parser g s) where
+instance (LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) where
    type GrammarFunctor (Parser g s) = ResultList g s
    nonTerminal :: (Rank2.Functor g, ParserInput (Parser g s) ~ s) => (g (ResultList g s) -> ResultList g s a) -> Parser g s a
    nonTerminal f = Parser p where
@@ -105,7 +105,7 @@ instance GrammarParsing (Parser g s) where
 -- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>
 --                  g (Memoizing.'Parser' g s) -> s -> g ('Compose' ('ParseResults' s) [])
 -- @
-instance MultiParsing (Parser g s) where
+instance (LeftReductive s, FactorialMonoid s) => MultiParsing (Parser g s) where
    type GrammarConstraint (Parser g s) g' = (g ~ g', Rank2.Functor g)
    type ResultFunctor (Parser g s) = Compose (ParseResults s) []
    -- | Returns the list of all possible input prefix parses paired with the remaining input suffix.

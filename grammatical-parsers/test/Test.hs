@@ -10,10 +10,10 @@ import Data.List (find, minimumBy, nub, sort)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Semigroup (Semigroup, (<>))
 import Data.Monoid (Monoid(..), Product(..))
-import Data.Monoid.Cancellative (LeftReductiveMonoid, isPrefixOf)
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid, factors)
 import Data.Monoid.Textual (TextualMonoid(toString))
+import Data.Semigroup.Cancellative (LeftReductive, isPrefixOf)
 import Data.Typeable (Typeable)
 import Data.Word (Word8, Word64)
 
@@ -83,7 +83,7 @@ main = defaultMain tests
 
 type Parser = Parallel.Parser
 
-simpleParse :: (Eq s, FactorialMonoid s) => Parallel.Parser (Rank2.Only r) s r -> s -> ParseResults s [(s, r)]
+simpleParse :: (Eq s, FactorialMonoid s, LeftReductive s) => Parallel.Parser (Rank2.Only r) s r -> s -> ParseResults s [(s, r)]
 simpleParse p input = getCompose . getCompose $ simply parsePrefix p input
 
 tests = testGroup "Grampa" [
@@ -213,11 +213,11 @@ instance (Show s, MonoidNull s, Monoid r) => Monoid (DescribedParser s r) where
 instance EqProp (ParseFailure s) where
    ParseFailure pos1 msg1 =-= ParseFailure pos2 msg2 = property (pos1 == pos2)
 
-instance (Ord r, Show r, EqProp r, Eq s, EqProp s, Show s, FactorialMonoid s, Arbitrary s) =>
+instance (Ord r, Show r, EqProp r, Eq s, EqProp s, Show s, FactorialMonoid s, LeftReductive s, Arbitrary s) =>
          EqProp (Parser (Rank2.Only r) s r) where
    p1 =-= p2 = forAll arbitrary (\s-> (nub <$> simpleParse p1 s) =-= (nub <$> simpleParse p2 s))
 
-instance (Eq s, FactorialMonoid s, Show s, EqProp s, Arbitrary s, Ord r, Show r, EqProp r, Typeable r) =>
+instance (Eq s, FactorialMonoid s, LeftReductive s, Show s, EqProp s, Arbitrary s, Ord r, Show r, EqProp r, Typeable r) =>
          EqProp (DescribedParser s r) where
    DescribedParser _ p1 =-= DescribedParser _ p2 = forAll arbitrary $ \s->
       simpleParse p1 s =-= simpleParse p2 s
@@ -242,7 +242,7 @@ instance (Show s, FactorialMonoid s) => MonadPlus (DescribedParser s) where
    mzero = DescribedParser "mzero" mzero
    DescribedParser d1 p1 `mplus` DescribedParser d2 p2 = DescribedParser (d1 ++ " `mplus` " ++ d2) (mplus p1 p2)
 
-instance forall s. (Semigroup s, FactorialMonoid s, LeftReductiveMonoid s, Ord s, Typeable s, Show s, Enumerable s) =>
+instance forall s. (Semigroup s, FactorialMonoid s, LeftReductive s, Ord s, Typeable s, Show s, Enumerable s) =>
          Enumerable (DescribedParser s s) where
    enumerate = share (choice [c0 (DescribedParser "anyToken" anyToken),
                               c0 (DescribedParser "getInput" getInput),
@@ -256,7 +256,7 @@ instance forall s. (Semigroup s, FactorialMonoid s, LeftReductiveMonoid s, Ord s
                               binary " <> " (<>),
                               binary " <|> " (<|>)])
 
-instance forall s r. (Ord s, Semigroup s, FactorialMonoid s, LeftReductiveMonoid s, Show s, Enumerable s) =>
+instance forall s r. (Ord s, Semigroup s, FactorialMonoid s, LeftReductive s, Show s, Enumerable s) =>
          Enumerable (DescribedParser s ()) where
    enumerate = share (choice [c0 (DescribedParser "eof" eof),
                               pay (c1 $ \(DescribedParser d p :: DescribedParser s s)-> DescribedParser ("void " <> d) (void p)),

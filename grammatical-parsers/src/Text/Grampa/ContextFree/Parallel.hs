@@ -105,7 +105,7 @@ instance Monoid x => Monoid (Parser g s x) where
 -- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, Eq s, 'FactorialMonoid' s) =>
 --                  g (Parallel.'Parser' g s) -> s -> g ('Compose' ('ParseResults' s) [])
 -- @
-instance MultiParsing (Parser g s) where
+instance (Cancellative.LeftReductive s, FactorialMonoid s) => MultiParsing (Parser g s) where
    type ResultFunctor (Parser g s) = Compose (ParseResults s) []
    -- | Returns the list of all possible input prefix parses paired with the remaining input suffix.
    parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input . (`applyParser` input)) g

@@ -122,7 +122,7 @@ instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => T
    semi = lexicalSemicolon
    token = lexicalToken
 
-instance GrammarParsing (Parser g s) where
+instance (LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) where
    type GrammarFunctor (Parser g s) = Result g s
    nonTerminal f = Parser p where
       p ((_, d) : _) = f d
@@ -203,7 +203,7 @@ instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
 -- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>
 --                  g (Packrat.'Parser' g s) -> s -> g ('ParseResults' s)
 -- @
-instance MultiParsing (Parser g s) where
+instance (LeftReductive s, FactorialMonoid s) => MultiParsing (Parser g s) where
    type ResultFunctor (Parser g s) = ParseResults s
    type GrammarConstraint (Parser g s) g' = (g ~ g', Rank2.Functor g)
    {-# NOINLINE parsePrefix #-}

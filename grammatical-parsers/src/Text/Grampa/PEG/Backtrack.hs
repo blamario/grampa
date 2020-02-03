@@ -199,7 +199,7 @@ instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
 -- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>
 --                  g (Backtrack.'Parser' g s) -> s -> g ('ParseResults' s)
 -- @
-instance MultiParsing (Parser g s) where
+instance (Cancellative.LeftReductive s, Factorial.FactorialMonoid s) => MultiParsing (Parser g s) where
    type ResultFunctor (Parser g s) = ParseResults s
    {-# NOINLINE parsePrefix #-}
    -- | Returns an input prefix parse paired with the remaining input suffix.
