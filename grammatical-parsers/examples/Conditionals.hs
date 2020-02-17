@@ -29,12 +29,12 @@ instance (Show (f t), Show (f e)) => Show (Conditionals t e f) where
                            (", test= " ++ showsPrec prec (test a)
                             (", term= " ++ showsPrec prec (term a) ("}" ++ rest)))
 
-instance Lexical (Conditionals t e) where
-   type LexicalConstraint p (Conditionals t e) s = (p ~ Parser, s ~ String)
+instance TokenParsing (Parser (Conditionals t e) String)
+instance LexicalParsing (Parser (Conditionals t e) String)
 
 $(Rank2.TH.deriveAll ''Conditionals)
 
-conditionals :: (ConditionalDomain t e, Lexical g, LexicalConstraint Parser g String)
+conditionals :: (ConditionalDomain t e, LexicalParsing (Parser g String))
              => GrammarBuilder (Conditionals t e) g Parser String
 conditionals Conditionals{..} =
    Conditionals{expr= ifThenElse <$> (keyword "if" *> test) <*> (keyword "then" *> term) <*> (keyword "else" *> term),

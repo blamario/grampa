@@ -10,7 +10,7 @@ import Data.Monoid (Monoid, (<>))
 import Data.Monoid.Factorial (FactorialMonoid)
 
 import Text.Grampa.Class (InputParsing(ParserInput, concatMany, string), 
-                          Lexical(LexicalConstraint, lexicalToken, keyword))
+                          LexicalParsing(lexicalToken, keyword))
 import Text.Parser.Combinators (Parsing((<?>)), count)
 
 -- | Attempts to parse a monoidal value, if the argument parser fails returns 'mempty'.
@@ -33,11 +33,9 @@ upto n p
    | otherwise = pure []
 
 -- | Parses the given delimiter, such as a comma or a brace
-delimiter :: (Show s, FactorialMonoid s, LeftReductive s, s ~ ParserInput (p g s),
-              Parsing (p g s), InputParsing (p g s), Lexical g, LexicalConstraint p g s) => s -> p g s s
+delimiter :: (Show s, FactorialMonoid s, LeftReductive s, s ~ ParserInput m, LexicalParsing m) => s -> m s
 delimiter s = lexicalToken (string s) <?> ("delimiter " <> show s)
 
 -- | Parses the given operator symbol
-operator :: (Show s, FactorialMonoid s, LeftReductive s, s ~ ParserInput (p g s),
-             Parsing (p g s), InputParsing (p g s), Lexical g, LexicalConstraint p g s) => s -> p g s s
+operator :: (Show s, FactorialMonoid s, LeftReductive s, s ~ ParserInput m, LexicalParsing m) => s -> m s
 operator s = lexicalToken (string s) <?> ("operator " <> show s)

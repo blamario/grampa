@@ -30,6 +30,4 @@ grammar Test{..} = Test{
                     <|> Xyzw <$> amb <*> string "w")
    }
 
-instance Lexical Test
-
 $(Rank2.TH.deriveAll ''Test)

@@ -24,12 +24,10 @@ import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
-import Text.Parser.Token (TokenParsing)
-import qualified Text.Parser.Token
 
 import qualified Rank2
 
-import Text.Grampa.Class (Lexical(..), GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
+import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           AmbiguousParsing(..), Ambiguous(Ambiguous), ParseResults, Expected(..))
 import Text.Grampa.Internal (FailureInfo(..), ResultList(..), ResultsOfLength(..), fromResultList)
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
@@ -91,6 +89,7 @@ instance Monoid x => Monoid (Parser g s x) where
    mappend = liftA2 mappend
 
 instance (LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) where
+   type ParserGrammar (Parser g s) = g
    type GrammarFunctor (Parser g s) = ResultList g s
    nonTerminal :: (Rank2.Functor g, ParserInput (Parser g s) ~ s) => (g (ResultList g s) -> ResultList g s a) -> Parser g s a
    nonTerminal f = Parser p where
@@ -236,11 +235,6 @@ instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
             p [] = ResultList mempty (FailureInfo 0 [Expected "Char.satisfy"])
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
-
-instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
-   someSpace = someLexicalSpace
-   semi = lexicalSemicolon
-   token = lexicalToken
 
 instance AmbiguousParsing (Parser g s) where
    ambiguous (Parser p) = Parser q

@@ -88,10 +88,10 @@ instance Rank2.Traversable (Arithmetic e) where
                   <*> f (factor a)
                   <*> f (primary a)
 
-instance Lexical (Arithmetic e)
+instance TokenParsing (Parser (Arithmetic e) String)
+instance LexicalParsing (Parser (Arithmetic e) String)
 
-arithmetic :: (Lexical g, LexicalConstraint Parser g String, ArithmeticDomain e) =>
-              GrammarBuilder (Arithmetic e) g Parser String
+arithmetic :: (LexicalParsing (Parser g String), ArithmeticDomain e) => GrammarBuilder (Arithmetic e) g Parser String
 arithmetic Arithmetic{..} = Arithmetic{
    expr= sum,
    sum= product

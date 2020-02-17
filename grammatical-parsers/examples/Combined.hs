@@ -1,4 +1,5 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, RecordWildCards, TemplateHaskell, UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RecordWildCards,
+             TemplateHaskell, UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 
 module Combined where
@@ -8,7 +9,7 @@ import qualified Data.Bool
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Rank2.TH
-import Text.Grampa (Lexical, LexicalConstraint, GrammarBuilder)
+import Text.Grampa (TokenParsing, LexicalParsing, GrammarBuilder)
 import Text.Grampa.ContextFree.LeftRecursive (Parser)
 import qualified Arithmetic
 import qualified Boolean
@@ -118,7 +119,8 @@ instance (Show (f Domain), Show (f String)) => Show (Expression f) where
                            (", conditionalGrammar=" ++ showsPrec prec (conditionalGrammar g)
                            (", lambdaGrammar=" ++ showsPrec prec (lambdaGrammar g) ("}" ++ rest))))))
 
-instance Lexical Expression
+instance TokenParsing (Parser Expression String)
+instance LexicalParsing (Parser Expression String)
 
 $(Rank2.TH.deriveAll ''Expression)
 
@@ -189,7 +191,7 @@ instance Rank2.Traversable Expression where
                   <*> Rank2.traverse f (lambdaGrammar g)
 -}
 
-expression :: (Lexical g, LexicalConstraint Parser g String) => GrammarBuilder Expression g Parser String
+expression :: (LexicalParsing (Parser g String)) => GrammarBuilder Expression g Parser String
 expression Expression{..} =
    let combinedExpr = Arithmetic.expr arithmeticGrammar
                       <|> Boolean.expr booleanGrammar

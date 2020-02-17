@@ -2,7 +2,7 @@
              FlexibleContexts, FlexibleInstances, OverloadedStrings, RankNTypes, ScopedTypeVariables, TypeApplications,
              TypeFamilies, TypeSynonymInstances, UndecidableInstances #-}
 module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), AmbiguousParsing(..), InputParsing(..),
-                          InputCharParsing(..), Lexical(..), ParseResults, ParseFailure(..), Expected(..),
+                          InputCharParsing(..), LexicalParsing(..), ParseResults, ParseFailure(..), Expected(..),
                           Ambiguous(..), Position, positionOffset, completeParser) where
 
 import Control.Applicative (Alternative(empty), liftA2, (<|>))
@@ -27,6 +27,7 @@ import qualified Text.ParserCombinators.Incremental as Incremental
 import Text.Parser.Combinators (Parsing((<?>), eof, try), skipMany, unexpected)
 import Text.Parser.Char (CharParsing)
 import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
+import Text.Parser.Token (TokenParsing)
 import qualified Text.Parser.Char
 import GHC.Exts (Constraint)
 
@@ -108,13 +109,16 @@ class InputParsing m => MultiParsing m where
 
 -- | Parsers that belong to this class can memoize the parse results to avoid exponential performance complexity.
 class MultiParsing m => GrammarParsing m where
+   -- | The record of grammar productions associated with the parser
+   type ParserGrammar m :: (* -> *) -> *
+   -- | For internal use by 'notTerminal'
    type GrammarFunctor m :: * -> *
    -- | Used to reference a grammar production, only necessary from outside the grammar itself
-   nonTerminal :: GrammarConstraint m g => (g (GrammarFunctor m) -> GrammarFunctor m a) -> m a
+   nonTerminal :: (g ~ ParserGrammar m, GrammarConstraint m g) => (g (GrammarFunctor m) -> GrammarFunctor m a) -> m a
    -- | Construct a grammar whose every production refers to itself.
-   selfReferring :: (GrammarConstraint m g, Rank2.Distributive g) => g m
+   selfReferring :: (g ~ ParserGrammar m, GrammarConstraint m g, Rank2.Distributive g) => g m
    -- | Convert a self-referring grammar function to a grammar.
-   fixGrammar :: forall g s. (GrammarConstraint m g, Rank2.Distributive g) => (g m -> g m) -> g m
+   fixGrammar :: (g ~ ParserGrammar m, GrammarConstraint m g, Rank2.Distributive g) => (g m -> g m) -> g m
    -- | Mark a parser that relies on primitive recursion to prevent an infinite loop in 'fixGrammar'.
    recursive :: m a -> m a
 
@@ -222,56 +226,37 @@ class AmbiguousParsing m where
    -- | Collect all alternative parses of the same length into a 'NonEmpty' list of results.
    ambiguous :: m a -> m (Ambiguous a)
 
--- | If a grammar is 'Lexical', its parsers can instantiate the 'Text.Parser.Token.TokenParsing' class.
-class Lexical (g :: (* -> *) -> *) where
-   type LexicalConstraint (m :: ((* -> *) -> *) -> * -> * -> *) g s :: Constraint
+-- | If a grammar is 'Lexical', its parsers can instantiate the 'TokenParsing' class.
+class (InputCharParsing m, TokenParsing m) => LexicalParsing m where
    -- | Always succeeds, consuming all white space and comments
-   lexicalWhiteSpace :: LexicalConstraint m g s => m g s ()
+   lexicalWhiteSpace :: m ()
    -- | Consumes all whitespace and comments, failing if there are none
-   someLexicalSpace :: LexicalConstraint m g s => m g s ()
+   someLexicalSpace :: m ()
    -- | Consumes a single comment, defaults to 'empty'
-   lexicalComment :: LexicalConstraint m g s => m g s ()
+   lexicalComment :: m ()
    -- | Consumes a single semicolon and any trailing whitespace, returning the character |';'|. The method can be
    -- overridden for automatic semicolon insertion, but if it succeeds on semicolon or white space input it must
    -- consume it.
-   lexicalSemicolon :: LexicalConstraint m g s => m g s Char
+   lexicalSemicolon :: m Char
    -- | Applies the argument parser and consumes the trailing 'lexicalWhitespace'
-   lexicalToken :: LexicalConstraint m g s => m g s a -> m g s a
+   lexicalToken :: m a -> m a
    -- | Applies the argument parser, determines whether its result is a legal identifier, and consumes the trailing
    -- 'lexicalWhitespace'
-   identifierToken :: LexicalConstraint m g s => m g s s -> m g s s
+   identifierToken :: m (ParserInput m) -> m (ParserInput m)
    -- | Determines whether the given character can start an identifier token, allows only a letter or underscore by
    -- default
    isIdentifierStartChar :: Char -> Bool
    -- | Determines whether the given character can be any part of an identifier token, also allows numbers
    isIdentifierFollowChar :: Char -> Bool
    -- | Parses a valid identifier and consumes the trailing 'lexicalWhitespace'
-   identifier :: LexicalConstraint m g s => m g s s
+   identifier :: m (ParserInput m)
    -- | Parses the argument word whole, not followed by any identifier character, and consumes the trailing
    -- 'lexicalWhitespace'
-   keyword :: LexicalConstraint m g s => s -> m g s ()
+   keyword :: ParserInput m -> m ()
 
-   type instance LexicalConstraint m g s = (s ~ ParserInput (m g s), Applicative (m g ()), Monad (m g s),
-                                            InputCharParsing (m g s), Show s, TextualMonoid s)
-   default lexicalComment :: Alternative (m g s) => m g s ()
-   default lexicalWhiteSpace :: (LexicalConstraint m g s, InputCharParsing (m g s),
-                                 ParserInput (m g s) ~ s, TextualMonoid s)
-                             => m g s ()
-   default someLexicalSpace :: (LexicalConstraint m g s, InputCharParsing (m g s), ParserInput (m g s) ~ s,
-                                TextualMonoid s)
-                            => m g s ()
-   default lexicalSemicolon :: (LexicalConstraint m g s, InputCharParsing (m g s), TextualMonoid s)
-                            => m g s Char
-   default lexicalToken :: (LexicalConstraint m g s, InputCharParsing (m g s), TextualMonoid s)
-                        => m g s a -> m g s a
-   default identifierToken :: (LexicalConstraint m g s, InputCharParsing (m g s), TextualMonoid s)
-                           => m g s s -> m g s s
-   default identifier :: (LexicalConstraint m g s, Monad (m g s), Alternative (m g s), ParserInput (m g s) ~ s,
-                          InputCharParsing (m g s), TextualMonoid s)
-                      => m g s s
-   default keyword :: (LexicalConstraint m g s, InputCharParsing (m g s),
-                       ParserInput (m g s) ~ s, Show s, TextualMonoid s)
-                   => s -> m g s ()
+   default identifier :: TextualMonoid (ParserInput m) => m (ParserInput m)
+   default keyword :: (Show (ParserInput m), TextualMonoid (ParserInput m)) => ParserInput m -> m ()
+
    lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> takeCharsWhile isSpace)
    someLexicalSpace = takeCharsWhile1 isSpace *> skipMany (lexicalComment *> takeCharsWhile isSpace)
                       <|> lexicalComment *> skipMany (takeCharsWhile isSpace *> lexicalComment)
@@ -280,10 +265,10 @@ class Lexical (g :: (* -> *) -> *) where
    lexicalToken p = p <* lexicalWhiteSpace
    isIdentifierStartChar c = isLetter c || c == '_'
    isIdentifierFollowChar c = isAlphaNum c || c == '_'
-   identifier = identifierToken (liftA2 mappend (satisfyCharInput (isIdentifierStartChar @g))
-                                                (takeCharsWhile (isIdentifierFollowChar @g))) <?> "an identifier"
+   identifier = identifierToken (liftA2 mappend (satisfyCharInput (isIdentifierStartChar @m))
+                                                (takeCharsWhile (isIdentifierFollowChar @m))) <?> "an identifier"
    identifierToken = lexicalToken
-   keyword s = lexicalToken (string s *> notSatisfyChar (isIdentifierFollowChar @g)) <?> ("keyword " <> show s)
+   keyword s = lexicalToken (string s *> notSatisfyChar (isIdentifierFollowChar @m)) <?> ("keyword " <> show s)
 
 instance InputParsing ReadP where
    type ParserInput ReadP = String

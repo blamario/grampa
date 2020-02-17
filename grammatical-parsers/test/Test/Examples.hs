@@ -1,4 +1,4 @@
-{-# Language FlexibleInstances, MultiParamTypeClasses, RankNTypes, ScopedTypeVariables #-}
+{-# Language FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, ScopedTypeVariables #-}
 module Test.Examples where
 
 import Control.Applicative (empty, (<|>))
@@ -29,19 +29,19 @@ parseArithmetical = uniqueParse (fixGrammar Arithmetic.arithmetic) Arithmetic.ex
 parseBoolean :: String -> Either String BooleanTree
 parseBoolean = uniqueParse (fixGrammar boolean) (Boolean.expr . Rank2.snd)
 
-comparisons :: (Rank2.Functor g, Lexical g, LexicalConstraint Parser g String) =>
+comparisons :: (Rank2.Functor g, LexicalParsing (Parser g String)) =>
                GrammarBuilder ArithmeticComparisons g Parser String
 comparisons (Rank2.Pair a c) =
    Rank2.Pair (Arithmetic.arithmetic a) (Comparisons.comparisons c){Comparisons.term= Arithmetic.expr a}
 
-boolean :: (Rank2.Functor g, Lexical g, LexicalConstraint Parser g String) =>
+boolean :: (Rank2.Functor g, LexicalParsing (Parser g String)) =>
            GrammarBuilder ArithmeticComparisonsBoolean g Parser String
 boolean (Rank2.Pair ac b) = Rank2.Pair (comparisons ac) (Boolean.boolean (Comparisons.test $ Rank2.snd ac) b)
 
 parseConditional :: String -> Either String (ConditionalTree ArithmeticTree)
 parseConditional = uniqueParse (fixGrammar conditionals) (Conditionals.expr . Rank2.snd)
 
-conditionals :: (Rank2.Functor g, Lexical g, LexicalConstraint Parser g String) => GrammarBuilder ACBC g Parser String
+conditionals :: (Rank2.Functor g, LexicalParsing (Parser g String)) => GrammarBuilder ACBC g Parser String
 conditionals (Rank2.Pair acb c) =
    boolean acb `Rank2.Pair`
    Conditionals.conditionals c{Conditionals.test= Boolean.expr (Rank2.snd acb),
@@ -150,6 +150,11 @@ uniqueParse g p s = case getCompose (p $ parseComplete g s)
                        Right _ -> Left "Ambiguous"
                        Left err -> Left (toString mempty $ failureDescription s err 3)
 
-instance Lexical ArithmeticComparisons
-instance Lexical ArithmeticComparisonsBoolean
-instance Lexical ACBC
+instance TokenParsing (Parser ArithmeticComparisons String)
+instance TokenParsing (Parser ArithmeticComparisonsBoolean String)
+instance TokenParsing (Parser ACBC String)
+
+instance LexicalParsing (Parser ArithmeticComparisons String)
+instance LexicalParsing (Parser ArithmeticComparisonsBoolean String)
+instance LexicalParsing (Parser ACBC String)
+

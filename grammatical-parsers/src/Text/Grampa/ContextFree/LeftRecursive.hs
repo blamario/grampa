@@ -28,12 +28,10 @@ import qualified Text.Parser.Char as Char
 import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
-import Text.Parser.Token (TokenParsing)
-import qualified Text.Parser.Token as Token
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          AmbiguousParsing(..), Lexical(..), Ambiguous(..), ParseResults, Expected(..))
+                          AmbiguousParsing(..), Ambiguous(..), ParseResults, Expected(..))
 import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), fromResultList)
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
@@ -137,6 +135,7 @@ instance (LeftReductive s, FactorialMonoid s) => MultiParsing (Fixed Memoizing.P
    {-# INLINE parseComplete #-}
 
 instance (LeftReductive s, FactorialMonoid s) => GrammarParsing (Fixed Memoizing.Parser g s) where
+   type ParserGrammar (Fixed Memoizing.Parser g s) = g
    type GrammarFunctor (Fixed Memoizing.Parser g s) = ParserFunctor g s
    nonTerminal :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
                   (g (ParserFunctor g s) -> ParserFunctor g s a) -> Parser g s a
@@ -540,18 +539,6 @@ instance (CharParsing (p g s), InputCharParsing (Fixed p g s), TextualMonoid s,
    satisfy predicate = positivePrimitive "Char.satisfy" (Char.satisfy predicate)
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
-
-instance (Lexical g, LexicalConstraint (Fixed Backtrack.Parser) g s, Show s, TextualMonoid s) =>
-         TokenParsing (Fixed Backtrack.Parser g s) where
-   someSpace = someLexicalSpace
-   semi = lexicalSemicolon
-   token = lexicalToken
-
-instance (Lexical g, LexicalConstraint (Fixed Memoizing.Parser) g s, Show s, TextualMonoid s) =>
-         TokenParsing (Fixed Memoizing.Parser g s) where
-   someSpace = someLexicalSpace
-   semi = lexicalSemicolon
-   token = lexicalToken
 
 instance AmbiguousParsing (Fixed Memoizing.Parser g s) where
    ambiguous (PositiveDirectParser p) = PositiveDirectParser (ambiguous p)

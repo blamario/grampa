@@ -24,12 +24,10 @@ import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
-import Text.Parser.Token (TokenParsing)
-import qualified Text.Parser.Token
 
 import qualified Rank2
 
-import Text.Grampa.Class (Lexical(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
+import Text.Grampa.Class (InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), Expected(..))
 import Text.Grampa.Internal (BinTree(..), FailureInfo(..), noFailure)
 
@@ -208,11 +206,6 @@ instance TextualMonoid s => CharParsing (Parser g s) where
                   _ -> ResultList mempty (FailureInfo (Factorial.length s) [Expected "Char.satisfy"])
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
-
-instance (Lexical g, LexicalConstraint Parser g s, Show s, TextualMonoid s) => TokenParsing (Parser g s) where
-   someSpace = someLexicalSpace
-   semi = lexicalSemicolon
-   token = lexicalToken
 
 fromResultList :: (Eq s, FactorialMonoid s) => s -> ResultList s r -> ParseResults s [(s, r)]
 fromResultList s (ResultList EmptyTree (FailureInfo pos msgs)) = 
