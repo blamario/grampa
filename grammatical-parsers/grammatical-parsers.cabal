@@ -61,6 +61,16 @@ executable             arithmetic
                        rank2classes >= 1.0.2 && < 1.5, grammatical-parsers,
                        monoid-subclasses >=1.0 && <1.1
 
+executable             boolean-transformations
+  hs-source-dirs:      examples
+  main-is:             BooleanTransformations.hs
+  other-modules:       Boolean, Utilities
+  default-language:    Haskell2010
+  build-depends:       base >=4.9 && <5, containers >= 0.5.7.0 && < 0.7,
+                       parsers < 0.13,
+                       rank2classes >= 1.0.2 && < 1.5, grammatical-parsers,
+                       monoid-subclasses >=1.0 && <1.1
+
 test-suite           quicktests
   type:              exitcode-stdio-1.0
   hs-source-dirs:    test, examples
