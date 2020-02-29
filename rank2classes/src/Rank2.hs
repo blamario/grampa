@@ -6,7 +6,7 @@
 -- @Rank2.@ prefix and a twist that their methods operate on a heterogenous collection. The same property is shared by
 -- the two less standard classes 'Apply' and 'Distributive'.
 {-# LANGUAGE DefaultSignatures, InstanceSigs, KindSignatures, PolyKinds, Rank2Types #-}
-{-# LANGUAGE ScopedTypeVariables, TypeOperators #-}
+{-# LANGUAGE ScopedTypeVariables, StandaloneDeriving, TypeOperators, UndecidableInstances #-}
 {-# LANGUAGE EmptyCase #-}
 module Rank2 (
 -- * Rank 2 classes
@@ -24,10 +24,11 @@ import qualified Control.Applicative as Rank1
 import qualified Control.Monad as Rank1
 import qualified Data.Foldable as Rank1
 import qualified Data.Traversable as Rank1
+import qualified Data.Functor.Compose as Rank1
+import qualified Data.Distributive as Rank1
 import Data.Coerce (coerce)
 import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(..))
-import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Functor.Const (Const(..))
 import Data.Functor.Product (Product(Pair))
 import Data.Functor.Sum (Sum(InL, InR))
@@ -65,9 +66,9 @@ class Foldable g where
 class (Functor g, Foldable g) => Traversable g where
    {-# MINIMAL traverse | sequence #-}
    traverse :: Rank1.Applicative m => (forall a. p a -> m (q a)) -> g p -> m (g q)
-   sequence :: Rank1.Applicative m => g (Compose m p) -> m (g p)
-   traverse f = sequence . fmap (Compose . f)
-   sequence = traverse getCompose
+   sequence :: Rank1.Applicative m => g (Rank1.Compose m p) -> m (g p)
+   traverse f = sequence . fmap (Rank1.Compose . f)
+   sequence = traverse Rank1.getCompose
 
 -- | Wrapper for functions that map the argument constructor type
 newtype Arrow p q a = Arrow{apply :: p a -> q a}
@@ -112,23 +113,23 @@ class Apply g => Applicative g where
 -- | Equivalent of 'Rank1.Distributive' for rank 2 data types
 class DistributiveTraversable g => Distributive g where
    {-# MINIMAL cotraverse|distribute #-}
-   collect :: Rank1.Functor f1 => (a -> g f2) -> f1 a -> g (Compose f1 f2)
-   distribute :: Rank1.Functor f1 => f1 (g f2) -> g (Compose f1 f2)
+   collect :: Rank1.Functor f1 => (a -> g f2) -> f1 a -> g (Rank1.Compose f1 f2)
+   distribute :: Rank1.Functor f1 => f1 (g f2) -> g (Rank1.Compose f1 f2)
    -- | Dual of 'traverse', equivalent of 'Rank1.cotraverse' for rank 2 data types 
    cotraverse :: Rank1.Functor m => (forall a. m (p a) -> q a) -> m (g p) -> g q
 
    collect f = distribute . Rank1.fmap f
-   distribute = cotraverse Compose
-   cotraverse f = (fmap (f . getCompose)) . distribute
+   distribute = cotraverse Rank1.Compose
+   cotraverse f = (fmap (f . Rank1.getCompose)) . distribute
 
 -- | A weaker 'Distributive' that requires 'Rank1.Traversable' to use, not just a 'Rank1.Functor'.
 class Functor g => DistributiveTraversable (g :: (k -> *) -> *) where
-   collectTraversable :: Rank1.Traversable f1 => (a -> g f2) -> f1 a -> g (Compose f1 f2)   
-   distributeTraversable :: Rank1.Traversable f1 => f1 (g f2) -> g (Compose f1 f2)
+   collectTraversable :: Rank1.Traversable f1 => (a -> g f2) -> f1 a -> g (Rank1.Compose f1 f2)   
+   distributeTraversable :: Rank1.Traversable f1 => f1 (g f2) -> g (Rank1.Compose f1 f2)
    cotraverseTraversable :: Rank1.Traversable f1 => (forall x. f1 (f2 x) -> f x) -> f1 (g f2) -> g f
 
    collectTraversable f = distributeTraversable . Rank1.fmap f
-   distributeTraversable = cotraverseTraversable Compose
+   distributeTraversable = cotraverseTraversable Rank1.Compose
    
    default cotraverseTraversable :: (Rank1.Traversable m, Distributive g) => 
                                     (forall a. m (p a) -> q a) -> m (g p) -> g q
@@ -140,23 +141,23 @@ distributeJoin = cotraverse Rank1.join
 
 -- | Like 'fmap', but traverses over its argument
 fmapTraverse :: (DistributiveTraversable g, Rank1.Traversable f) => (forall a. f (t a) -> u a) -> f (g t) -> g u
-fmapTraverse f x = fmap (f . getCompose) (distributeTraversable x)
+fmapTraverse f x = fmap (f . Rank1.getCompose) (distributeTraversable x)
 
 -- | Like 'liftA2', but traverses over its first argument
 liftA2Traverse1 :: (Apply g, DistributiveTraversable g, Rank1.Traversable f) =>
                    (forall a. f (t a) -> u a -> v a) -> f (g t) -> g u -> g v
-liftA2Traverse1 f x = liftA2 (f . getCompose) (distributeTraversable x)
+liftA2Traverse1 f x = liftA2 (f . Rank1.getCompose) (distributeTraversable x)
 
 -- | Like 'liftA2', but traverses over its second argument
 liftA2Traverse2 :: (Apply g, DistributiveTraversable g, Rank1.Traversable f) => 
                    (forall a. t a -> f (u a) -> v a) -> g t -> f (g u) -> g v
-liftA2Traverse2 f x y = liftA2 (\x' y' -> f x' (getCompose y')) x (distributeTraversable y)
+liftA2Traverse2 f x y = liftA2 (\x' y' -> f x' (Rank1.getCompose y')) x (distributeTraversable y)
 
 -- | Like 'liftA2', but traverses over both its arguments
 liftA2TraverseBoth :: (Apply g, DistributiveTraversable g, Rank1.Traversable f1, Rank1.Traversable f2) =>
                       (forall a. f1 (t a) -> f2 (u a) -> v a) -> f1 (g t) -> f2 (g u) -> g v
 liftA2TraverseBoth f x y = liftA2 applyCompose (distributeTraversable x) (distributeTraversable y)
-   where applyCompose x' y' = f (getCompose x') (getCompose y')
+   where applyCompose x' y' = f (Rank1.getCompose x') (Rank1.getCompose y')
 
 {-# DEPRECATED distributeWith "Use cotraverse instead." #-}
 -- | Synonym for 'cotraverse'
@@ -177,6 +178,13 @@ newtype Only a f = Only {fromOnly :: f a} deriving (Eq, Ord, Show)
 
 -- | Equivalent of 'Data.Functor.Identity' for rank 2 data types
 newtype Identity g f = Identity {runIdentity :: g f} deriving (Eq, Ord, Show)
+
+-- | Equivalent of 'Data.Functor.Compose' for rank 2 data types
+newtype Compose g p q = Compose {getCompose :: g (Rank1.Compose p q)}
+
+deriving instance Eq (g (Rank1.Compose p q)) => Eq (Compose g p q)
+deriving instance Ord (g (Rank1.Compose p q)) => Ord (Compose g p q)
+deriving instance Show (g (Rank1.Compose p q)) => Show (Compose g p q)
 
 -- | A nested parametric type represented as a rank-2 type
 newtype Flip g a f = Flip {unFlip :: g (f a)} deriving (Eq, Ord, Show)
@@ -217,6 +225,12 @@ instance Functor (Only a) where
 
 instance Functor g => Functor (Identity g) where
    f <$> Identity g = Identity (f <$> g)
+
+instance (Functor g, Rank1.Functor p) => Functor (Compose g p) where
+   (<$>) :: forall q r. (forall a. q a -> r a) -> Compose g p q -> Compose g p r
+   f <$> Compose g = Compose (f' <$> g)
+      where f' :: forall a. Rank1.Compose p q a -> Rank1.Compose p r a
+            f' (Rank1.Compose q) = Rank1.Compose (f Rank1.<$> q)
 
 instance (Functor g, Functor h) => Functor (Product g h) where
    f <$> Pair a b = Pair (f <$> a) (f <$> b)
@@ -265,6 +279,9 @@ instance Foldable (Only x) where
 instance Foldable g => Foldable (Identity g) where
    foldMap f (Identity g) = foldMap f g
 
+instance (Foldable g, Rank1.Foldable p) => Foldable (Compose g p) where
+   foldMap f (Compose g) = foldMap (Rank1.foldMap f . Rank1.getCompose) g
+
 instance (Foldable g, Foldable h) => Foldable (Product g h) where
    foldMap f (Pair g h) = foldMap f g `mappend` foldMap f h
 
@@ -308,6 +325,12 @@ instance Traversable (Only x) where
 
 instance Traversable g => Traversable (Identity g) where
    traverse f (Identity g) = Identity Rank1.<$> traverse f g
+
+instance (Traversable g, Rank1.Traversable p) => Traversable (Compose g p) where
+   traverse :: forall m q r. Rank1.Applicative m => (forall a. q a -> m (r a)) -> Compose g p q -> m (Compose g p r)
+   traverse f (Compose g) = Compose Rank1.<$> traverse f' g
+      where f' :: forall a. Rank1.Compose p q a -> m (Rank1.Compose p r a)
+            f' (Rank1.Compose q) = Rank1.Compose Rank1.<$> Rank1.traverse f q
 
 instance (Traversable g, Traversable h) => Traversable (Product g h) where
    traverse f (Pair g h) = Rank1.liftA2 Pair (traverse f g) (traverse f h)
@@ -358,6 +381,16 @@ instance Apply g => Apply (Identity g) where
    Identity g <*> Identity h = Identity (g <*> h)
    liftA2 f (Identity g) (Identity h) = Identity (liftA2 f g h)
 
+instance (Apply g, Rank1.Applicative p) => Apply (Compose g p) where
+   (<*>)  :: forall q r. Compose g p (q ~> r) -> Compose g p q -> Compose g p r
+   liftA2 :: forall q r s. (forall a. q a -> r a -> s a) -> Compose g p q -> Compose g p r -> Compose g p s
+   Compose g <*> Compose h = Compose (liftA2 f' g h)
+      where f' :: forall a. Rank1.Compose p (q ~> r) a -> Rank1.Compose p q a -> Rank1.Compose p r a
+            f' (Rank1.Compose f) (Rank1.Compose q) = Rank1.Compose (Rank1.liftA2 apply f q)
+   liftA2 f (Compose g) (Compose h) = Compose (liftA2 f' g h)
+      where f' :: forall a. Rank1.Compose p q a -> Rank1.Compose p r a -> Rank1.Compose p s a
+            f' (Rank1.Compose q) (Rank1.Compose r) = Rank1.Compose (Rank1.liftA2 f q r)
+
 instance (Apply g, Apply h) => Apply (Product g h) where
    Pair gf hf <*> ~(Pair gx hx) = Pair (gf <*> gx) (hf <*> hx)
    liftA2 f (Pair g1 h1) ~(Pair g2 h2) = Pair (liftA2 f g1 g2) (liftA2 f h1 h2)
@@ -396,6 +429,9 @@ instance Applicative (Only x) where
 instance Applicative g => Applicative (Identity g) where
    pure f = Identity (pure f)
 
+instance (Applicative g, Rank1.Applicative p) => Applicative (Compose g p) where
+   pure f = Compose (pure (Rank1.Compose (Rank1.pure f)))
+
 instance (Applicative g, Applicative h) => Applicative (Product g h) where
    pure f = Pair (pure f) (pure f)
 
@@ -416,6 +452,10 @@ instance DistributiveTraversable Proxy
 instance DistributiveTraversable (Only x)
 instance DistributiveTraversable g => DistributiveTraversable (Identity g) where
    cotraverseTraversable w f = Identity (cotraverseTraversable w (Rank1.fmap runIdentity f))
+instance (DistributiveTraversable g, Rank1.Distributive p) => DistributiveTraversable (Compose g p) where
+   cotraverseTraversable w f = Compose (cotraverseTraversable
+                                        (Rank1.Compose . Rank1.fmap w . Rank1.distribute . Rank1.fmap Rank1.getCompose)
+                                        (Rank1.fmap getCompose f))
 instance (DistributiveTraversable g, DistributiveTraversable h) => DistributiveTraversable (Product g h) where
    cotraverseTraversable w f = Pair (cotraverseTraversable w (Rank1.fmap fst f))
                                     (cotraverseTraversable w (Rank1.fmap snd f))
@@ -441,6 +481,10 @@ instance Distributive (Only x) where
 
 instance Distributive g => Distributive (Identity g) where
    cotraverse w f = Identity (cotraverse w (Rank1.fmap runIdentity f))
+
+instance (Distributive g, Rank1.Distributive p) => Distributive (Compose g p) where
+   cotraverse w f = Compose (cotraverse (Rank1.Compose . Rank1.fmap w . Rank1.distribute . Rank1.fmap Rank1.getCompose)
+                                        (Rank1.fmap getCompose f))
 
 instance (Distributive g, Distributive h) => Distributive (Product g h) where
    cotraverse w f = Pair (cotraverse w (Rank1.fmap fst f)) (cotraverse w (Rank1.fmap snd f))
