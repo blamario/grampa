@@ -29,7 +29,7 @@ import qualified Rank2
 
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           AmbiguousParsing(..), Ambiguous(Ambiguous), ParseResults, ParseFailure(..), Expected(..))
-import Text.Grampa.Internal (FailureInfo(..)) --, ResultList(..), ResultsOfLength(..))
+import Text.Grampa.Internal (FailureInfo(..))
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
 import Prelude hiding (iterate, length, null, showList, span, takeWhile)
@@ -43,13 +43,15 @@ data ResultsOfLength m g s a = ROL !Int ![(s, g (ResultListT m g s))] !(NonEmpty
 data ResultListT m g s r = ResultList{resultSuccesses :: ![ResultsOfLengthT m g s r],
                                       resultFailures  :: !(FailureInfo s)}
 
+singleResult :: Applicative m => Int -> [(s, g (ResultListT m g s))] -> r -> ResultListT m g s r
+singleResult len rest a = ResultList [ResultsOfLengthT $ ROL len rest (pure a:|[])] mempty
 
 instance Functor m => Functor (ParserT m g s) where
    fmap f (Parser p) = Parser (fmap f . p)
    {-# INLINE fmap #-}
 
 instance Applicative m => Applicative (ParserT m g s) where
-   pure a = Parser (\rest-> ResultList [ResultsOfLengthT $ ROL 0 rest (pure a:|[])] mempty)
+   pure a = Parser (\rest-> singleResult 0 rest a)
    Parser p <*> Parser q = Parser r where
       r rest = case p rest
                of ResultList results failure -> ResultList mempty failure <> foldMap continue results
@@ -79,7 +81,6 @@ instance (Monad m, Traversable m) => Monad (ParserT m g s) where
    Parser p >>= f = Parser q where
       q rest = case p rest
                of ResultList results failure -> ResultList mempty failure <> foldMap continue results
---      continue (ResultsOfLengthT l rest' rs) = foldMap (continue' l . flip applyParser rest' . (>>= f) . lift) rs
       continue (ResultsOfLengthT (ROL l rest' rs)) = foldMap (continue' l . flip applyParser rest' . rejoin . fmap f) rs
       continue' l (ResultList rs failure) = ResultList (adjust l <$> rs) failure
       adjust l (ResultsOfLengthT (ROL l' rest' rs)) = ResultsOfLengthT (ROL (l+l') rest' rs)
@@ -147,44 +148,44 @@ instance (Applicative m, LeftReductive s, FactorialMonoid s) => InputParsing (Pa
    type ParserInput (ParserT m g s) = s
    endOfInput = eof
    getInput = Parser p
-      where p rest@((s, _):_) = ResultList [ResultsOfLengthT $ ROL 0 rest (pure s:|[])] mempty
-            p [] = ResultList [ResultsOfLengthT $ ROL 0 [] (pure mempty:|[])] mempty
+      where p rest@((s, _):_) = singleResult 0 rest s
+            p [] = singleResult 0 [] mempty
    anyToken = Parser p
       where p rest@((s, _):t) = case splitPrimePrefix s
-                                of Just (first, _) -> ResultList [ResultsOfLengthT $ ROL 1 t (pure first:|[])] mempty
+                                of Just (first, _) -> singleResult 1 t first
                                    _ -> ResultList mempty (FailureInfo (genericLength rest) [Expected "anyToken"])
             p [] = ResultList mempty (FailureInfo 0 [Expected "anyToken"])
    satisfy predicate = Parser p
       where p rest@((s, _):t) =
                case splitPrimePrefix s
-               of Just (first, _) | predicate first -> ResultList [ResultsOfLengthT $ ROL 1 t (pure first:|[])] mempty
+               of Just (first, _) | predicate first -> singleResult 1 t first
                   _ -> ResultList mempty (FailureInfo (genericLength rest) [Expected "satisfy"])
             p [] = ResultList mempty (FailureInfo 0 [Expected "satisfy"])
    scan s0 f = Parser (p s0)
-      where p s rest@((i, _) : _) = ResultList [ResultsOfLengthT $ ROL l (drop l rest) (pure prefix:|[])] mempty
+      where p s rest@((i, _) : _) = singleResult l (drop l rest) prefix
                where (prefix, _, _) = Factorial.spanMaybe' s f i
                      l = Factorial.length prefix
-            p _ [] = ResultList [ResultsOfLengthT $ ROL 0 [] (pure mempty:|[])] mempty
+            p _ [] = singleResult 0 [] mempty
    takeWhile predicate = Parser p
       where p rest@((s, _) : _)
                | x <- Factorial.takeWhile predicate s, l <- Factorial.length x =
-                    ResultList [ResultsOfLengthT $ ROL l (drop l rest) (pure x:|[])] mempty
-            p [] = ResultList [ResultsOfLengthT $ ROL 0 [] (pure mempty:|[])] mempty
+                    singleResult l (drop l rest) x
+            p [] = singleResult 0 [] mempty
    takeWhile1 predicate = Parser p
       where p rest@((s, _) : _)
                | x <- Factorial.takeWhile predicate s, l <- Factorial.length x, l > 0 =
-                    ResultList [ResultsOfLengthT $ ROL l (drop l rest) (pure x:|[])] mempty
+                    singleResult l (drop l rest) x
             p rest = ResultList mempty (FailureInfo (genericLength rest) [Expected "takeWhile1"])
    string s = Parser p where
       p rest@((s', _) : _)
-         | s `isPrefixOf` s' = ResultList [ResultsOfLengthT $ ROL l (Factorial.drop l rest) (pure s:|[])] mempty
+         | s `isPrefixOf` s' = singleResult l (drop l rest) s
       p rest = ResultList mempty (FailureInfo (genericLength rest) [ExpectedInput s])
       l = Factorial.length s
    notSatisfy predicate = Parser p
       where p rest@((s, _):_)
                | Just (first, _) <- splitPrimePrefix s, 
                  predicate first = ResultList mempty (FailureInfo (genericLength rest) [Expected "notSatisfy"])
-            p rest = ResultList [ResultsOfLengthT $ ROL 0 rest (pure ():|[])] mempty
+            p rest = singleResult 0 rest ()
    {-# INLINABLE string #-}
 
 instance (Applicative m, Show s, TextualMonoid s) => InputCharParsing (ParserT m g s) where
@@ -192,29 +193,29 @@ instance (Applicative m, Show s, TextualMonoid s) => InputCharParsing (ParserT m
       where p rest@((s, _):t) =
                case Textual.characterPrefix s
                of Just first
-                     | predicate first -> ResultList [ResultsOfLengthT $ ROL 1 t (pure (Factorial.primePrefix s):|[])] mempty
+                     | predicate first -> singleResult 1 t (Factorial.primePrefix s)
                   _ -> ResultList mempty (FailureInfo (genericLength rest) [Expected "satisfyCharInput"])
             p [] = ResultList mempty (FailureInfo 0 [Expected "satisfyCharInput"])
    scanChars s0 f = Parser (p s0)
-      where p s rest@((i, _) : _) = ResultList [ResultsOfLengthT $ ROL l (drop l rest) (pure prefix:|[])] mempty
+      where p s rest@((i, _) : _) = singleResult l (drop l rest) prefix
                where (prefix, _, _) = Textual.spanMaybe_' s f i
                      l = Factorial.length prefix
-            p _ [] = ResultList [ResultsOfLengthT $ ROL 0 [] (pure mempty:|[])] mempty
+            p _ [] = singleResult 0 [] mempty
    takeCharsWhile predicate = Parser p
       where p rest@((s, _) : _)
                | x <- Textual.takeWhile_ False predicate s, l <- Factorial.length x =
-                    ResultList [ResultsOfLengthT $ ROL l (drop l rest) (pure x:|[])] mempty
-            p [] = ResultList [ResultsOfLengthT $ ROL 0 [] (pure mempty:|[])] mempty
+                    singleResult l (drop l rest) x
+            p [] = singleResult 0 [] mempty
    takeCharsWhile1 predicate = Parser p
       where p rest@((s, _) : _)
                | x <- Textual.takeWhile_ False predicate s, l <- Factorial.length x, l > 0 =
-                    ResultList [ResultsOfLengthT $ ROL l (drop l rest) (pure x:|[])] mempty
+                    singleResult l (drop l rest) x
             p rest = ResultList mempty (FailureInfo (genericLength rest) [Expected "takeCharsWhile1"])
    notSatisfyChar predicate = Parser p
       where p rest@((s, _):_)
                | Just first <- Textual.characterPrefix s, 
                  predicate first = ResultList mempty (FailureInfo (genericLength rest) [Expected "notSatisfyChar"])
-            p rest = ResultList [ResultsOfLengthT $ ROL 0 rest (pure ():|[])] mempty
+            p rest = singleResult 0 rest ()
 
 instance (Applicative m, MonoidNull s) => Parsing (ParserT m g s) where
    try (Parser p) = Parser q
@@ -227,28 +228,29 @@ instance (Applicative m, MonoidNull s) => Parsing (ParserT m g s) where
                         ResultList [] (FailureInfo pos $ if pos == genericLength rest then [Expected msg] else msgs)
                      replaceFailure rl = rl
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
-      where rewind t (ResultList [] _) = ResultList [ResultsOfLengthT $ ROL 0 t (pure ():|[])] mempty
+      where rewind t (ResultList [] _) = singleResult 0 t ()
             rewind t ResultList{} = ResultList mempty (FailureInfo (genericLength t) [Expected "notFollowedBy"])
    skipMany p = go
       where go = pure () <|> p *> go
    unexpected msg = Parser (\t-> ResultList mempty $ FailureInfo (genericLength t) [Expected msg])
    eof = Parser f
       where f rest@((s, _):_)
-               | null s = ResultList [ResultsOfLengthT $ ROL 0 rest (pure ():|[])] mempty
+               | null s = singleResult 0 rest ()
                | otherwise = ResultList mempty (FailureInfo (genericLength rest) [Expected "end of input"])
-            f [] = ResultList [ResultsOfLengthT $ ROL 0 [] (pure ():|[])] mempty
+            f [] = singleResult 0 [] ()
 
 instance (Applicative m, MonoidNull s) => LookAheadParsing (ParserT m g s) where
    lookAhead (Parser p) = Parser (\input-> rewind input (p input))
       where rewind _ rl@(ResultList [] _) = rl
-            rewind t (ResultList rl failure) = ResultList [ResultsOfLengthT $ ROL 0 t $ foldr1 (<>) (results <$> rl)] failure
+            rewind t (ResultList rl failure) =
+               ResultList [ResultsOfLengthT $ ROL 0 t $ foldr1 (<>) (results <$> rl)] failure
             results (ResultsOfLengthT (ROL _ _ r)) = r
 
 instance (Applicative m, Show s, TextualMonoid s) => CharParsing (ParserT m g s) where
    satisfy predicate = Parser p
       where p rest@((s, _):t) =
                case Textual.characterPrefix s
-               of Just first | predicate first -> ResultList [ResultsOfLengthT (ROL 1 t $ pure first:|[])] mempty
+               of Just first | predicate first -> singleResult 1 t first
                   _ -> ResultList mempty (FailureInfo (genericLength rest) [Expected "Char.satisfy"])
             p [] = ResultList mempty (FailureInfo 0 [Expected "Char.satisfy"])
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
@@ -276,18 +278,18 @@ longest p = Backtrack.Parser q where
 peg :: Applicative m => Backtrack.Parser g [(s, g (ResultListT m g s))] a -> ParserT m g s a
 peg p = Parser q where
    q rest = case Backtrack.applyParser p rest
-            of Backtrack.Parsed l result suffix -> ResultList [ResultsOfLengthT (ROL l suffix $ pure result:|[])] mempty
-               Backtrack.NoParse (FailureInfo pos expected) -> ResultList mempty (FailureInfo pos ((fst . head <$>) <$> expected))
+            of Backtrack.Parsed l result suffix -> singleResult l suffix result
+               Backtrack.NoParse (FailureInfo pos expected) ->
+                  ResultList mempty (FailureInfo pos ((fst . head <$>) <$> expected))
 
 -- | Turns a backtracking PEG parser into a context-free parser
 terminalPEG :: (Applicative m, Monoid s) => Backtrack.Parser g s a -> ParserT m g s a
 terminalPEG p = Parser q where
    q [] = case Backtrack.applyParser p mempty
-            of Backtrack.Parsed l result _ -> ResultList [ResultsOfLengthT (ROL l [] $ pure result:|[])] mempty
+            of Backtrack.Parsed l result _ -> singleResult l [] result
                Backtrack.NoParse failure -> ResultList mempty failure
    q rest@((s, _):_) = case Backtrack.applyParser p s
-                       of Backtrack.Parsed l result _ -> 
-                             ResultList [ResultsOfLengthT (ROL l (drop l rest) $ pure result:|[])] mempty
+                       of Backtrack.Parsed l result _ -> singleResult l (drop l rest) result
                           Backtrack.NoParse failure -> ResultList mempty failure
 
 fromResultList :: (Functor m, Eq s, FactorialMonoid s) => s -> ResultListT m g s r -> ParseResults s [(s, m r)]
