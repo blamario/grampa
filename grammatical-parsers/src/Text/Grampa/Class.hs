@@ -258,8 +258,8 @@ class (InputCharParsing m, TokenParsing m) => LexicalParsing m where
    default keyword :: (Show (ParserInput m), TextualMonoid (ParserInput m)) => ParserInput m -> m ()
 
    lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> takeCharsWhile isSpace)
-   someLexicalSpace = takeCharsWhile1 isSpace *> skipMany (lexicalComment *> takeCharsWhile isSpace)
-                      <|> lexicalComment *> skipMany (takeCharsWhile isSpace *> lexicalComment)
+   someLexicalSpace = takeCharsWhile1 isSpace *> (lexicalComment *> lexicalWhiteSpace <|> pure ())
+                      <|> lexicalComment *> lexicalWhiteSpace
    lexicalComment = empty
    lexicalSemicolon = lexicalToken (Text.Parser.Char.char ';')
    lexicalToken p = p <* lexicalWhiteSpace

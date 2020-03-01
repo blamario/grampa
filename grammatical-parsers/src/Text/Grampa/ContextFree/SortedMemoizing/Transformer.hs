@@ -2,7 +2,7 @@
              RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
 module Text.Grampa.ContextFree.SortedMemoizing.Transformer
        (FailureInfo(..), ResultListT(..), ParserT(..), (<<|>),
-        lift, reparseTails, longest, peg, terminalPEG)
+        lift, tmap, reparseTails, longest, peg, terminalPEG)
 where
 
 import Control.Applicative
@@ -34,8 +34,8 @@ import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
 import Prelude hiding (iterate, length, null, showList, span, takeWhile)
 
--- | Parser for a context-free grammar with packrat-like sharing of parse results. It does not support left-recursive
--- grammars.
+-- | Parser for a context-free grammar with packrat-like sharing that carries a monadic computation as part of the
+-- parse result.
 newtype ParserT m g s r = Parser{applyParser :: [(s, g (ResultListT m g s))] -> ResultListT m g s r}
 
 newtype ResultsOfLengthT m g s r = ResultsOfLengthT{getResultsOfLength :: ResultsOfLength m g s (m r)}
@@ -95,8 +95,19 @@ instance (Foldable m, Monad m, Traversable m) => MonadPlus (ParserT m g s) where
    mzero = empty
    mplus = (<|>)
 
+-- | Lift a parse-free computation into the parser.
 lift :: m a -> ParserT m g s a
 lift m = Parser (\rest-> ResultList [ResultsOfLengthT $ ROL 0 rest (m:|[])] mempty)
+
+-- | Modify the computation carried by the parser.
+tmap :: (m a -> m b) -> ParserT m g s a -> ParserT m g s b
+tmap f (Parser p) = Parser (mapResultList f . p)
+
+mapResultList :: (m a -> m b) -> ResultListT m g s a -> ResultListT m g s b
+mapResultList f (ResultList successes failures) = ResultList (mapResults f <$> successes) failures
+
+mapResults :: (m a -> m b) -> ResultsOfLengthT m g s a -> ResultsOfLengthT m g s b
+mapResults f (ResultsOfLengthT rol) = ResultsOfLengthT (f <$> rol)
 
 instance (Applicative m, Semigroup x) => Semigroup (ParserT m g s x) where
    (<>) = liftA2 (<>)
@@ -300,7 +311,7 @@ fromResultList _ (ResultList rl _failure) = Right (foldMap f rl)
          f (ResultsOfLengthT (ROL _ [] r)) = (,) mempty <$> toList r
 {-# INLINABLE fromResultList #-}
 
-instance Functor m => Functor (ResultsOfLength m g s) where
+instance Functor (ResultsOfLength m g s) where
    fmap f (ROL l t a) = ROL l t (f <$> a)
    {-# INLINE fmap #-}
 

@@ -65,6 +65,14 @@ instance Functor (ResultList g s) where
    fmap f (ResultList l failure) = ResultList ((f <$>) <$> l) failure
    {-# INLINE fmap #-}
 
+instance Applicative (ResultsOfLength g s) where
+   pure = ResultsOfLength 0 mempty . pure
+   ResultsOfLength l1 _ fs <*> ResultsOfLength l2 t2 xs = ResultsOfLength (l1 + l2) t2 (fs <*> xs)
+
+instance Applicative (ResultList g s) where
+   pure a = ResultList [pure a] mempty
+   ResultList rl1 f1 <*> ResultList rl2 f2 = ResultList ((<*>) <$> rl1 <*> rl2) (f1 <> f2)
+
 instance Semigroup (ResultList g s r) where
    ResultList rl1 f1 <> ResultList rl2 f2 = ResultList (join rl1 rl2) (f1 <> f2)
       where join [] rl = rl
