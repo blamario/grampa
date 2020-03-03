@@ -27,7 +27,7 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 
 import qualified Rank2
 
-import Text.Grampa.Class (InputParsing(..), InputCharParsing(..), MultiParsing(..),
+import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), Expected(..))
 import Text.Grampa.Internal (BinTree(..), FailureInfo(..), noFailure)
 
@@ -192,6 +192,23 @@ instance FactorialMonoid s => Parsing (Parser g s) where
    eof = Parser f
       where f s | null s = ResultList (Leaf $ ResultInfo s ()) noFailure
                 | otherwise = ResultList mempty (FailureInfo (Factorial.length s) [Expected "end of input"])
+
+instance FactorialMonoid s => DeterministicParsing (Parser g s) where
+   Parser p <<|> Parser q = Parser r where
+      r rest = case p rest
+               of rl@(ResultList EmptyTree _failure) -> rl <> q rest
+                  rl -> rl
+   takeSome p = (:) <$> p <*> takeMany p
+   takeMany (Parser p) = Parser (q id) where
+      q acc rest = case p rest
+                   of ResultList EmptyTree _failure -> ResultList (Leaf $ ResultInfo rest (acc [])) mempty
+                      ResultList rl _ -> foldMap continue rl
+         where continue (ResultInfo rest' result) = q (acc . (result:)) rest'
+   skipAll (Parser p) = Parser q where
+      q rest = case p rest
+               of ResultList EmptyTree _failure -> ResultList (Leaf $ ResultInfo rest ()) mempty
+                  ResultList rl _failure -> foldMap continue rl
+         where continue (ResultInfo rest' _) = q rest'
 
 instance FactorialMonoid s => LookAheadParsing (Parser g s) where
    lookAhead (Parser p) = Parser (\input-> rewind input (p input))

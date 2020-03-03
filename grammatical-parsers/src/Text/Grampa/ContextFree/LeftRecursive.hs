@@ -3,11 +3,11 @@
 {-# OPTIONS -fno-full-laziness #-}
 module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..),
                                               longest, peg, terminalPEG,
-                                              parseSeparated, separated, (<<|>))
+                                              parseSeparated, separated)
 where
 
 import Control.Applicative
-import Control.Monad (Monad(..), MonadPlus(..))
+import Control.Monad (Monad(..), MonadPlus(..), void)
 import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
 
 import Data.Functor.Compose (Compose(..))
@@ -31,7 +31,7 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          AmbiguousParsing(..), Ambiguous(..), ParseResults, Expected(..))
+                          AmbiguousParsing(..), Ambiguous(..), DeterministicParsing(..), ParseResults, Expected(..))
 import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), fromResultList)
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
@@ -289,29 +289,6 @@ instance Alternative (p g s) => Alternative (Fixed p g s) where
    {-# INLINABLE many #-}
    {-# INLINABLE some #-}
 
-infixl 3 <<|>
-(<<|>) :: Parser g s a -> Parser g s a -> Parser g s a
-p@DirectParser{} <<|> q@PositiveDirectParser{} = DirectParser{
-   complete= complete p Memoizing.<<|> complete q,
-   direct0 = direct0 p,
-   direct1= direct1 p Memoizing.<<|> complete q}
-p@DirectParser{} <<|> q@DirectParser{} = DirectParser{
-   complete= complete p Memoizing.<<|> complete q,
-   direct0 = direct0 p Memoizing.<<|> direct0 q,
-   direct1= direct1 p Memoizing.<<|> direct1 q}
-p <<|> q = Parser{complete= complete p' Memoizing.<<|> complete q',
-                 direct= direct p' Memoizing.<<|> direct q',
-                 direct0= direct0 p' Memoizing.<<|> direct0 q',
-                 direct1= direct1 p' Memoizing.<<|> direct1 q',
-                 indirect= indirect p' Memoizing.<<|> indirect q',
-                 appendResults= (<>),
-                 cyclicDescendants= \deps-> let
-                         ParserFlags pn pd = cyclicDescendants p' deps
-                         ParserFlags qn qd = cyclicDescendants q' deps
-                      in ParserFlags (pn || qn) (Rank2.liftA2 union pd qd)}
-   where p'@Parser{} = general p
-         q'@Parser{} = general q
-
 union :: Const Bool x -> Const Bool x -> Const Bool x
 union (Const False) d = d
 union (Const True) _ = Const True
@@ -409,6 +386,67 @@ instance (Parsing (p g s), InputParsing (Fixed p g s)) => Parsing (Fixed p g s) 
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
    unexpected msg = positivePrimitive "unexpected" (unexpected msg)
    skipMany p = concatMany (() <$ p)
+
+instance (InputParsing (Fixed p g s), DeterministicParsing (p g s)) => DeterministicParsing (Fixed p g s) where
+   p@DirectParser{} <<|> q@PositiveDirectParser{} = DirectParser{
+      complete= complete p <<|> complete q,
+      direct0 = direct0 p,
+      direct1= direct1 p <<|> complete q}
+   p@DirectParser{} <<|> q@DirectParser{} = DirectParser{
+      complete= complete p <<|> complete q,
+      direct0 = direct0 p <<|> direct0 q,
+      direct1= direct1 p <<|> direct1 q}
+   p <<|> q = Parser{complete= complete p' <<|> complete q',
+                    direct= direct p' <<|> direct q',
+                    direct0= direct0 p' <<|> direct0 q',
+                    direct1= direct1 p' <<|> direct1 q',
+                    indirect= indirect p' <<|> indirect q',
+                    appendResults= (<>),
+                    cyclicDescendants= \deps-> let
+                            ParserFlags pn pd = cyclicDescendants p' deps
+                            ParserFlags qn qd = cyclicDescendants q' deps
+                         in ParserFlags (pn || qn) (Rank2.liftA2 union pd qd)}
+      where p'@Parser{} = general p
+            q'@Parser{} = general q
+   takeSome p = (:) <$> p <*> takeMany p
+   takeMany (PositiveDirectParser p) = DirectParser{
+      complete = takeMany p,
+      direct0= [] <$ notFollowedBy (void p),
+      direct1= takeSome p}
+   takeMany p@DirectParser{} = DirectParser{
+      complete = takeMany (complete p),
+      direct0= (:[]) <$> direct0 p <<|> [] <$ notFollowedBy (void $ complete p),
+      direct1= (:) <$> direct1 p <*> takeMany (complete p)}
+   takeMany p@Parser{} = Parser{
+      complete= mcp,
+      direct= d1 <<|> d0,
+      direct0= d0,
+      direct1= d1,
+      indirect= (:) <$> indirect p <*> mcp,
+      appendResults= (<>),
+      cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
+      where d0 = (:[]) <$> direct0 p <<|> [] <$ notFollowedBy (void $ direct p)
+            d1 = (:) <$> direct1 p <*> mcp
+            mcp = takeMany (complete p)
+   skipAll (PositiveDirectParser p) = DirectParser{
+      complete = skipAll p,
+      direct0= () <$ notFollowedBy (void p),
+      direct1= p *> skipAll p}
+   skipAll p@DirectParser{} = DirectParser{
+      complete = skipAll (complete p),
+      direct0= void (direct0 p) <<|> notFollowedBy (void $ complete p),
+      direct1= direct1 p *> skipAll (complete p)}
+   skipAll p@Parser{} = Parser{
+      complete= mcp,
+      direct= d1 <<|> d0,
+      direct0= d0,
+      direct1= d1,
+      indirect= indirect p *> mcp,
+      appendResults= const id,
+      cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
+      where d0 = () <$ direct0 p <<|> notFollowedBy (void $ direct p)
+            d1 = direct1 p *> mcp
+            mcp = skipAll (complete p)
 
 instance (LookAheadParsing (p g s), InputParsing (Fixed p g s)) => LookAheadParsing (Fixed p g s) where
    lookAhead p@PositiveDirectParser{} = DirectParser{

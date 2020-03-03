@@ -45,7 +45,8 @@ data Boolean e f =
 
 instance CharParsing (p (Boolean e) String) => TokenParsing (p (Boolean e) String)
 
-instance (InputCharParsing (p (Boolean e) String), ParserInput (p (Boolean e) String) ~ String) =>
+instance (DeterministicParsing (p (Boolean e) String),
+          InputCharParsing (p (Boolean e) String), ParserInput (p (Boolean e) String) ~ String) =>
          LexicalParsing (p (Boolean e) String)
 
 $(Rank2.TH.deriveAll ''Boolean)

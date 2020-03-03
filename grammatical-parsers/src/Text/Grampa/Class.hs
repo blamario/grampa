@@ -1,11 +1,12 @@
 {-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, DeriveDataTypeable, DeriveFunctor,
              FlexibleContexts, FlexibleInstances, OverloadedStrings, RankNTypes, ScopedTypeVariables, TypeApplications,
              TypeFamilies, TypeSynonymInstances, UndecidableInstances #-}
-module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), AmbiguousParsing(..), InputParsing(..),
-                          InputCharParsing(..), LexicalParsing(..), ParseResults, ParseFailure(..), Expected(..),
+module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
+                          AmbiguousParsing(..), DeterministicParsing(..), InputParsing(..), InputCharParsing(..),
+                          LexicalParsing(..), ParseResults, ParseFailure(..), Expected(..),
                           Ambiguous(..), Position, positionOffset, completeParser) where
 
-import Control.Applicative (Alternative(empty), liftA2, (<|>))
+import Control.Applicative (Alternative(empty, many, some), optional, liftA2, (<|>))
 import Data.ByteString (ByteString, singleton)
 import Data.Char (isAlphaNum, isLetter, isSpace)
 import Data.Functor (void)
@@ -24,7 +25,7 @@ import Data.Semigroup (Semigroup((<>)))
 import qualified Data.Semigroup.Cancellative as Cancellative
 import Text.ParserCombinators.ReadP (ReadP)
 import qualified Text.ParserCombinators.Incremental as Incremental
-import Text.Parser.Combinators (Parsing((<?>), eof, try), skipMany, unexpected)
+import Text.Parser.Combinators (Parsing((<?>), eof, notFollowedBy, try), skipMany, unexpected)
 import Text.Parser.Char (CharParsing)
 import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 import Text.Parser.Token (TokenParsing)
@@ -143,8 +144,7 @@ class LookAheadParsing m => InputParsing m where
    anyToken :: m (ParserInput m)
    -- | A parser that accepts an input atom only if it satisfies the given predicate.
    satisfy :: ((ParserInput m) -> Bool) -> m (ParserInput m)
-   -- | A parser that succeeds exactly when satisfy doesn't, equivalent to
-   -- 'Text.Parser.Combinators.notFollowedBy' @. satisfy@
+   -- | A parser that succeeds exactly when satisfy doesn't, equivalent to -- 'notFollowedBy' @. satisfy@
    notSatisfy :: (ParserInput m -> Bool) -> m ()
 
    -- | A stateful scanner. The predicate modifies a state argument, and each transformed state is passed to successive
@@ -202,8 +202,7 @@ class (CharParsing m, InputParsing m) => InputCharParsing m where
    -- given predicate, and returning the input atom that represents the character. A faster version of @singleton <$>
    -- satisfyChar p@ and of @satisfy (fromMaybe False p . characterPrefix)@.
    satisfyCharInput :: (Char -> Bool) -> m (ParserInput m)
-   -- | A parser that succeeds exactly when satisfy doesn't, equivalent to
-   -- 'Text.Parser.Combinators.notFollowedBy' @. satisfy@
+   -- | A parser that succeeds exactly when satisfy doesn't, equivalent to 'notFollowedBy' @. satisfy@
    notSatisfyChar :: (Char -> Bool) -> m ()
 
    -- | Stateful scanner like `scan`, but specialized for 'TextualMonoid' inputs.
@@ -226,8 +225,28 @@ class AmbiguousParsing m where
    -- | Collect all alternative parses of the same length into a 'NonEmpty' list of results.
    ambiguous :: m a -> m (Ambiguous a)
 
+-- | Combinator methods for constructing deterministic parsers, /i.e./, parsers that can succeed with only a single
+-- result.
+class Parsing m => DeterministicParsing m where
+   -- | Left-biased choice: if the left alternative succeeds, the right one is never tried.
+   infixl 3 <<|>
+   (<<|>) :: m a -> m a -> m a
+   -- | Like 'optional', but never succeeds with @Nothing@ if the argument parser can succeed.
+   takeOptional :: m a -> m (Maybe a)
+   -- | Like 'some', but always consuming the longest matching sequence of input.
+   takeMany :: m a -> m [a]
+   -- | Like 'some', but always consuming the longest matching sequence of input.
+   takeSome :: m a -> m [a]
+   -- | Like 'skipMany', but always consuming the longest matching sequence of input.
+   skipAll :: m a -> m ()
+   p <<|> q = try p <|> notFollowedBy (void p) *> q
+   takeOptional p = Just <$> p <<|> pure Nothing
+   takeMany p = many p <* notFollowedBy (void p)
+   takeSome p = some p <* notFollowedBy (void p)
+   skipAll p = p *> skipAll p <<|> pure ()
+
 -- | If a grammar is 'Lexical', its parsers can instantiate the 'TokenParsing' class.
-class (InputCharParsing m, TokenParsing m) => LexicalParsing m where
+class (DeterministicParsing m, InputCharParsing m, TokenParsing m) => LexicalParsing m where
    -- | Always succeeds, consuming all white space and comments
    lexicalWhiteSpace :: m ()
    -- | Consumes all whitespace and comments, failing if there are none
@@ -257,9 +276,9 @@ class (InputCharParsing m, TokenParsing m) => LexicalParsing m where
    default identifier :: TextualMonoid (ParserInput m) => m (ParserInput m)
    default keyword :: (Show (ParserInput m), TextualMonoid (ParserInput m)) => ParserInput m -> m ()
 
-   lexicalWhiteSpace = takeCharsWhile isSpace *> skipMany (lexicalComment *> takeCharsWhile isSpace)
-   someLexicalSpace = takeCharsWhile1 isSpace *> (lexicalComment *> lexicalWhiteSpace <|> pure ())
-                      <|> lexicalComment *> lexicalWhiteSpace
+   lexicalWhiteSpace = takeCharsWhile isSpace *> skipAll (lexicalComment *> takeCharsWhile isSpace)
+   someLexicalSpace = takeCharsWhile1 isSpace *> (lexicalComment *> lexicalWhiteSpace <<|> pure ())
+                      <<|> lexicalComment *> lexicalWhiteSpace
    lexicalComment = empty
    lexicalSemicolon = lexicalToken (Text.Parser.Char.char ';')
    lexicalToken p = p <* lexicalWhiteSpace

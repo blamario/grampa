@@ -25,7 +25,7 @@ import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
-import Text.Grampa.Class (InputParsing(..), InputCharParsing(..), MultiParsing(..),
+import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), Expected(..))
 import Text.Grampa.Internal (FailureInfo(..))
 
@@ -112,6 +112,16 @@ instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
             q input success failure = p input success' failure'
                where success' _ _ _ _ = failure (FailureInfo (Factorial.length input) [Expected "notFollowedBy"])
                      failure' _ = success () 0 input failure
+
+instance Factorial.FactorialMonoid s => DeterministicParsing (Parser g s) where
+   (<<|>) :: forall g s a. Parser g s a -> Parser g s a -> Parser g s a
+   Parser p <<|> Parser q = Parser r where
+      r :: forall x. s -> (a -> Int -> s -> (FailureInfo s -> x) -> x) -> (FailureInfo s -> x) -> x
+      r rest success failure = p rest success' failure'
+         where success' a len rest' _ = success a len rest' failure
+               failure' f1 = q rest success (\f2 -> failure (f1 <> f2))
+   takeSome p = (:) <$> p <*> takeMany p
+   takeMany p = takeSome p <<|> pure []
 
 instance Factorial.FactorialMonoid s => LookAheadParsing (Parser g s) where
    lookAhead :: forall a. Parser g s a -> Parser g s a

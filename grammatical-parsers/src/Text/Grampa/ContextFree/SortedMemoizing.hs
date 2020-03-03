@@ -1,7 +1,7 @@
-{-# LANGUAGE FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
+{-# LANGUAGE BangPatterns, FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
 module Text.Grampa.ContextFree.SortedMemoizing 
-       (FailureInfo(..), ResultList(..), Parser(..), (<<|>),
+       (FailureInfo(..), ResultList(..), Parser(..),
         reparseTails, longest, peg, terminalPEG)
 where
 
@@ -28,7 +28,8 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 import qualified Rank2
 
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          AmbiguousParsing(..), Ambiguous(Ambiguous), ParseResults, Expected(..))
+                          AmbiguousParsing(..), Ambiguous(Ambiguous), DeterministicParsing(..),
+                          ParseResults, Expected(..))
 import Text.Grampa.Internal (FailureInfo(..), ResultList(..), ResultsOfLength(..), fromResultList)
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
@@ -59,13 +60,6 @@ instance Alternative (Parser g i) where
       r rest = p rest <> q rest
    {-# INLINE (<|>) #-}
    {-# INLINABLE empty #-}
-
-infixl 3 <<|>
-(<<|>) :: Parser g s a -> Parser g s a -> Parser g s a
-Parser p <<|> Parser q = Parser r where
-   r rest = case p rest
-            of rl@(ResultList [] _failure) -> rl <> q rest
-               rl -> rl
 
 instance Monad (Parser g i) where
    return = pure
@@ -219,6 +213,23 @@ instance MonoidNull s => Parsing (Parser g s) where
                | null s = ResultList [ResultsOfLength 0 rest (():|[])] mempty
                | otherwise = ResultList mempty (FailureInfo (genericLength rest) [Expected "end of input"])
             f [] = ResultList [ResultsOfLength 0 [] (():|[])] mempty
+
+instance MonoidNull s => DeterministicParsing (Parser g s) where
+   Parser p <<|> Parser q = Parser r where
+      r rest = case p rest
+               of rl@(ResultList [] _failure) -> rl <> q rest
+                  rl -> rl
+   takeSome p = (:) <$> p <*> takeMany p
+   takeMany (Parser p) = Parser (q 0 id) where
+      q !len acc rest = case p rest
+                        of ResultList [] _failure -> ResultList [ResultsOfLength len rest (acc [] :| [])] mempty
+                           ResultList rl _ -> foldMap continue rl
+         where continue (ResultsOfLength len' rest' results) = foldMap (\r-> q (len + len') (acc . (r:)) rest') results
+   skipAll (Parser p) = Parser (q 0) where
+      q !len rest = case p rest
+                    of ResultList [] _failure -> ResultList [ResultsOfLength len rest (():|[])] mempty
+                       ResultList rl _failure -> foldMap continue rl
+         where continue (ResultsOfLength len' rest' _) = q (len + len') rest'
 
 instance MonoidNull s => LookAheadParsing (Parser g s) where
    lookAhead (Parser p) = Parser (\input-> rewind input (p input))

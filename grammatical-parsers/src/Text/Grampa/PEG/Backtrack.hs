@@ -25,7 +25,7 @@ import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
-import Text.Grampa.Class (InputParsing(..), InputCharParsing(..), MultiParsing(..),
+import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), Expected(..))
 import Text.Grampa.Internal (FailureInfo(..))
 
@@ -105,6 +105,13 @@ instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t Parsed{} = NoParse (FailureInfo (Factorial.length t) [Expected "notFollowedBy"])
             rewind t NoParse{} = Parsed () t
+
+-- | Every PEG parser is deterministic all the time.
+instance FactorialMonoid s => DeterministicParsing (Parser g s) where
+   (<<|>) = alt
+   takeSome = some
+   takeMany = many
+   skipAll = skipMany
 
 instance Factorial.FactorialMonoid s => LookAheadParsing (Parser g s) where
    lookAhead (Parser p) = Parser (\input-> rewind input (p input))

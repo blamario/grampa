@@ -7,7 +7,7 @@ module Text.Grampa (
    -- * Types
    Grammar, GrammarBuilder, ParseResults, ParseFailure(..), Expected(..), Ambiguous(..), Position,
    -- * Parser combinators and primitives
-   InputParsing(..), InputCharParsing(..), MultiParsing(..), GrammarParsing(..),
+   DeterministicParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..), GrammarParsing(..),
    TokenParsing(..), LexicalParsing(..), AmbiguousParsing(..),
    module Text.Parser.Char,
    module Text.Parser.Combinators,
@@ -25,9 +25,9 @@ import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 import Text.Parser.Token (TokenParsing(..))
 
 import qualified Rank2
-import Text.Grampa.Class (MultiParsing(..), GrammarParsing(..), InputParsing(..), InputCharParsing(..),
-                          LexicalParsing(..), AmbiguousParsing(..),
-                          Ambiguous(..), ParseResults, ParseFailure(..), Expected(..), Position,
+import Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
+                          DeterministicParsing(..), InputParsing(..), InputCharParsing(..), LexicalParsing(..),
+                          AmbiguousParsing(..), Ambiguous(..), ParseResults, ParseFailure(..), Expected(..), Position,
                           positionOffset)
 
 -- | A type synonym for a fixed grammar record type @g@ with a given parser type @p@ on input streams of type @s@
