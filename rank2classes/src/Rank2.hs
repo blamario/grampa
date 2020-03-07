@@ -170,7 +170,7 @@ distributeWithTraversable :: (DistributiveTraversable g, Rank1.Traversable m) =>
                              (forall a. m (p a) -> q a) -> m (g p) -> g q
 distributeWithTraversable = cotraverseTraversable
 
--- | A rank-2 equivalent of '()', a zero-element tuple
+-- | A rank-2 equivalent of @()@, a zero-element tuple
 data Empty f = Empty deriving (Eq, Ord, Show)
 
 -- | A rank-2 tuple of only one element

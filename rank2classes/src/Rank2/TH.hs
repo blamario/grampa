@@ -46,6 +46,7 @@ deriveApply ty = do
               pragInlD '(Rank2.<*>) Inlinable FunLike AllPhases,
               pragInlD 'Rank2.liftA2 Inlinable FunLike AllPhases]]
 
+-- | This function always succeeds, but the methods it generates may be partial. Use with care.
 unsafeDeriveApply :: Name -> Q [Dec]
 unsafeDeriveApply ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Apply ty
