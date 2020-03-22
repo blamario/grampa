@@ -6,6 +6,7 @@ import Control.Applicative ((<|>), empty)
 import Control.Arrow (first)
 import Control.Monad (guard, join)
 import Data.Char (isSpace)
+import Data.List (isPrefixOf)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Identity (Identity(..))
 import System.Environment (getArgs)
@@ -29,81 +30,120 @@ data AST f = And (f (AST f)) (f (AST f))
 
 deriving instance (Show (f (AST f)), Show (f Bool), Show (f String)) => Show (AST f)
 
-instance Boolean.BooleanDomain (NodeWrap (AST NodeWrap)) where
+instance Boolean.BooleanDomain (ParsedWrap (AST ParsedWrap)) where
    and = binary And
    or = binary Or
    not = bare . Not
    true = bare (Literal True)
    false = bare (Literal False)
 
-binary :: (NodeWrap (AST NodeWrap) -> NodeWrap (AST NodeWrap) -> AST NodeWrap)
-       -> NodeWrap (AST NodeWrap) -> NodeWrap (AST NodeWrap) -> NodeWrap (AST NodeWrap)
+binary :: (ParsedWrap (AST ParsedWrap) -> ParsedWrap (AST ParsedWrap) -> AST ParsedWrap)
+       -> ParsedWrap (AST ParsedWrap) -> ParsedWrap (AST ParsedWrap) -> ParsedWrap (AST ParsedWrap)
 binary f a b = bare (f a b)
 
+type ParsedWrap = (,) ParsedIgnorables
 type NodeWrap = (,) AttachedIgnorables
-data AttachedIgnorables = Trailing Ignorables
-                        | Parenthesized Ignorables AttachedIgnorables Ignorables deriving Show
+data AttachedIgnorables = Attached Ignorables Ignorables
+                        | Parenthesized Ignorables AttachedIgnorables Ignorables
+                        deriving Show
+data ParsedIgnorables = Trailing Ignorables
+                      | OperatorTrailing Ignorables
+                      | ParenthesesTrailing Ignorables ParsedIgnorables Ignorables
+                      deriving Show
 type Ignorables = [Either WhiteSpace Comment]
-newtype Comment    = Comment String    deriving Show
+newtype Comment    = Comment{getComment :: String} deriving Show
 newtype WhiteSpace = WhiteSpace String deriving Show
 
-type Grammar = Boolean.Boolean (NodeWrap (AST NodeWrap))
+type Grammar = Boolean.Boolean (ParsedWrap (AST ParsedWrap))
 
 main :: IO ()
 main = do args <- concat <$> getArgs
           let tree = (getCompose . fmap snd . getCompose . Boolean.expr $
-                      parseComplete (fixGrammar grammar) args :: ParseResults String [NodeWrap (AST NodeWrap)])
+                      parseComplete (fixGrammar grammar) args :: ParseResults String [ParsedWrap (AST ParsedWrap)])
           print tree
-          case tree
-             of Right results -> do mapM_ (print . reconstructed 0) results
-                                    mapM_ (print . reconstructed 0 . simplified) results
+          case (completeRearranged mempty <$>) <$> tree
+             of Right results -> do mapM_ (print . show) results
+                                    mapM_ (print . showSource . simplified) results
                 _ -> pure ()
 
-reconstructed :: Int -> NodeWrap (AST NodeWrap) -> String
-reconstructed prec (ws, node) = serialized prec ws node
+class ShowSource a where
+   showSource :: a -> String
+   showsSourcePrec :: Int -> a -> String -> String
+   showSource a = showsSourcePrec 0 a mempty
+
+instance ShowSource (NodeWrap (AST NodeWrap)) where
+   showsSourcePrec prec (Attached lead follow, node) rest =
+      whiteString lead <> showsSourcePrec prec node (whiteString follow <> rest)
+   showsSourcePrec prec (Parenthesized lead ws follow, node) rest =
+      whiteString lead <> showsSourcePrec 0 (ws, node) (whiteString follow <> rest)
+
+instance ShowSource (AST NodeWrap) where
+   showsSourcePrec prec (Or left right) rest
+      | prec < 1 = showsSourcePrec 1 left ("||" <> showsSourcePrec 0 right rest)
+   showsSourcePrec prec (And left right) rest
+      | prec < 2 = showsSourcePrec 2 left ("&&" <> showsSourcePrec 1 right rest)
+   showsSourcePrec prec (Not expr) rest
+      | prec < 3 = "not" <> showsSourcePrec 2 expr rest
+   showsSourcePrec _ (Literal True) rest = "True" <> rest
+   showsSourcePrec _ (Literal False) rest = "False" <> rest
+   showsSourcePrec _ (Variable name) rest = name <> rest
+   showsSourcePrec _ node rest =   "(" <> showsSourcePrec 0 node (")" <> rest)
+
+completeRearranged :: Ignorables -> ParsedWrap (AST ParsedWrap) -> NodeWrap (AST NodeWrap)
+completeRearranged ws node | ((ws', node'), rest) <- rearranged ws node = (withTail ws' rest, node')
+
+rearranged :: Ignorables -> ParsedWrap (AST ParsedWrap) -> (NodeWrap (AST NodeWrap), Ignorables)
+rearranged leftover (Trailing follow, node)
+   | (follow', lead') <- splitDirections follow, (node', follow'') <- rearrangedChildren mempty mempty node =
+        ((Attached leftover (follow'' <> follow'), node'), lead')
+rearranged leftover (OperatorTrailing follow, node)
+   | (node', follow') <- rearrangedChildren mempty follow node = ((Attached leftover mempty, node'), follow')
+rearranged leftover (ParenthesesTrailing lead ws follow, node)
+   | (follow', lead') <- splitDirections follow, ((ws', node'), follow'') <- rearranged lead (ws, node) =
+        ((Parenthesized leftover (ws' `withTail` follow'') follow', node'), lead')
+
+withTail (Attached lead follow) ws = Attached lead (follow <> ws)
+withTail (Parenthesized lead inside follow) ws = Parenthesized lead inside (follow <> ws)
+
+rearrangedChildren :: Ignorables -> Ignorables -> AST ParsedWrap -> (AST NodeWrap, Ignorables)
+rearrangedChildren left right (And a b)
+   | a' <- completeRearranged left a,
+     (b', rest') <- rearranged right b = (And a' b', rest')
+rearrangedChildren left right (Or a b)
+   | a' <- completeRearranged left a,
+     (b', rest') <- rearranged right b = (Or a' b', rest')
+rearrangedChildren leftover [] (Not a)
+   | (a', rest) <- rearranged leftover a = (Not a', rest)
+rearrangedChildren [] [] (Literal a) = (Literal a, [])
+rearrangedChildren [] [] (Variable name) = (Variable name, [])
+
+splitDirections :: Ignorables -> (Ignorables, Ignorables)
+splitDirections = span (either (const True) (isPrefixOf "^" . getComment))
 
 simplified :: NodeWrap (AST NodeWrap) -> NodeWrap (AST NodeWrap)
 simplified e@(_, Literal{}) = e
 simplified e@(_, Variable{}) = e
 simplified (a, Not e) = case simplified e
-                        of (b, Literal True) -> (swallow a b, Literal False)
-                           (b, Literal False) -> (swallow a b, Literal True)
+                        of (b, Literal True) -> (raise a b, Literal False)
+                           (b, Literal False) -> (raise a b, Literal True)
                            e' -> (a, Not e')
 simplified (a, And l r) = case (simplified l, simplified r)
-                          of ((b, Literal False), _) -> (raiseLeft a b, Literal False)
-                             ((b, Literal True), (c, r')) -> (raise2right a b c, r')
-                             (_, (b, Literal False)) -> (raiseRight a b, Literal False)
-                             ((b, l'), (c, Literal True)) -> (raise2left a b c, l')
+                          of ((b, Literal False), _) -> (raise a b, Literal False)
+                             ((b, Literal True), (c, r')) -> (raise a c, r')
+                             (_, (b, Literal False)) -> (raise a b, Literal False)
+                             ((b, l'), (c, Literal True)) -> (raise a b, l')
                              (l', r') -> (a, And l' r')
 simplified (a, Or l r) =  case (simplified l, simplified r)
-                          of ((b, Literal False), (c, r')) -> (raise2right a b c, r')
-                             ((b, Literal True), _) -> (raiseLeft a b, Literal True)
-                             ((b, l'), (c, Literal False)) -> (raise2left a b c, l')
-                             (_, (b, Literal True)) -> (raiseRight a b, Literal True)
+                          of ((b, Literal False), (c, r')) -> (raise a c, r')
+                             ((b, Literal True), _) -> (raise a b, Literal True)
+                             ((b, l'), (c, Literal False)) -> (raise a b, l')
+                             (_, (b, Literal True)) -> (raise a b, Literal True)
                              (l', r') -> (a, Or l' r')
 
-swallow, raiseLeft, raiseRight :: AttachedIgnorables -> AttachedIgnorables -> AttachedIgnorables
-raise2left, raise2right :: AttachedIgnorables -> AttachedIgnorables -> AttachedIgnorables -> AttachedIgnorables
-swallow = raiseRight
-raiseLeft   (Trailing a) (Trailing b) = Trailing (b <> a)
-raiseRight  (Trailing a) (Parenthesized b c d) = Parenthesized (a <> b) c d
-raiseRight  (Trailing a) (Trailing b) = Trailing (a <> b)
-raise2left  (Trailing a) (Trailing b) (Trailing c) = Trailing (a <> b <> c)
-raise2left  (Parenthesized a b c) d _ = Parenthesized a (raiseLeft b d) c
-raise2right (Trailing a) (Trailing b) (Trailing c) = Trailing (a <> b <> c)
-raise2right (Trailing a) (Trailing b) (Parenthesized c d e) = Parenthesized (a <> c) d e
-
-serialized :: Int -> AttachedIgnorables -> AST NodeWrap -> String
-serialized prec (Trailing follow) (Or left right)
-   | prec < 1 = reconstructed 1 left <> "||" <> whiteString follow <> reconstructed 0 right
-serialized prec (Trailing follow) (And left right)
-   | prec < 2 = reconstructed 2 left <> "&&" <> whiteString follow <> reconstructed 1 right
-serialized prec (Trailing follow) (Not expr) | prec < 3 = "not" <> whiteString follow <> reconstructed 2 expr
-serialized _ (Trailing follow) (Literal True) = "True" <> whiteString follow
-serialized _ (Trailing follow) (Literal False) = "False" <> whiteString follow
-serialized _ (Trailing follow) (Variable name) = name <> whiteString follow
-serialized _ (Parenthesized open inside close) node =
-   "(" <> whiteString open <> serialized 0 inside node <> ")" <> whiteString close
+raise :: AttachedIgnorables -> AttachedIgnorables -> AttachedIgnorables
+raise  (Parenthesized opl op opr) arg = Parenthesized opl (raise op arg) opr
+raise  (Attached opl opr) (Parenthesized l arg r) = Parenthesized (opl <> l) arg (r <> opr)
+raise  (Attached opl opr) (Attached argl argr) = Attached (opl <> argl) (argr <> opr)
 
 whiteString :: Ignorables -> String
 whiteString (Left (WhiteSpace ws) : rest) = ws <> whiteString rest
@@ -113,24 +153,26 @@ whiteString [] = ""
 grammar :: GrammarBuilder Grammar Grammar Parser String
 grammar Boolean{..} = Boolean{
    expr= term
-         <|> trailingWhiteSpace (Boolean.or <$> term <* symbol "||" <*> expr),
+         <|> operatorTrailingWhiteSpace (Boolean.or <$> term <* symbol "||" <*> expr),
    term= factor
-         <|> trailingWhiteSpace (Boolean.and <$> factor <* symbol "&&" <*> term),
+         <|> operatorTrailingWhiteSpace (Boolean.and <$> factor <* symbol "&&" <*> term),
    factor= trailingWhiteSpace (keyword "True" *> pure Boolean.true
                                  <|> keyword "False" *> pure Boolean.false
                                  <|> bare . Variable <$> identifier
                                  <|> keyword "not" *> (Boolean.not <$> factor))
            <|> parenthesizedWhiteSpace (symbol "(" *> expr <* symbol ")")}
 
-bare :: a -> NodeWrap a
+bare :: a -> ParsedWrap a
 bare a = (Trailing [], a)
 
-trailingWhiteSpace, parenthesizedWhiteSpace :: Parser Grammar String (NodeWrap (AST NodeWrap))
-                                            -> Parser Grammar String (NodeWrap (AST NodeWrap))
+trailingWhiteSpace, operatorTrailingWhiteSpace, parenthesizedWhiteSpace
+   :: Parser Grammar String (ParsedWrap (AST ParsedWrap)) -> Parser Grammar String (ParsedWrap (AST ParsedWrap))
 trailingWhiteSpace = tmap store
    where store ([ws], (Trailing ws', a)) = (mempty, (Trailing $ ws' <> ws, a))
+operatorTrailingWhiteSpace = tmap store
+   where store ([ws], (Trailing [], a)) = (mempty, (OperatorTrailing ws, a))
 parenthesizedWhiteSpace = tmap store
-   where store ([ws,ws'], (aws, a)) = ([], (Parenthesized ws aws ws', a))
+   where store ([ws,ws'], (aws, a)) = ([], (ParenthesesTrailing ws aws ws', a))
 
 instance {-# OVERLAPS #-} TokenParsing (Parser Grammar String) where
    someSpace = someLexicalSpace
