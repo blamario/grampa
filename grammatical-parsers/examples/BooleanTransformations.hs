@@ -112,7 +112,7 @@ rearrangedChildren left right (And a b)
 rearrangedChildren left right (Or a b)
    | a' <- completeRearranged left a,
      (b', rest') <- rearranged right b = (Or a' b', rest')
-rearrangedChildren leftover [] (Not a)
+rearrangedChildren [] leftover (Not a)
    | (a', rest) <- rearranged leftover a = (Not a', rest)
 rearrangedChildren [] [] (Literal a) = (Literal a, [])
 rearrangedChildren [] [] (Variable name) = (Variable name, [])
@@ -158,8 +158,8 @@ grammar Boolean{..} = Boolean{
          <|> operatorTrailingWhiteSpace (Boolean.and <$> factor <* symbol "&&" <*> term),
    factor= trailingWhiteSpace (keyword "True" *> pure Boolean.true
                                  <|> keyword "False" *> pure Boolean.false
-                                 <|> bare . Variable <$> identifier
-                                 <|> keyword "not" *> (Boolean.not <$> factor))
+                                 <|> bare . Variable <$> identifier)
+           <|> operatorTrailingWhiteSpace (keyword "not" *> (Boolean.not <$> factor))
            <|> parenthesizedWhiteSpace (symbol "(" *> expr <* symbol ")")}
 
 bare :: a -> ParsedWrap a
