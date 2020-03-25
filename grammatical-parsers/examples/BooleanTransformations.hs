@@ -47,7 +47,7 @@ data AttachedIgnorables = Attached Ignorables Ignorables
                         | Parenthesized Ignorables AttachedIgnorables Ignorables
                         deriving Show
 data ParsedIgnorables = Trailing Ignorables
-                      | OperatorTrailing Ignorables
+                      | OperatorTrailing [Ignorables]
                       | ParenthesesTrailing Ignorables ParsedIgnorables Ignorables
                       deriving Show
 type Ignorables = [Either WhiteSpace Comment]
@@ -94,10 +94,10 @@ completeRearranged ws node | ((ws', node'), rest) <- rearranged ws node = (withT
 
 rearranged :: Ignorables -> ParsedWrap (AST ParsedWrap) -> (NodeWrap (AST NodeWrap), Ignorables)
 rearranged leftover (Trailing follow, node)
-   | (follow', lead') <- splitDirections follow, (node', follow'') <- rearrangedChildren mempty mempty node =
+   | (follow', lead') <- splitDirections follow, (node', follow'') <- rearrangedChildren [] node =
         ((Attached leftover (follow'' <> follow'), node'), lead')
 rearranged leftover (OperatorTrailing follow, node)
-   | (node', follow') <- rearrangedChildren mempty follow node = ((Attached leftover mempty, node'), follow')
+   | (node', follow') <- rearrangedChildren follow node = ((Attached leftover mempty, node'), follow')
 rearranged leftover (ParenthesesTrailing lead ws follow, node)
    | (follow', lead') <- splitDirections follow, ((ws', node'), follow'') <- rearranged lead (ws, node) =
         ((Parenthesized leftover (ws' `withTail` follow'') follow', node'), lead')
@@ -105,17 +105,17 @@ rearranged leftover (ParenthesesTrailing lead ws follow, node)
 withTail (Attached lead follow) ws = Attached lead (follow <> ws)
 withTail (Parenthesized lead inside follow) ws = Parenthesized lead inside (follow <> ws)
 
-rearrangedChildren :: Ignorables -> Ignorables -> AST ParsedWrap -> (AST NodeWrap, Ignorables)
-rearrangedChildren left right (And a b)
+rearrangedChildren :: [Ignorables] -> AST ParsedWrap -> (AST NodeWrap, Ignorables)
+rearrangedChildren [left, right] (And a b)
    | a' <- completeRearranged left a,
      (b', rest') <- rearranged right b = (And a' b', rest')
-rearrangedChildren left right (Or a b)
+rearrangedChildren [left, right] (Or a b)
    | a' <- completeRearranged left a,
      (b', rest') <- rearranged right b = (Or a' b', rest')
-rearrangedChildren [] leftover (Not a)
+rearrangedChildren [leftover] (Not a)
    | (a', rest) <- rearranged leftover a = (Not a', rest)
-rearrangedChildren [] [] (Literal a) = (Literal a, [])
-rearrangedChildren [] [] (Variable name) = (Variable name, [])
+rearrangedChildren [] (Literal a) = (Literal a, [])
+rearrangedChildren [] (Variable name) = (Variable name, [])
 
 splitDirections :: Ignorables -> (Ignorables, Ignorables)
 splitDirections = span (either (const True) (isPrefixOf "^" . getComment))
@@ -153,24 +153,26 @@ whiteString [] = ""
 grammar :: GrammarBuilder Grammar Grammar Parser String
 grammar Boolean{..} = Boolean{
    expr= term
-         <|> operatorTrailingWhiteSpace (Boolean.or <$> term <* symbol "||" <*> expr),
+         <|> operatorTrailingWhiteSpace [mempty] (Boolean.or <$> term <* symbol "||" <*> expr),
    term= factor
-         <|> operatorTrailingWhiteSpace (Boolean.and <$> factor <* symbol "&&" <*> term),
+         <|> operatorTrailingWhiteSpace [mempty] (Boolean.and <$> factor <* symbol "&&" <*> term),
    factor= trailingWhiteSpace (keyword "True" *> pure Boolean.true
                                  <|> keyword "False" *> pure Boolean.false
                                  <|> bare . Variable <$> identifier)
-           <|> operatorTrailingWhiteSpace (keyword "not" *> (Boolean.not <$> factor))
+           <|> operatorTrailingWhiteSpace [] (keyword "not" *> (Boolean.not <$> factor))
            <|> parenthesizedWhiteSpace (symbol "(" *> expr <* symbol ")")}
 
 bare :: a -> ParsedWrap a
 bare a = (Trailing [], a)
 
-trailingWhiteSpace, operatorTrailingWhiteSpace, parenthesizedWhiteSpace
+operatorTrailingWhiteSpace :: [Ignorables] -> Parser Grammar String (ParsedWrap (AST ParsedWrap))
+                           -> Parser Grammar String (ParsedWrap (AST ParsedWrap))
+trailingWhiteSpace, parenthesizedWhiteSpace
    :: Parser Grammar String (ParsedWrap (AST ParsedWrap)) -> Parser Grammar String (ParsedWrap (AST ParsedWrap))
 trailingWhiteSpace = tmap store
    where store ([ws], (Trailing ws', a)) = (mempty, (Trailing $ ws' <> ws, a))
-operatorTrailingWhiteSpace = tmap store
-   where store ([ws], (Trailing [], a)) = (mempty, (OperatorTrailing ws, a))
+operatorTrailingWhiteSpace prefix = tmap store
+   where store (wss, (Trailing [], a)) = (mempty, (OperatorTrailing (prefix <> wss), a))
 parenthesizedWhiteSpace = tmap store
    where store ([ws,ws'], (aws, a)) = ([], (ParenthesesTrailing ws aws ws', a))
 
