@@ -40,7 +40,8 @@ import Prelude hiding (cycle, null, span, takeWhile)
 
 type Parser = Fixed Memoizing.Parser
 
-type ResultAppend g s = ResultList g s Rank2.~> ResultList g s Rank2.~> ResultList g s
+type ResultAppend p (g :: (* -> *) -> *) s =
+   GrammarFunctor (p g s) Rank2.~> GrammarFunctor (p g s) Rank2.~> GrammarFunctor (p g s)
 
 data Fixed p g s a =
    Parser {
@@ -52,14 +53,14 @@ data Fixed p g s a =
    | PositiveDirectParser {
       complete :: p g s a}
 
-data SeparatedParser p g s a = FrontParser (p g s a)
-                             | CycleParser {
-                                  cycleParser  :: p g s a,
-                                  backParser   :: p g s a,
-                                  appendResultsArrow :: ResultAppend g s a,
-                                  dependencies :: g (Const Bool)}
-                             | BackParser {
-                                  backParser :: p g s a}
+data SeparatedParser p (g :: (* -> *) -> *) s a = FrontParser (p g s a)
+                                                | CycleParser {
+                                                     cycleParser  :: p g s a,
+                                                     backParser   :: p g s a,
+                                                     appendResultsArrow :: ResultAppend p g s a,
+                                                     dependencies :: g (Const Bool)}
+                                                | BackParser {
+                                                     backParser :: p g s a}
 
 data ParserFlags g = ParserFlags {
    nullable :: Bool,
@@ -645,7 +646,8 @@ terminalPEG p@Parser{} = Parser{complete= Memoizing.terminalPEG (complete p),
                                 appendResults= (<>),
                                 cyclicDescendants= cyclicDescendants p}
 
-parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, Eq s, FactorialMonoid s) =>
+parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g,
+                               Eq s, FactorialMonoid s, LeftReductive s) =>
                   g (Parser g s) -> s -> [(s, g (ResultList g s))]
 parseRecursive = parseSeparated . separated
 {-# INLINE parseRecursive #-}
@@ -710,7 +712,7 @@ fixNullabilities gf = Rank2.fmap (Const . nullable . getConst) (go initial)
 -- | Parse the given input using a context-free grammar separated into two parts: the first specifying all the
 -- left-recursive productions, the second all others. The first function argument specifies the left-recursive
 -- dependencies among the grammar productions.
-parseSeparated :: forall g s. (Rank2.Apply g, Rank2.Foldable g, Eq s, FactorialMonoid s) =>
+parseSeparated :: forall g s. (Rank2.Apply g, Rank2.Foldable g, Eq s, FactorialMonoid s, LeftReductive s) =>
                   g (SeparatedParser Memoizing.Parser g s) -> s -> [(s, g (ResultList g s))]
 parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
    where parseTail s parsedTail = parsed
@@ -733,8 +735,9 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                       -> g (ResultList g s)
          maybeDependencies :: g (Const (Maybe (g (Const Bool))))
          maybeDependency :: SeparatedParser Memoizing.Parser g s r -> Const (Maybe (g (Const Bool))) r
-         appends :: g (ResultAppend g s)
-         parserAppend :: SeparatedParser Memoizing.Parser g s r -> ResultAppend g s r
+         appends :: g (ResultAppend Memoizing.Parser g s)
+         parserAppend :: forall p r. (GrammarParsing (p g s), Semigroup (GrammarFunctor (p g s) r))
+                      => SeparatedParser p g s r -> ResultAppend p g s r
 
          directs = Rank2.fmap backParser parsers
          indirects = Rank2.fmap (\p-> case p of {CycleParser{}-> cycleParser p; _ -> empty}) parsers
