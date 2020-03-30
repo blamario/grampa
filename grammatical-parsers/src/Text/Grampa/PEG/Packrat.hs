@@ -27,7 +27,7 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..),
                           GrammarParsing(..), MultiParsing(..),
-                          ParseResults, ParseFailure(..), Expected(..))
+                          TailsParsing(parseTails), ParseResults, ParseFailure(..), Expected(..))
 import Text.Grampa.Internal (FailureInfo(..))
 
 data Result g s v = Parsed{parsedPrefix :: !v, 
@@ -130,6 +130,9 @@ instance (LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) whe
       p ((_, d) : _) = f d
       p _ = NoParse (FailureInfo 0 [Expected "NonTerminal at endOfInput"])
 
+instance (LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s) where
+   parseTails = applyParser
+
 instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
    endOfInput = eof
@@ -209,13 +212,13 @@ instance (LeftReductive s, FactorialMonoid s) => MultiParsing (Parser g s) where
    type ResultFunctor (Parser g s) = ParseResults s
    type GrammarConstraint (Parser g s) g' = (g ~ g', Rank2.Functor g)
    {-# NOINLINE parsePrefix #-}
-   parsePrefix g input = Rank2.fmap (Compose . fromResult input) (snd $ head $ parseTails g input)
+   parsePrefix g input = Rank2.fmap (Compose . fromResult input) (snd $ head $ parseGrammarTails g input)
    parseComplete g input = Rank2.fmap ((snd <$>) . fromResult input)
-                                      (snd $ head $ reparseTails close $ parseTails g input)
+                                      (snd $ head $ reparseTails close $ parseGrammarTails g input)
       where close = Rank2.fmap (<* eof) g
 
-parseTails :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> [(s, g (Result g s))]
-parseTails g input = foldr parseTail [] (Factorial.tails input)
+parseGrammarTails :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> [(s, g (Result g s))]
+parseGrammarTails g input = foldr parseTail [] (Factorial.tails input)
       where parseTail s parsedTail = parsed where
                parsed = (s,d):parsedTail
                d      = Rank2.fmap (($ parsed) . applyParser) g

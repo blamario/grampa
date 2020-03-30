@@ -3,7 +3,7 @@
              TypeFamilies, TypeSynonymInstances, UndecidableInstances #-}
 module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
                           AmbiguousParsing(..), DeterministicParsing(..), InputParsing(..), InputCharParsing(..),
-                          LexicalParsing(..), ParseResults, ParseFailure(..), Expected(..),
+                          LexicalParsing(..), TailsParsing(..), ParseResults, ParseFailure(..), Expected(..),
                           Ambiguous(..), Position, positionOffset, completeParser) where
 
 import Control.Applicative (Alternative(empty, many, some), optional, liftA2, (<|>))
@@ -30,7 +30,7 @@ import Text.Parser.Char (CharParsing)
 import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 import Text.Parser.Token (TokenParsing)
 import qualified Text.Parser.Char
-import GHC.Exts (Constraint)
+import Data.Kind (Constraint)
 
 import qualified Data.Attoparsec.ByteString as Attoparsec
 import qualified Text.ParserCombinators.ReadP as ReadP
@@ -128,6 +128,10 @@ class MultiParsing m => GrammarParsing m where
    fixGrammar = ($ selfReferring)
    {-# INLINE fixGrammar #-}
    recursive = id
+
+class GrammarParsing m => TailsParsing m where
+   -- | Parse the tails of the input together with memoized parse results
+   parseTails :: GrammarConstraint m g => m r -> [(ParserInput m, g (GrammarFunctor m))] -> GrammarFunctor m r
 
 {-# DEPRECATED endOfInput "Use 'Text.Parser.Combinators.eof' instead" #-}
 -- | Methods for parsing monoidal inputs

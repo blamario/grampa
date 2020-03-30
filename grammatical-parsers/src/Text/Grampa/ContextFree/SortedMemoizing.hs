@@ -29,7 +29,7 @@ import qualified Rank2
 
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           AmbiguousParsing(..), Ambiguous(Ambiguous), DeterministicParsing(..),
-                          ParseResults, Expected(..))
+                          TailsParsing(parseTails), ParseResults, Expected(..))
 import Text.Grampa.Internal (FailureInfo(..), ResultList(..), ResultsOfLength(..), fromResultList)
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
@@ -91,6 +91,9 @@ instance (LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) whe
       p _ = ResultList mempty (FailureInfo 0 [Expected "NonTerminal at endOfInput"])
    {-# INLINE nonTerminal #-}
 
+instance (LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s) where
+   parseTails = applyParser
+
 -- | Memoizing parser guarantees O(n²) performance for grammars with unambiguous productions, but provides no left
 -- recursion support.
 --
@@ -102,15 +105,15 @@ instance (LeftReductive s, FactorialMonoid s) => MultiParsing (Parser g s) where
    type GrammarConstraint (Parser g s) g' = (g ~ g', Rank2.Functor g)
    type ResultFunctor (Parser g s) = Compose (ParseResults s) []
    -- | Returns the list of all possible input prefix parses paired with the remaining input suffix.
-   parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input) (snd $ head $ parseTails g input)
+   parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input) (snd $ head $ parseGrammarTails g input)
    parseComplete :: (ParserInput (Parser g s) ~ s, Rank2.Functor g, Eq s, FactorialMonoid s) =>
                     g (Parser g s) -> s -> g (Compose (ParseResults s) [])
    parseComplete g input = Rank2.fmap ((snd <$>) . Compose . fromResultList input)
-                              (snd $ head $ reparseTails close $ parseTails g input)
+                              (snd $ head $ reparseTails close $ parseGrammarTails g input)
       where close = Rank2.fmap (<* eof) g
 
-parseTails :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> [(s, g (ResultList g s))]
-parseTails g input = foldr parseTail [] (Factorial.tails input)
+parseGrammarTails :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> [(s, g (ResultList g s))]
+parseGrammarTails g input = foldr parseTail [] (Factorial.tails input)
    where parseTail s parsedTail = parsed
             where parsed = (s,d):parsedTail
                   d      = Rank2.fmap (($ parsed) . applyParser) g

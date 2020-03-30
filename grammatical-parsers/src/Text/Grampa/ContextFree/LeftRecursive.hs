@@ -31,7 +31,8 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          AmbiguousParsing(..), Ambiguous(..), DeterministicParsing(..), ParseResults, Expected(..))
+                          AmbiguousParsing(..), Ambiguous(..), DeterministicParsing(..),
+                          TailsParsing(parseTails), ParseResults, Expected(..))
 import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), fromResultList)
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
@@ -555,7 +556,7 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Fixed Backtrack.P
       direct0= d0,
       direct1= d1,
       indirect= mappend <$> indirect p <*> cmp,
-      appendResults= mappend,
+      appendResults= (<>),
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
       where d0 = pure mempty `Backtrack.alt` direct0 p
             d1 = mappend <$> direct1 p <*> cmp
@@ -652,16 +653,17 @@ parseRecursive :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traver
 parseRecursive = parseSeparated . separated
 {-# INLINE parseRecursive #-}
 
-separated :: forall g s. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
-             g (Parser g s) -> g (SeparatedParser Memoizing.Parser g s)
+separated :: forall p g s. (Alternative (p g s), Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g,
+                            GrammarFunctor (p g s) ~ ResultList g s) =>
+             g (Fixed p g s) -> g (SeparatedParser p g s)
 separated g = Rank2.liftA4 reseparate circulars cycleFollowers descendants g
    where descendants :: g (Const (g (Const Bool)))
          cycleFollowers, circulars :: g (Const Bool)
          cyclicDescendantses :: g (Const (ParserFlags g))
          leftRecursive :: forall a. Const (g (Const Bool)) a -> Const (ParserFlags g) a -> Const Bool a
          leftRecursiveDeps :: forall a. Const Bool a -> Const (ParserFlags g) a -> Const (g (Const Bool)) a
-         reseparate :: forall a. Const Bool a -> Const Bool a -> Const (g (Const Bool)) a -> Parser g s a
-                    -> SeparatedParser Memoizing.Parser g s a
+         reseparate :: forall a. Const Bool a -> Const Bool a -> Const (g (Const Bool)) a -> Fixed p g s a
+                    -> SeparatedParser p g s a
          reseparate (Const circular) (Const follower) (Const deps) p
             | circular || leader && follower =
               CycleParser (indirect p) (direct p) (Rank2.Arrow (Rank2.Arrow . appendResults p)) deps
@@ -712,32 +714,32 @@ fixNullabilities gf = Rank2.fmap (Const . nullable . getConst) (go initial)
 -- | Parse the given input using a context-free grammar separated into two parts: the first specifying all the
 -- left-recursive productions, the second all others. The first function argument specifies the left-recursive
 -- dependencies among the grammar productions.
-parseSeparated :: forall g s. (Rank2.Apply g, Rank2.Foldable g, Eq s, FactorialMonoid s, LeftReductive s) =>
-                  g (SeparatedParser Memoizing.Parser g s) -> s -> [(s, g (ResultList g s))]
+parseSeparated :: forall p g s. (Rank2.Apply g, Rank2.Foldable g, Eq s, FactorialMonoid s, LeftReductive s,
+                                 p ~ Memoizing.Parser) =>
+                  g (SeparatedParser p g s) -> s -> [(s, g (GrammarFunctor (p g s)))]
 parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
    where parseTail s parsedTail = parsed
             where parsed = (s,d''):parsedTail
-                  d      = Rank2.fmap (($ (s,d):parsedTail) . Memoizing.applyParser) directs
+                  d      = Rank2.fmap (($ (s,d):parsedTail) . parseTails) directs
                   d'     = fixRecursive s parsedTail d
                   d''    = Rank2.liftA2 f parsers d'
-                  f :: forall a. SeparatedParser Memoizing.Parser g s a -> ResultList g s a -> ResultList g s a
-                  f (FrontParser p) _ = Memoizing.applyParser p ((s,d''):parsedTail)
+                  f :: forall a. SeparatedParser p g s a -> GrammarFunctor (p g s) a -> GrammarFunctor (p g s) a
+                  f (FrontParser p) _ = parseTails p ((s,d''):parsedTail)
                   f _ result = result
-         fixRecursive :: s -> [(s, g (ResultList g s))] -> g (ResultList g s) -> g (ResultList g s)
-         whileAnyContinues :: (g (ResultList g s) -> g (ResultList g s))
-                           -> (g (ResultList g s) -> g (ResultList g s))
-                           -> g (ResultList g s) -> g (ResultList g s) -> g (ResultList g s)
-         recurseTotal :: s -> g (ResultList g s Rank2.~> ResultList g s) -> [(s, g (ResultList g s))]
-                      -> g (ResultList g s)
-                      -> g (ResultList g s)
-         recurseMarginal :: s -> [(s, g (ResultList g s))]
-                      -> g (ResultList g s)
-                      -> g (ResultList g s)
+         fixRecursive :: s -> [(s, g (GrammarFunctor (p g s)))] -> g (GrammarFunctor (p g s)) -> g (GrammarFunctor (p g s))
+         whileAnyContinues :: (g (GrammarFunctor (p g s)) -> g (GrammarFunctor (p g s)))
+                           -> (g (GrammarFunctor (p g s)) -> g (GrammarFunctor (p g s)))
+                           -> g (GrammarFunctor (p g s)) -> g (GrammarFunctor (p g s)) -> g (GrammarFunctor (p g s))
+         recurseTotal :: s -> g (GrammarFunctor (p g s) Rank2.~> GrammarFunctor (p g s)) -> [(s, g (GrammarFunctor (p g s)))]
+                      -> g (GrammarFunctor (p g s))
+                      -> g (GrammarFunctor (p g s))
+         recurseMarginal :: s -> [(s, g (GrammarFunctor (p g s)))]
+                      -> g (GrammarFunctor (p g s))
+                      -> g (GrammarFunctor (p g s))
          maybeDependencies :: g (Const (Maybe (g (Const Bool))))
-         maybeDependency :: SeparatedParser Memoizing.Parser g s r -> Const (Maybe (g (Const Bool))) r
-         appends :: g (ResultAppend Memoizing.Parser g s)
-         parserAppend :: forall p r. (GrammarParsing (p g s), Semigroup (GrammarFunctor (p g s) r))
-                      => SeparatedParser p g s r -> ResultAppend p g s r
+         maybeDependency :: SeparatedParser p g s r -> Const (Maybe (g (Const Bool))) r
+         appends :: g (ResultAppend p g s)
+         parserAppend :: SeparatedParser p g s r -> ResultAppend p g s r
 
          directs = Rank2.fmap backParser parsers
          indirects = Rank2.fmap (\p-> case p of {CycleParser{}-> cycleParser p; _ -> empty}) parsers
@@ -757,8 +759,8 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
             Rank2.liftA3 choiceWhile maybeDependencies total (whileAnyContinues ft fm (ft total) (fm marginal))
             where choiceWhile :: Eq s =>
                                  Const (Maybe (g (Const Bool))) x
-                              -> ResultList g s x -> ResultList g s x
-                              -> ResultList g s x
+                              -> GrammarFunctor (p g s) x -> GrammarFunctor (p g s) x
+                              -> GrammarFunctor (p g s) x
                   choiceWhile (Const Nothing) t _ = t
                   choiceWhile (Const (Just deps)) t t'
                      | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps marginal)) = t'
@@ -769,8 +771,8 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                                   then t' else t
                         in ResultList [] (Memoizing.FailureInfo pos expected')
                      | otherwise = t
-                     where combine :: Const Bool x -> ResultList g s x -> Const Bool x
-                           combineFailures :: Eq s => [Expected s] -> Const Bool x -> ResultList g s x -> Const Bool x
+                     where combine :: Const Bool x -> GrammarFunctor (p g s) x -> Const Bool x
+                           combineFailures :: Eq s => [Expected s] -> Const Bool x -> GrammarFunctor (p g s) x -> Const Bool x
                            combine (Const False) _ = Const False
                            combine (Const True) (ResultList [] _) = Const False
                            combine (Const True) _ = Const True
@@ -779,8 +781,8 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                               = Const (any (`notElem` expected) expected')
 
          recurseTotal s initialAppends parsedTail total = Rank2.liftA2 reparse initialAppends indirects
-            where reparse :: (ResultList g s Rank2.~> ResultList g s) a -> Memoizing.Parser g s a -> ResultList g s a
-                  reparse append p = Rank2.apply append (Memoizing.applyParser p $ (s, total) : parsedTail)
+            where reparse :: (GrammarFunctor (p g s) Rank2.~> GrammarFunctor (p g s)) a -> p g s a -> GrammarFunctor (p g s) a
+                  reparse append p = Rank2.apply append (parseTails p $ (s, total) : parsedTail)
          recurseMarginal s parsedTail marginal =
-            flip Memoizing.applyParser ((s, marginal) : parsedTail) Rank2.<$> indirects
+            flip parseTails ((s, marginal) : parsedTail) Rank2.<$> indirects
 {-# NOINLINE parseSeparated #-}
