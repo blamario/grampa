@@ -33,7 +33,7 @@ import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           AmbiguousParsing(..), Ambiguous(..), DeterministicParsing(..),
                           TailsParsing(parseTails), ParseResults, Expected(..))
-import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), fromResultList)
+import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), FailureInfo(..), fromResultList)
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
@@ -714,8 +714,10 @@ fixNullabilities gf = Rank2.fmap (Const . nullable . getConst) (go initial)
 -- | Parse the given input using a context-free grammar separated into two parts: the first specifying all the
 -- left-recursive productions, the second all others. The first function argument specifies the left-recursive
 -- dependencies among the grammar productions.
-parseSeparated :: forall p g s. (Rank2.Apply g, Rank2.Foldable g, Eq s, FactorialMonoid s, LeftReductive s,
-                                 p ~ Memoizing.Parser) =>
+parseSeparated :: forall p g rl s. (Rank2.Apply g, Rank2.Foldable g, Eq s, FactorialMonoid s, LeftReductive s,
+                                    TailsParsing (p g s), GrammarConstraint (p g s) g,
+                                    GrammarFunctor (p g s) ~ rl s, FallibleWithExpectations rl,
+                                    s ~ ParserInput (p g s)) =>
                   g (SeparatedParser p g s) -> s -> [(s, g (GrammarFunctor (p g s)))]
 parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
    where parseTail s parsedTail = parsed
@@ -745,7 +747,7 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
          indirects = Rank2.fmap (\p-> case p of {CycleParser{}-> cycleParser p; _ -> empty}) parsers
          appends = Rank2.fmap parserAppend parsers
          parserAppend p@CycleParser{} = appendResultsArrow p
-         parserAppend _ = Rank2.Arrow (Rank2.Arrow . (<>))
+         parserAppend _ = Rank2.Arrow (Rank2.Arrow . const)
          maybeDependencies = Rank2.fmap maybeDependency parsers
          maybeDependency p@CycleParser{} = Const (Just $ dependencies p)
          maybeDependency _ = Const Nothing
@@ -757,28 +759,26 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
 
          whileAnyContinues ft fm total marginal =
             Rank2.liftA3 choiceWhile maybeDependencies total (whileAnyContinues ft fm (ft total) (fm marginal))
-            where choiceWhile :: Eq s =>
-                                 Const (Maybe (g (Const Bool))) x
+            where choiceWhile :: Const (Maybe (g (Const Bool))) x
                               -> GrammarFunctor (p g s) x -> GrammarFunctor (p g s) x
                               -> GrammarFunctor (p g s) x
                   choiceWhile (Const Nothing) t _ = t
                   choiceWhile (Const (Just deps)) t t'
                      | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps marginal)) = t'
-                     | ResultList [] (Memoizing.FailureInfo _ expected) <- t =
-                        let ResultList _ (Memoizing.FailureInfo pos expected') =
-                               if getAny (Rank2.foldMap (Any . getConst) $
-                                          Rank2.liftA2 (combineFailures expected) deps marginal)
-                                  then t' else t
-                        in ResultList [] (Memoizing.FailureInfo pos expected')
-                     | otherwise = t
+                     | hasSuccess t = t
+                     | otherwise =
+                        let expected = expectations t
+                            FailureInfo pos expected' =
+                               failureOf (if getAny (Rank2.foldMap (Any . getConst) $
+                                                     Rank2.liftA2 (combineFailures expected) deps marginal)
+                                          then t' else t)
+                        in failWith (FailureInfo pos expected')
                      where combine :: Const Bool x -> GrammarFunctor (p g s) x -> Const Bool x
-                           combineFailures :: Eq s => [Expected s] -> Const Bool x -> GrammarFunctor (p g s) x -> Const Bool x
+                           combineFailures :: [Expected s] -> Const Bool x -> GrammarFunctor (p g s) x -> Const Bool x
                            combine (Const False) _ = Const False
-                           combine (Const True) (ResultList [] _) = Const False
-                           combine (Const True) _ = Const True
+                           combine (Const True) results = Const (hasSuccess results)
                            combineFailures _ (Const False) _ = Const False
-                           combineFailures expected (Const True) (ResultList _ (Memoizing.FailureInfo _ expected'))
-                              = Const (any (`notElem` expected) expected')
+                           combineFailures expected (Const True) rl = Const (any (`notElem` expected) $ expectations rl)
 
          recurseTotal s initialAppends parsedTail total = Rank2.liftA2 reparse initialAppends indirects
             where reparse :: (GrammarFunctor (p g s) Rank2.~> GrammarFunctor (p g s)) a -> p g s a -> GrammarFunctor (p g s) a
@@ -786,3 +786,16 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
          recurseMarginal s parsedTail marginal =
             flip parseTails ((s, marginal) : parsedTail) Rank2.<$> indirects
 {-# NOINLINE parseSeparated #-}
+
+class FallibleWithExpectations f where
+   hasSuccess   :: f s a -> Bool
+   failureOf    :: f s a -> FailureInfo s
+   failWith     :: FailureInfo s -> f s a
+   expectations :: f s a -> [Expected s]
+
+instance FallibleWithExpectations (ResultList g) where
+   hasSuccess (ResultList [] _) = False
+   hasSuccess _ = True
+   failureOf (ResultList _ failure) = failure
+   failWith = ResultList []
+   expectations (ResultList _ (FailureInfo _ expected)) = expected
