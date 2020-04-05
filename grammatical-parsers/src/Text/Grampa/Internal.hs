@@ -1,6 +1,10 @@
+{-# LANGUAGE FlexibleInstances, RankNTypes #-}
+
 module Text.Grampa.Internal (BinTree(..), FailureInfo(..), ResultList(..), ResultsOfLength(..),
+                             AmbiguousAlternative(..),
                              fromResultList, noFailure) where
 
+import Control.Applicative (Applicative(..), Alternative(..))
 import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
 import Data.List.NonEmpty (NonEmpty)
@@ -10,7 +14,7 @@ import Data.Semigroup (Semigroup((<>)))
 
 import Data.Monoid.Factorial (FactorialMonoid, length)
 
-import Text.Grampa.Class (Expected(..), ParseFailure(..), ParseResults)
+import Text.Grampa.Class (Ambiguous(..), Expected(..), ParseFailure(..), ParseResults)
 
 import Prelude hiding (length, showList)
 
@@ -73,14 +77,31 @@ instance Applicative (ResultList g s) where
    pure a = ResultList [pure a] mempty
    ResultList rl1 f1 <*> ResultList rl2 f2 = ResultList ((<*>) <$> rl1 <*> rl2) (f1 <> f2)
 
+instance Alternative (ResultList g s) where
+   empty = ResultList mempty mempty
+   (<|>) = (<>)
+
 instance Semigroup (ResultList g s r) where
-   ResultList rl1 f1 <> ResultList rl2 f2 = ResultList (join rl1 rl2) (f1 <> f2)
-      where join [] rl = rl
-            join rl [] = rl
-            join rl1'@(rol1@(ResultsOfLength l1 s1 r1) : rest1) rl2'@(rol2@(ResultsOfLength l2 _ r2) : rest2)
-               | l1 < l2 = rol1 : join rest1 rl2'
-               | l1 > l2 = rol2 : join rl1' rest2
-               | otherwise = ResultsOfLength l1 s1 (r1 <> r2) : join rest1 rest2
+   ResultList rl1 f1 <> ResultList rl2 f2 = ResultList (merge rl1 rl2) (f1 <> f2)
+      where merge [] rl = rl
+            merge rl [] = rl
+            merge rl1'@(rol1@(ResultsOfLength l1 s1 r1) : rest1) rl2'@(rol2@(ResultsOfLength l2 _ r2) : rest2)
+               | l1 < l2 = rol1 : merge rest1 rl2'
+               | l1 > l2 = rol2 : merge rl1' rest2
+               | otherwise = ResultsOfLength l1 s1 (r1 <> r2) : merge rest1 rest2
+
+instance AmbiguousAlternative (ResultList g s) where
+   ambiguousOr (ResultList rl1 f1) (ResultList rl2 f2) = ResultList (merge rl1 rl2) (f1 <> f2)
+      where merge [] rl = rl
+            merge rl [] = rl
+            merge rl1'@(rol1@(ResultsOfLength l1 s1 r1) : rest1) rl2'@(rol2@(ResultsOfLength l2 _ r2) : rest2)
+               | l1 < l2 = rol1 : merge rest1 rl2'
+               | l1 > l2 = rol2 : merge rl1' rest2
+               | otherwise = ResultsOfLength l1 s1 (liftA2 collect r1 r2) : merge rest1 rest2
+            collect (Ambiguous xs) (Ambiguous ys) = Ambiguous (xs <> ys)
+
+class Alternative f => AmbiguousAlternative f where
+   ambiguousOr :: f (Ambiguous a) -> f (Ambiguous a) -> f (Ambiguous a)
 
 instance Monoid (ResultList g s r) where
    mempty = ResultList mempty mempty

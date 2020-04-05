@@ -30,7 +30,7 @@ import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           DeterministicParsing(..), AmbiguousParsing(..), Ambiguous(Ambiguous),
                           ParseResults, ParseFailure(..), Expected(..))
-import Text.Grampa.Internal (FailureInfo(..))
+import Text.Grampa.Internal (FailureInfo(..), AmbiguousAlternative(..))
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
 import Prelude hiding (iterate, length, null, showList, span, takeWhile)
@@ -349,6 +349,21 @@ instance Applicative m => Applicative (ResultsOfLengthT m g s) where
 instance Applicative m => Applicative (ResultListT m g s) where
    pure a = ResultList [pure a] mempty
    ResultList rl1 f1 <*> ResultList rl2 f2 = ResultList ((<*>) <$> rl1 <*> rl2) (f1 <> f2)
+
+instance Applicative m => Alternative (ResultListT m g s) where
+   empty = ResultList mempty mempty
+   (<|>) = (<>)
+
+instance Applicative m => AmbiguousAlternative (ResultListT m g s) where
+   ambiguousOr (ResultList rl1 f1) (ResultList rl2 f2) = ResultList (merge rl1 rl2) (f1 <> f2)
+      where merge [] rl = rl
+            merge rl [] = rl
+            merge rl1'@(rol1@(ResultsOfLengthT (ROL l1 s1 r1)) : rest1)
+                  rl2'@(rol2@(ResultsOfLengthT (ROL l2 _ r2)) : rest2)
+               | l1 < l2 = rol1 : merge rest1 rl2'
+               | l1 > l2 = rol2 : merge rl1' rest2
+               | otherwise = ResultsOfLengthT (ROL l1 s1 $ liftA2 (liftA2 collect) r1 r2) : merge rest1 rest2
+            collect (Ambiguous xs) (Ambiguous ys) = Ambiguous (xs <> ys)
 
 instance Semigroup (ResultListT m g s r) where
    ResultList rl1 f1 <> ResultList rl2 f2 = ResultList (merge rl1 rl2) (f1 <> f2)
