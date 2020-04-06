@@ -34,7 +34,7 @@ import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           AmbiguousParsing(..), Ambiguous(..), DeterministicParsing(..),
                           TailsParsing(parseTails), ParseResults, Expected(..))
-import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), FailureInfo(..),
+import Text.Grampa.Internal (ResultList(..), FailureInfo(..),
                              AmbiguousAlternative(ambiguousOr), fromResultList)
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
@@ -535,7 +535,7 @@ instance (CharParsing (p g s), InputCharParsing (Fixed p g s), TextualMonoid s,
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance AmbiguousParsing (Fixed Memoizing.Parser g s) where
+instance AmbiguousParsing (p g s) => AmbiguousParsing (Fixed p g s) where
    ambiguous (PositiveDirectParser p) = PositiveDirectParser (ambiguous p)
    ambiguous p@DirectParser{} = DirectParser{complete= ambiguous (complete p),
                                              direct0=  ambiguous (direct0 p),
