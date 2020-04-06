@@ -474,8 +474,9 @@ instance (LookAheadParsing (p g s), InputParsing (Fixed p g s)) => LookAheadPars
       indirect= lookAhead (indirect p),
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
 
-instance (LeftReductive s, FactorialMonoid s) => InputParsing (Fixed Memoizing.Parser g s) where
-   type ParserInput (Fixed Memoizing.Parser g s) = s
+instance (LeftReductive s, FactorialMonoid s, InputParsing (p g s), ParserInput (p g s) ~ s) =>
+         InputParsing (Fixed p g s) where
+   type ParserInput (Fixed p g s) = s
    getInput = primitive "getInput" getInput empty getInput
    anyToken = positivePrimitive "anyToken" anyToken
    satisfy predicate = positivePrimitive "satisfy" (satisfy predicate)
@@ -517,60 +518,8 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Fixed Memoizing.P
    {-# INLINABLE string #-}
    {-# INLINABLE concatMany #-}
 
-instance (Show s, TextualMonoid s) => InputCharParsing (Fixed Memoizing.Parser g s) where
-   satisfyCharInput predicate = positivePrimitive "satisfyCharInput" (satisfyCharInput predicate)
-   notSatisfyChar predicate = primitive "notSatisfyChar" (notSatisfyChar predicate) empty (notSatisfyChar predicate)
-   scanChars s0 f = primitive "scanChars" (mempty <$ notSatisfyChar test) (lookAhead (Char.satisfy test) *> p) p
-      where p = scanChars s0 f
-            test = isJust . f s0
-   takeCharsWhile predicate = primitive "takeCharsWhile" (mempty <$ notSatisfyChar predicate)
-                                                         (takeCharsWhile1 predicate) (takeCharsWhile predicate)
-   takeCharsWhile1 predicate = positivePrimitive "takeCharsWhile1" (takeCharsWhile1 predicate)
-
-instance (LeftReductive s, FactorialMonoid s) => InputParsing (Fixed Backtrack.Parser g s) where
-   type ParserInput (Fixed Backtrack.Parser g s) = s
-   getInput = primitive "getInput" getInput empty getInput
-   anyToken = positivePrimitive "anyToken" anyToken
-   satisfy predicate = positivePrimitive "satisfy" (satisfy predicate)
-   notSatisfy predicate = primitive "notSatisfy" (notSatisfy predicate) empty (notSatisfy predicate)
-   scan s0 f = primitive "scan" (mempty <$ notSatisfy test) (lookAhead (satisfy test) *> p) p
-      where p = scan s0 f
-            test = isJust . f s0
-   string s
-      | null s = primitive "string" (string s) empty (string s)
-      | otherwise = positivePrimitive "string" (string s)
-   takeWhile predicate = primitive "takeWhile" (mempty <$ notSatisfy predicate)
-                                               (takeWhile1 predicate) (takeWhile predicate)
-   takeWhile1 predicate = positivePrimitive "takeWhile1" (takeWhile1 predicate)
-   concatMany p@PositiveDirectParser{} = DirectParser{
-      complete= cmp,
-      direct0= d0,
-      direct1= d1}
-      where d0 = pure mempty
-            d1 = mappend <$> complete p <*> cmp
-            cmp = concatMany (complete p)
-   concatMany p@DirectParser{} = DirectParser{
-      complete= cmp,
-      direct0= d0,
-      direct1= d1}
-      where d0 = pure mempty `Backtrack.alt` direct0 p
-            d1 = mappend <$> direct1 p <*> cmp
-            cmp = concatMany (complete p)
-   concatMany p@Parser{} = Parser{
-      complete= cmp,
-      direct= d0 `Backtrack.alt` d1,
-      direct0= d0,
-      direct1= d1,
-      indirect= mappend <$> indirect p <*> cmp,
-      isAmbiguous= Nothing,
-      cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
-      where d0 = pure mempty `Backtrack.alt` direct0 p
-            d1 = mappend <$> direct1 p <*> cmp
-            cmp = concatMany (complete p)
-   {-# INLINABLE string #-}
-   {-# INLINABLE concatMany #-}
-
-instance (Show s, TextualMonoid s) => InputCharParsing (Fixed Backtrack.Parser g s) where
+instance (Show s, TextualMonoid s, InputCharParsing (p g s), ParserInput (p g s) ~ s) =>
+         InputCharParsing (Fixed p g s) where
    satisfyCharInput predicate = positivePrimitive "satisfyCharInput" (satisfyCharInput predicate)
    notSatisfyChar predicate = primitive "notSatisfyChar" (notSatisfyChar predicate) empty (notSatisfyChar predicate)
    scanChars s0 f = primitive "scanChars" (mempty <$ notSatisfyChar test) (lookAhead (Char.satisfy test) *> p) p
