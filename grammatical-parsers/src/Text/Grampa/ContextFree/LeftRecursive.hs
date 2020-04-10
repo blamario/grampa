@@ -33,7 +33,7 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           AmbiguousParsing(..), Ambiguous(..), DeterministicParsing(..),
-                          TailsParsing(parseTails), ParseResults, Expected(..))
+                          TailsParsing(parseTails, parseAllTails), ParseResults, Expected(..))
 import Text.Grampa.Internal (ResultList(..), FailureInfo(..),
                              AmbiguousAlternative(ambiguousOr), fromResultList)
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
@@ -126,27 +126,39 @@ general' p@Parser{} = p
 -- 'parseComplete' :: ("Rank2".'Rank2.Apply' g, "Rank2".'Rank2.Traversable' g, 'FactorialMonoid' s) =>
 --                  g (LeftRecursive.'Fixed g s) -> s -> g ('Compose' ('ParseResults' s) [])
 -- @
-instance (LeftReductive s, FactorialMonoid s) => MultiParsing (Fixed Memoizing.Parser g s) where
-   type GrammarConstraint (Fixed Memoizing.Parser g s) g' = (g ~ g', Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
-   type ResultFunctor (Fixed Memoizing.Parser g s) = Compose (ParseResults s) []
+instance (Eq s, LeftReductive s, FactorialMonoid s, Alternative (p g s),
+          TailsParsing (p g s), GrammarConstraint (p g s) g, ParserGrammar (p g s) ~ g,
+          rl ~ ResultList g, ResultFunctor (p g s) ~ Compose (ParseResults s) [],
+          s ~ ParserInput (p g s), GrammarFunctor (p g s) ~ rl s, FallibleWithExpectations rl,
+          AmbiguousAlternative (GrammarFunctor (p g s))) =>
+         MultiParsing (Fixed p g s) where
+   type GrammarConstraint (Fixed p g s) g' = (GrammarConstraint (p g s) g', g ~ g',
+                                              Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
+   type ResultFunctor (Fixed p g s) = ResultFunctor (p g s)
    parsePrefix :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, Eq s, FactorialMonoid s) =>
-                  g (Parser g s) -> s -> g (Compose (Compose (ParseResults s) []) ((,) s))
+                  g (Fixed p g s) -> s -> g (Compose (ResultFunctor (p g s)) ((,) s))
    parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input)
                                     (snd $ head $ parseRecursive g input)
    {-# INLINE parsePrefix #-}
    parseComplete :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, Eq s, FactorialMonoid s) =>
-                    g (Parser g s) -> s -> g (Compose (ParseResults s) [])
-   parseComplete g = \input-> let close = Rank2.fmap (<* eof) selfReferring
+                    g (Fixed p g s) -> s -> g (ResultFunctor (p g s))
+   parseComplete g = \input-> let close :: g (p g s)
+                                  close = Rank2.fmap (<* eof) selfReferring
                               in Rank2.fmap ((snd <$>) . Compose . fromResultList input)
-                                            (snd $ head $ Memoizing.reparseTails close $ parseSeparated g' input)
+                                            (snd $ head $ parseAllTails close $ parseSeparated g' input)
       where g' = separated g
    {-# INLINE parseComplete #-}
 
-instance (LeftReductive s, FactorialMonoid s) => GrammarParsing (Fixed Memoizing.Parser g s) where
-   type ParserGrammar (Fixed Memoizing.Parser g s) = g
-   type GrammarFunctor (Fixed Memoizing.Parser g s) = ParserFunctor g s
+instance (Eq s, LeftReductive s, FactorialMonoid s, Alternative (p g s),
+          TailsParsing (p g s), GrammarConstraint (p g s) g, ParserGrammar (p g s) ~ g,
+          rl ~ ResultList g, ResultFunctor (p g s) ~ Compose (ParseResults s) [],
+          s ~ ParserInput (p g s), GrammarFunctor (p g s) ~ rl s, FallibleWithExpectations rl,
+          AmbiguousAlternative (GrammarFunctor (p g s))) =>
+         GrammarParsing (Fixed p g s) where
+   type ParserGrammar (Fixed p g s) = g
+   type GrammarFunctor (Fixed p g s) = ParserFunctor g s
    nonTerminal :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
-                  (g (ParserFunctor g s) -> ParserFunctor g s a) -> Parser g s a
+                  (g (ParserFunctor g s) -> ParserFunctor g s a) -> Fixed p g s a
    nonTerminal f = Parser{
       complete= ind,
       direct= empty,

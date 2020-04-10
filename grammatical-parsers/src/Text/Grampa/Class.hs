@@ -132,6 +132,11 @@ class MultiParsing m => GrammarParsing m where
 class GrammarParsing m => TailsParsing m where
    -- | Parse the tails of the input together with memoized parse results
    parseTails :: GrammarConstraint m g => m r -> [(ParserInput m, g (GrammarFunctor m))] -> GrammarFunctor m r
+   parseAllTails :: (GrammarConstraint m g, Rank2.Functor g) =>
+                    g m -> [(ParserInput m, g (GrammarFunctor m))] -> [(ParserInput m, g (GrammarFunctor m))]
+   parseAllTails _ [] = []
+   parseAllTails final parsed@((s, _):_) = (s, gd):parsed
+      where gd = Rank2.fmap (`parseTails` parsed) final
 
 {-# DEPRECATED endOfInput "Use 'Text.Parser.Combinators.eof' instead" #-}
 -- | Methods for parsing monoidal inputs

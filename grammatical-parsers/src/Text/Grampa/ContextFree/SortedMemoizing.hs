@@ -2,7 +2,7 @@
              RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
 module Text.Grampa.ContextFree.SortedMemoizing 
        (FailureInfo(..), ResultList(..), Parser(..),
-        reparseTails, longest, peg, terminalPEG)
+        longest, peg, terminalPEG)
 where
 
 import Control.Applicative
@@ -29,7 +29,7 @@ import qualified Rank2
 
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           AmbiguousParsing(..), Ambiguous(Ambiguous), DeterministicParsing(..),
-                          TailsParsing(parseTails), ParseResults, Expected(..))
+                          TailsParsing(parseTails, parseAllTails), ParseResults, Expected(..))
 import Text.Grampa.Internal (FailureInfo(..), ResultList(..), ResultsOfLength(..), fromResultList)
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
@@ -109,7 +109,7 @@ instance (LeftReductive s, FactorialMonoid s) => MultiParsing (Parser g s) where
    parseComplete :: (ParserInput (Parser g s) ~ s, Rank2.Functor g, Eq s, FactorialMonoid s) =>
                     g (Parser g s) -> s -> g (Compose (ParseResults s) [])
    parseComplete g input = Rank2.fmap ((snd <$>) . Compose . fromResultList input)
-                              (snd $ head $ reparseTails close $ parseGrammarTails g input)
+                              (snd $ head $ parseAllTails close $ parseGrammarTails g input)
       where close = Rank2.fmap (<* eof) g
 
 parseGrammarTails :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> [(s, g (ResultList g s))]
@@ -117,11 +117,6 @@ parseGrammarTails g input = foldr parseTail [] (Factorial.tails input)
    where parseTail s parsedTail = parsed
             where parsed = (s,d):parsedTail
                   d      = Rank2.fmap (($ parsed) . applyParser) g
-
-reparseTails :: Rank2.Functor g => g (Parser g s) -> [(s, g (ResultList g s))] -> [(s, g (ResultList g s))]
-reparseTails _ [] = []
-reparseTails final parsed@((s, _):_) = (s, gd):parsed
-   where gd = Rank2.fmap (`applyParser` parsed) final
 
 instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
