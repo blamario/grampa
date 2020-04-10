@@ -3,6 +3,7 @@
 {-# OPTIONS -fno-full-laziness #-}
 module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..),
                                               longest, peg, terminalPEG,
+                                              liftPositive,
                                               parseSeparated, separated)
 where
 
@@ -354,18 +355,18 @@ instance (Alternative (p g s), Monoid x) => Monoid (Fixed p g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
-primitive :: String -> p g s a -> p g s a -> p g s a -> Fixed p g s a
-primitive _name d0 d1 d = DirectParser{complete= d,
-                                       direct0= d0,
-                                       direct1= d1}
+primitive :: p g s a -> p g s a -> p g s a -> Fixed p g s a
+primitive d0 d1 d = DirectParser{complete= d,
+                                 direct0= d0,
+                                 direct1= d1}
 {-# INLINE primitive #-}
 
-positivePrimitive :: String -> p g s a -> Fixed p g s a
-positivePrimitive _name p = PositiveDirectParser{complete= p}
-{-# INLINE positivePrimitive #-}
+liftPositive :: p g s a -> Fixed p g s a
+liftPositive p = PositiveDirectParser{complete= p}
+{-# INLINE liftPositive #-}
 
 instance (Parsing (p g s), InputParsing (Fixed p g s)) => Parsing (Fixed p g s) where
-   eof = primitive "eof" eof empty eof
+   eof = primitive eof empty eof
    try (PositiveDirectParser p) = PositiveDirectParser (try p)
    try p@DirectParser{} = DirectParser{
       complete= try (complete p),
@@ -404,7 +405,7 @@ instance (Parsing (p g s), InputParsing (Fixed p g s)) => Parsing (Fixed p g s) 
       isAmbiguous= Nothing,
       indirect= notFollowedBy (indirect p),
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
-   unexpected msg = positivePrimitive "unexpected" (unexpected msg)
+   unexpected msg = liftPositive (unexpected msg)
    skipMany p = concatMany (() <$ p)
 
 instance (InputParsing (Fixed p g s), DeterministicParsing (p g s)) => DeterministicParsing (Fixed p g s) where
@@ -489,19 +490,19 @@ instance (LookAheadParsing (p g s), InputParsing (Fixed p g s)) => LookAheadPars
 instance (LeftReductive s, FactorialMonoid s, InputParsing (p g s), ParserInput (p g s) ~ s) =>
          InputParsing (Fixed p g s) where
    type ParserInput (Fixed p g s) = s
-   getInput = primitive "getInput" getInput empty getInput
-   anyToken = positivePrimitive "anyToken" anyToken
-   satisfy predicate = positivePrimitive "satisfy" (satisfy predicate)
-   notSatisfy predicate = primitive "notSatisfy" (notSatisfy predicate) empty (notSatisfy predicate)
-   scan s0 f = primitive "scan" (mempty <$ notSatisfy test) (lookAhead (satisfy test) *> p) p
+   getInput = primitive getInput empty getInput
+   anyToken = liftPositive anyToken
+   satisfy predicate = liftPositive (satisfy predicate)
+   notSatisfy predicate = primitive (notSatisfy predicate) empty (notSatisfy predicate)
+   scan s0 f = primitive (mempty <$ notSatisfy test) (lookAhead (satisfy test) *> p) p
       where p = scan s0 f
             test = isJust . f s0
    string s
-      | null s = primitive "string" (string s) empty (string s)
-      | otherwise = positivePrimitive "string" (string s)
-   takeWhile predicate = primitive "takeWhile" (mempty <$ notSatisfy predicate)
+      | null s = primitive (string s) empty (string s)
+      | otherwise = liftPositive (string s)
+   takeWhile predicate = primitive (mempty <$ notSatisfy predicate)
                                                (takeWhile1 predicate) (takeWhile predicate)
-   takeWhile1 predicate = positivePrimitive "takeWhile1" (takeWhile1 predicate)
+   takeWhile1 predicate = liftPositive (takeWhile1 predicate)
    concatMany p@PositiveDirectParser{} = DirectParser{
       complete= cmp,
       direct0= d0,
@@ -532,18 +533,18 @@ instance (LeftReductive s, FactorialMonoid s, InputParsing (p g s), ParserInput 
 
 instance (Show s, TextualMonoid s, InputCharParsing (p g s), ParserInput (p g s) ~ s) =>
          InputCharParsing (Fixed p g s) where
-   satisfyCharInput predicate = positivePrimitive "satisfyCharInput" (satisfyCharInput predicate)
-   notSatisfyChar predicate = primitive "notSatisfyChar" (notSatisfyChar predicate) empty (notSatisfyChar predicate)
-   scanChars s0 f = primitive "scanChars" (mempty <$ notSatisfyChar test) (lookAhead (Char.satisfy test) *> p) p
+   satisfyCharInput predicate = liftPositive (satisfyCharInput predicate)
+   notSatisfyChar predicate = primitive (notSatisfyChar predicate) empty (notSatisfyChar predicate)
+   scanChars s0 f = primitive (mempty <$ notSatisfyChar test) (lookAhead (Char.satisfy test) *> p) p
       where p = scanChars s0 f
             test = isJust . f s0
-   takeCharsWhile predicate = primitive "takeCharsWhile" (mempty <$ notSatisfyChar predicate)
-                                                         (takeCharsWhile1 predicate) (takeCharsWhile predicate)
-   takeCharsWhile1 predicate = positivePrimitive "takeCharsWhile1" (takeCharsWhile1 predicate)
+   takeCharsWhile predicate = primitive (mempty <$ notSatisfyChar predicate)
+                                        (takeCharsWhile1 predicate) (takeCharsWhile predicate)
+   takeCharsWhile1 predicate = liftPositive (takeCharsWhile1 predicate)
 
 instance (CharParsing (p g s), InputCharParsing (Fixed p g s), TextualMonoid s,
           s ~ ParserInput (Fixed p g s), Show s) => CharParsing (Fixed p g s) where
-   satisfy predicate = positivePrimitive "Char.satisfy" (Char.satisfy predicate)
+   satisfy predicate = liftPositive (Char.satisfy predicate)
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
