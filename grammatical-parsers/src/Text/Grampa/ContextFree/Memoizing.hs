@@ -107,15 +107,16 @@ instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
-instance (LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) where
+instance (Eq s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) where
    type ParserGrammar (Parser g s) = g
    type GrammarFunctor (Parser g s) = ResultList g s
+   parsingResult s = Compose . fromResultList s
    nonTerminal f = Parser p where
       p ((_, d) : _) = f d
       p _ = ResultList mempty (FailureInfo 0 [Expected "NonTerminal at endOfInput"])
    {-# INLINE nonTerminal #-}
 
-instance (LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s) where
+instance (Eq s, LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s) where
    parseTails = applyParser
 
 -- | Memoizing parser guarantees O(n²) performance for grammars with unambiguous productions, but provides no left

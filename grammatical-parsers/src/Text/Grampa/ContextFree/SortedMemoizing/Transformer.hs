@@ -110,9 +110,10 @@ instance (Applicative m, Monoid x) => Monoid (ParserT m g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
-instance (Applicative m, LeftReductive s, FactorialMonoid s, Rank2.Functor g) => GrammarParsing (ParserT m g s) where
+instance (Applicative m, Eq s, LeftReductive s, FactorialMonoid s, Rank2.Functor g) => GrammarParsing (ParserT m g s) where
    type ParserGrammar (ParserT m g s) = g
    type GrammarFunctor (ParserT m g s) = ResultListT m g s
+   parsingResult s = Compose . Compose . fmap (fmap sequenceA) . fromResultList s
    nonTerminal :: (ParserInput (ParserT m g s) ~ s) => (g (ResultListT m g s) -> ResultListT m g s a) -> ParserT m g s a
    nonTerminal f = Parser p where
       p ((_, d) : _) = f d

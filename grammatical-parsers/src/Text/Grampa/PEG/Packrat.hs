@@ -123,14 +123,15 @@ instance (Show s, Textual.TextualMonoid s) => CharParsing (Parser g s) where
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance (LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) where
+instance (Eq s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) where
    type ParserGrammar (Parser g s) = g
    type GrammarFunctor (Parser g s) = Result g s
+   parsingResult = fromResult
    nonTerminal f = Parser p where
       p ((_, d) : _) = f d
       p _ = NoParse (FailureInfo 0 [Expected "NonTerminal at endOfInput"])
 
-instance (LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s) where
+instance (Eq s, LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s) where
    parseTails = applyParser
 
 instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where

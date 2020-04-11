@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs,
-             RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
+             RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies, TypeOperators,
+             UndecidableInstances #-}
 {-# OPTIONS -fno-full-laziness #-}
 module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..),
                                               longest, peg, terminalPEG,
@@ -76,8 +77,8 @@ data ParserFlags g = ParserFlags {
 
 deriving instance Show (g (Const Bool)) => Show (ParserFlags g)
 
-data ParserFunctor g s a = ParserResultsFunctor {parserResults :: ResultList g s a}
-                         | ParserFlagsFunctor {parserFlags :: ParserFlags g}
+data ParserFunctor p g s a = ParserResultsFunctor {parserResults :: GrammarFunctor (p g s) a}
+                           | ParserFlagsFunctor {parserFlags :: ParserFlags g}
 
 newtype Union (g :: (* -> *) -> *) = Union{getUnion :: g (Const Bool)}
 
@@ -172,9 +173,11 @@ instance (Eq s, LeftReductive s, FactorialMonoid s, Alternative (p g s),
           AmbiguousAlternative (GrammarFunctor (p g s))) =>
          GrammarParsing (Fixed p g s) where
    type ParserGrammar (Fixed p g s) = g
-   type GrammarFunctor (Fixed p g s) = ParserFunctor g s
+   type GrammarFunctor (Fixed p g s) = ParserFunctor p g s
+   parsingResult :: s -> ParserFunctor p g s a -> ResultFunctor (p g s) (s, a)
+   parsingResult s = parsingResult @(p g s) s . parserResults
    nonTerminal :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
-                  (g (ParserFunctor g s) -> ParserFunctor g s a) -> Fixed p g s a
+                  (g (ParserFunctor p g s) -> ParserFunctor p g s a) -> Fixed p g s a
    nonTerminal f = Parser{
       complete= ind,
       direct= empty,

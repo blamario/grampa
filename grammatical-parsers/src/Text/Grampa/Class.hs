@@ -114,6 +114,8 @@ class MultiParsing m => GrammarParsing m where
    type ParserGrammar m :: (* -> *) -> *
    -- | For internal use by 'notTerminal'
    type GrammarFunctor m :: * -> *
+   -- | Converts the intermediate to final parsing result.
+   parsingResult :: ParserInput m -> GrammarFunctor m a -> ResultFunctor m (ParserInput m, a)
    -- | Used to reference a grammar production, only necessary from outside the grammar itself
    nonTerminal :: (g ~ ParserGrammar m, GrammarConstraint m g) => (g (GrammarFunctor m) -> GrammarFunctor m a) -> m a
    -- | Construct a grammar whose every production refers to itself.
