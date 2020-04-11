@@ -1,9 +1,9 @@
-{-# LANGUAGE ExistentialQuantification, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, InstanceSigs,
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
 {-# OPTIONS -fno-full-laziness #-}
 module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..),
                                               longest, peg, terminalPEG,
-                                              liftPositive,
+                                              liftPositive, liftPure, mapPrimitive,
                                               parseSeparated, separated)
 where
 
@@ -11,6 +11,7 @@ import Control.Applicative
 import Control.Monad (Monad(..), MonadPlus(..), void)
 import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
 
+import Data.Coerce (coerce)
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (isJust)
@@ -24,7 +25,7 @@ import Data.Semigroup.Cancellative (LeftReductive)
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
 import Data.String (fromString)
-import Data.Typeable ((:~:)(Refl))
+import Data.Type.Equality ((:~:)(Refl))
 
 import qualified Text.Parser.Char as Char
 import Text.Parser.Char (CharParsing)
@@ -57,7 +58,8 @@ data Fixed p g s a =
    | PositiveDirectParser {
       complete :: p g s a}
 
-data AmbiguityWitness a = forall b. AmbiguityWitness (a :~: Ambiguous b)
+data AmbiguityWitness a where
+   AmbiguityWitness :: (a :~: Ambiguous b) -> AmbiguityWitness a
 
 data SeparatedParser p (g :: (* -> *) -> *) s a = FrontParser (p g s a)
                                                 | CycleParser {
@@ -88,6 +90,19 @@ instance (Rank2.Apply g, Rank2.Distributive g) => Semigroup (Union g) where
 instance (Rank2.Apply g, Rank2.Distributive g) => Monoid (Union g) where
    mempty = Union (Rank2.cotraverse (Const . getConst) (Const False))
    mappend (Union g1) (Union g2) = Union (Rank2.liftA2 union g1 g2)
+
+mapPrimitive :: (p g s a -> p g s a) -> Fixed p g s a -> Fixed p g s a
+mapPrimitive f p@PositiveDirectParser{} = PositiveDirectParser{complete= f (complete p)}
+mapPrimitive f p@DirectParser{} = DirectParser{complete= f (complete p),
+                                               direct0= f (direct0 p),
+                                               direct1= f (direct1 p)}
+mapPrimitive f p@Parser{} = Parser{complete= f (complete p),
+                                   isAmbiguous= isAmbiguous p,
+                                   cyclicDescendants= cyclicDescendants p,
+                                   indirect= f (indirect p),
+                                   direct= f (direct p),
+                                   direct0= f (direct0 p),
+                                   direct1= f (direct1 p)}
 
 general, general' :: Alternative (p g s) => Fixed p g s a -> Fixed p g s a
 
@@ -361,9 +376,17 @@ primitive d0 d1 d = DirectParser{complete= d,
                                  direct1= d1}
 {-# INLINE primitive #-}
 
+-- | Lifts a primitive positive parser (/i.e./, one that always consumes some input) into a left-recursive one
 liftPositive :: p g s a -> Fixed p g s a
 liftPositive p = PositiveDirectParser{complete= p}
 {-# INLINE liftPositive #-}
+
+-- | Lifts a primitive pure parser (/i.e./, one that consumes no input) into a left-recursive one
+liftPure :: Alternative (p g s) => p g s a -> Fixed p g s a
+liftPure p = DirectParser{complete= p,
+                          direct0= p,
+                          direct1= empty}
+{-# INLINE liftPure #-}
 
 instance (Parsing (p g s), InputParsing (Fixed p g s)) => Parsing (Fixed p g s) where
    eof = primitive eof empty eof
