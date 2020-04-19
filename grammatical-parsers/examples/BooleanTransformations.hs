@@ -9,6 +9,7 @@ import Data.Char (isSpace)
 import Data.List (isPrefixOf)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Identity (Identity(..))
+import Data.Maybe (mapMaybe)
 import System.Environment (getArgs)
 import Text.Parser.Token (TokenParsing(..), symbol)
 import qualified Text.Grampa
@@ -19,6 +20,18 @@ import Text.Grampa (TokenParsing(someSpace), LexicalParsing(lexicalComment, lexi
 import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift, tmap)
 import qualified Boolean
 import Boolean(Boolean(..))
+
+-- |
+-- >>> simplifiedSource "True && [comment] x"
+-- "[comment] x"
+-- >>> simplifiedSource "False || [comment1] (True || [comment2] x)"
+-- "[comment1] True "
+-- >>> simplifiedSource "False || [^ trailing comment] [leading comment] (True || [comment2] x)"
+-- "[leading comment] True "
+-- >>> simplifiedSource "False || [^ trailing comment] [leading comment] (True [operator leading] || [comment2] x)"
+-- "[leading comment] True "
+-- >>> simplifiedSource "([^1][1] True [^2][2] && [^3][3] x [^4][4])[^5][5] || [^6][6] False [^7][7]"
+-- "[3] x [^4][^5]"
 
 type Parser = ParserT ((,) [Ignorables])
 
@@ -43,7 +56,9 @@ binary f a b = bare (f a b)
 
 type ParsedWrap = (,) ParsedIgnorables
 type NodeWrap = (,) AttachedIgnorables
-data AttachedIgnorables = Attached Ignorables Ignorables
+data AttachedIgnorables = Attached Ignorables AttachedIgnorables Ignorables
+                        | Blank
+                        | AttachedToOperator Ignorables Ignorables
                         | Parenthesized Ignorables AttachedIgnorables Ignorables
                         deriving Show
 data ParsedIgnorables = Trailing Ignorables
@@ -58,13 +73,21 @@ type Grammar = Boolean.Boolean (ParsedWrap (AST ParsedWrap))
 
 main :: IO ()
 main = do args <- concat <$> getArgs
-          let tree = (getCompose . fmap snd . getCompose . Boolean.expr $
-                      parseComplete (fixGrammar grammar) args :: ParseResults String [ParsedWrap (AST ParsedWrap)])
+          let tree = parse args
           print tree
-          case (completeRearranged mempty <$>) <$> tree
-             of Right results -> do mapM_ (print . show) results
-                                    mapM_ (print . showSource . simplified) results
-                _ -> pure ()
+          case tree
+             of Right [parsed] -> do let rearranged = completeRearranged mempty parsed
+                                     print rearranged
+                                     putStrLn (showSource $ simplified rearranged)
+                other -> error (show other)
+
+parse :: String -> ParseResults String [ParsedWrap (AST ParsedWrap)]
+parse = getCompose . fmap snd . getCompose . Boolean.expr . parseComplete (fixGrammar grammar)
+
+simplifiedSource :: String -> String
+simplifiedSource input = case (parse input)
+                         of Right [parsed] -> showSource (simplified $ completeRearranged mempty parsed)
+                            other -> error (show other)
 
 class ShowSource a where
    showSource :: a -> String
@@ -72,7 +95,7 @@ class ShowSource a where
    showSource a = showsSourcePrec 0 a mempty
 
 instance ShowSource (NodeWrap (AST NodeWrap)) where
-   showsSourcePrec prec (Attached lead follow, node) rest =
+   showsSourcePrec prec (Attached lead Blank follow, node) rest =
       whiteString lead <> showsSourcePrec prec node (whiteString follow <> rest)
    showsSourcePrec prec (Parenthesized lead ws follow, node) rest =
       whiteString lead <> showsSourcePrec 0 (ws, node) (whiteString follow <> rest)
@@ -90,36 +113,43 @@ instance ShowSource (AST NodeWrap) where
    showsSourcePrec _ node rest =   "(" <> showsSourcePrec 0 node (")" <> rest)
 
 completeRearranged :: Ignorables -> ParsedWrap (AST ParsedWrap) -> NodeWrap (AST NodeWrap)
-completeRearranged ws node | ((ws', node'), rest) <- rearranged ws node = (withTail ws' rest, node')
+completeRearranged ws node
+   | ((ws', node'), trailing) <- rearranged ws node = (embed [] ws' trailing, node')
 
 rearranged :: Ignorables -> ParsedWrap (AST ParsedWrap) -> (NodeWrap (AST NodeWrap), Ignorables)
 rearranged leftover (Trailing follow, node)
-   | (follow', lead') <- splitDirections follow, (node', follow'') <- rearrangedChildren [] node =
-        ((Attached leftover (follow'' <> follow'), node'), lead')
-rearranged leftover (OperatorTrailing follow, node)
-   | (node', follow') <- rearrangedChildren follow node = ((Attached leftover mempty, node'), follow')
+   | (follow', lead') <- splitDirections follow, (lead'', node', follow'') <- rearrangedChildren [] node =
+        ((Attached (leftover <> lead'') Blank (follow'' <> follow'), node'), lead')
+rearranged leftover (OperatorTrailing [[], follow], node)
+   | (follow', lead') <- splitDirections follow,
+     (lead'', node', follow'') <- rearrangedChildren [[], lead'] node =
+        ((Attached leftover (AttachedToOperator lead'' follow') [], node'), follow'')
 rearranged leftover (ParenthesesTrailing lead ws follow, node)
-   | (follow', lead') <- splitDirections follow, ((ws', node'), follow'') <- rearranged lead (ws, node) =
-        ((Parenthesized leftover (ws' `withTail` follow'') follow', node'), lead')
+   | (follow', lead') <- splitDirections follow, (ws', node') <- completeRearranged lead (ws, node) =
+        ((Parenthesized leftover ws' follow', node'), lead')
 
-withTail (Attached lead follow) ws = Attached lead (follow <> ws)
-withTail (Parenthesized lead inside follow) ws = Parenthesized lead inside (follow <> ws)
+embed leading Blank trailing = Attached leading Blank trailing
+embed leading (Attached lead inside follow) trailing = embed (leading <> lead) inside (follow <> trailing)
+embed leading (AttachedToOperator lead follow) trailing = AttachedToOperator (leading <> lead) (follow <> trailing)
+embed leading (Parenthesized lead inside follow) trailing = Parenthesized (leading <> lead) inside (follow <> trailing)
 
-rearrangedChildren :: [Ignorables] -> AST ParsedWrap -> (AST NodeWrap, Ignorables)
+rearrangedChildren :: [Ignorables] -> AST ParsedWrap -> (Ignorables, AST NodeWrap, Ignorables)
 rearrangedChildren [left, right] (And a b)
-   | a' <- completeRearranged left a,
-     (b', rest') <- rearranged right b = (And a' b', rest')
+   | (a', follow1) <- rearranged left a,
+     (b', follow2) <- rearranged right b = (follow1, And a' b', follow2)
 rearrangedChildren [left, right] (Or a b)
-   | a' <- completeRearranged left a,
-     (b', rest') <- rearranged right b = (Or a' b', rest')
+   | (a', follow1) <- rearranged left a,
+     (b', follow2) <- rearranged right b = (follow1, Or a' b', follow2)
 rearrangedChildren [leftover] (Not a)
-   | (a', rest) <- rearranged leftover a = (Not a', rest)
-rearrangedChildren [] (Literal a) = (Literal a, [])
-rearrangedChildren [] (Variable name) = (Variable name, [])
+   | (a', follow) <- rearranged leftover a = ([], Not a', follow)
+rearrangedChildren [] (Literal a) = ([], Literal a, [])
+rearrangedChildren [] (Variable name) = ([], Variable name, [])
 
+-- | Separates the whitespace and comments that refer to the preceding construct.
 splitDirections :: Ignorables -> (Ignorables, Ignorables)
 splitDirections = span (either (const True) (isPrefixOf "^" . getComment))
 
+-- | Simplifies the given expression according to the laws of Boolean algebra.
 simplified :: NodeWrap (AST NodeWrap) -> NodeWrap (AST NodeWrap)
 simplified e@(_, Literal{}) = e
 simplified e@(_, Variable{}) = e
@@ -141,9 +171,18 @@ simplified (a, Or l r) =  case (simplified l, simplified r)
                              (l', r') -> (a, Or l' r')
 
 raise :: AttachedIgnorables -> AttachedIgnorables -> AttachedIgnorables
-raise  (Parenthesized opl op opr) arg = Parenthesized opl (raise op arg) opr
-raise  (Attached opl opr) (Parenthesized l arg r) = Parenthesized (opl <> l) arg (r <> opr)
-raise  (Attached opl opr) (Attached argl argr) = Attached (opl <> argl) (argr <> opr)
+raise Blank arg = arg
+raise op Blank = op
+raise AttachedToOperator{} arg = arg
+raise (Parenthesized opl op opr) arg = Parenthesized opl (raise op arg) opr
+raise (Attached opl inside opr) (Parenthesized l arg r) =
+   Parenthesized (comments opl <> l) (raise inside arg) (r <> comments opr)
+raise (AttachedToOperator opl opr) (Parenthesized l arg r) = Parenthesized (comments opl <> l) arg (r <> comments opr)
+raise (AttachedToOperator opl opr) (Attached argl inside argr) =
+   Attached (comments opl <> argl) inside (argr <> comments opr)
+
+comments :: Ignorables -> Ignorables
+comments = mapMaybe (either (const Nothing) (Just . Right))
 
 whiteString :: Ignorables -> String
 whiteString (Left (WhiteSpace ws) : rest) = ws <> whiteString rest
