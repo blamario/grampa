@@ -14,10 +14,13 @@ module Text.Grampa (
    module Text.Parser.LookAhead)
 where
 
+import Data.Char (isSpace)
 import Data.List (intersperse, nub, sort)
 import Data.Monoid ((<>))
 import qualified Data.Monoid.Factorial as Factorial
 import Data.Monoid.Factorial (FactorialMonoid)
+import qualified Data.Monoid.Textual as Textual
+import Data.Monoid.Textual (TextualMonoid)
 import Data.String (IsString(fromString))
 import Text.Parser.Char (CharParsing(char, notChar, anyChar))
 import Text.Parser.Combinators (Parsing((<?>), notFollowedBy, skipMany, skipSome, unexpected))
@@ -47,7 +50,7 @@ simply parseGrammar p input = Rank2.fromOnly (parseGrammar (Rank2.Only p) input)
 
 -- | Given the textual parse input, the parse failure on the input, and the number of lines preceding the failure to
 -- show, produce a human-readable failure description.
-failureDescription :: forall s. (Ord s, IsString s, FactorialMonoid s) => s -> ParseFailure s -> Int -> s
+failureDescription :: forall s. (Ord s, TextualMonoid s) => s -> ParseFailure s -> Int -> s
 failureDescription input (ParseFailure pos expected) contextLineCount =
    offsetContext input pos contextLineCount
    <> "expected " <> oxfordComma (fromExpected <$> nub (sort expected))
@@ -64,11 +67,15 @@ failureDescription input (ParseFailure pos expected) contextLineCount =
 
 -- | Given the parser input, an offset within it, and desired number of context lines, returns a description of
 -- the offset position in English.
-offsetContext :: (Eq s, IsString s, FactorialMonoid s) => s -> Int -> Int -> s
+offsetContext :: (Eq s, TextualMonoid s) => s -> Int -> Int -> s
 offsetContext input offset contextLineCount = 
-   foldMap (<> "\n") prevLines <> fromString (replicate column ' ') <> "^\n"
+   foldMap (<> "\n") prevLines <> lastLinePadding
    <> "at line " <> fromString (show $ length allPrevLines) <> ", column " <> fromString (show $ column+1) <> "\n"
    where (allPrevLines, column) = offsetLineAndColumn input offset
+         lastLinePadding
+            | (lastLine:_) <- allPrevLines, paddingPrefix <- Textual.takeWhile_ False isSpace lastLine =
+                 Factorial.take column (paddingPrefix <> fromString (replicate column ' ')) <> "^\n"
+            | otherwise = ""
          prevLines = reverse (take contextLineCount allPrevLines)
 
 -- | Given the full input and an offset within it, returns all the input lines up to and including the offset
