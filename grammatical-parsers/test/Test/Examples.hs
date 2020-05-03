@@ -142,17 +142,20 @@ instance Enumerable a => Enumerable (ConditionalTree a) where
 instance Enumerable Relation where
    enumerate = share (choice $ pay . pure . Relation <$> ["<", "<=", "==", ">=", ">"])
 
-uniqueParse :: (Ord s, TextualMonoid s, Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g) =>
+uniqueParse :: (Ord s, TextualMonoid s, Show r, Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g) =>
                Grammar g Parser s -> (forall f. g f -> f r) -> s -> Either String r
 uniqueParse g p s = case getCompose (p $ parseComplete g s)
                     of Right [r] -> Right r
                        Right [] -> Left "Unparseable"
-                       Right _ -> Left "Ambiguous"
+                       Right rs -> Left ("Ambiguous: " ++ show rs)
                        Left err -> Left (toString mempty $ failureDescription s err 3)
 
-instance TokenParsing (Parser ArithmeticComparisons String)
-instance TokenParsing (Parser ArithmeticComparisonsBoolean String)
-instance TokenParsing (Parser ACBC String)
+instance TokenParsing (Parser ArithmeticComparisons String) where
+   token = lexicalToken
+instance TokenParsing (Parser ArithmeticComparisonsBoolean String) where
+   token = lexicalToken
+instance TokenParsing (Parser ACBC String) where
+   token = lexicalToken
 
 instance LexicalParsing (Parser ArithmeticComparisons String)
 instance LexicalParsing (Parser ArithmeticComparisonsBoolean String)
