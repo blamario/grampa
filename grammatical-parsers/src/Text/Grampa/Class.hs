@@ -154,7 +154,7 @@ class LookAheadParsing m => InputParsing m where
    -- | A parser that accepts any single input atom.
    anyToken :: m (ParserInput m)
    -- | A parser that accepts an input atom only if it satisfies the given predicate.
-   satisfy :: ((ParserInput m) -> Bool) -> m (ParserInput m)
+   satisfy :: (ParserInput m -> Bool) -> m (ParserInput m)
    -- | A parser that succeeds exactly when satisfy doesn't, equivalent to -- 'notFollowedBy' @. satisfy@
    notSatisfy :: (ParserInput m -> Bool) -> m ()
 
@@ -186,7 +186,7 @@ class LookAheadParsing m => InputParsing m where
    notSatisfy predicate = try (void $ satisfy $ not . predicate) <|> eof
    default concatMany :: (Monoid a, Alternative m) => m a -> m a
    concatMany p = go
-      where go = mappend <$> try p <*> go <|> pure mempty
+      where go = mappend <$> p <*> go <|> pure mempty
    default getSourcePos :: (FactorialMonoid (ParserInput m), Functor m) => m (Position (ParserInput m))
    getSourcePos = Position . Factorial.length <$> getInput
    default scan :: (Monad m, FactorialMonoid (ParserInput m)) =>

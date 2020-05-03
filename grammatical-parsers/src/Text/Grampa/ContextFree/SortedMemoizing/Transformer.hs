@@ -237,7 +237,7 @@ instance (Applicative m, MonoidNull s) => Parsing (ParserT m g s) where
       where rewind t (ResultList [] _) = singleResult 0 t ()
             rewind t ResultList{} = ResultList mempty (FailureInfo (genericLength t) [Expected "notFollowedBy"])
    skipMany p = go
-      where go = pure () <|> p *> go
+      where go = pure () <|> try p *> go
    unexpected msg = Parser (\t-> ResultList mempty $ FailureInfo (genericLength t) [Expected msg])
    eof = Parser f
       where f rest@((s, _):_)

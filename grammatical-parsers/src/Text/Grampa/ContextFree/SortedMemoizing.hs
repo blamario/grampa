@@ -205,7 +205,7 @@ instance MonoidNull s => Parsing (Parser g s) where
       where rewind t (ResultList [] _) = ResultList [ResultsOfLength 0 t (():|[])] mempty
             rewind t ResultList{} = ResultList mempty (FailureInfo (genericLength t) [Expected "notFollowedBy"])
    skipMany p = go
-      where go = pure () <|> p *> go
+      where go = pure () <|> try p *> go
    unexpected msg = Parser (\t-> ResultList mempty $ FailureInfo (genericLength t) [Expected msg])
    eof = Parser f
       where f rest@((s, _):_)

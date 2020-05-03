@@ -432,7 +432,7 @@ instance (Parsing (p g s), InputParsing (Fixed p g s)) => Parsing (Fixed p g s) 
       indirect= notFollowedBy (indirect p),
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
    unexpected msg = liftPositive (unexpected msg)
-   skipMany p = concatMany (() <$ p)
+   skipMany p = concatMany (() <$ try p)
 
 instance (InputParsing (Fixed p g s), DeterministicParsing (p g s)) => DeterministicParsing (Fixed p g s) where
    p@DirectParser{} <<|> q@PositiveDirectParser{} = DirectParser{
