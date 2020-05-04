@@ -248,12 +248,16 @@ class Parsing m => DeterministicParsing m where
    takeMany :: m a -> m [a]
    -- | Like 'some', but always consuming the longest matching sequence of input.
    takeSome :: m a -> m [a]
+   -- | Like 'concatMany', but always consuming the longest matching sequence of input.
+   concatAll :: Monoid a => m a -> m a
    -- | Like 'skipMany', but always consuming the longest matching sequence of input.
    skipAll :: m a -> m ()
    p <<|> q = try p <|> notFollowedBy (void p) *> q
    takeOptional p = Just <$> p <<|> pure Nothing
    takeMany p = many p <* notFollowedBy (void p)
    takeSome p = some p <* notFollowedBy (void p)
+   concatAll p = go
+      where go = liftA2 mappend p go <<|> pure mempty
    skipAll p = p *> skipAll p <<|> pure ()
 
 -- | If a grammar is 'Lexical', its parsers can instantiate the 'TokenParsing' class.
