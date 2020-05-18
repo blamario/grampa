@@ -208,4 +208,5 @@ Here is an example GHCi session:
 ~~~
 
 Grammars are another use case that is almost, but not quite, completely unlike database records. See
-[grammatical-parsers](https://github.com/blamario/grampa/tree/master/grammatical-parsers) about that.
+[grammatical-parsers](https://github.com/blamario/grampa/tree/master/grammatical-parsers) or
+[construct](https://hackage.haskell.org/package/construct) for examples.

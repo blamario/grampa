@@ -1,5 +1,6 @@
 Version 1.4
 ---------------
+* Added Rank2.Compose :: ((* -> *) -> *) -> (* -> *) -> ((* -> *) -> *)
 * Matched the precedence of <$> and <*> operators with Prelude
 * Relaxed the lower bound of base dependency to 4.10
 
