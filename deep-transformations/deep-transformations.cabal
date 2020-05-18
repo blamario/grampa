@@ -39,7 +39,7 @@ library
                         Transformation.Full, Transformation.Full.TH,
                         Transformation.Rank2, Transformation.AG
   build-depends:        base >= 4.7 && < 5, rank2classes >= 1.2.1 && < 1.4,
-                        template-haskell >= 2.11 && < 2.15
+                        template-haskell >= 2.11 && < 2.17
   default-language:     Haskell2010
 
 test-suite doctests
