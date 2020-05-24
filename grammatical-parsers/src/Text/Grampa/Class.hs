@@ -49,8 +49,9 @@ data Expected s = Expected String
 
 -- | Opaque data type that represents an input position.
 newtype Position s = Position{
-  -- | The length of the input from the position to end.
-  remainderLength :: Int}
+   -- | The length of the input from the position to end.
+   remainderLength :: Int}
+   deriving (Eq, Read, Show)
 
 -- | Map the position into its offset from the beginning of the full input.
 positionOffset :: FactorialMonoid s => s -> Position s -> Int
