@@ -177,9 +177,9 @@ raise AttachedToOperator{} arg = arg
 raise (Parenthesized opl op opr) arg = Parenthesized opl (raise op arg) opr
 raise (Attached opl inside opr) (Parenthesized l arg r) =
    Parenthesized (comments opl <> l) (raise inside arg) (r <> comments opr)
-raise (AttachedToOperator opl opr) (Parenthesized l arg r) = Parenthesized (comments opl <> l) arg (r <> comments opr)
-raise (AttachedToOperator opl opr) (Attached argl inside argr) =
-   Attached (comments opl <> argl) inside (argr <> comments opr)
+-- raise (AttachedToOperator opl opr) (Parenthesized l arg r) = Parenthesized (comments opl <> l) arg (r <> comments opr)
+-- raise (AttachedToOperator opl opr) (Attached argl inside argr) =
+--    Attached (comments opl <> argl) inside (argr <> comments opr)
 
 comments :: Ignorables -> Ignorables
 comments = mapMaybe (either (const Nothing) (Just . Right))
