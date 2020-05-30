@@ -28,7 +28,8 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 import qualified Rank2
 
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          AmbiguousParsing(..), Ambiguous(Ambiguous), DeterministicParsing(..),
+                          AmbiguousParsing(..), Ambiguous(Ambiguous),
+                          ConsumedInputParsing(..), DeterministicParsing(..),
                           TailsParsing(parseTails, parseAllTails), ParseResults, Expected(..))
 import Text.Grampa.Internal (FailureInfo(..), ResultList(..), ResultsOfLength(..), fromResultList)
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
@@ -190,6 +191,13 @@ instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
                | Just first <- Textual.characterPrefix s, 
                  predicate first = ResultList mempty (FailureInfo (genericLength rest) [Expected "notSatisfyChar"])
             p rest = ResultList [ResultsOfLength 0 rest (():|[])] mempty
+
+instance (LeftReductive s, FactorialMonoid s) => ConsumedInputParsing (Parser g s) where
+   match (Parser p) = Parser q
+      where q [] = addConsumed mempty (p [])
+            q rest@((s, _) : _) = addConsumed s (p rest)
+            addConsumed input (ResultList rl failure) = ResultList (add1 <$> rl) failure
+               where add1 (ResultsOfLength l t rs) = ResultsOfLength l t ((,) (Factorial.take l input) <$> rs)
 
 instance MonoidNull s => Parsing (Parser g s) where
    try (Parser p) = Parser q

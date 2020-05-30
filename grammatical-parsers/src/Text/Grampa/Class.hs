@@ -3,7 +3,8 @@
              TypeFamilies, TypeSynonymInstances, UndecidableInstances #-}
 module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
                           AmbiguousParsing(..), DeterministicParsing(..), InputParsing(..), InputCharParsing(..),
-                          LexicalParsing(..), TailsParsing(..), ParseResults, ParseFailure(..), Expected(..),
+                          ConsumedInputParsing(..), LexicalParsing(..), TailsParsing(..),
+                          ParseResults, ParseFailure(..), Expected(..),
                           Ambiguous(..), Position, positionOffset, completeParser) where
 
 import Control.Applicative (Alternative(empty, many, some), optional, liftA2, (<|>))
@@ -232,8 +233,13 @@ class (CharParsing m, InputParsing m) => InputCharParsing m where
 
    satisfyChar = Text.Parser.Char.satisfy
 
+-- | Parsers that keep track of the consumed input.
+class InputParsing m => ConsumedInputParsing m where
+   -- | Return both the result of a parse and the portion of the input that the argument parser consumed.
+   match :: m a -> m (ParserInput m, a)
+
 -- | Parsers that can produce alternative parses and collect them into an 'Ambiguous' node
-class AmbiguousParsing m where
+class Alternative m => AmbiguousParsing m where
    -- | Collect all alternative parses of the same length into a 'NonEmpty' list of results.
    ambiguous :: m a -> m (Ambiguous a)
 

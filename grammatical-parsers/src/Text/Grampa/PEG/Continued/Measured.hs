@@ -25,8 +25,8 @@ import qualified Text.Parser.Char as Char
 import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
-import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          ParseResults, ParseFailure(..), Expected(..))
+import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
+                          MultiParsing(..), ParseResults, ParseFailure(..), Expected(..))
 import Text.Grampa.Internal (FailureInfo(..))
 
 data Result (g :: (* -> *) -> *) s v = Parsed{parsedPrefix :: !v,
@@ -193,6 +193,13 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
                           (const $ success prefix len suffix)
                      failure _ = success mempty 0 rest
    {-# INLINABLE string #-}
+
+instance (LeftReductive s, FactorialMonoid s) => ConsumedInputParsing (Parser g s) where
+   match :: forall a. Parser g s a -> Parser g s (s, a)
+   match (Parser p) = Parser q
+      where q :: forall x. s -> ((s, a) -> Int -> s -> x) -> (FailureInfo s -> x) -> x
+            q rest success failure = p rest success' failure
+               where success' r !len suffix = success (Factorial.take len rest, r) len suffix
 
 instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p

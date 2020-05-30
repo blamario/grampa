@@ -7,8 +7,10 @@ module Text.Grampa (
    -- * Types
    Grammar, GrammarBuilder, ParseResults, ParseFailure(..), Expected(..), Ambiguous(..), Position,
    -- * Parser combinators and primitives
-   DeterministicParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..), GrammarParsing(..),
-   TokenParsing(..), LexicalParsing(..), AmbiguousParsing(..),
+   DeterministicParsing(..), AmbiguousParsing(..),
+   InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
+   MultiParsing(..), GrammarParsing(..),
+   TokenParsing(..), LexicalParsing(..),
    module Text.Parser.Char,
    module Text.Parser.Combinators,
    module Text.Parser.LookAhead)
@@ -29,7 +31,8 @@ import Text.Parser.Token (TokenParsing(..))
 
 import qualified Rank2
 import Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
-                          DeterministicParsing(..), InputParsing(..), InputCharParsing(..), LexicalParsing(..),
+                          InputParsing(..), InputCharParsing(..),
+                          ConsumedInputParsing(..), DeterministicParsing(..), LexicalParsing(..),
                           AmbiguousParsing(..), Ambiguous(..), ParseResults, ParseFailure(..), Expected(..), Position,
                           positionOffset)
 

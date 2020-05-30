@@ -35,7 +35,8 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          AmbiguousParsing(..), Ambiguous(..), DeterministicParsing(..),
+                          AmbiguousParsing(..), Ambiguous(..),
+                          ConsumedInputParsing(..), DeterministicParsing(..),
                           TailsParsing(parseTails, parseAllTails), ParseResults, Expected(..))
 import Text.Grampa.Internal (ResultList(..), FailureInfo(..),
                              AmbiguousAlternative(ambiguousOr), fromResultList)
@@ -556,6 +557,22 @@ instance (LeftReductive s, FactorialMonoid s, InputParsing (p g s), ParserInput 
             cmp = concatMany (complete p)
    {-# INLINABLE string #-}
    {-# INLINABLE concatMany #-}
+
+instance (LeftReductive s, FactorialMonoid s,
+          ConsumedInputParsing (p g s), ParserInput (p g s) ~ s) => ConsumedInputParsing (Fixed p g s) where
+   match (PositiveDirectParser p) = PositiveDirectParser (match p)
+   match p@DirectParser{} = DirectParser{
+      complete= match (complete p),
+      direct0 = match (direct0 p),
+      direct1 = match (direct1 p)}
+   match p@Parser{} = Parser{
+      complete= match (complete p),
+      direct =  match (direct p),
+      direct0 = match (direct0 p),
+      direct1 = match (direct1 p),
+      indirect= match (indirect p),
+      isAmbiguous= Nothing,
+      cyclicDescendants= cyclicDescendants p}
 
 instance (Show s, TextualMonoid s, InputCharParsing (p g s), ParserInput (p g s) ~ s) =>
          InputCharParsing (Fixed p g s) where
