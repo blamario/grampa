@@ -62,7 +62,7 @@ positionOffset wholeInput = (wholeLength -) . remainderLength
 
 -- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of
 -- alternative results.
-newtype Ambiguous a = Ambiguous (NonEmpty a) deriving (Data, Eq, Ord, Show, Typeable)
+newtype Ambiguous a = Ambiguous{getAmbiguous :: NonEmpty a} deriving (Data, Eq, Ord, Show, Typeable)
 
 instance Show1 Ambiguous where
    liftShowsPrec sp sl d (Ambiguous (h :| l)) t
