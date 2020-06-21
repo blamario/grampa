@@ -301,6 +301,7 @@ class (DeterministicParsing m, InputCharParsing m, TokenParsing m) => LexicalPar
    lexicalWhiteSpace = takeCharsWhile isSpace *> skipAll (lexicalComment *> takeCharsWhile isSpace)
    someLexicalSpace = takeCharsWhile1 isSpace *> (lexicalComment *> lexicalWhiteSpace <<|> pure ())
                       <<|> lexicalComment *> lexicalWhiteSpace
+                      <?> "whitespace"
    lexicalComment = empty
    lexicalSemicolon = lexicalToken (Text.Parser.Char.char ';')
    lexicalToken p = p <* lexicalWhiteSpace
