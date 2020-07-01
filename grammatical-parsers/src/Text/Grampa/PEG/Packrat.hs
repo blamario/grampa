@@ -136,7 +136,6 @@ instance (Eq s, LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s)
 
 instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
-   endOfInput = eof
    getInput = Parser p
       where p rest@((s, _):_) = Parsed s rest
             p [] = Parsed mempty []
@@ -164,6 +163,11 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
       where p rest@((s, _) : _)
                | x <- Factorial.takeWhile predicate s = Parsed x (Factorial.drop (Factorial.length x) rest)
             p [] = Parsed mempty []
+   take n = Parser p
+      where p rest@((s, _) : _)
+               | x <- Factorial.take n s, Factorial.length x == n = Parsed x (drop n rest)
+            p [] | n == 0 = Parsed mempty []
+            p rest = NoParse (FailureInfo (genericLength rest) [Expected $ "take " ++ show n])
    takeWhile1 predicate = Parser p
       where p rest@((s, _) : _)
                | x <- Factorial.takeWhile predicate s, not (Null.null x) =
@@ -173,8 +177,6 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
       p rest@((s', _) : _)
          | s `isPrefixOf` s' = Parsed s (Factorial.drop (Factorial.length s) rest)
       p rest = NoParse (FailureInfo (genericLength rest) [ExpectedInput s])
-   concatMany p = go
-      where go = mappend <$> p <*> go <|> mempty
 
 instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p

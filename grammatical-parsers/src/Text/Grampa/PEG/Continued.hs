@@ -136,7 +136,6 @@ instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
 
 instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
-   endOfInput = eof
    getInput = Parser p
       where p rest success _ = success rest rest
    anyToken = Parser p
@@ -162,6 +161,11 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
       where p :: forall x. state -> s -> (s -> s -> x) -> (FailureInfo s -> x) -> x
             p s rest success _ = success prefix suffix
                where (prefix, suffix, _) = Factorial.spanMaybe' s f rest
+   take n = Parser p
+      where p :: forall x. s -> (s -> s -> x) -> (FailureInfo s -> x) -> x
+            p rest success _
+               | (prefix, suffix) <- Factorial.splitAt n rest, Factorial.length prefix == n = success prefix suffix
+            p rest _ failure = failure (FailureInfo (Factorial.length rest) [Expected $ "take" ++ show n])
    takeWhile predicate = Parser p
       where p :: forall x. s -> (s -> s -> x) -> (FailureInfo s -> x) -> x
             p rest success _ | (prefix, suffix) <- Factorial.span predicate rest = success prefix suffix
@@ -177,12 +181,6 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
       p s' success failure
          | Just suffix <- stripPrefix s s' = success s suffix
          | otherwise = failure (FailureInfo (Factorial.length s') [ExpectedInput s])
-   concatMany :: forall a. Monoid a => Parser g s a -> Parser g s a
-   concatMany (Parser p) = Parser q
-      where q :: forall x. s -> (a -> s -> x) -> (FailureInfo s -> x) -> x
-            q rest success _ = p rest success' failure
-               where success' prefix suffix = q suffix (success . mappend prefix) (const $ success prefix suffix)
-                     failure _ = success mempty rest
    {-# INLINABLE string #-}
 
 instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where

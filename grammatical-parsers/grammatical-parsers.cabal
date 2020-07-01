@@ -49,8 +49,8 @@ library
                        transformers >= 0.5 && < 0.6,
                        monoid-subclasses >=1.0 && <1.1,
                        parsers < 0.13,
+                       input-parsers < 0.2,
                        attoparsec >= 0.13 && < 0.14,
-                       incremental-parser >= 0.3.4 && < 0.5,
                        rank2classes >= 1.0.2 && < 1.5
 
 executable             arithmetic

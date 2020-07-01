@@ -150,7 +150,6 @@ reparseTails final parsed@((s, _):_) = (s, gd):parsed
 
 instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
-   endOfInput = eof
    getInput = Parser p
       where p rest@((s, _):_) = ResultList (Leaf $ ResultInfo 0 rest s) mempty
             p [] = ResultList (Leaf $ ResultInfo 0 [] mempty) mempty
@@ -170,6 +169,12 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
                where (prefix, _, _) = Factorial.spanMaybe' s f i
                      l = Factorial.length prefix
             p _ [] = ResultList (Leaf $ ResultInfo 0 [] mempty) mempty
+   take 0 = mempty
+   take n = Parser p
+      where p rest@((s, _) : _)
+               | x <- Factorial.take n s, l <- Factorial.length x, l == n =
+                    ResultList (Leaf $ ResultInfo l (drop l rest) x) mempty
+            p rest = ResultList mempty (FailureInfo (genericLength rest) [Expected $ "take " ++ show n])
    takeWhile predicate = Parser p
       where p rest@((s, _) : _)
                | x <- Factorial.takeWhile predicate s, l <- Factorial.length x =

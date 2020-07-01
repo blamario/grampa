@@ -9,16 +9,20 @@ import Data.Semigroup.Cancellative (LeftReductive)
 import Data.Monoid (Monoid, (<>))
 import Data.Monoid.Factorial (FactorialMonoid)
 
-import Text.Grampa.Class (InputParsing(ParserInput, concatMany, string), 
-                          LexicalParsing(lexicalToken, keyword))
+import Text.Grampa.Class (InputParsing(ParserInput, string), LexicalParsing(lexicalToken, keyword))
 import Text.Parser.Combinators (Parsing((<?>)), count)
 
 -- | Attempts to parse a monoidal value, if the argument parser fails returns 'mempty'.
-moptional :: (Monoid x, Alternative p) => p x -> p x
+moptional :: (Alternative p, Monoid a) => p a -> p a
 moptional p = p <|> pure mempty
 
+-- | Zero or more argument occurrences like 'many', with concatenated monoidal results.
+concatMany :: (Alternative p, Monoid a) => p a -> p a
+concatMany p = go
+   where go = mappend <$> p <*> go <|> pure mempty
+
 -- | One or more argument occurrences like 'some', with concatenated monoidal results.
-concatSome :: (Monoid x, Applicative p, InputParsing p) => p x -> p x
+concatSome :: (Alternative p, Monoid a) => p a -> p a
 concatSome p = (<>) <$> p <*> concatMany p
 
 -- | Returns 'True' if the argument parser succeeds and 'False' otherwise.

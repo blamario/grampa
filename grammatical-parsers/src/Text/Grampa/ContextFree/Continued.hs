@@ -142,7 +142,6 @@ instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
 
 instance (Cancellative.LeftReductive s, Factorial.FactorialMonoid s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
-   endOfInput = eof
    getInput = Parser p
       where p rest success failure = success rest rest failure
    anyToken = Parser p
@@ -168,6 +167,12 @@ instance (Cancellative.LeftReductive s, Factorial.FactorialMonoid s) => InputPar
       where p :: forall x. state -> s -> (s -> s -> (FailureInfo s -> x) -> x) -> (FailureInfo s -> x) -> x
             p s rest success failure = success prefix suffix failure
                where (prefix, suffix, _) = Factorial.spanMaybe' s f rest
+   take n = Parser p
+      where p :: forall x. s -> (s -> s -> (FailureInfo s -> x) -> x) -> (FailureInfo s -> x) -> x
+            p rest success failure
+              | (prefix, suffix) <- Factorial.splitAt n rest,
+                Factorial.length prefix == n = success prefix suffix failure
+              | otherwise = failure (FailureInfo (Factorial.length rest) [Expected $ "take " ++ show n])
    takeWhile predicate = Parser p
       where p :: forall x. s -> (s -> s -> (FailureInfo s -> x) -> x) -> (FailureInfo s -> x) -> x
             p rest success failure | (prefix, suffix) <- Factorial.span predicate rest = success prefix suffix failure
@@ -183,12 +188,6 @@ instance (Cancellative.LeftReductive s, Factorial.FactorialMonoid s) => InputPar
       p s' success failure
          | Just suffix <- Cancellative.stripPrefix s s' = success s suffix failure
          | otherwise = failure (FailureInfo (Factorial.length s') [ExpectedInput s])
-   concatMany :: forall a. Monoid a => Parser g s a -> Parser g s a
-   concatMany (Parser p) = Parser q
-      where q :: forall x. s -> (a -> s -> (FailureInfo s -> x) -> x) -> (FailureInfo s -> x) -> x
-            q rest success failure = p rest success' (const $ success mempty rest failure)
-               where success' prefix suffix failure' =
-                        q suffix (success . mappend prefix) (const $ success prefix suffix failure')
    {-# INLINABLE string #-}
 
 instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where

@@ -153,7 +153,6 @@ parseGrammarTails g input = foldr parseTail [] (Factorial.tails input)
 
 instance (Applicative m, LeftReductive s, FactorialMonoid s) => InputParsing (ParserT m g s) where
    type ParserInput (ParserT m g s) = s
-   endOfInput = eof
    getInput = Parser p
       where p rest@((s, _):_) = singleResult 0 rest s
             p [] = singleResult 0 [] mempty
@@ -178,6 +177,12 @@ instance (Applicative m, LeftReductive s, FactorialMonoid s) => InputParsing (Pa
                | x <- Factorial.takeWhile predicate s, l <- Factorial.length x =
                     singleResult l (drop l rest) x
             p [] = singleResult 0 [] mempty
+   take 0 = mempty
+   take n = Parser p
+      where p rest@((s, _) : _)
+               | x <- Factorial.take n s, l <- Factorial.length x, l == n =
+                    singleResult l (drop l rest) x
+            p rest = ResultList mempty (FailureInfo (genericLength rest) [Expected $ "take " ++ show n])
    takeWhile1 predicate = Parser p
       where p rest@((s, _) : _)
                | x <- Factorial.takeWhile predicate s, l <- Factorial.length x, l > 0 =

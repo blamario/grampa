@@ -129,7 +129,6 @@ instance (Show s, Textual.TextualMonoid s) => CharParsing (Parser g s) where
 
 instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
-   endOfInput = eof
    getInput = Parser p
       where p rest = Parsed rest rest
    anyToken = Parser p
@@ -149,6 +148,10 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Pars
    scan s0 f = Parser (p s0)
       where p s rest = Parsed prefix suffix
                where (prefix, suffix, _) = Factorial.spanMaybe' s f rest
+   take n = Parser p
+      where p rest
+              | (prefix, suffix) <- Factorial.splitAt n rest, Factorial.length prefix == n = Parsed prefix suffix
+              | otherwise = NoParse (FailureInfo (Factorial.length rest) [Expected $ "take " ++ show n])
    takeWhile predicate = Parser p
       where p rest | (prefix, suffix) <- Factorial.span predicate rest = Parsed prefix suffix
    takeWhile1 predicate = Parser p
@@ -159,19 +162,9 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Pars
    string s = Parser p where
       p s' | Just suffix <- Cancellative.stripPrefix s s' = Parsed s suffix
            | otherwise = NoParse (FailureInfo (Factorial.length s') [ExpectedInput s])
-   concatMany (Parser p) = Parser q
-      where q rest = case p rest
-                     of Parsed prefix suffix -> let Parsed prefix' suffix' = q suffix
-                                                in Parsed (mappend prefix prefix') suffix'
-                        NoParse{} -> Parsed mempty rest
    {-# INLINABLE string #-}
 
 instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
-   satisfyChar predicate = Parser p
-      where p rest =
-               case Textual.splitCharacterPrefix rest
-               of Just (first, suffix) | predicate first -> Parsed first suffix
-                  _ -> NoParse (FailureInfo (Factorial.length rest) [Expected "satisfyChar"])
    satisfyCharInput predicate = Parser p
       where p rest =
                case Textual.splitCharacterPrefix rest

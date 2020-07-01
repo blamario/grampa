@@ -43,7 +43,7 @@ import Text.Grampa.Internal (ResultList(..), FailureInfo(..),
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
-import Prelude hiding (cycle, null, span, takeWhile)
+import Prelude hiding (cycle, null, span, take, takeWhile)
 
 type Parser = Fixed Memoizing.Parser
 
@@ -433,7 +433,6 @@ instance (Parsing (p g s), InputParsing (Fixed p g s)) => Parsing (Fixed p g s) 
       indirect= notFollowedBy (indirect p),
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
    unexpected msg = liftPositive (unexpected msg)
-   skipMany p = concatMany (() <$ try p)
 
 instance (InputParsing (Fixed p g s), DeterministicParsing (p g s)) => DeterministicParsing (Fixed p g s) where
    p@DirectParser{} <<|> q@PositiveDirectParser{} = DirectParser{
@@ -527,36 +526,12 @@ instance (LeftReductive s, FactorialMonoid s, InputParsing (p g s), ParserInput 
    string s
       | null s = primitive (string s) empty (string s)
       | otherwise = liftPositive (string s)
+   take 0 = mempty
+   take n = liftPositive (take n)
    takeWhile predicate = primitive (mempty <$ notSatisfy predicate)
                                                (takeWhile1 predicate) (takeWhile predicate)
    takeWhile1 predicate = liftPositive (takeWhile1 predicate)
-   concatMany p@PositiveDirectParser{} = DirectParser{
-      complete= cmp,
-      direct0= d0,
-      direct1= d1}
-      where d0 = pure mempty
-            d1 = mappend <$> complete p <*> cmp
-            cmp = concatMany (complete p)
-   concatMany p@DirectParser{} = DirectParser{
-      complete= cmp,
-      direct0= d0,
-      direct1= d1}
-      where d0 = pure mempty <|> direct0 p
-            d1 = mappend <$> direct1 p <*> cmp
-            cmp = concatMany (complete p)
-   concatMany p@Parser{} = Parser{
-      complete= cmp,
-      direct= d0 <|> d1,
-      direct0= d0,
-      direct1= d1,
-      indirect= mappend <$> indirect p <*> cmp,
-      isAmbiguous= Nothing,
-      cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
-      where d0 = pure mempty <|> direct0 p
-            d1 = mappend <$> direct1 p <*> cmp
-            cmp = concatMany (complete p)
    {-# INLINABLE string #-}
-   {-# INLINABLE concatMany #-}
 
 instance (LeftReductive s, FactorialMonoid s,
           ConsumedInputParsing (p g s), ParserInput (p g s) ~ s) => ConsumedInputParsing (Fixed p g s) where

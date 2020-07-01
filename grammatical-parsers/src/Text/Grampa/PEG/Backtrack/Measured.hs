@@ -134,7 +134,6 @@ instance (Show s, Textual.TextualMonoid s) => CharParsing (Parser g s) where
 
 instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
-   endOfInput = eof
    getInput = Parser p
       where p rest = Parsed 0 rest rest
    anyToken = Parser p
@@ -154,6 +153,10 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Pars
    scan s0 f = Parser (p s0)
       where p s rest = Parsed (Factorial.length prefix) prefix suffix
                where (prefix, suffix, _) = Factorial.spanMaybe' s f rest
+   take n = Parser p
+      where p rest
+              | (prefix, suffix) <- Factorial.splitAt n rest, Factorial.length prefix == n = Parsed n prefix suffix
+              | otherwise = NoParse (FailureInfo (Factorial.length rest) [Expected $ "take " ++ show n])
    takeWhile predicate = Parser p
       where p rest | (prefix, suffix) <- Factorial.span predicate rest =
                Parsed (Factorial.length prefix) prefix suffix
@@ -166,11 +169,6 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Pars
       p s' | Just suffix <- Cancellative.stripPrefix s s' = Parsed l s suffix
            | otherwise = NoParse (FailureInfo (Factorial.length s') [ExpectedInput s])
       l = Factorial.length s
-   concatMany (Parser p) = Parser q
-      where q rest = case p rest
-                     of Parsed l prefix suffix -> let Parsed l' prefix' suffix' = q suffix
-                                                  in Parsed (l+l') (mappend prefix prefix') suffix'
-                        NoParse{} -> Parsed 0 mempty rest
    {-# INLINABLE string #-}
 
 instance (Cancellative.LeftReductive s, FactorialMonoid s) => ConsumedInputParsing (Parser g s) where

@@ -18,6 +18,7 @@ where
 
 import Data.Char (isSpace)
 import Data.List (intersperse, nub, sort)
+import qualified Data.List as List
 import Data.Monoid ((<>))
 import qualified Data.Monoid.Factorial as Factorial
 import Data.Monoid.Factorial (FactorialMonoid)
@@ -79,7 +80,7 @@ offsetContext input offset contextLineCount =
             | (lastLine:_) <- allPrevLines, paddingPrefix <- Textual.takeWhile_ False isSpace lastLine =
                  Factorial.take column (paddingPrefix <> fromString (replicate column ' ')) <> "^\n"
             | otherwise = ""
-         prevLines = reverse (take contextLineCount allPrevLines)
+         prevLines = reverse (List.take contextLineCount allPrevLines)
 
 -- | Given the full input and an offset within it, returns all the input lines up to and including the offset
 -- in reverse order, as well as the zero-based column number of the offset

@@ -114,7 +114,6 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => MultiParsing (Pars
 
 instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
-   endOfInput = eof
    getInput = Parser p
       where p s = ResultList (Leaf $ ResultInfo s s) noFailure
    anyToken = Parser p
@@ -133,8 +132,14 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Pars
    scan s0 f = Parser (p s0)
       where p s i = ResultList (Leaf $ ResultInfo suffix prefix) noFailure
                where (prefix, suffix, _) = Factorial.spanMaybe' s f i
+   take n = Parser p
+      where p s
+              | (prefix, suffix) <- Factorial.splitAt n s,
+                Factorial.length prefix == n = ResultList (Leaf $ ResultInfo suffix prefix) noFailure
+              | otherwise = ResultList mempty (FailureInfo (Factorial.length s) [Expected $ "take " ++ show n])
    takeWhile predicate = Parser p
-      where p s | (prefix, suffix) <- Factorial.span predicate s = ResultList (Leaf $ ResultInfo suffix prefix) noFailure
+      where p s = ResultList (Leaf $ ResultInfo suffix prefix) noFailure
+              where (prefix, suffix) = Factorial.span predicate s
    takeWhile1 predicate = Parser p
       where p s | (prefix, suffix) <- Factorial.span predicate s = 
                if Null.null prefix
@@ -143,10 +148,6 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Pars
    string s = Parser p where
       p s' | Just suffix <- Cancellative.stripPrefix s s' = ResultList (Leaf $ ResultInfo suffix s) noFailure
            | otherwise = ResultList mempty (FailureInfo (Factorial.length s') [ExpectedInput s])
-   concatMany (Parser p) = Parser q
-      where q s = ResultList (Leaf $ ResultInfo s mempty) failure <> foldMap continue rs
-               where ResultList rs failure = p s
-            continue (ResultInfo suffix prefix) = mappend prefix <$> q suffix
 
 instance TextualMonoid s => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p

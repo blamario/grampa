@@ -139,7 +139,6 @@ instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
 
 instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
-   endOfInput = eof
    getInput = Parser p
       where p rest success _ = success rest 0 rest
    anyToken = Parser p
@@ -166,6 +165,12 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
             p s rest success _ = success prefix len suffix
                where (prefix, suffix, _) = Factorial.spanMaybe' s f rest
                      !len = Factorial.length prefix
+   take n = Parser p
+      where p :: forall x. s -> (s -> Int -> s -> x) -> (FailureInfo s -> x) -> x
+            p rest success _
+               | (prefix, suffix) <- Factorial.splitAt n rest,
+                 len <- Factorial.length prefix, len == n = success prefix len suffix
+            p rest _ failure = failure (FailureInfo (Factorial.length rest) [Expected $ "take" ++ show n])
    takeWhile predicate = Parser p
       where p :: forall x. s -> (s -> Int -> s -> x) -> (FailureInfo s -> x) -> x
             p rest success _ 
@@ -184,14 +189,6 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
       p s' success failure
          | Just suffix <- stripPrefix s s', !len <- Factorial.length s = success s len suffix
          | otherwise = failure (FailureInfo (Factorial.length s') [ExpectedInput s])
-   concatMany :: forall a. Monoid a => Parser g s a -> Parser g s a
-   concatMany (Parser p) = Parser q
-      where q :: forall x. s -> (a -> Int -> s -> x) -> (FailureInfo s -> x) -> x
-            q rest success _ = p rest success' failure
-               where success' prefix !len suffix = 
-                        q suffix (\prefix' !len'-> success (mappend prefix prefix') (len + len')) 
-                          (const $ success prefix len suffix)
-                     failure _ = success mempty 0 rest
    {-# INLINABLE string #-}
 
 instance (LeftReductive s, FactorialMonoid s) => ConsumedInputParsing (Parser g s) where
