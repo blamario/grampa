@@ -114,7 +114,7 @@ instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
                      failure' _ = success () 0 input failure
 
 instance Factorial.FactorialMonoid s => DeterministicParsing (Parser g s) where
-   (<<|>) :: forall g s a. Parser g s a -> Parser g s a -> Parser g s a
+   (<<|>) :: forall a. Parser g s a -> Parser g s a -> Parser g s a
    Parser p <<|> Parser q = Parser r where
       r :: forall x. s -> (a -> Int -> s -> (FailureInfo s -> x) -> x) -> (FailureInfo s -> x) -> x
       r rest success failure = p rest success' failure'

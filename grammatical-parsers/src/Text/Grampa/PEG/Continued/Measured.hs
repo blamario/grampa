@@ -223,7 +223,7 @@ instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
                      !len = Factorial.length prefix
    takeCharsWhile predicate = Parser p
       where p :: forall x. s -> (s -> Int -> s -> x) -> (FailureInfo s -> x) -> x
-            p rest success _ 
+            p rest success _
                | (prefix, suffix) <- Textual.span_ False predicate rest, 
                  !len <- Factorial.length prefix = success prefix len suffix
    takeCharsWhile1 predicate = Parser p

@@ -3,7 +3,6 @@ module Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, SeparatedPars
                                                           parseSeparated, separated)
 where
 
-import Control.Applicative (Alternative)
 import Text.Grampa.ContextFree.LeftRecursive (Fixed, SeparatedParser(..), FallibleWithExpectations(..),
                                               liftPositive, liftPure, mapPrimitive, parseSeparated, separated)
 import qualified Text.Grampa.ContextFree.SortedMemoizing.Transformer as Transformer
