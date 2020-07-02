@@ -5,7 +5,7 @@ module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
                           AmbiguousParsing(..), DeterministicParsing(..), InputParsing(..), InputCharParsing(..),
                           ConsumedInputParsing(..), LexicalParsing(..), TailsParsing(..),
                           ParseResults, ParseFailure(..), Expected(..),
-                          Ambiguous(..), Position, positionOffset, completeParser) where
+                          Ambiguous(..), completeParser) where
 
 import Control.Applicative (Alternative(empty, many, some), optional, liftA2, (<|>))
 import Data.ByteString (ByteString, singleton)
@@ -48,18 +48,6 @@ data ParseFailure s = ParseFailure Int [Expected s] deriving (Eq, Show)
 data Expected s = Expected String
                 | ExpectedInput s
                 deriving (Functor, Eq, Ord, Read, Show)
-
--- | Opaque data type that represents an input position.
-newtype Position s = Position{
-   -- | The length of the input from the position to end.
-   remainderLength :: Int}
-   deriving (Eq, Read, Show)
-
--- | Map the position into its offset from the beginning of the full input.
-positionOffset :: FactorialMonoid s => s -> Position s -> Int
-positionOffset wholeInput = (wholeLength -) . remainderLength
-   where wholeLength = Factorial.length wholeInput
-{-# INLINE positionOffset #-}
 
 -- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of
 -- alternative results.
