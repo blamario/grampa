@@ -5,9 +5,11 @@ module Text.Grampa.Combinators (moptional, concatMany, concatSome,
                                 delimiter, operator, keyword) where
 
 import Control.Applicative(Applicative(..), Alternative(..))
-import Data.Semigroup.Cancellative (LeftReductive)
-import Data.Monoid (Monoid, (<>))
+import Data.List.NonEmpty (fromList)
+import Data.Monoid (Monoid)
 import Data.Monoid.Factorial (FactorialMonoid)
+import Data.Semigroup (Semigroup(sconcat))
+import Data.Semigroup.Cancellative (LeftReductive)
 
 import Text.Grampa.Class (InputParsing(ParserInput, string), LexicalParsing(lexicalToken, keyword))
 import Text.Parser.Combinators (Parsing((<?>)), count)
@@ -18,12 +20,11 @@ moptional p = p <|> pure mempty
 
 -- | Zero or more argument occurrences like 'many', with concatenated monoidal results.
 concatMany :: (Alternative p, Monoid a) => p a -> p a
-concatMany p = go
-   where go = mappend <$> p <*> go <|> pure mempty
+concatMany p = mconcat <$> many p
 
 -- | One or more argument occurrences like 'some', with concatenated monoidal results.
-concatSome :: (Alternative p, Monoid a) => p a -> p a
-concatSome p = (<>) <$> p <*> concatMany p
+concatSome :: (Alternative p, Semigroup a) => p a -> p a
+concatSome p = sconcat . fromList <$> some p
 
 -- | Returns 'True' if the argument parser succeeds and 'False' otherwise.
 flag :: Alternative p => p a -> p Bool
