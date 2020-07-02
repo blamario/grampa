@@ -13,16 +13,12 @@ module Text.Grampa (
    TokenParsing(..), LexicalParsing(..),
    module Text.Parser.Char,
    module Text.Parser.Combinators,
-   module Text.Parser.LookAhead)
+   module Text.Parser.LookAhead,
+   module Text.Grampa.Combinators)
 where
 
-import Data.Char (isSpace)
 import Data.List (intersperse, nub, sort)
-import qualified Data.List as List
 import Data.Monoid ((<>))
-import qualified Data.Monoid.Factorial as Factorial
-import Data.Monoid.Factorial (FactorialMonoid)
-import qualified Data.Monoid.Textual as Textual
 import Data.Monoid.Textual (TextualMonoid)
 import Data.String (IsString(fromString))
 import Text.Parser.Char (CharParsing(char, notChar, anyChar))

@@ -12,9 +12,7 @@ import Control.Applicative
 import Control.Monad (Monad(..), MonadPlus(..), void)
 import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
 
-import Data.Coerce (coerce)
 import Data.Functor.Compose (Compose(..))
-import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Maybe (isJust)
 
 import Data.Semigroup (Semigroup(..))
@@ -37,9 +35,8 @@ import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           AmbiguousParsing(..), Ambiguous(..),
                           ConsumedInputParsing(..), DeterministicParsing(..),
-                          TailsParsing(parseTails, parseAllTails), ParseResults, Expected(..))
-import Text.Grampa.Internal (ResultList(..), FailureInfo(..),
-                             AmbiguousAlternative(ambiguousOr), fromResultList)
+                          TailsParsing(parseTails, parseAllTails), Expected(..))
+import Text.Grampa.Internal (ResultList(..), FailureInfo(..), AmbiguousAlternative(ambiguousOr))
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 

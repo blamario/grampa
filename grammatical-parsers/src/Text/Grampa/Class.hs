@@ -29,8 +29,8 @@ import Text.Parser.Combinators (Parsing((<?>), eof, notFollowedBy, try), skipMan
 import Text.Parser.Char (CharParsing)
 import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
 import Text.Parser.Token (TokenParsing)
-import Text.Parser.Deterministic(DeterministicParsing(..))
-import Text.Parser.Input(ConsumedInputParsing(..), InputParsing(..), InputCharParsing(..))
+import Text.Parser.Deterministic (DeterministicParsing(..))
+import Text.Parser.Input (ConsumedInputParsing(..), InputParsing(..), InputCharParsing(..))
 import qualified Text.Parser.Char
 import Data.Kind (Constraint)
 
