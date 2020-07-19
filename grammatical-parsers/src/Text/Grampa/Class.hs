@@ -7,10 +7,8 @@ module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
                           ParseResults, ParseFailure(..), Expected(..),
                           Ambiguous(..), completeParser) where
 
-import Control.Applicative (Alternative(empty, many, some), optional, liftA2, (<|>))
-import Data.ByteString (ByteString, singleton)
+import Control.Applicative (Alternative(empty), liftA2)
 import Data.Char (isAlphaNum, isLetter, isSpace)
-import Data.Functor (void)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List.NonEmpty (NonEmpty((:|)))
@@ -19,23 +17,15 @@ import Data.Typeable (Typeable)
 import Data.Monoid (Monoid(mempty, mappend))
 import qualified Data.Monoid.Null as Null
 import Data.Monoid.Null (MonoidNull)
-import qualified Data.Monoid.Factorial as Factorial
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 import Data.Semigroup (Semigroup((<>)))
-import qualified Data.Semigroup.Cancellative as Cancellative
-import Text.ParserCombinators.ReadP (ReadP)
-import Text.Parser.Combinators (Parsing((<?>), eof, notFollowedBy, try), skipMany, unexpected)
-import Text.Parser.Char (CharParsing)
-import Text.Parser.LookAhead (LookAheadParsing(lookAhead))
+import Text.Parser.Combinators (Parsing((<?>)))
 import Text.Parser.Token (TokenParsing)
 import Text.Parser.Deterministic (DeterministicParsing(..))
 import Text.Parser.Input (ConsumedInputParsing(..), InputParsing(..), InputCharParsing(..))
 import qualified Text.Parser.Char
 import Data.Kind (Constraint)
-
-import qualified Data.Attoparsec.ByteString as Attoparsec
-import qualified Text.ParserCombinators.ReadP as ReadP
 
 import qualified Rank2
 
