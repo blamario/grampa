@@ -160,7 +160,7 @@ Generic Programing with deep-transformations
 Folding
 -------
 
-Suppose we we want to get a list of all variables used in an expression. To do this we would decalre the appropriate
+Suppose we we want to get a list of all variables used in an expression. To do this we would declare the appropriate
  [`Transformation`](https://hackage.haskell.org/package/deep-transformations/docs/Transformation.html) instance for an
  arbitrary data type. We'll give this data type an evocative name.
 
@@ -184,7 +184,7 @@ instance GetVariables `At` Decl Identity Identity where
   GetVariables $ x = mempty
 ~~~
 
-There is one last decision to make on our transformation: is it a pre-order or a post-order fold? In this case it
+There is one last decision to make about our transformation: is it a pre-order or a post-order fold? In this case it
  doesn't matter, so let's pick pre-order:
 
 ~~~ {.haskell}
@@ -293,7 +293,8 @@ instance Full.Functor DeadCodeEliminator Expr where
   (<$>) = AG.fullMapDefault runIdentity
 ~~~
 
-We also need another bit of a boilerplate instance that can be generated
+We also need another bit of a boilerplate instance that can be automatically generated with Template Haskell functions
+ from [`Rank2.TH`](https://hackage.haskell.org/package/rank2classes/docs/Rank2-TH.html):
 
 ~~~ {.haskell}
 instance Rank2.Apply (Decl f') where
@@ -308,6 +309,8 @@ instance Rank2.Apply (Expr f') where
   Mul x1 y1 <*> ~(Mul x2 y2) = Mul (Rank2.apply x1 x2) (Rank2.apply y1 y2)
 ~~~
 
+### Attributes
+
 Every type of node can have different inherited and synthesized attributes, so we need to declare what they are. Since
  we want to inline the constant bindings declared in outer scopes, we must keep track of all visible bindings. This
  kind of *environment* is a typical example of an inherited attribute. It is also the only attribute inherited by an
@@ -318,8 +321,8 @@ type Env = Var -> Maybe (Expr Identity Identity)
 type instance AG.Atts (AG.Inherited DeadCodeEliminator) (Expr _ _) = Env
 ~~~
 
-A declaration will also need to inherit the environment, if only to pass it on to the nested expressions. It will also
-need to know the list of variables that are used at all, so it can discard useless assignments.
+A declaration will also need to inherit the environment, if only to pass it on to the nested expressions. Because we
+ want to discard useless assignments, it will also need to know the list of all referenced variables.
 
 ~~~ {.haskell}
 type instance AG.Atts (AG.Inherited DeadCodeEliminator) (Decl _ _) = (Env, [Var])
@@ -351,11 +354,13 @@ Now we need to describe how to calculate the attributes, by declaring `Attributi
 
 ~~~ {.haskell.ignore}
 class Attribution t g deep shallow where
-   attribution :: sem ~ Inherited t Rank2.~> Synthesized t
+   attribution :: sem ~ (Inherited t Rank2.~> Synthesized t)
                => t -> shallow (g deep deep)
                -> (Inherited   t (g sem sem), g sem (Synthesized t))
                -> (Synthesized t (g sem sem), g sem (Inherited t))
 ~~~
+
+### Expression rules
 
 Let's see a few simple `attribution` rules first. The rules for leaf nodes can ignore their childrens' attributes
 because they don't have any children.
@@ -388,10 +393,20 @@ The only non-trivial rule is for the `Let` node. It needs to pass the list of va
      Let (AG.Inherited (env, Full.foldMap GetVariables expr)) (AG.Inherited $ \v-> maybe (env v) Just (env' v)))
 ~~~
 
+### Declaration rules
+
 The rules for `Decl` are a bit more involved.
 
 ~~~ {.haskell}
 instance AG.Attribution DeadCodeEliminator Decl Identity Identity where
+~~~
+
+A single variable binding can be in three distinct situations. If the variable is not referenced at all, we can just
+erase the declaration. If the variable is referenced but the value assigned to it is constant, we can again erase the
+declaration and store the constant binding in the environment instead. Finally, if nothing else works we must preserve
+the declaration.
+
+~~~ {.haskell}
   attribution DeadCodeEliminator (Identity (v := e)) (AG.Inherited ~(env, used), (_ := AG.Synthesized e')) =
     (AG.Synthesized (if null (Deep.foldMap GetVariables e')
                      then (\var-> if var == v then Just e' else Nothing, Nothing)  -- constant binding
@@ -399,11 +414,22 @@ instance AG.Attribution DeadCodeEliminator Decl Identity Identity where
                                           then Just (v := Identity e')             -- used binding
                                           else Nothing)),                          -- unused binding
      v := AG.Inherited env)
+~~~
+
+The rule for a sequence of declarations is much simpler: we only need to combine the two synthesized environments into
+their union and to reconstruct the simplified sequence from its simplified children. Note that the sequence becomes
+unnecessary if either of its children disappears.
+
+~~~ {.haskell}
   attribution DeadCodeEliminator (Identity Seq{}) (inh, (Seq (AG.Synthesized (env1, d1')) (AG.Synthesized (env2, d2')))) =
     (AG.Synthesized (\v-> maybe (env2 v) Just (env1 v),
                      bin Seq <$> d1' <*> d2' <|> d1' <|> d2'),
      Seq inh inh)
 ~~~
+
+### Test
+
+Here is the attribute grammar finally in action:
 
 ~~~ {.haskell}
 -- |
