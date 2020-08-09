@@ -1,9 +1,12 @@
-{-# Language FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, StandaloneDeriving,
+{-# Language DefaultSignatures, FlexibleContexts, FlexibleInstances,
+             MultiParamTypeClasses, RankNTypes, StandaloneDeriving,
              TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 module Transformation.AG where
 
 import Data.Functor.Identity
+import Data.Generics.Product.Subtype (Subtype(upcast))
+import GHC.Records (HasField(getField))
 import qualified Rank2
 import Transformation (Transformation, Domain, Codomain)
 import qualified Transformation
@@ -31,29 +34,51 @@ knit r chSem = Rank2.Arrow knit'
             where (syn, chInh) = r (inh, chSyn)
                   chSyn = chSem Rank2.<*> chInh
 
+class Transformation t => Revelation t where
+   reveal :: t -> Domain t x -> x
+
 class Attribution t g deep shallow where
    attribution :: t -> shallow (g deep deep) -> Rule t g
-   bequest     :: forall sem . sem ~ Semantics t =>
-                  t -> shallow (g deep deep) -> Atts (Inherited t) (g sem sem) -> g sem (Synthesized t)
+   bequest     :: forall sem. sem ~ Semantics t =>
+                  t -> shallow (g deep deep)
+               -> Atts (Inherited t) (g sem sem)
+               -> g sem (Synthesized t)
                -> g sem (Inherited t)
-   synthesis   :: forall sem . sem ~ Semantics t =>
-                  t -> shallow (g deep deep) -> Atts (Inherited t) (g sem sem) -> g sem (Synthesized t)
+   synthesis   :: forall sem. sem ~ Semantics t =>
+                  t -> shallow (g deep deep)
+               -> Atts (Inherited t) (g sem sem)
+               -> g sem (Synthesized t)
                -> Atts (Synthesized t) (g sem sem)
    attribution t l (Inherited i, s) = (Synthesized $ synthesis t l i s, bequest t l i s)
-   bequest t l i s = snd (attribution t l (Inherited i, s))
+   default bequest :: forall sem.
+                      (deep ~ sem, sem ~ Semantics t, Domain t ~ shallow, Revelation t,
+                       Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem))
+                   => t -> shallow (g deep deep)
+                   -> Atts (Inherited t) (g sem sem)
+                   -> g sem (Synthesized t)
+                   -> g sem (Inherited t)
+   bequest = bequestDefault
    synthesis t l i s = syn (fst $ attribution t l (Inherited i, s))
-   {-# Minimal attribution | bequest, synthesis #-}
+   {-# Minimal attribution | synthesis #-}
 
-instance Transformation (Inherited t a) where
-   type Domain (Inherited t a) = Semantics t
-   type Codomain (Inherited t a) = Inherited t
+newtype PassDown t (f :: * -> *) a = PassDown a
 
-instance (Atts (Inherited t) a ~ Atts (Inherited t) b) => Transformation.At (Inherited t a) b where
-   ($) (Inherited i) = const (Inherited i)
+instance Subtype (Atts (Inherited t) a) b => Transformation.At (PassDown t f b) a where
+   ($) (PassDown i) _ = Inherited (upcast i)
 
-passDown :: (sem ~ Semantics t, Shallow.Functor (Inherited t (g sem sem)) (g sem)) =>
-            Inherited t (g sem sem) -> g sem sem -> g sem (Inherited t)
-passDown inheritance node = inheritance Shallow.<$> node
+instance Transformation (PassDown t f a) where
+  type Domain (PassDown t f a) = f
+  type Codomain (PassDown t f a) = Inherited t
+
+bequestDefault, passDown :: forall sem shallow t g.
+                            (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
+                             Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem))
+                         => t -> shallow (g sem sem)
+                         -> Atts (Inherited t) (g sem sem)
+                         -> g sem (Synthesized t)
+                         -> g sem (Inherited t)
+bequestDefault t local inheritance synthesized = PassDown inheritance Shallow.<$> reveal t local
+passDown = bequestDefault
 
 -- | Drop-in implementation of 'Transformation.$'
 applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g q p)
