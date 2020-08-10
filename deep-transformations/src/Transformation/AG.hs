@@ -39,27 +39,31 @@ class Transformation t => Revelation t where
 
 class Attribution t g deep shallow where
    attribution :: t -> shallow (g deep deep) -> Rule t g
+
+class Bequether t g deep shallow where
    bequest     :: forall sem. sem ~ Semantics t =>
                   t -> shallow (g deep deep)
                -> Atts (Inherited t) (g sem sem)
                -> g sem (Synthesized t)
                -> g sem (Inherited t)
+
+class Synthesizer t g deep shallow where
    synthesis   :: forall sem. sem ~ Semantics t =>
                   t -> shallow (g deep deep)
                -> Atts (Inherited t) (g sem sem)
                -> g sem (Synthesized t)
                -> Atts (Synthesized t) (g sem sem)
+
+newtype Separated t = Separated t
+
+instance {-# overlappable #-} (Bequether (Separated t) g d s, Synthesizer (Separated t) g d s) =>
+                              Attribution (Separated t) g d s where
    attribution t l (Inherited i, s) = (Synthesized $ synthesis t l i s, bequest t l i s)
-   default bequest :: forall sem.
-                      (deep ~ sem, sem ~ Semantics t, Domain t ~ shallow, Revelation t,
-                       Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem))
-                   => t -> shallow (g deep deep)
-                   -> Atts (Inherited t) (g sem sem)
-                   -> g sem (Synthesized t)
-                   -> g sem (Inherited t)
+
+instance {-# overlappable #-} (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
+                               Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem)) =>
+                              Bequether t g (Semantics t) shallow where
    bequest = bequestDefault
-   synthesis t l i s = syn (fst $ attribution t l (Inherited i, s))
-   {-# Minimal attribution | synthesis #-}
 
 newtype PassDown t (f :: * -> *) a = PassDown a
 
