@@ -13,8 +13,8 @@ This library, `deep-transformations`, provides a solution to the problem of trav
  on quite a number of extensions:
 
 ~~~ {.haskell}
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, UndecidableInstances, MultiParamTypeClasses,
-             StandaloneDeriving, TypeFamilies, TypeOperators #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,
+             StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
 module README where
 ~~~
 

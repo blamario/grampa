@@ -54,10 +54,10 @@ class Synthesizer t g deep shallow where
                -> g sem (Synthesized t)
                -> Atts (Synthesized t) (g sem sem)
 
-newtype Separated t = Separated t
+newtype Auto t = Auto t
 
-instance {-# overlappable #-} (Bequether (Separated t) g d s, Synthesizer (Separated t) g d s) =>
-                              Attribution (Separated t) g d s where
+instance {-# overlappable #-} (Bequether (Auto t) g d s, Synthesizer (Auto t) g d s) =>
+                              Attribution (Auto t) g d s where
    attribution t l (Inherited i, s) = (Synthesized $ synthesis t l i s, bequest t l i s)
 
 instance {-# overlappable #-} (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
