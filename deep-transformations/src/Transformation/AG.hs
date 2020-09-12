@@ -1,12 +1,10 @@
-{-# Language DefaultSignatures, FlexibleContexts, FlexibleInstances,
+{-# Language FlexibleContexts, FlexibleInstances,
              MultiParamTypeClasses, RankNTypes, StandaloneDeriving,
              TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 module Transformation.AG where
 
 import Data.Functor.Identity
-import Data.Generics.Product.Subtype (Subtype(upcast))
-import GHC.Records (HasField(getField))
 import qualified Rank2
 import Transformation (Transformation, Domain, Codomain)
 import qualified Transformation
@@ -56,33 +54,9 @@ class Synthesizer t g deep shallow where
 
 newtype Auto t = Auto t
 
-instance {-# overlappable #-} (Bequether (Auto t) g d s, Synthesizer (Auto t) g d s) =>
-                              Attribution (Auto t) g d s where
+instance (Bequether (Auto t) g d s, sem ~ Semantics (Auto t), Synthesizer (Auto t) g d s) =>
+         Attribution (Auto t) g d s where
    attribution t l (Inherited i, s) = (Synthesized $ synthesis t l i s, bequest t l i s)
-
-instance {-# overlappable #-} (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
-                               Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem)) =>
-                              Bequether t g (Semantics t) shallow where
-   bequest = bequestDefault
-
-newtype PassDown t (f :: * -> *) a = PassDown a
-
-instance Subtype (Atts (Inherited t) a) b => Transformation.At (PassDown t f b) a where
-   ($) (PassDown i) _ = Inherited (upcast i)
-
-instance Transformation (PassDown t f a) where
-  type Domain (PassDown t f a) = f
-  type Codomain (PassDown t f a) = Inherited t
-
-bequestDefault, passDown :: forall sem shallow t g.
-                            (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
-                             Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem))
-                         => t -> shallow (g sem sem)
-                         -> Atts (Inherited t) (g sem sem)
-                         -> g sem (Synthesized t)
-                         -> g sem (Inherited t)
-bequestDefault t local inheritance synthesized = PassDown inheritance Shallow.<$> reveal t local
-passDown = bequestDefault
 
 -- | Drop-in implementation of 'Transformation.$'
 applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g q p)
