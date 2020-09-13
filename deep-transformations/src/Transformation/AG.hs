@@ -32,31 +32,8 @@ knit r chSem = Rank2.Arrow knit'
             where (syn, chInh) = r (inh, chSyn)
                   chSyn = chSem Rank2.<*> chInh
 
-class Transformation t => Revelation t where
-   reveal :: t -> Domain t x -> x
-
 class Attribution t g deep shallow where
    attribution :: t -> shallow (g deep deep) -> Rule t g
-
-class Bequether t g deep shallow where
-   bequest     :: forall sem. sem ~ Semantics t =>
-                  t -> shallow (g deep deep)
-               -> Atts (Inherited t) (g sem sem)
-               -> g sem (Synthesized t)
-               -> g sem (Inherited t)
-
-class Synthesizer t g deep shallow where
-   synthesis   :: forall sem. sem ~ Semantics t =>
-                  t -> shallow (g deep deep)
-               -> Atts (Inherited t) (g sem sem)
-               -> g sem (Synthesized t)
-               -> Atts (Synthesized t) (g sem sem)
-
-newtype Auto t = Auto t
-
-instance (Bequether (Auto t) g d s, sem ~ Semantics (Auto t), Synthesizer (Auto t) g d s) =>
-         Attribution (Auto t) g d s where
-   attribution t l (Inherited i, s) = (Synthesized $ synthesis t l i s, bequest t l i s)
 
 -- | Drop-in implementation of 'Transformation.$'
 applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g q p)

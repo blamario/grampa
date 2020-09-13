@@ -22,6 +22,29 @@ import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Shallow as Shallow
 
+newtype Auto t = Auto t
+
+instance {-# overlappable #-} (Bequether (Auto t) g d s, sem ~ Semantics (Auto t), Synthesizer (Auto t) g d s) =>
+                              Attribution (Auto t) g d s where
+   attribution t l (Inherited i, s) = (Synthesized $ synthesis t l i s, bequest t l i s)
+
+class Transformation t => Revelation t where
+   reveal :: t -> Domain t x -> x
+
+class Bequether t g deep shallow where
+   bequest     :: forall sem. sem ~ Semantics t =>
+                  t -> shallow (g deep deep)
+               -> Atts (Inherited t) (g sem sem)
+               -> g sem (Synthesized t)
+               -> g sem (Inherited t)
+
+class Synthesizer t g deep shallow where
+   synthesis   :: forall sem. sem ~ Semantics t =>
+                  t -> shallow (g deep deep)
+               -> Atts (Inherited t) (g sem sem)
+               -> g sem (Synthesized t)
+               -> Atts (Synthesized t) (g sem sem)
+
 class Synthesizer' t g deep shallow result where
    synthesis'  :: forall a sem. sem ~ Semantics t =>
                   t -> shallow (g deep deep)
@@ -50,8 +73,8 @@ instance {-# overlappable #-} (sem ~ Semantics t, Domain t ~ shallow, Revelation
                               Bequether t g (Semantics t) shallow where
    bequest = bequestDefault
 
-instance (Atts (Synthesized t) (g sem sem) ~ result, Generic result, sem ~ Semantics t,
-          Synthesizer' t g d s (Rep result)) => Synthesizer t g d s where
+instance {-# overlappable #-} (Atts (Synthesized t) (g sem sem) ~ result, Generic result, sem ~ Semantics t,
+                               Synthesizer' t g d s (Rep result)) => Synthesizer t g d s where
    synthesis t node i s = to (synthesis' t node i s)
 
 newtype PassDown (t :: Type) (f :: * -> *) a = PassDown a
