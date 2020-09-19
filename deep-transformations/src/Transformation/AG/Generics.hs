@@ -1,6 +1,7 @@
-{-# Language DataKinds, DefaultSignatures, FlexibleContexts, FlexibleInstances,
+{-# Language DataKinds, DefaultSignatures, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving,
              MultiParamTypeClasses, PolyKinds, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
              TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
+{-# Options_GHC -fprint-potential-instances #-}
 
 module Transformation.AG.Generics where
 
@@ -52,21 +53,23 @@ class Synthesizer' t g deep shallow result where
                -> g sem (Synthesized t)
                -> result a
 
-class SynthesizerField t g deep shallow (name :: Symbol) result where
-   synthesisF  :: forall a sem. sem ~ Semantics t =>
-                  t -> shallow (g deep deep)
-               -> Atts (Inherited t) (g sem sem)
-               -> g sem (Synthesized t)
-               -> Proxy name
-               -> result
+class SynthesizedField (name :: Symbol) result t g deep shallow where
+   synthesizedField  :: forall a sem. sem ~ Semantics t =>
+                        Proxy name
+                     -> t
+                     -> shallow (g deep deep)
+                     -> Atts (Inherited t) (g sem sem)
+                     -> g sem (Synthesized t)
+                     -> result
 
-class SynthesizerField' t g deep shallow (name :: Symbol) result where
-   synthesisF'  :: forall a sem. sem ~ Semantics t =>
-                   t -> shallow (g deep deep)
-                -> Atts (Inherited t) (g sem sem)
-                -> g sem (Synthesized t)
-                -> Proxy name
-                -> result a
+class SynthesizedField' (name :: Symbol) result t g deep shallow where
+   synthesizedField'  :: forall a sem. sem ~ Semantics t =>
+                         Proxy name
+                      -> t
+                      -> shallow (g deep deep)
+                      -> Atts (Inherited t) (g sem sem)
+                      -> g sem (Synthesized t)
+                      -> result a
 
 instance {-# overlappable #-} (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
                                Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem)) =>
@@ -78,8 +81,8 @@ instance {-# overlappable #-} (Atts (Synthesized t) (g sem sem) ~ result, Generi
    synthesis t node i s = to (synthesis' t node i s)
 
 newtype PassDown (t :: Type) (f :: * -> *) a = PassDown a
-newtype Accumulated a = Accumulated a
-newtype Replicated m n a = Replicated (m a)
+newtype Accumulated a = Accumulated{getAccumulated :: a} deriving (Eq, Ord, Show, Semigroup, Monoid)
+newtype Replicated m n a = Replicated{getReplicated :: m a} deriving (Eq, Ord, Show, Semigroup, Monoid)
 data Accumulator (t :: Type) (name :: Symbol) (a :: Type) = Accumulator
 data Replicator (t :: Type) (m :: Type -> Type) (n :: Type -> Type) (name :: Symbol) (a :: Type) = Replicator
 
@@ -109,39 +112,42 @@ instance (Applicative m, Applicative n, HasField name (Atts (Synthesized t) a) a
 class MayHaveMonoidalField (name :: Symbol) a f where
    getMonoidalField :: Proxy name -> f x -> a
 
-instance (MayHaveMonoidalField name a x, MayHaveMonoidalField name a y, Semigroup a) =>
+instance {-# overlaps #-} (MayHaveMonoidalField name a x, MayHaveMonoidalField name a y, Semigroup a) =>
          MayHaveMonoidalField name a (x :*: y) where
    getMonoidalField name (x :*: y) = getMonoidalField name x <> getMonoidalField name y
 
-instance TypeError (Text "Cannot get a single field value from a sum type") =>
+instance {-# overlaps #-} TypeError (Text "Cannot get a single field value from a sum type") =>
          MayHaveMonoidalField name a (x :+: y) where
    getMonoidalField _ _ = error "getMonoidalField on sum type"
 
-instance MayHaveMonoidalField name a (M1 i ('MetaSel ('Just name) su ss ds) (K1 j a)) where
+instance {-# overlaps #-} MayHaveMonoidalField name a (M1 i ('MetaSel ('Just name) su ss ds) (K1 j a)) where
    getMonoidalField name (M1 (K1 v)) = v
 
-instance Monoid a => MayHaveMonoidalField name a f where
+instance {-# overlappable #-} Monoid a => MayHaveMonoidalField name a f where
    getMonoidalField name _ = mempty
 
 instance (Synthesizer' t g deep shallow x, Synthesizer' t g deep shallow y) =>
          Synthesizer' t g deep shallow (x :*: y) where
    synthesis' t node i s = synthesis' t node i s :*: synthesis' t node i s
 
-instance SynthesizerField' t g deep shallow name f =>
-         Synthesizer' t g deep shallow (M1 i ('MetaSel ('Just name) su ss ds) f) where
-   synthesis' t node i s = M1 (synthesisF' t node i s (Proxy :: Proxy name))
+instance {-# overlappable #-} Synthesizer' t g deep shallow f => Synthesizer' t g deep shallow (M1 i meta f) where
+   synthesis' t node i s = M1 (synthesis' t node i s)
 
-instance SynthesizerField t g deep shallow name a => SynthesizerField' t g deep shallow name (K1 i a) where
-   synthesisF' t node i s name = K1 (synthesisF t node i s name)
+instance {-# overlaps #-} SynthesizedField' name f t g deep shallow =>
+                          Synthesizer' t g deep shallow (M1 i ('MetaSel ('Just name) su ss ds) f) where
+   synthesis' t node i s = M1 (synthesizedField' (Proxy :: Proxy name) t node i s)
+
+instance SynthesizedField name a t g deep shallow => SynthesizedField' name (K1 i a) t g deep shallow where
+   synthesizedField' name t node i s = K1 (synthesizedField name t node i s)
 
 instance  {-# overlappable #-} (Monoid a, Shallow.Foldable (Accumulator t name a) (g (Semantics t))) =>
-                               SynthesizerField t g deep shallow name (Accumulated a) where
-   synthesisF t _ _ s name = Accumulated (Shallow.foldMap (Accumulator :: Accumulator t name a) s)
+                               SynthesizedField name (Accumulated a) t g deep shallow where
+   synthesizedField name t _ _ s = Accumulated (Shallow.foldMap (Accumulator :: Accumulator t name a) s)
 
 instance  {-# overlappable #-} (Applicative m, a ~ g (Semantics t) n,
                                 Shallow.Traversable (Replicator t m n name a) (g (Semantics t))) =>
-                               SynthesizerField t g deep shallow name (Replicated m n a) where
-   synthesisF t _ _ s name = Replicated (Shallow.traverse (Replicator :: Replicator t m n name a) s)
+                               SynthesizedField name (Replicated m n a) t g deep shallow where
+   synthesizedField name t _ _ s = Replicated (Shallow.traverse (Replicator :: Replicator t m n name a) s)
 
 bequestDefault, passDown :: forall sem shallow t g.
                             (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
