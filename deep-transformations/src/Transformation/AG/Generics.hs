@@ -54,7 +54,7 @@ class Synthesizer' t g deep shallow result where
                -> result a
 
 class SynthesizedField (name :: Symbol) result t g deep shallow where
-   synthesizedField  :: forall a sem. sem ~ Semantics t =>
+   synthesizedField  :: forall sem. sem ~ Semantics t =>
                         Proxy name
                      -> t
                      -> shallow (g deep deep)
@@ -92,7 +92,7 @@ instance Transformation (PassDown t f a) where
 
 instance Transformation (Accumulator t name a) where
   type Domain (Accumulator t name a) = Synthesized t
-  type Codomain (Accumulator t name a) = Const a
+  type Codomain (Accumulator t name a) = Const (Accumulated a)
 
 instance Transformation (Replicator t m n name a) where
   type Domain (Replicator t m n name a) = Synthesized t
@@ -101,7 +101,7 @@ instance Transformation (Replicator t m n name a) where
 instance Subtype (Atts (Inherited t) a) b => Transformation.At (PassDown t f b) a where
    ($) (PassDown i) _ = Inherited (upcast i)
 
-instance (Monoid a, r ~ Atts (Synthesized t) x, Generic r, MayHaveMonoidalField name a (Rep r)) =>
+instance (Monoid a, r ~ Atts (Synthesized t) x, Generic r, MayHaveMonoidalField name (Accumulated a) (Rep r)) =>
          Transformation.At (Accumulator t name a) x where
    _ $ Synthesized r = Const (getMonoidalField (Proxy :: Proxy name) $ from r)
 
@@ -142,7 +142,7 @@ instance SynthesizedField name a t g deep shallow => SynthesizedField' name (K1 
 
 instance  {-# overlappable #-} (Monoid a, Shallow.Foldable (Accumulator t name a) (g (Semantics t))) =>
                                SynthesizedField name (Accumulated a) t g deep shallow where
-   synthesizedField name t _ _ s = Accumulated (Shallow.foldMap (Accumulator :: Accumulator t name a) s)
+   synthesizedField name t _ _ s = accumulate name t s
 
 instance  {-# overlappable #-} (Applicative m, a ~ g (Semantics t) n,
                                 Shallow.Traversable (Replicator t m n name a) (g (Semantics t))) =>
@@ -158,3 +158,7 @@ bequestDefault, passDown :: forall sem shallow t g.
                          -> g sem (Inherited t)
 bequestDefault t local inheritance synthesized = PassDown inheritance Shallow.<$> reveal t local
 passDown = bequestDefault
+
+accumulate :: forall name t g deep shallow a. (Monoid a, Shallow.Foldable (Accumulator t name a) (g (Semantics t))) =>
+              Proxy name -> t -> g (Semantics t) (Synthesized t) -> Accumulated a
+accumulate name t s = Shallow.foldMap (Accumulator :: Accumulator t name a) s
