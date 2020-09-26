@@ -82,7 +82,8 @@ instance {-# overlappable #-} (Atts (Synthesized t) (g sem sem) ~ result, Generi
 
 newtype PassDown (t :: Type) (f :: * -> *) a = PassDown a
 newtype Accumulated a = Accumulated{getAccumulated :: a} deriving (Eq, Ord, Show, Semigroup, Monoid)
-newtype Replicated m n a = Replicated{getReplicated :: m a} deriving (Eq, Ord, Show, Semigroup, Monoid)
+newtype Replicated m n a = Replicated{getReplicated :: m a}
+                         deriving (Eq, Ord, Show, Semigroup, Monoid, Functor, Applicative, Monad, Foldable)
 data Accumulator (t :: Type) (name :: Symbol) (a :: Type) = Accumulator
 data Replicator (t :: Type) (m :: Type -> Type) (n :: Type -> Type) (name :: Symbol) (a :: Type) = Replicator
 
@@ -147,7 +148,7 @@ instance  {-# overlappable #-} (Monoid a, Shallow.Foldable (Accumulator t name a
 instance  {-# overlappable #-} (Applicative m, a ~ g (Semantics t) n,
                                 Shallow.Traversable (Replicator t m n name a) (g (Semantics t))) =>
                                SynthesizedField name (Replicated m n a) t g deep shallow where
-   synthesizedField name t _ _ s = Replicated (Shallow.traverse (Replicator :: Replicator t m n name a) s)
+   synthesizedField name t _ _ s = replicateField name t s
 
 bequestDefault, passDown :: forall sem shallow t g.
                             (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
@@ -162,3 +163,8 @@ passDown = bequestDefault
 accumulate :: forall name t g deep shallow a. (Monoid a, Shallow.Foldable (Accumulator t name a) (g (Semantics t))) =>
               Proxy name -> t -> g (Semantics t) (Synthesized t) -> Accumulated a
 accumulate name t s = Shallow.foldMap (Accumulator :: Accumulator t name a) s
+
+replicateField :: forall name t m n g deep shallow a.
+                  (a ~ g (Semantics t) n, Shallow.Traversable (Replicator t m n name a) (g (Semantics t))) =>
+                  Proxy name -> t -> g (Semantics t) (Synthesized t) -> Replicated m n a
+replicateField name t s = Replicated (Shallow.traverse (Replicator :: Replicator t m n name a) s)
