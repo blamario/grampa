@@ -235,7 +235,7 @@ genLiftA2Field unsafely fun fieldType field1Access field2Access wrap = do
         | t1 /= VarT typeVar -> genLiftA2Field unsafely fun t2 field1Access field2Access (appE (varE 'liftA2) . wrap)
      SigT ty _kind -> genLiftA2Field unsafely fun ty field1Access field2Access wrap
      ParensT ty -> genLiftA2Field unsafely fun ty field1Access field2Access wrap
-     _ | unsafely -> [| error "Cannot apply liftA2 to field" |]
+     _ | unsafely -> field1Access
        | otherwise -> error ("Cannot apply liftA2 to field of type " <> show fieldType)
 
 genLiftA3Clause :: Bool -> Con -> Q Clause
@@ -286,7 +286,7 @@ genLiftA3Field unsafely fun fieldType field1Access field2Access field3Access wra
           -> genLiftA3Field unsafely fun t2 field1Access field2Access field3Access (appE (varE 'liftA3) . wrap)
      SigT ty _kind -> genLiftA3Field unsafely fun ty field1Access field2Access field3Access wrap
      ParensT ty -> genLiftA3Field unsafely fun ty field1Access field2Access field3Access wrap
-     _ | unsafely -> [| error "Cannot apply liftA3 to field" |]
+     _ | unsafely -> field1Access
        | otherwise -> error ("Cannot apply liftA3 to field of type " <> show fieldType)
 
 genApClause :: Bool -> Con -> Q ([Type], Clause)
@@ -333,7 +333,7 @@ genApField unsafely fieldType field1Access field2Access wrap = do
      AppT t1 t2 | t1 /= VarT typeVar -> genApField unsafely t2 field1Access field2Access (appE (varE 'liftA2) . wrap)
      SigT ty _kind -> genApField unsafely ty field1Access field2Access wrap
      ParensT ty -> genApField unsafely ty field1Access field2Access wrap
-     _ | unsafely -> (,) [] <$> [| error ("Cannot apply ap to field" <> $(pure $ LitE $ StringL $ show fieldType)) |]
+     _ | unsafely -> (,) [] <$> field1Access
        | otherwise -> error ("Cannot apply ap to field of type " <> show fieldType)
 
 genPureClause :: Con -> Q ([Type], Clause)
