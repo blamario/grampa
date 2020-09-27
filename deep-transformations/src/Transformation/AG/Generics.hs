@@ -1,9 +1,11 @@
 {-# Language DataKinds, DefaultSignatures, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving,
              MultiParamTypeClasses, PolyKinds, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
              TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
-{-# Options_GHC -fprint-potential-instances #-}
 
-module Transformation.AG.Generics where
+module Transformation.AG.Generics (Auto(..), Folded(..), Mapped(..),
+                                   Bequether(..), Synthesizer(..), SynthesizedField(..), Revelation(..),
+                                   foldedField, mappedField)
+where
 
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Const (Const(..))
@@ -35,24 +37,19 @@ class Transformation t => Revelation t where
 
 class Bequether t g deep shallow where
    bequest     :: forall sem. sem ~ Semantics t =>
-                  t -> shallow (g deep deep)
+                  t
+               -> shallow (g deep deep)
                -> Atts (Inherited t) (g sem sem)
                -> g sem (Synthesized t)
                -> g sem (Inherited t)
 
 class Synthesizer t g deep shallow where
    synthesis   :: forall sem. sem ~ Semantics t =>
-                  t -> shallow (g deep deep)
+                  t
+               -> shallow (g deep deep)
                -> Atts (Inherited t) (g sem sem)
                -> g sem (Synthesized t)
                -> Atts (Synthesized t) (g sem sem)
-
-class Synthesizer' t g deep shallow result where
-   synthesis'  :: forall a sem. sem ~ Semantics t =>
-                  t -> shallow (g deep deep)
-               -> Atts (Inherited t) (g sem sem)
-               -> g sem (Synthesized t)
-               -> result a
 
 class SynthesizedField (name :: Symbol) result t g deep shallow where
    synthesizedField  :: forall sem. sem ~ Semantics t =>
@@ -63,28 +60,22 @@ class SynthesizedField (name :: Symbol) result t g deep shallow where
                      -> g sem (Synthesized t)
                      -> result
 
-class SynthesizedField' (name :: Symbol) result t g deep shallow where
-   synthesizedField'  :: forall a sem. sem ~ Semantics t =>
-                         Proxy name
-                      -> t
-                      -> shallow (g deep deep)
-                      -> Atts (Inherited t) (g sem sem)
-                      -> g sem (Synthesized t)
-                      -> result a
-
 instance {-# overlappable #-} (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
                                Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem)) =>
                               Bequether t g (Semantics t) shallow where
    bequest = bequestDefault
 
 instance {-# overlappable #-} (Atts (Synthesized t) (g sem sem) ~ result, Generic result, sem ~ Semantics t,
-                               Synthesizer' t g d s (Rep result)) => Synthesizer t g d s where
-   synthesis t node i s = to (synthesis' t node i s)
+                               GenericSynthesizer t g d s (Rep result)) => Synthesizer t g d s where
+   synthesis t node i s = to (genericSynthesis t node i s)
+
+newtype Folded a = Folded{getFolded :: a} deriving (Eq, Ord, Show, Semigroup, Monoid)
+newtype Mapped f a = Mapped{getMapped :: f a}
+                   deriving (Eq, Ord, Show, Semigroup, Monoid, Functor, Applicative, Monad, Foldable)
+
+-- * Generic transformations
 
 newtype PassDown (t :: Type) (f :: * -> *) a = PassDown a
-newtype Accumulated a = Accumulated{getAccumulated :: a} deriving (Eq, Ord, Show, Semigroup, Monoid)
-newtype Replicated f a = Replicated{getReplicated :: f a}
-                       deriving (Eq, Ord, Show, Semigroup, Monoid, Functor, Applicative, Monad, Foldable)
 data Accumulator (t :: Type) (name :: Symbol) (a :: Type) = Accumulator
 data Replicator (t :: Type) (f :: Type -> Type) (name :: Symbol) = Replicator
 
@@ -94,7 +85,7 @@ instance Transformation (PassDown t f a) where
 
 instance Transformation (Accumulator t name a) where
   type Domain (Accumulator t name a) = Synthesized t
-  type Codomain (Accumulator t name a) = Const (Accumulated a)
+  type Codomain (Accumulator t name a) = Const (Folded a)
 
 instance Transformation (Replicator t f name) where
   type Domain (Replicator t f name) = Synthesized t
@@ -103,12 +94,31 @@ instance Transformation (Replicator t f name) where
 instance Subtype (Atts (Inherited t) a) b => Transformation.At (PassDown t f b) a where
    ($) (PassDown i) _ = Inherited (upcast i)
 
-instance (Monoid a, r ~ Atts (Synthesized t) x, Generic r, MayHaveMonoidalField name (Accumulated a) (Rep r)) =>
+instance (Monoid a, r ~ Atts (Synthesized t) x, Generic r, MayHaveMonoidalField name (Folded a) (Rep r)) =>
          Transformation.At (Accumulator t name a) x where
    _ $ Synthesized r = Const (getMonoidalField (Proxy :: Proxy name) $ from r)
 
-instance (HasField name (Atts (Synthesized t) a) (Replicated f a)) => Transformation.At (Replicator t f name) a where
-   _ $ Synthesized r = getReplicated (getField @name r)
+instance (HasField name (Atts (Synthesized t) a) (Mapped f a)) => Transformation.At (Replicator t f name) a where
+   _ $ Synthesized r = getMapped (getField @name r)
+
+-- * Generic classes
+
+class GenericSynthesizer t g deep shallow result where
+   genericSynthesis  :: forall a sem. sem ~ Semantics t =>
+                        t
+                     -> shallow (g deep deep)
+                     -> Atts (Inherited t) (g sem sem)
+                     -> g sem (Synthesized t)
+                     -> result a
+
+class GenericSynthesizedField (name :: Symbol) result t g deep shallow where
+   genericSynthesizedField  :: forall a sem. sem ~ Semantics t =>
+                               Proxy name
+                            -> t
+                            -> shallow (g deep deep)
+                            -> Atts (Inherited t) (g sem sem)
+                            -> g sem (Synthesized t)
+                            -> result a
 
 class MayHaveMonoidalField (name :: Symbol) a f where
    getMonoidalField :: Proxy name -> f x -> a
@@ -127,28 +137,29 @@ instance {-# overlaps #-} MayHaveMonoidalField name a (M1 i ('MetaSel ('Just nam
 instance {-# overlappable #-} Monoid a => MayHaveMonoidalField name a f where
    getMonoidalField name _ = mempty
 
-instance (Synthesizer' t g deep shallow x, Synthesizer' t g deep shallow y) =>
-         Synthesizer' t g deep shallow (x :*: y) where
-   synthesis' t node i s = synthesis' t node i s :*: synthesis' t node i s
+instance (GenericSynthesizer t g deep shallow x, GenericSynthesizer t g deep shallow y) =>
+         GenericSynthesizer t g deep shallow (x :*: y) where
+   genericSynthesis t node i s = genericSynthesis t node i s :*: genericSynthesis t node i s
 
-instance {-# overlappable #-} Synthesizer' t g deep shallow f => Synthesizer' t g deep shallow (M1 i meta f) where
-   synthesis' t node i s = M1 (synthesis' t node i s)
+instance {-# overlappable #-} GenericSynthesizer t g deep shallow f =>
+                              GenericSynthesizer t g deep shallow (M1 i meta f) where
+   genericSynthesis t node i s = M1 (genericSynthesis t node i s)
 
-instance {-# overlaps #-} SynthesizedField' name f t g deep shallow =>
-                          Synthesizer' t g deep shallow (M1 i ('MetaSel ('Just name) su ss ds) f) where
-   synthesis' t node i s = M1 (synthesizedField' (Proxy :: Proxy name) t node i s)
+instance {-# overlaps #-} GenericSynthesizedField name f t g deep shallow =>
+                          GenericSynthesizer t g deep shallow (M1 i ('MetaSel ('Just name) su ss ds) f) where
+   genericSynthesis t node i s = M1 (genericSynthesizedField (Proxy :: Proxy name) t node i s)
 
-instance SynthesizedField name a t g deep shallow => SynthesizedField' name (K1 i a) t g deep shallow where
-   synthesizedField' name t node i s = K1 (synthesizedField name t node i s)
+instance SynthesizedField name a t g deep shallow => GenericSynthesizedField name (K1 i a) t g deep shallow where
+   genericSynthesizedField name t node i s = K1 (synthesizedField name t node i s)
 
 instance  {-# overlappable #-} (Monoid a, Shallow.Foldable (Accumulator t name a) (g (Semantics t))) =>
-                               SynthesizedField name (Accumulated a) t g deep shallow where
-   synthesizedField name t _ _ s = accumulate name t s
+                               SynthesizedField name (Folded a) t g deep shallow where
+   synthesizedField name t _ _ s = foldedField name t s
 
 instance  {-# overlappable #-} (Functor f, Shallow.Functor (Replicator t f name) (g f),
                                 Atts (Synthesized t) (g (Semantics t) (Semantics t)) ~ Atts (Synthesized t) (g f f)) =>
-                               SynthesizedField name (Replicated f (g f f)) t g deep f where
-   synthesizedField name t local _ s = Replicated (replicateField name t s <$ local)
+                               SynthesizedField name (Mapped f (g f f)) t g deep f where
+   synthesizedField name t local _ s = Mapped (mappedField name t s <$ local)
 
 bequestDefault, passDown :: forall sem shallow t g.
                             (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
@@ -160,12 +171,12 @@ bequestDefault, passDown :: forall sem shallow t g.
 bequestDefault t local inheritance synthesized = PassDown inheritance Shallow.<$> reveal t local
 passDown = bequestDefault
 
-accumulate :: forall name t g deep shallow a. (Monoid a, Shallow.Foldable (Accumulator t name a) (g (Semantics t))) =>
-              Proxy name -> t -> g (Semantics t) (Synthesized t) -> Accumulated a
-accumulate name t s = Shallow.foldMap (Accumulator :: Accumulator t name a) s
+foldedField :: forall name t g deep shallow a. (Monoid a, Shallow.Foldable (Accumulator t name a) (g (Semantics t))) =>
+              Proxy name -> t -> g (Semantics t) (Synthesized t) -> Folded a
+foldedField name t s = Shallow.foldMap (Accumulator :: Accumulator t name a) s
 
-replicateField :: forall name t g deep shallow f a.
+mappedField :: forall name t g deep shallow f a.
                   (Shallow.Functor (Replicator t f name) (g f),
                    Atts (Synthesized t) (g (Semantics t) (Semantics t)) ~ Atts (Synthesized t) (g f f)) =>
                   Proxy name -> t -> g (Semantics t) (Synthesized t) -> g f f
-replicateField name t s = (Replicator :: Replicator t f name) Shallow.<$> (unsafeCoerce s :: g f (Synthesized t))
+mappedField name t s = (Replicator :: Replicator t f name) Shallow.<$> (unsafeCoerce s :: g f (Synthesized t))
