@@ -2,7 +2,7 @@
              MultiParamTypeClasses, PolyKinds, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
              TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
-module Transformation.AG.Generics (Auto(..), Folded(..), Mapped(..),
+module Transformation.AG.Generics (Auto(..), Folded(..), Mapped(..), Traversed(..),
                                    Bequether(..), Synthesizer(..), SynthesizedField(..), Revelation(..),
                                    foldedField, mappedField)
 where
@@ -72,12 +72,17 @@ instance {-# overlappable #-} (Atts (Synthesized t) (g sem sem) ~ result, Generi
 newtype Folded a = Folded{getFolded :: a} deriving (Eq, Ord, Show, Semigroup, Monoid)
 newtype Mapped f a = Mapped{getMapped :: f a}
                    deriving (Eq, Ord, Show, Semigroup, Monoid, Functor, Applicative, Monad, Foldable)
+newtype Traversed m f a = Traversed{getTraversed :: m (f a)} deriving (Eq, Ord, Show, Semigroup, Monoid)
+
+instance (Functor m, Functor f) => Functor (Traversed m f) where
+   fmap f (Traversed x) = Traversed ((f <$>) <$> x)
 
 -- * Generic transformations
 
 newtype PassDown (t :: Type) (f :: * -> *) a = PassDown a
 data Accumulator (t :: Type) (name :: Symbol) (a :: Type) = Accumulator
 data Replicator (t :: Type) (f :: Type -> Type) (name :: Symbol) = Replicator
+data Traverser (t :: Type) (m :: Type -> Type) (f :: Type -> Type) (name :: Symbol) = Traverser
 
 instance Transformation (PassDown t f a) where
   type Domain (PassDown t f a) = f
@@ -91,6 +96,10 @@ instance Transformation (Replicator t f name) where
   type Domain (Replicator t f name) = Synthesized t
   type Codomain (Replicator t f name) = f
 
+instance Transformation (Traverser t m f name) where
+  type Domain (Traverser t m f name) = Synthesized t
+  type Codomain (Traverser t m f name) = Compose m f
+
 instance Subtype (Atts (Inherited t) a) b => Transformation.At (PassDown t f b) a where
    ($) (PassDown i) _ = Inherited (upcast i)
 
@@ -100,6 +109,9 @@ instance (Monoid a, r ~ Atts (Synthesized t) x, Generic r, MayHaveMonoidalField 
 
 instance (HasField name (Atts (Synthesized t) a) (Mapped f a)) => Transformation.At (Replicator t f name) a where
    _ $ Synthesized r = getMapped (getField @name r)
+
+instance (HasField name (Atts (Synthesized t) a) (Traversed m f a)) => Transformation.At (Traverser t m f name) a where
+   _ $ Synthesized r = Compose (getTraversed $ getField @name r)
 
 -- * Generic classes
 
@@ -161,6 +173,11 @@ instance  {-# overlappable #-} (Functor f, Shallow.Functor (Replicator t f name)
                                SynthesizedField name (Mapped f (g f f)) t g deep f where
    synthesizedField name t local _ s = Mapped (mappedField name t s <$ local)
 
+instance  {-# overlappable #-} (Traversable f, Applicative m, Shallow.Traversable (Traverser t m f name) (g f),
+                                Atts (Synthesized t) (g (Semantics t) (Semantics t)) ~ Atts (Synthesized t) (g f f)) =>
+                               SynthesizedField name (Traversed m f (g f f)) t g deep f where
+   synthesizedField name t local _ s = Traversed (traverse (const $ traversedField name t s) local)
+
 bequestDefault, passDown :: forall sem shallow t g.
                             (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
                              Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem))
@@ -180,3 +197,9 @@ mappedField :: forall name t g deep shallow f a.
                    Atts (Synthesized t) (g (Semantics t) (Semantics t)) ~ Atts (Synthesized t) (g f f)) =>
                   Proxy name -> t -> g (Semantics t) (Synthesized t) -> g f f
 mappedField name t s = (Replicator :: Replicator t f name) Shallow.<$> (unsafeCoerce s :: g f (Synthesized t))
+
+traversedField :: forall name t g m f.
+                     (Shallow.Traversable (Traverser t m f name) (g f),
+                      Atts (Synthesized t) (g (Semantics t) (Semantics t)) ~ Atts (Synthesized t) (g f f)) =>
+                     Proxy name -> t -> g (Semantics t) (Synthesized t) -> m (g f f)
+traversedField name t s = Shallow.traverse (Traverser :: Traverser t m f name) (unsafeCoerce s :: g f (Synthesized t))
