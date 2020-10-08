@@ -4,7 +4,7 @@
 
 module Transformation.AG.Generics (Auto(..), Folded(..), Mapped(..), Traversed(..),
                                    Bequether(..), Synthesizer(..), SynthesizedField(..), Revelation(..),
-                                   foldedField, mappedField)
+                                   foldedField, mappedField, passDown, bequestDefault)
 where
 
 import Data.Functor.Compose (Compose(..))
@@ -178,15 +178,15 @@ instance  {-# overlappable #-} (Traversable f, Applicative m, Shallow.Traversabl
                                SynthesizedField name (Traversed m f (g f f)) t g deep f where
    synthesizedField name t local _ s = Traversed (traverse (const $ traversedField name t s) local)
 
-bequestDefault, passDown :: forall sem shallow t g.
-                            (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
-                             Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem))
-                         => t -> shallow (g sem sem)
-                         -> Atts (Inherited t) (g sem sem)
-                         -> g sem (Synthesized t)
-                         -> g sem (Inherited t)
-bequestDefault t local inheritance synthesized = PassDown inheritance Shallow.<$> reveal t local
-passDown = bequestDefault
+bequestDefault :: forall sem shallow t g. (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
+                                           Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem))
+               => t -> shallow (g sem sem) -> Atts (Inherited t) (g sem sem) -> g sem (Synthesized t)
+               -> g sem (Inherited t)
+bequestDefault t local inheritance synthesized = passDown inheritance (reveal t local)
+
+passDown :: forall sem t g atts. (sem ~ Semantics t, Shallow.Functor (PassDown t sem atts) (g sem))
+         => atts -> g sem sem -> g sem (Inherited t)
+passDown inheritance local = PassDown inheritance Shallow.<$> local
 
 foldedField :: forall name t g deep shallow a. (Monoid a, Shallow.Foldable (Accumulator t name a) (g (Semantics t))) =>
               Proxy name -> t -> g (Semantics t) (Synthesized t) -> Folded a
