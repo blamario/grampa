@@ -32,8 +32,8 @@ instance {-# overlappable #-} (Bequether (Auto t) g d s, sem ~ Semantics (Auto t
                               Attribution (Auto t) g d s where
    attribution t l (Inherited i, s) = (Synthesized $ synthesis t l i s, bequest t l i s)
 
-class Transformation t => Revelation t where
-   reveal :: t -> Domain t x -> x
+class (Transformation t, dom ~ Domain t) => Revelation t dom where
+   reveal :: t -> dom x -> x
 
 class Bequether t g deep shallow where
    bequest     :: forall sem. sem ~ Semantics t =>
@@ -60,7 +60,13 @@ class SynthesizedField (name :: Symbol) result t g deep shallow where
                      -> g sem (Synthesized t)
                      -> result
 
-instance {-# overlappable #-} (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
+instance (Transformation t, Domain t ~ Identity) => Revelation t Identity where
+   reveal _ (Identity x) = x
+
+instance (Transformation t, Domain t ~ (,) a) => Revelation t ((,) a) where
+   reveal _ (_, x) = x
+
+instance {-# overlappable #-} (sem ~ Semantics t, Domain t ~ shallow, Revelation t shallow,
                                Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem)) =>
                               Bequether t g (Semantics t) shallow where
    bequest = bequestDefault
@@ -178,7 +184,7 @@ instance  {-# overlappable #-} (Traversable f, Applicative m, Shallow.Traversabl
                                SynthesizedField name (Traversed m f (g f f)) t g deep f where
    synthesizedField name t local _ s = Traversed (traverse (const $ traversedField name t s) local)
 
-bequestDefault :: forall sem shallow t g. (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
+bequestDefault :: forall sem shallow t g. (sem ~ Semantics t, Domain t ~ shallow, Revelation t shallow,
                                            Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem))
                => t -> shallow (g sem sem) -> Atts (Inherited t) (g sem sem) -> g sem (Synthesized t)
                -> g sem (Inherited t)
