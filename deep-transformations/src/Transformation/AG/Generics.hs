@@ -26,6 +26,7 @@ import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Shallow as Shallow
 
+-- | Transformation wrapper that allows automatic inference of attribute rules.
 newtype Auto t = Auto t
 
 instance {-# overlappable #-} (Bequether (Auto t) g d s, sem ~ Semantics (Auto t), Synthesizer (Auto t) g d s) =>
@@ -33,31 +34,35 @@ instance {-# overlappable #-} (Bequether (Auto t) g d s, sem ~ Semantics (Auto t
    attribution t l (Inherited i, s) = (Synthesized $ synthesis t l i s, bequest t l i s)
 
 class (Transformation t, dom ~ Domain t) => Revelation t dom where
+   -- | Extract the value from the transformation domain
    reveal :: t -> dom x -> x
 
+-- | A half of the 'Attribution' class used to specify all inherited attributes.
 class Bequether t g deep shallow where
    bequest     :: forall sem. sem ~ Semantics t =>
-                  t
-               -> shallow (g deep deep)
-               -> Atts (Inherited t) (g sem sem)
-               -> g sem (Synthesized t)
+                  t                                -- ^ transformation        
+               -> shallow (g deep deep)            -- ^ tre node              
+               -> Atts (Inherited t) (g sem sem)   -- ^ inherited attributes  
+               -> g sem (Synthesized t)            -- ^ synthesized attributes
                -> g sem (Inherited t)
 
+-- | A half of the 'Attribution' class used to specify all specified attributes.
 class Synthesizer t g deep shallow where
    synthesis   :: forall sem. sem ~ Semantics t =>
-                  t
-               -> shallow (g deep deep)
-               -> Atts (Inherited t) (g sem sem)
-               -> g sem (Synthesized t)
+                  t                                -- ^ transformation        
+               -> shallow (g deep deep)            -- ^ tre node
+               -> Atts (Inherited t) (g sem sem)   -- ^ inherited attributes  
+               -> g sem (Synthesized t)            -- ^ synthesized attributes
                -> Atts (Synthesized t) (g sem sem)
 
+-- | Class for specifying a single named attribute
 class SynthesizedField (name :: Symbol) result t g deep shallow where
    synthesizedField  :: forall sem. sem ~ Semantics t =>
-                        Proxy name
-                     -> t
-                     -> shallow (g deep deep)
-                     -> Atts (Inherited t) (g sem sem)
-                     -> g sem (Synthesized t)
+                        Proxy name                      -- ^ attribute name
+                     -> t                               -- ^ transformation
+                     -> shallow (g deep deep)           -- ^ tree node
+                     -> Atts (Inherited t) (g sem sem)  -- ^ inherited attributes
+                     -> g sem (Synthesized t)           -- ^ synthesized attributes
                      -> result
 
 instance (Transformation t, Domain t ~ Identity) => Revelation t Identity where
@@ -75,9 +80,15 @@ instance {-# overlappable #-} (Atts (Synthesized t) (g sem sem) ~ result, Generi
                                GenericSynthesizer t g d s (Rep result)) => Synthesizer t g d s where
    synthesis t node i s = to (genericSynthesis t node i s)
 
+-- | Wrapper for a field that should be automatically synthesized by folding together all child nodes' synthesized
+-- attributes of the same name.
 newtype Folded a = Folded{getFolded :: a} deriving (Eq, Ord, Show, Semigroup, Monoid)
+-- | Wrapper for a field that should be automatically synthesized by replacing every child node by its synthesized
+-- attribute of the same name.
 newtype Mapped f a = Mapped{getMapped :: f a}
                    deriving (Eq, Ord, Show, Semigroup, Monoid, Functor, Applicative, Monad, Foldable)
+-- | Wrapper for a field that should be automatically synthesized by traversing over all child nodes and applying each
+-- node's synthesized attribute of the same name.
 newtype Traversed m f a = Traversed{getTraversed :: m (f a)} deriving (Eq, Ord, Show, Semigroup, Monoid)
 
 instance (Functor m, Functor f) => Functor (Traversed m f) where
@@ -85,9 +96,13 @@ instance (Functor m, Functor f) => Functor (Traversed m f) where
 
 -- * Generic transformations
 
+-- | Internal transformation for passing down the inherited attributes.
 newtype PassDown (t :: Type) (f :: * -> *) a = PassDown a
+-- | Internal transformation for accumulating the 'Folded' attributes.
 data Accumulator (t :: Type) (name :: Symbol) (a :: Type) = Accumulator
+-- | Internal transformation for replicating the 'Mapped' attributes.
 data Replicator (t :: Type) (f :: Type -> Type) (name :: Symbol) = Replicator
+-- | Internal transformation for traversing the 'Traversed' attributes.
 data Traverser (t :: Type) (m :: Type -> Type) (f :: Type -> Type) (name :: Symbol) = Traverser
 
 instance Transformation (PassDown t f a) where
@@ -121,6 +136,7 @@ instance (HasField name (Atts (Synthesized t) a) (Traversed m f a)) => Transform
 
 -- * Generic classes
 
+-- | The 'Generic' mirror of 'Synthesizer'
 class GenericSynthesizer t g deep shallow result where
    genericSynthesis  :: forall a sem. sem ~ Semantics t =>
                         t
@@ -129,6 +145,7 @@ class GenericSynthesizer t g deep shallow result where
                      -> g sem (Synthesized t)
                      -> result a
 
+-- | The 'Generic' mirror of 'SynthesizedField'
 class GenericSynthesizedField (name :: Symbol) result t g deep shallow where
    genericSynthesizedField  :: forall a sem. sem ~ Semantics t =>
                                Proxy name
@@ -138,6 +155,7 @@ class GenericSynthesizedField (name :: Symbol) result t g deep shallow where
                             -> g sem (Synthesized t)
                             -> result a
 
+-- | Used for accumulating the 'Folded' fields 
 class MayHaveMonoidalField (name :: Symbol) a f where
    getMonoidalField :: Proxy name -> f x -> a
 
@@ -184,26 +202,32 @@ instance  {-# overlappable #-} (Traversable f, Applicative m, Shallow.Traversabl
                                SynthesizedField name (Traversed m f (g f f)) t g deep f where
    synthesizedField name t local _ s = Traversed (traverse (const $ traversedField name t s) local)
 
+-- | The default 'bequest' method definition relies on generics to automatically pass down all same-named inherited
+-- attributes.
 bequestDefault :: forall sem shallow t g. (sem ~ Semantics t, Domain t ~ shallow, Revelation t shallow,
                                            Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem))
                => t -> shallow (g sem sem) -> Atts (Inherited t) (g sem sem) -> g sem (Synthesized t)
                -> g sem (Inherited t)
 bequestDefault t local inheritance synthesized = passDown inheritance (reveal t local)
 
+-- | Pass down the given record of inherited fields to child nodes.
 passDown :: forall sem t g atts. (sem ~ Semantics t, Shallow.Functor (PassDown t sem atts) (g sem))
          => atts -> g sem sem -> g sem (Inherited t)
 passDown inheritance local = PassDown inheritance Shallow.<$> local
 
+-- | The default 'synthesizedField' method definition for 'Folded' fields.
 foldedField :: forall name t g deep shallow a. (Monoid a, Shallow.Foldable (Accumulator t name a) (g (Semantics t))) =>
               Proxy name -> t -> g (Semantics t) (Synthesized t) -> Folded a
 foldedField name t s = Shallow.foldMap (Accumulator :: Accumulator t name a) s
 
+-- | The default 'synthesizedField' method definition for 'Mapped' fields.
 mappedField :: forall name t g deep shallow f a.
                   (Shallow.Functor (Replicator t f name) (g f),
                    Atts (Synthesized t) (g (Semantics t) (Semantics t)) ~ Atts (Synthesized t) (g f f)) =>
                   Proxy name -> t -> g (Semantics t) (Synthesized t) -> g f f
 mappedField name t s = (Replicator :: Replicator t f name) Shallow.<$> (unsafeCoerce s :: g f (Synthesized t))
 
+-- | The default 'synthesizedField' method definition for 'Traversed' fields.
 traversedField :: forall name t g m f.
                      (Shallow.Traversable (Traverser t m f name) (g f),
                       Atts (Synthesized t) (g (Semantics t) (Semantics t)) ~ Atts (Synthesized t) (g f f)) =>

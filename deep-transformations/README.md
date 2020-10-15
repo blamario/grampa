@@ -367,11 +367,15 @@ because they don't have any children.
 
 ~~~ {.haskell}
 instance AG.Attribution DeadCodeEliminator Expr Identity Identity where
-  attribution DeadCodeEliminator (Identity e@(EVar v)) (AG.Inherited env, _) = (AG.Synthesized (maybe e id $ env v), EVar v)
-  attribution DeadCodeEliminator (Identity e@(Con n)) (AG.Inherited env, _) = (AG.Synthesized e, Con n)
+  attribution DeadCodeEliminator (Identity e@(EVar v)) (AG.Inherited env, _) =
+    (AG.Synthesized (maybe e id $ env v), EVar v)
+  attribution DeadCodeEliminator (Identity e@(Con n)) (AG.Inherited env, _) =
+    (AG.Synthesized e, Con n)
 ~~~
 
-The `Add` and `Mul` nodes' rules need only to pass their inheritance down and to re-join the synthesized child expressions.
+The `Add` and `Mul` nodes' rules need only to pass their inheritance down and to re-join the synthesized child
+expressions. Note that boilerplate code like this can be eliminated using the constructs from the
+`Transformation.AG.Generics` module.
 
 ~~~ {.haskell}
   attribution DeadCodeEliminator (Identity Add{}) (inh, (Add (AG.Synthesized e1') (AG.Synthesized e2'))) =
@@ -390,7 +394,7 @@ The only non-trivial rule is for the `Let` node. It needs to pass the list of va
   attribution DeadCodeEliminator (Identity (Let _decl expr))
               (AG.Inherited env, (Let (AG.Synthesized ~(env', decl')) (AG.Synthesized expr'))) =
     (AG.Synthesized (maybe id (bin Let) decl' expr'),
-     Let (AG.Inherited (env, Full.foldMap GetVariables expr)) (AG.Inherited $ \v-> maybe (env v) Just (env' v)))
+     Let (AG.Inherited (env, Full.foldMap GetVariables expr)) (AG.Inherited $ \v-> env' v <|> env v))
 ~~~
 
 ### Declaration rules
@@ -422,7 +426,7 @@ unnecessary if either of its children disappears.
 
 ~~~ {.haskell}
   attribution DeadCodeEliminator (Identity Seq{}) (inh, (Seq (AG.Synthesized (env1, d1')) (AG.Synthesized (env2, d2')))) =
-    (AG.Synthesized (\v-> maybe (env2 v) Just (env1 v),
+    (AG.Synthesized (\v-> env1 v <|> env2 v,
                      bin Seq <$> d1' <*> d2' <|> d1' <|> d2'),
      Seq inh inh)
 ~~~
