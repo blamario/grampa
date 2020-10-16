@@ -1,6 +1,27 @@
 {-# Language FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables,
              TypeFamilies, TypeOperators, UndecidableInstances #-}
 
+-- | A /natural transformation/ is a concept from category theory for a mapping between two functors and their objects
+-- that preserves a naturality condition. In Haskell the naturality condition boils down to parametricity, so a
+-- natural transformation between two functors @f@ and @g@ is represented as
+--
+-- > type NaturalTransformation f g = ∀a. f a → g a
+--
+-- This type appears in several Haskell libraries, most obviously in
+-- [natural-transformations](https://hackage.haskell.org/package/natural-transformation). There are times, however,
+-- when we crave more control. Sometimes what we want to do depends on which type @a@ is hiding in that @f a@ we're
+-- given. Sometimes, in other words, we need an /unnatural/ transformation.
+--
+-- This means we have to abandon parametricity for ad-hoc polymorphism, and that means type classes. There are two
+-- steps to defining a transformation:
+--
+-- * an instance of the base class 'Transformation' declares the two functors being mapped, much like a function type
+--   signature,
+-- * while the actual mapping of values is performed by an arbitrary number of instances of the method '$', a bit like
+--   multiple equation clauses that make up a single function definition.
+--
+-- The module is meant to be imported qualified.
+
 module Transformation where
 
 import qualified Data.Functor as Rank1

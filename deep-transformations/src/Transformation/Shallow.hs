@@ -1,6 +1,10 @@
 {-# Language DeriveDataTypeable, FlexibleInstances, KindSignatures, MultiParamTypeClasses, RankNTypes,
              StandaloneDeriving, TypeFamilies, UndecidableInstances #-}
 
+-- | Type classes 'Functor', 'Foldable', and 'Traversable' that correspond to the standard type classes of the same
+-- name. The [rank2classes](https://hackage.haskell.org/package/rank2classes) package provides the equivalent set
+-- of classes for natural transformations.
+
 module Transformation.Shallow where
 
 import Control.Applicative (Applicative, (<*>), liftA2)

@@ -2,8 +2,22 @@
              MultiParamTypeClasses, PolyKinds, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
              TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
-module Transformation.AG.Generics (Auto(..), Folded(..), Mapped(..), Traversed(..),
+-- | This module can be used to scrap the boilerplate attribute declarations. In particular:
+--
+-- * If an 'attribution' rule always merely copies the inherited attributes to the children's inherited attributes of
+--   the same name, the rule can be left out by wrapping the transformation into an 'Auto' constructor and making the
+--   inherited attributes a 'Generic' instance.
+-- * A synthesized attribute whose value is a fold of all same-named attributes of the children can be wrapped in the
+--   'Folded' constructor and calculated automatically.
+-- * A synthesized attribute that is a copy of the current node but with every child taken from the same-named
+--   synthesized child attribute can be wrapped in the 'Mapped' constructor and calculated automatically.
+-- * If the attribute additionally carries an applicative effect, the 'Mapped' wrapper can be replaced by 'Traversed'.
+
+module Transformation.AG.Generics (-- * Type wrappers for automatic attribute inference
+                                   Auto(..), Folded(..), Mapped(..), Traversed(..),
+                                   -- * Type classes replacing 'Attribution'
                                    Bequether(..), Synthesizer(..), SynthesizedField(..), Revelation(..),
+                                   -- * The default behaviour on generic datatypes
                                    foldedField, mappedField, passDown, bequestDefault)
 where
 
@@ -46,7 +60,7 @@ class Bequether t g deep shallow where
                -> g sem (Synthesized t)            -- ^ synthesized attributes
                -> g sem (Inherited t)
 
--- | A half of the 'Attribution' class used to specify all specified attributes.
+-- | A half of the 'Attribution' class used to specify all synthesized attributes.
 class Synthesizer t g deep shallow where
    synthesis   :: forall sem. sem ~ Semantics t =>
                   t                                -- ^ transformation        
