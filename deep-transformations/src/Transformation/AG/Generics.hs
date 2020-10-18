@@ -15,6 +15,7 @@
 
 module Transformation.AG.Generics (-- * Type wrappers for automatic attribute inference
                                    Auto(..), Folded(..), Mapped(..), Traversed(..),
+                                   Accumulator(..),
                                    -- * Type classes replacing 'Attribution'
                                    Bequether(..), Synthesizer(..), SynthesizedField(..), Revelation(..),
                                    -- * The default behaviour on generic datatypes
