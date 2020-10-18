@@ -43,8 +43,7 @@ import qualified Transformation.Shallow as Shallow
 -- | Transformation wrapper that allows automatic inference of attribute rules.
 newtype Auto t = Auto t
 
-instance {-# overlappable #-} (Bequether (Auto t) g d s, sem ~ Semantics (Auto t), Synthesizer (Auto t) g d s) =>
-                              Attribution (Auto t) g d s where
+instance {-# overlappable #-} (Bequether (Auto t) g d s, Synthesizer (Auto t) g d s) => Attribution (Auto t) g d s where
    attribution t l (Inherited i, s) = (Synthesized $ synthesis t l i s, bequest t l i s)
 
 class (Transformation t, dom ~ Domain t) => Revelation t dom where
@@ -55,7 +54,7 @@ class (Transformation t, dom ~ Domain t) => Revelation t dom where
 class Bequether t g deep shallow where
    bequest     :: forall sem. sem ~ Semantics t =>
                   t                                -- ^ transformation        
-               -> shallow (g deep deep)            -- ^ tre node              
+               -> shallow (g deep deep)            -- ^ tree node
                -> Atts (Inherited t) (g sem sem)   -- ^ inherited attributes  
                -> g sem (Synthesized t)            -- ^ synthesized attributes
                -> g sem (Inherited t)
@@ -218,32 +217,33 @@ instance  {-# overlappable #-} (Traversable f, Applicative m, Shallow.Traversabl
 
 -- | The default 'bequest' method definition relies on generics to automatically pass down all same-named inherited
 -- attributes.
-bequestDefault :: forall sem shallow t g. (sem ~ Semantics t, Domain t ~ shallow, Revelation t shallow,
-                                           Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem))
+bequestDefault :: forall t g shallow deep sem.
+                  (sem ~ Semantics t, Domain t ~ shallow, Revelation t shallow,
+                   Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem))
                => t -> shallow (g sem sem) -> Atts (Inherited t) (g sem sem) -> g sem (Synthesized t)
                -> g sem (Inherited t)
 bequestDefault t local inheritance synthesized = passDown inheritance (reveal t local)
 
 -- | Pass down the given record of inherited fields to child nodes.
-passDown :: forall sem t g atts. (sem ~ Semantics t, Shallow.Functor (PassDown t sem atts) (g sem))
-         => atts -> g sem sem -> g sem (Inherited t)
+passDown :: forall t g shallow deep atts. (Shallow.Functor (PassDown t shallow atts) (g deep)) =>
+            atts -> g deep shallow -> g deep (Inherited t)
 passDown inheritance local = PassDown inheritance Shallow.<$> local
 
 -- | The default 'synthesizedField' method definition for 'Folded' fields.
-foldedField :: forall name t g deep shallow a. (Monoid a, Shallow.Foldable (Accumulator t name a) (g (Semantics t))) =>
-              Proxy name -> t -> g (Semantics t) (Synthesized t) -> Folded a
+foldedField :: forall name t g a sem. (Monoid a, Shallow.Foldable (Accumulator t name a) (g sem)) =>
+               Proxy name -> t -> g sem (Synthesized t) -> Folded a
 foldedField name t s = Shallow.foldMap (Accumulator :: Accumulator t name a) s
 
 -- | The default 'synthesizedField' method definition for 'Mapped' fields.
-mappedField :: forall name t g deep shallow f a.
+mappedField :: forall name t g f sem.
                   (Shallow.Functor (Replicator t f name) (g f),
-                   Atts (Synthesized t) (g (Semantics t) (Semantics t)) ~ Atts (Synthesized t) (g f f)) =>
-                  Proxy name -> t -> g (Semantics t) (Synthesized t) -> g f f
+                   Atts (Synthesized t) (g sem sem) ~ Atts (Synthesized t) (g f f)) =>
+                  Proxy name -> t -> g sem (Synthesized t) -> g f f
 mappedField name t s = (Replicator :: Replicator t f name) Shallow.<$> (unsafeCoerce s :: g f (Synthesized t))
 
 -- | The default 'synthesizedField' method definition for 'Traversed' fields.
-traversedField :: forall name t g m f.
+traversedField :: forall name t g m f sem.
                      (Shallow.Traversable (Traverser t m f name) (g f),
-                      Atts (Synthesized t) (g (Semantics t) (Semantics t)) ~ Atts (Synthesized t) (g f f)) =>
-                     Proxy name -> t -> g (Semantics t) (Synthesized t) -> m (g f f)
+                      Atts (Synthesized t) (g sem sem) ~ Atts (Synthesized t) (g f f)) =>
+                     Proxy name -> t -> g sem (Synthesized t) -> m (g f f)
 traversedField name t s = Shallow.traverse (Traverser :: Traverser t m f name) (unsafeCoerce s :: g f (Synthesized t))
