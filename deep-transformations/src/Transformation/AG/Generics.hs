@@ -15,7 +15,6 @@
 
 module Transformation.AG.Generics (-- * Type wrappers for automatic attribute inference
                                    Auto(..), Folded(..), Mapped(..), Traversed(..),
-                                   Accumulator(..),
                                    -- * Type classes replacing 'Attribution'
                                    Bequether(..), Synthesizer(..), SynthesizedField(..), Revelation(..),
                                    -- * The default behaviour on generic datatypes
@@ -172,6 +171,8 @@ class GenericSynthesizedField (name :: Symbol) result t g deep shallow where
 -- | Used for accumulating the 'Folded' fields 
 class MayHaveMonoidalField (name :: Symbol) a f where
    getMonoidalField :: Proxy name -> f x -> a
+class FoundField a f where
+   getFoundField :: f x -> a
 
 instance {-# overlaps #-} (MayHaveMonoidalField name a x, MayHaveMonoidalField name a y, Semigroup a) =>
          MayHaveMonoidalField name a (x :*: y) where
@@ -181,11 +182,26 @@ instance {-# overlaps #-} TypeError (Text "Cannot get a single field value from 
          MayHaveMonoidalField name a (x :+: y) where
    getMonoidalField _ _ = error "getMonoidalField on sum type"
 
-instance {-# overlaps #-} MayHaveMonoidalField name a (M1 i ('MetaSel ('Just name) su ss ds) (K1 j a)) where
-   getMonoidalField name (M1 (K1 v)) = v
+instance {-# overlaps #-} FoundField a f => MayHaveMonoidalField name a (M1 i ('MetaSel ('Just name) su ss ds) f) where
+   getMonoidalField name (M1 x) = getFoundField x
+
+instance {-# overlaps #-} Monoid a => MayHaveMonoidalField name a (M1 i ('MetaSel Nothing su ss ds) f) where
+   getMonoidalField _ _ = mempty
+
+instance {-# overlaps #-} MayHaveMonoidalField name a f => MayHaveMonoidalField name a (M1 i ('MetaData n m p nt) f) where
+   getMonoidalField name (M1 x) = getMonoidalField name x
+
+instance {-# overlaps #-} MayHaveMonoidalField name a f => MayHaveMonoidalField name a (M1 i ('MetaCons n fi s) f) where
+   getMonoidalField name (M1 x) = getMonoidalField name x
 
 instance {-# overlappable #-} Monoid a => MayHaveMonoidalField name a f where
    getMonoidalField name _ = mempty
+
+instance FoundField a f => FoundField a (M1 i j f) where
+     getFoundField (M1 f) = getFoundField f
+
+instance FoundField a (K1 i a) where
+     getFoundField (K1 a) = a
 
 instance (GenericSynthesizer t g deep shallow x, GenericSynthesizer t g deep shallow y) =>
          GenericSynthesizer t g deep shallow (x :*: y) where

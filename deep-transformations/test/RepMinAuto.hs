@@ -77,7 +77,8 @@ instance (Transformation t, Transformation.At t a, Full.Functor t (Tree a)) => D
 instance (Transformation t, Full.Functor t (Tree a)) => Deep.Functor t (Root a) where
    t <$> Root x = Root (t Full.<$> x)
 
-instance (Transformation t, Transformation.At t a, Transformation.At t (Tree a (Codomain t) (Codomain t)), Functor(Domain t)) =>
+instance (Transformation t, Transformation.At t a,
+          Transformation.At t (Tree a (Codomain t) (Codomain t)), Functor(Domain t)) =>
          Full.Functor t (Tree a) where
    (<$>) = Full.mapUpDefault
 
@@ -99,7 +100,7 @@ data SynRepMin = SynRepMin{local :: AG.Folded (Min Int),
                            tree  :: Tree Int Identity Identity}
                deriving (Generic, Show)
 
---data SynRepLeaf = SynRepLeaf{local :: AG.Folded (Min Int)} deriving (Generic, Show)
+data SynRepLeaf = SynRepLeaf{local :: AG.Folded (Min Int)} deriving (Generic, Show)
 
 type instance AG.Atts (Inherited (Auto RepMin)) (Tree Int f' f) = InhRepMin
 type instance AG.Atts (Synthesized (Auto RepMin)) (Tree Int f' f) = SynRepMin
@@ -107,17 +108,14 @@ type instance AG.Atts (Inherited (Auto RepMin)) (Root Int f' f) = ()
 type instance AG.Atts (Synthesized (Auto RepMin)) (Root Int f' f) = SynRepMin
 
 type instance AG.Atts (Inherited a) Int = InhRepMin
-type instance AG.Atts (Synthesized a) Int = Int
+type instance AG.Atts (Synthesized a) Int = SynRepLeaf
 
 instance Transformation.At (Auto RepMin) (Tree Int Sem Sem) where
    ($) = AG.applyDefault runIdentity
 instance Transformation.At (Auto RepMin) (Root Int Sem Sem) where
    ($) = AG.applyDefault runIdentity
 instance Transformation.At (Auto RepMin) Int where
-   Auto RepMin $ Identity n = Rank2.Arrow (const $ Synthesized n)
-
-instance {-# overlaps #-} Transformation.At (AG.Accumulator (Auto RepMin) "local" (Min Int)) Int where
-   _ $ Synthesized n = Const (AG.Folded $ Min n)
+   Auto RepMin $ Identity n = Rank2.Arrow (const $ Synthesized $ SynRepLeaf $ AG.Folded $ Min n)
 
 instance AG.Bequether (Auto RepMin) (Root Int) Sem Identity where
    bequest (Auto RepMin) self inherited (Root (Synthesized SynRepMin{local= rootLocal})) =
@@ -129,17 +127,6 @@ instance AG.SynthesizedField "tree" (Tree Int Identity Identity) (Auto RepMin) (
 instance AG.SynthesizedField "tree" (Tree Int Identity Identity) (Auto RepMin) (Tree Int) Sem Identity where
    synthesizedField _ _ _ inherited (Fork left right) = tree (syn left) `fork` tree (syn right)
    synthesizedField _ _ _ inherited (Leaf value) = Leaf{leafValue= Identity $ global inherited}
-
-instance AG.Synthesizer (Auto RepMin) (Tree Int) Sem Identity where
-   synthesis _ _ inherited (Fork left right) = SynRepMin{local= local (syn left) `min` local (syn right),
-                                                         tree= tree (syn left) `fork` tree (syn right)}
-   synthesis _ _ inherited (Leaf value) = SynRepMin{local= AG.Folded (Min $ syn value),
-                                                    tree= Leaf{leafValue= Identity $ global inherited}}
-
-instance AG.SynthesizedField "local" (AG.Folded (Min Int)) (Auto RepMin) (Tree Int) Sem Identity where
-   synthesizedField _ _ (Identity (Leaf n)) _inherited _synthesized = AG.Folded (Min $ syn $ n Rank2.$ undefined)
---   synthesizedField name t _ _ s = Shallow.foldMap (AG.Accumulator :: AG.Accumulator t name (Min Int)) s
-   synthesizedField name t _ _ s = AG.foldedField name t s
 
 -- * Helper functions
 fork l r = Fork (Identity l) (Identity r)
