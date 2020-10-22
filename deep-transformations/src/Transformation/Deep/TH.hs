@@ -140,7 +140,7 @@ genDeepmapClause deepConstraint fullConstraint instanceType (RecC name fields) =
           ((,) fieldName <$>)
           <$> genDeepmapField (varE f) fieldType deepConstraint fullConstraint (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP f, varP x] body []
+   (,) constraints <$> clause [varP f, x `asP` recP name []] body []
 genDeepmapClause deepConstraint fullConstraint instanceType
                  (GadtC [name] fieldTypes (AppT (AppT resultType (VarT tyVar')) (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar' _tyVar) <- getQ
@@ -171,7 +171,7 @@ genFoldMapClause deepConstraint fullConstraint instanceType (NormalC name fieldT
        newField x (_, fieldType) = genFoldMapField (varE t) fieldType deepConstraint fullConstraint (varE x) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause pats (normalB body) []
-genFoldMapClause deepConstraint fullConstraint instanceType (RecC _name fields) = do
+genFoldMapClause deepConstraint fullConstraint instanceType (RecC name fields) = do
    t <- newName "t"
    x <- newName "x"
    let body | null fields = [| mempty |]
@@ -182,7 +182,7 @@ genFoldMapClause deepConstraint fullConstraint instanceType (RecC _name fields) 
        newField (fieldName, _, fieldType) =
           genFoldMapField (varE t) fieldType deepConstraint fullConstraint (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP t, bangP (varP x)] (normalB body) []
+   (,) constraints <$> clause [varP t, x `asP` recP name []] (normalB body) []
 genFoldMapClause deepConstraint fullConstraint instanceType
                  (GadtC [name] fieldTypes (AppT (AppT resultType (VarT tyVar')) (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar' _tyVar) <- getQ
@@ -232,7 +232,7 @@ genTraverseClause genTraverseField deepConstraint fullConstraint instanceType (R
           ((,) fieldName <$>)
           <$> genTraverseField (varE f) fieldType deepConstraint fullConstraint (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP f, varP x] (normalB body) []
+   (,) constraints <$> clause [varP f, x `asP` recP name []] (normalB body) []
 genTraverseClause genTraverseField deepConstraint fullConstraint instanceType
                   (GadtC [name] fieldTypes (AppT (AppT resultType (VarT tyVar')) (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar' _tyVar) <- getQ

@@ -172,7 +172,7 @@ genFmapClause (RecC name fields) = do
           ((,) fieldName <$>)
           <$> genFmapField (varE f) fieldType (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP f, bangP (varP x)] body []
+   (,) constraints <$> clause [varP f, x `asP` recP name []] body []
 genFmapClause (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
@@ -214,7 +214,7 @@ genLiftA2Clause unsafely (RecC name fields) = do
        newNamedField (fieldName, _, fieldType) =
           fieldExp fieldName (genLiftA2Field unsafely (varE f) fieldType (getFieldOf x) (getFieldOf y) id)
           where getFieldOf = appE (varE fieldName) . varE
-   clause [varP f, bangP (varP x), varP y] body []
+   clause [varP f, x `asP` recP name [], varP y] body []
 genLiftA2Clause unsafely (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
@@ -262,7 +262,7 @@ genLiftA3Clause unsafely (RecC name fields) = do
        newNamedField (fieldName, _, fieldType) =
           fieldExp fieldName (genLiftA3Field unsafely (varE f) fieldType (getFieldOf x) (getFieldOf y) (getFieldOf z) id)
           where getFieldOf = appE (varE fieldName) . varE
-   clause [varP f, bangP (varP x), varP y, varP z] body []
+   clause [varP f, x `asP` recP name [], varP y, varP z] body []
 genLiftA3Clause unsafely (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
@@ -312,7 +312,7 @@ genApClause unsafely (RecC name fields) = do
           ((,) fieldName <$>) <$> genApField unsafely fieldType (getFieldOf x) (getFieldOf y) id
           where getFieldOf = appE (varE fieldName) . varE
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP x, bangP (varP y)] body []
+   (,) constraints <$> clause [x `asP` recP name [], varP y] body []
 genApClause unsafely (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
@@ -378,7 +378,7 @@ genFoldMapClause (NormalC name fieldTypes) = do
        newField x (_, fieldType) = genFoldMapField f fieldType (varE x) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause pats (normalB body) []
-genFoldMapClause (RecC _name fields) = do
+genFoldMapClause (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
    let body | null fields = [| mempty |]
@@ -388,7 +388,7 @@ genFoldMapClause (RecC _name fields) = do
        newField :: VarBangType -> Q ([Type], Exp)
        newField (fieldName, _, fieldType) = genFoldMapField f fieldType (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP f, bangP (varP x)] (normalB body) []
+   (,) constraints <$> clause [varP f, x `asP` recP name []] (normalB body) []
 genFoldMapClause (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
@@ -437,7 +437,7 @@ genTraverseClause (RecC name fields) = do
        newField :: VarBangType -> Q ([Type], Exp)
        newField (fieldName, _, fieldType) = genTraverseField (varE f) fieldType (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP f, bangP (varP x)] body []
+   (,) constraints <$> clause [varP f, x `asP` recP name []] body []
 genTraverseClause (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)

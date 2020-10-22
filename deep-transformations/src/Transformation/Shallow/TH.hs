@@ -138,7 +138,7 @@ genShallowmapClause shallowConstraint baseConstraint instanceType (RecC name fie
           ((,) fieldName <$>)
           <$> genShallowmapField (varE t) fieldType shallowConstraint baseConstraint (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP t, varP x] body []
+   (,) constraints <$> clause [varP t, x `asP` recP name []] body []
 genShallowmapClause shallowConstraint baseConstraint instanceType
                     (GadtC [name] fieldTypes (AppT resultType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
@@ -169,7 +169,7 @@ genFoldMapClause shallowConstraint baseConstraint instanceType (NormalC name fie
        newField x (_, fieldType) = genFoldMapField (varE t) fieldType shallowConstraint baseConstraint (varE x) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause pats (normalB body) []
-genFoldMapClause shallowConstraint baseConstraint instanceType (RecC _name fields) = do
+genFoldMapClause shallowConstraint baseConstraint instanceType (RecC name fields) = do
    t <- newName "t"
    x <- newName "x"
    let body | null fields = [| mempty |]
@@ -180,7 +180,7 @@ genFoldMapClause shallowConstraint baseConstraint instanceType (RecC _name field
        newField (fieldName, _, fieldType) =
           genFoldMapField (varE t) fieldType shallowConstraint baseConstraint (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP t, bangP (varP x)] (normalB body) []
+   (,) constraints <$> clause [varP t, x `asP` recP name []] (normalB body) []
 genFoldMapClause shallowConstraint baseConstraint instanceType
                  (GadtC [name] fieldTypes (AppT resultType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
@@ -230,7 +230,7 @@ genTraverseClause genTraverseField shallowConstraint baseConstraint instanceType
           ((,) fieldName <$>)
           <$> genTraverseField (varE f) fieldType shallowConstraint baseConstraint (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP f, varP x] (normalB body) []
+   (,) constraints <$> clause [varP f, x `asP` recP name []] (normalB body) []
 genTraverseClause genTraverseField shallowConstraint baseConstraint instanceType
                   (GadtC [name] fieldTypes (AppT resultType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ

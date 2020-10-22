@@ -1,7 +1,7 @@
 {-# Language DataKinds, DeriveGeneric, DefaultSignatures, DuplicateRecordFields,
              EmptyDataDecls, FlexibleContexts, FlexibleInstances, FunctionalDependencies,
              MultiParamTypeClasses, RankNTypes, StandaloneDeriving,
-             TypeApplications, TypeFamilies, TypeOperators, TypeSynonymInstances, UndecidableInstances #-}
+             TemplateHaskell, TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 module RepMinAuto where
 
@@ -10,6 +10,7 @@ import Data.Functor.Identity
 import Data.Semigroup (Min(Min, getMin))
 import GHC.Generics (Generic)
 import qualified Rank2
+import qualified Rank2.TH
 import Transformation (Transformation(..))
 import Transformation.AG (Inherited(..), Synthesized(..))
 import qualified Transformation
@@ -19,8 +20,7 @@ import Transformation.AG.Generics (Auto(Auto))
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.Shallow as Shallow
-
-import Debug.Trace
+import qualified Transformation.Shallow.TH
 
 -- | tree data type
 data Tree a (f' :: * -> *) (f :: * -> *) = Fork{left :: f (Tree a f' f'),
@@ -39,12 +39,10 @@ instance Rank2.Functor (Tree a f') where
 instance Rank2.Functor (Root a f') where
    f <$> Root x = Root (f x)
 
-instance Rank2.Foldable (Tree a f') where
-   f `foldMap` Fork l r = f l <> f r
-   f `foldMap` Leaf x = f x
-
-instance Rank2.Foldable (Root a f') where
-   f `foldMap` Root x = f x
+$(Rank2.TH.deriveFoldable ''Tree)
+$(Rank2.TH.deriveTraversable ''Tree)
+$(Rank2.TH.deriveFoldable ''Root)
+$(Rank2.TH.deriveTraversable ''Root)
 
 instance Rank2.Apply (Tree a f') where
    Fork fl fr <*> ~(Fork l r) = Fork (Rank2.apply fl l) (Rank2.apply fr r)
@@ -56,19 +54,8 @@ instance Rank2.Applicative (Tree a f') where
 instance Rank2.Apply (Root a f') where
    Root f <*> ~(Root x) = Root (Rank2.apply f x)
 
-instance (Transformation t, Transformation.At t a, Transformation.At t (Tree a f' f')) => Shallow.Functor t (Tree a f') where
-   t <$> Fork l r = Fork (t Transformation.$ l) (t Transformation.$ r)
-   t <$> Leaf x = Leaf (t Transformation.$ x)
-
-instance (Transformation t, Transformation.At t (Tree a f' f')) => Shallow.Functor t (Root a f') where
-   t <$> Root x = Root (t Transformation.$ x)
-
-instance (Transformation t, Transformation.At t a, Transformation.At t (Tree a f' f')) => Shallow.Foldable t (Tree a f') where
-   t `foldMap` Fork l r = getConst (t Transformation.$ l) <> getConst (t Transformation.$ r)
-   t `foldMap` Leaf x = getConst (t Transformation.$ x)
-
-instance (Transformation t, Transformation.At t (Tree a f' f')) => Shallow.Foldable t (Root a f') where
-   t `foldMap` Root x = getConst (t Transformation.$ x)
+$(Transformation.Shallow.TH.deriveAll ''Tree)
+$(Transformation.Shallow.TH.deriveAll ''Root)
 
 instance (Transformation t, Transformation.At t a, Full.Functor t (Tree a)) => Deep.Functor t (Tree a) where
    t <$> Fork l r = Fork (t Full.<$> l) (t Full.<$> r)

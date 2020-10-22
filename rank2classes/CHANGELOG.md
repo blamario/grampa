@@ -1,3 +1,7 @@
+Version 1.4.1
+---------------
+* Fixed the templates for multi-constructor records
+
 Version 1.4
 ---------------
 * Added Rank2.Compose :: ((* -> *) -> *) -> (* -> *) -> ((* -> *) -> *)
