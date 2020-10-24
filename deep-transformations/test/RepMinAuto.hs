@@ -1,11 +1,8 @@
-{-# Language DataKinds, DeriveGeneric, DefaultSignatures, DuplicateRecordFields,
-             EmptyDataDecls, FlexibleContexts, FlexibleInstances, FunctionalDependencies,
-             MultiParamTypeClasses, RankNTypes, StandaloneDeriving,
-             TemplateHaskell, TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
+{-# Language DataKinds, DeriveGeneric, DuplicateRecordFields, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
+             StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
 module RepMinAuto where
 
-import Data.Functor.Const
 import Data.Functor.Identity
 import Data.Semigroup (Min(Min, getMin))
 import GHC.Generics (Generic)
@@ -18,9 +15,8 @@ import qualified Transformation.AG as AG
 import qualified Transformation.AG.Generics as AG
 import Transformation.AG.Generics (Auto(Auto))
 import qualified Transformation.Deep as Deep
-import qualified Transformation.Deep.TH
 import qualified Transformation.Full as Full
-import qualified Transformation.Shallow as Shallow
+import qualified Transformation.Deep.TH
 import qualified Transformation.Shallow.TH
 
 -- | tree data type

@@ -1,6 +1,5 @@
-{-# Language DefaultSignatures, EmptyDataDecls, FlexibleContexts, FlexibleInstances, FunctionalDependencies,
-             ConstraintKinds, MultiParamTypeClasses, RankNTypes, StandaloneDeriving, 
-             TypeApplications, TypeFamilies, TypeOperators, TypeSynonymInstances, UndecidableInstances #-}
+{-# Language FlexibleInstances, MultiParamTypeClasses, RankNTypes, StandaloneDeriving, 
+             TypeFamilies, UndecidableInstances #-}
 
 module RepMin where
 
