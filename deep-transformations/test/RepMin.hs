@@ -1,6 +1,7 @@
 {-# Language FlexibleInstances, MultiParamTypeClasses, RankNTypes, StandaloneDeriving, 
              TypeFamilies, UndecidableInstances #-}
 
+-- | The RepMin example - replicate a binary tree with all leaves replaced by the minimal leaf value.
 module RepMin where
 
 import Data.Functor.Identity
@@ -75,6 +76,7 @@ instance Full.Functor RepMin (Tree Int) where
 instance Full.Functor RepMin (Root Int) where
   (<$>) = AG.fullMapDefault runIdentity
 
+-- | The semantics of the primitive 'Int' type must be defined manually.
 instance Transformation.At RepMin Int where
    RepMin $ Identity n = Rank2.Arrow (const $ Synthesized n)
 
@@ -84,7 +86,8 @@ instance AG.Attribution RepMin (Root Int) Identity Identity where
                                                      Root{root= Inherited InhRepMin{global= local (syn root)}})
 
 instance AG.Attribution RepMin (Tree Int) Identity Identity where
-   attribution _ _ (inherited, Fork left right) = (Synthesized SynRepMin{local= local (syn left) `min` local (syn right),
+   attribution _ _ (inherited, Fork left right) = (Synthesized SynRepMin{local= local (syn left)
+                                                                                `min` local (syn right),
                                                                          tree= tree (syn left) `fork` tree (syn right)},
                                                    Fork{left= Inherited InhRepMin{global= global $ inh inherited},
                                                         right= Inherited InhRepMin{global= global $ inh inherited}})

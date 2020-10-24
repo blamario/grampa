@@ -6,11 +6,17 @@ An abstract syntax tree of a realistic programming language will generally conta
  declaration, type, statement, and module.
 
 This library, `deep-transformations`, provides a solution to the problem of traversing and transforming such
- heterogenous trees. It is not the only solution by far. The venerable
- [`multiplate`](http://hackage.haskell.org/package/multiplate) has long offered a very approachable way to traverse and
- fold heterogenous trees, without even depending on any extension to standard Haskell. Multiplate is not as expressive
- as the present library, but if it satisfies your needs go with it. If not, be aware that `deep-transformations` relies
- on quite a number of extensions:
+ heterogenous trees. It does this by generalizing the
+ [`rank2classes`](http://github.com/blamario/grampa/tree/master/rank2classes) library and by replacing parametric
+ polymorphism with ad-hoc polymorphism. The result is powerful enough to support a new embedding of attribute
+ grammars, as shown below and in two
+ [RepMin](http://github.com/blamario/grampa/blob/master/deep-transformations/test/RepMin.hs)
+ [examples]((http://github.com/blamario/grampa/blob/master/deep-transformations/test/RepMinAuto.hs))
+
+This is not the only solution by far. The venerable [`multiplate`](http://hackage.haskell.org/package/multiplate) has
+ long offered a very approachable way to traverse and fold heterogenous trees, without even depending on any extension
+ to standard Haskell. Multiplate is not as expressive as the present library, but if it satisfies your needs go with
+ it. If not, be aware that `deep-transformations` relies on quite a number of extensions:
 
 ~~~ {.haskell}
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,

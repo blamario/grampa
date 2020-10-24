@@ -1,6 +1,8 @@
 {-# Language DataKinds, DeriveGeneric, DuplicateRecordFields, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
              StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
+-- | The RepMin example with automatic derivation of attributes.
+
 module RepMinAuto where
 
 import Data.Functor.Identity
@@ -38,9 +40,10 @@ instance (Transformation t, Transformation.At t a, Transformation.At t (Tree a (
           Functor (Domain t)) => Full.Functor t (Tree a) where
    (<$>) = Full.mapUpDefault
 
--- | The transformation type
+-- | The transformation type. It will always appear wrapped in 'Auto' to enable automatic attribute derivation.
 data RepMin = RepMin
 
+-- | The semantics type synonym for convenience
 type Sem = AG.Semantics (Auto RepMin)
 
 instance Transformation (Auto RepMin) where
@@ -51,12 +54,14 @@ instance Transformation (Auto RepMin) where
 data InhRepMin = InhRepMin{global :: Int}
                deriving (Generic, Show)
 
--- | Synthesized attributes' type
+-- | Synthesized attributes' types rely on the 'AG.Folded' and 'AG.Mapped' wrappers, whose rules can be automatically
+-- | derived.
 data SynRepMin g = SynRepMin{local :: AG.Folded (Min Int),
                              tree  :: AG.Mapped Identity (g Int Identity Identity)}
                    deriving Generic
 deriving instance Show (g Int Identity Identity) => Show (SynRepMin g)
 
+-- | Synthesized attributes' type for the integer leaf.
 data SynRepLeaf = SynRepLeaf{local :: AG.Folded (Min Int),
                              tree :: AG.Mapped Identity Int}
                   deriving (Generic, Show)
@@ -74,12 +79,15 @@ instance Transformation.At (Auto RepMin) (Tree Int Sem Sem) where
 instance Transformation.At (Auto RepMin) (Root Int Sem Sem) where
    ($) = AG.applyDefault runIdentity
 
+-- | The semantics of the primitive 'Int' type must be defined manually.
 instance Transformation.At (Auto RepMin) Int where
    Auto RepMin $ Identity n = Rank2.Arrow f
       where f (Inherited InhRepMin{global= n'}) =
                Synthesized SynRepLeaf{local= AG.Folded (Min n),
                                       tree= AG.Mapped (Identity n')}
 
+-- | The only required attribute rule is the only non-trivial one, where we set the 'global' inherited attribute to
+-- | the 'local' minimum synthesized attribute at the tree root.
 instance AG.Bequether (Auto RepMin) (Root Int) Sem Identity where
    bequest (Auto RepMin) self inherited (Root (Synthesized SynRepMin{local= rootLocal})) =
       Root{root= Inherited InhRepMin{global= getMin (AG.getFolded rootLocal)}}
