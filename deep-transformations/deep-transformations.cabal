@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                deep-transformations
-version:             0
+version:             0.1
 synopsis:            Deep natural and unnatural tree transformations, including attribute grammars
 description:
 
@@ -12,7 +12,7 @@ description:
    .
    The functionality includes attribute grammars in "Transformation.AG".
 
-homepage:            https://github.com/blamario/grampa/deep-transformations
+homepage:            https://github.com/blamario/grampa/tree/master/deep-transformations
 bug-reports:         https://github.com/blamario/grampa/issues
 license:             BSD3
 license-file:        LICENSE
@@ -38,7 +38,7 @@ library
                         Transformation.Deep, Transformation.Deep.TH,
                         Transformation.Full, Transformation.Full.TH,
                         Transformation.Rank2, Transformation.AG, Transformation.AG.Generics
-  build-depends:        base >= 4.7 && < 5, rank2classes >= 1.2.1 && < 1.5,
+  build-depends:        base >= 4.7 && < 5, rank2classes >= 1.4.1 && < 1.5,
                         template-haskell >= 2.11 && < 2.17, generic-lens == 2.0.*
   default-language:     Haskell2010
 
