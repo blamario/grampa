@@ -22,6 +22,7 @@ copyright:           (c) 2019 Mario Blažević
 category:            Control, Generics
 build-type:          Custom
 cabal-version:       >=1.10
+extra-source-files:  README.md
 source-repository head
   type:              git
   location:          https://github.com/blamario/grampa

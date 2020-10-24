@@ -11,7 +11,7 @@ This library, `deep-transformations`, provides a solution to the problem of trav
  polymorphism with ad-hoc polymorphism. The result is powerful enough to support a new embedding of attribute
  grammars, as shown below and in two
  [RepMin](http://github.com/blamario/grampa/blob/master/deep-transformations/test/RepMin.hs)
- [examples]((http://github.com/blamario/grampa/blob/master/deep-transformations/test/RepMinAuto.hs))
+ [examples](http://github.com/blamario/grampa/blob/master/deep-transformations/test/RepMinAuto.hs)
 
 This is not the only solution by far. The venerable [`multiplate`](http://hackage.haskell.org/package/multiplate) has
  long offered a very approachable way to traverse and fold heterogenous trees, without even depending on any extension
@@ -71,10 +71,10 @@ type Var = String
 ~~~
 
 The parameters `d` and `s` stand for the *deep* and *shallow* type constructor. A typical occurrence of the tree will
- instantiate the same type for both parameters. While it may look ugly and annoying, this kind of parameterization
- carries benefits beyond this library's use. The parameters may vary from `Identity`, equivalent to the original
- simple formulation, via `(,) LexicalInfo` to store the source code position and white-space and comments for every
- node, or `[]` if you need some ambiguity, to attribute grammar semantics.
+ instantiate the same type for both parameters. While it may look complicated and annoying, this kind of
+ parameterization carries benefits beyond this library's use. The parameters may vary from `Identity`, equivalent to
+ the original simple formulation, via `(,) LexicalInfo` to store the source code position and white-space and comments
+ for every node, or `[]` if you need some ambiguity, to attribute grammar semantics.
 
 Now, let's declare all the class instances. First make the tree `Show`.
 
@@ -84,8 +84,8 @@ deriving instance (Show (f (Expr f' f')), Show (f (Decl f' f'))) => Show (Decl f
 ~~~
 
 The shallow parameter comes last so that every data type can have instances of
- [`rank2classes`](https://hackage.haskell.org/package/rank2classes). The instances below are written manually, but
- they can be generated automatically using the Template Haskell imports from
+ [`rank2classes`](https://hackage.haskell.org/package/rank2classes). The instances below are written manually for
+ exposition, but it would be easier to generate them automatically using the Template Haskell imports from
  [`Rank2.TH`](https://hackage.haskell.org/package/rank2classes/docs/Rank2-TH.html).
 
 ~~~ {.haskell}
@@ -117,9 +117,9 @@ While the methods declared above can be handy, they are limited in requiring tha
  `Decl`. That can be a severe handicap.
 
 The class methods exported by `deep-transformations` therefore work not with polymorphic functions but with
- *tranformations*. The instances of these classes are similar to the instances above. Also as above, they can be
- generated automatically with Template Haskell functions from
- [`Transformation.Deep.TH`](https://hackage.haskell.org/package/deep-transformations/docs/Transformation-Deep-TH.html).
+*transformations*. The instances of these classes are similar to the 'Rank2' instances above. Also as above, they can
+be generated automatically with Template Haskell functions from
+[`Transformation.Deep.TH`](https://hackage.haskell.org/package/deep-transformations/docs/Transformation-Deep-TH.html).
 
 ~~~ {.haskell}
 instance (Transformation t, Full.Functor t Decl, Full.Functor t Expr) => Deep.Functor t Decl where
@@ -145,20 +145,7 @@ instance (Transformation t, Full.Foldable t Decl, Full.Foldable t Expr) => Deep.
   t `foldMap` EVar v  = mempty
 ~~~
 
-~~~ {.haskell.ignore}
-instance (Full.Traversable t Decl, Full.Traversable t Expr) => Deep.Traversable t Decl where
-  t `traverse` (v := e)   = (v := (t `Full.traverse` e))
-  t `traverse` Seq x y = Seq (t `Full.traverse` x) (t `Full.traverse` y)
-
-instance (Full.Traversable t Decl, Full.Traversable t Expr) => Deep.Traversable t Expr where
-  t `traverse` Con n   = pure (Con n)
-  t `traverse` Add x y = Add <$> t `Full.traverse` x <*> t `Full.traverse` y
-  t `traverse` Mul x y = Mul <$> t `Full.traverse` x <*> t `Full.traverse` y
-  t `traverse` Let d e = Let <$> t `Full.traverse` d <*> t `Full.traverse` e
-  t `traverse` EVar v  = pure (EVar v)
-~~~
-
-Once the above boilerplate code is written or generated, no further boilerplate code need be written.
+Once the above boilerplate code is written or generated, no further boilerplate need be written.
 
 Generic Programing with deep-transformations
 ============================================
@@ -381,7 +368,8 @@ instance AG.Attribution DeadCodeEliminator Expr Identity Identity where
 
 The `Add` and `Mul` nodes' rules need only to pass their inheritance down and to re-join the synthesized child
 expressions. Note that boilerplate code like this can be eliminated using the constructs from the
-`Transformation.AG.Generics` module.
+[`Transformation.AG.Generics`](https://hackage.haskell.org/package/deep-transformations/docs/Transformation-AG-Generics.html)
+module.
 
 ~~~ {.haskell}
   attribution DeadCodeEliminator (Identity Add{}) (inh, (Add (AG.Synthesized e1') (AG.Synthesized e2'))) =
@@ -448,9 +436,4 @@ Here is the attribute grammar finally in action:
 -- Synthesized {syn = Add (Identity (Con 42)) (Identity (Add (Identity (Mul (Identity (Con 42)) (Identity (Con 68)))) (Identity (Con 7))))}
 -- >>> Full.fmap ConstantFold $ Identity $ AG.syn s
 -- Identity (Con 2905)
-~~~
-
-~~~ {.haskell}
-main = print $ Full.fmap ConstantFold $ Identity $ AG.syn
-     $ Full.fmap DeadCodeEliminator (Identity $ bin Let d1 e1) Rank2.$ AG.Inherited (const Nothing)
 ~~~
