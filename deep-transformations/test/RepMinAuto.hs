@@ -18,6 +18,7 @@ import qualified Transformation.AG as AG
 import qualified Transformation.AG.Generics as AG
 import Transformation.AG.Generics (Auto(Auto))
 import qualified Transformation.Deep as Deep
+import qualified Transformation.Deep.TH
 import qualified Transformation.Full as Full
 import qualified Transformation.Shallow as Shallow
 import qualified Transformation.Shallow.TH
@@ -32,30 +33,10 @@ data Root a f' f = Root{root :: f (Tree a f' f')}
 deriving instance (Show (f (Tree a f' f')), Show (f a)) => Show (Tree a f' f)
 deriving instance (Show (f (Tree a f' f'))) => Show (Root a f' f)
 
-instance Rank2.Functor (Tree a f') where
-   f <$> Fork l r = Fork (f l) (f r)
-   f <$> Leaf x = Leaf (f x)
-
-instance Rank2.Functor (Root a f') where
-   f <$> Root x = Root (f x)
-
-$(Rank2.TH.deriveFoldable ''Tree)
-$(Rank2.TH.deriveTraversable ''Tree)
-$(Rank2.TH.deriveFoldable ''Root)
-$(Rank2.TH.deriveTraversable ''Root)
-
-instance Rank2.Apply (Tree a f') where
-   Fork fl fr <*> ~(Fork l r) = Fork (Rank2.apply fl l) (Rank2.apply fr r)
-   Leaf f <*> ~(Leaf x) = Leaf (Rank2.apply f x)
-
-instance Rank2.Applicative (Tree a f') where
-   pure = Leaf
-
-instance Rank2.Apply (Root a f') where
-   Root f <*> ~(Root x) = Root (Rank2.apply f x)
-
-$(Transformation.Shallow.TH.deriveAll ''Tree)
-$(Transformation.Shallow.TH.deriveAll ''Root)
+$(concat <$>
+  (mapM (\derive-> mconcat <$> mapM derive [''Tree, ''Root])
+        [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,
+         Transformation.Shallow.TH.deriveAll]))
 
 instance (Transformation t, Transformation.At t a, Full.Functor t (Tree a)) => Deep.Functor t (Tree a) where
    t <$> Fork l r = Fork (t Full.<$> l) (t Full.<$> r)
