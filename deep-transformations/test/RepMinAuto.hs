@@ -36,18 +36,10 @@ deriving instance (Show (f (Tree a f' f'))) => Show (Root a f' f)
 $(concat <$>
   (mapM (\derive-> mconcat <$> mapM derive [''Tree, ''Root])
         [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,
-         Transformation.Shallow.TH.deriveAll]))
+         Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll]))
 
-instance (Transformation t, Transformation.At t a, Full.Functor t (Tree a)) => Deep.Functor t (Tree a) where
-   t <$> Fork l r = Fork (t Full.<$> l) (t Full.<$> r)
-   t <$> Leaf x = Leaf (t Transformation.$ x)
-
-instance (Transformation t, Full.Functor t (Tree a)) => Deep.Functor t (Root a) where
-   t <$> Root x = Root (t Full.<$> x)
-
-instance (Transformation t, Transformation.At t a,
-          Transformation.At t (Tree a (Codomain t) (Codomain t)), Functor(Domain t)) =>
-         Full.Functor t (Tree a) where
+instance (Transformation t, Transformation.At t a, Transformation.At t (Tree a (Codomain t) (Codomain t)),
+          Functor (Domain t)) => Full.Functor t (Tree a) where
    (<$>) = Full.mapUpDefault
 
 -- | The transformation type
