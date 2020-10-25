@@ -14,7 +14,7 @@ import Transformation (Transformation, Domain, Codomain)
 import qualified Transformation
 import qualified Transformation.Deep as Deep
 
--- | Type family that assigns maps a node type to the type of its attributes, indexed per type constructor.
+-- | Type family that maps a node type to the type of its attributes, indexed per type constructor.
 type family Atts (f :: * -> *) a
 
 -- | Type constructor wrapping the inherited attributes for the given transformation.
@@ -35,14 +35,28 @@ type Rule t g =  forall sem . sem ~ Semantics t
               => (Inherited   t (g sem sem), g sem (Synthesized t))
               -> (Synthesized t (g sem sem), g sem (Inherited t))
 
+-- | The core function to tie the recursive knot, turning a 'Rule' for a node into its 'Semantics'.
 knit :: (Rank2.Apply (g sem), sem ~ Semantics t) => Rule t g -> g sem sem -> sem (g sem sem)
 knit r chSem = Rank2.Arrow knit'
    where knit' inh = syn
             where (syn, chInh) = r (inh, chSyn)
                   chSyn = chSem Rank2.<*> chInh
 
+-- | The core type class for defining the attribute grammar. The instances of this class typically have a form like
+--
+-- > instance Attribution MyAttGrammar MyNode (Semantics MyAttGrammar) Identity where
+-- >   attribution MyAttGrammar{} (Identity MyNode{})
+-- >               (Inherited   fromParent,
+-- >                Synthesized MyNode{firstChild= fromFirstChild, ...})
+-- >             = (Synthesized _forMyself,
+-- >                Inherited   MyNode{firstChild= _forFirstChild, ...})
+--
+-- If you prefer to separate the calculation of different attributes, you can split the above instance into two
+-- instances of the 'Transformation.AG.Generics.Bequether' and 'Transformation.AG.Generics.Synthesizer' classes
+-- instead. If you derive 'GHC.Generics.Generic' instances for your attributes, you can even define each synthesized
+-- attribute individually with a 'Transformation.AG.Generics.SynthesizedField' instance.
 class Attribution t g deep shallow where
-   -- | The attribution rule for a given transormation and node.
+   -- | The attribution rule for a given transformation and node.
    attribution :: t -> shallow (g deep deep) -> Rule t g
 
 -- | Drop-in implementation of 'Transformation.$'

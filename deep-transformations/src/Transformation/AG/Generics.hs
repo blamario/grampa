@@ -5,8 +5,8 @@
 -- | This module can be used to scrap the boilerplate attribute declarations. In particular:
 --
 -- * If an 'attribution' rule always merely copies the inherited attributes to the children's inherited attributes of
---   the same name, the rule can be left out by wrapping the transformation into an 'Auto' constructor and making the
---   inherited attributes a 'Generic' instance.
+--   the same name, the rule can be left out by wrapping the transformation into an 'Auto' constructor and deriving
+--   the 'Generic' instance of the inherited attributes.
 -- * A synthesized attribute whose value is a fold of all same-named attributes of the children can be wrapped in the
 --   'Folded' constructor and calculated automatically.
 -- * A synthesized attribute that is a copy of the current node but with every child taken from the same-named
