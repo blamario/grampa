@@ -3,7 +3,7 @@
 
 -- | Type classes 'Functor', 'Foldable', and 'Traversable' that correspond to the standard type classes of the same
 -- name. The [rank2classes](https://hackage.haskell.org/package/rank2classes) package provides the equivalent set
--- of classes for natural transformations.
+-- of classes for natural transformations. This module extends the functionality to unnatural transformations.
 
 module Transformation.Shallow where
 
@@ -18,15 +18,15 @@ import           Transformation (Transformation, Domain, Codomain)
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
--- | Like 'Rank2.Functor' except it takes a 'Transformation' instead of a polymorphic function
+-- | Like Rank2.'Rank2.Functor' except it takes a 'Transformation' instead of a polymorphic function
 class (Transformation t, Rank2.Functor g) => Functor t g where
    (<$>) :: t -> g (Domain t) -> g (Codomain t)
 
--- | Like 'Rank2.Foldable' except it takes a 'Transformation' instead of a polymorphic function
+-- | Like Rank2.'Rank2.Foldable' except it takes a 'Transformation' instead of a polymorphic function
 class (Transformation t, Rank2.Foldable g) => Foldable t g where
    foldMap :: (Codomain t ~ Const m, Monoid m) => t -> g (Domain t) -> m
 
--- | Like 'Rank2.Traversable' except it takes a 'Transformation' instead of a polymorphic function
+-- | Like Rank2.'Rank2.Traversable' except it takes a 'Transformation' instead of a polymorphic function
 class (Transformation t, Rank2.Traversable g) => Traversable t g where
    traverse :: Codomain t ~ Compose m f => t -> g (Domain t) -> m (g f)
 

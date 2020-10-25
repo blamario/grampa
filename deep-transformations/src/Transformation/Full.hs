@@ -1,5 +1,10 @@
 {-# Language FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, TypeFamilies, TypeOperators #-}
 
+-- | Type classes 'Functor', 'Foldable', and 'Traversable' that correspond to the standard type classes of the same
+-- name, but applying the given transformation to the given tree node and all its descendants. The corresponding classes
+-- in the "Transformation.Shallow" moduleo perate only on the immediate children, while those from the
+-- "Transformation.Deep" module exclude the argument node itself.
+
 module Transformation.Full where
 
 import qualified Data.Functor
@@ -15,15 +20,15 @@ import {-# SOURCE #-} qualified Transformation.Deep as Deep
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
--- | Like 'Deep.Functor' except it maps an additional wrapper around the entire tree
+-- | Like "Transformation.Deep".'Deep.Functor' except it maps an additional wrapper around the entire tree
 class (Transformation t, Rank2.Functor (g (Domain t))) => Functor t g where
    (<$>) :: t -> Domain t (g (Domain t) (Domain t)) -> Codomain t (g (Codomain t) (Codomain t))
 
--- | Like 'Deep.Foldable' except the entire tree is also wrapped
+-- | Like "Transformation.Deep".'Deep.Foldable' except the entire tree is also wrapped
 class (Transformation t, Rank2.Foldable (g (Domain t))) => Foldable t g where
    foldMap :: (Codomain t ~ Const m, Monoid m) => t -> Domain t (g (Domain t) (Domain t)) -> m
 
--- | Like 'Deep.Traversable' except it traverses an additional wrapper around the entire tree
+-- | Like "Transformation.Deep".'Deep.Traversable' except it traverses an additional wrapper around the entire tree
 class (Transformation t, Rank2.Traversable (g (Domain t))) => Traversable t g where
    traverse :: Codomain t ~ Compose m f => t -> Domain t (g (Domain t) (Domain t)) -> m (f (g f f))
 

@@ -1,6 +1,11 @@
 {-# Language DeriveDataTypeable, FlexibleInstances, KindSignatures, MultiParamTypeClasses, RankNTypes,
              StandaloneDeriving, TypeFamilies, UndecidableInstances #-}
 
+-- | Type classes 'Functor', 'Foldable', and 'Traversable' that correspond to the standard type classes of the same
+-- name, but applying the given transformation to every descendant of the given tree node. The corresponding classes
+-- in the "Transformation.Shallow" module operate only on the immediate children, while those from the
+-- "Transformation.Full" module include the argument node itself.
+
 module Transformation.Deep where
 
 import Control.Applicative (Applicative, (<*>), liftA2)
@@ -15,15 +20,15 @@ import qualified Transformation.Full as Full
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
--- | Like 'Transformation.Shallow.Functor' except it maps all descendants and not only immediate children
+-- | Like "Transformation.Shallow".'Transformation.Shallow.Functor' except it maps all descendants and not only immediate children
 class (Transformation t, Rank2.Functor (g (Domain t))) => Functor t g where
    (<$>) :: t -> g (Domain t) (Domain t) -> g (Codomain t) (Codomain t)
 
--- | Like 'Transformation.Shallow.Foldable' except it folds all descendants and not only immediate children
+-- | Like "Transformation.Shallow".'Transformation.Shallow.Foldable' except it folds all descendants and not only immediate children
 class (Transformation t, Rank2.Foldable (g (Domain t))) => Foldable t g where
    foldMap :: (Codomain t ~ Const m, Monoid m) => t -> g (Domain t) (Domain t) -> m
 
--- | Like 'Transformation.Shallow.Traversable' except it folds all descendants and not only immediate children
+-- | Like "Transformation.Shallow".'Transformation.Shallow.Traversable' except it folds all descendants and not only immediate children
 class (Transformation t, Rank2.Traversable (g (Domain t))) => Traversable t g where
    traverse :: Codomain t ~ Compose m f => t -> g (Domain t) (Domain t) -> m (g f f)
 
