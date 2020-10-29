@@ -18,8 +18,8 @@ import qualified Transformation.Full as Full
 (<$>) f = (Deep.<$>) (Map f)
 
 -- | Fold the containing functor of every node in the given tree.
-foldMap :: (Deep.Functor (Fold p m) g, Rank2.Foldable (g (Const m)), Monoid m) => (forall a. p a -> m) -> g p p -> m
-foldMap f = Rank2.foldMap getConst . Deep.fmap (Fold f)
+foldMap :: (Deep.Foldable (Fold p m) g, Monoid m) => (forall a. p a -> m) -> g p p -> m
+foldMap f = Deep.foldMap (Fold f)
 
 -- | Traverse the containing functors of all nodes in the given tree.
 traverse :: Deep.Traversable (Traversal p q m) g => (forall a. p a -> m (q a)) -> g p p -> m (g q q)
