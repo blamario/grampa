@@ -8,9 +8,8 @@
 module Transformation.Full where
 
 import qualified Data.Functor
-import           Data.Functor.Compose (Compose(Compose, getCompose))
-import           Data.Functor.Const (Const(Const, getConst))
-import           Data.Kind (Type)
+import           Data.Functor.Compose (Compose(getCompose))
+import           Data.Functor.Const (Const(getConst))
 import qualified Data.Foldable
 import qualified Data.Traversable
 import qualified Rank2

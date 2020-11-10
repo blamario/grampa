@@ -8,11 +8,10 @@
 
 module Transformation.Deep where
 
-import Control.Applicative (Applicative, (<*>), liftA2)
+import Control.Applicative (Applicative, liftA2)
 import Data.Data (Data, Typeable)
 import Data.Functor.Compose (Compose)
 import Data.Functor.Const (Const)
-import Data.Kind (Type)
 import qualified Rank2
 import qualified Data.Functor
 import           Transformation (Transformation, Domain, Codomain)

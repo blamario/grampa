@@ -1,10 +1,9 @@
-{-# Language KindSignatures, MultiParamTypeClasses, RankNTypes, TypeFamilies #-}
+{-# Language MultiParamTypeClasses, RankNTypes, TypeFamilies #-}
 
 module Transformation.Deep where
 
 import Data.Functor.Compose (Compose)
 import Data.Functor.Const (Const)
-import Data.Kind (Type)
 import qualified Rank2
 import           Transformation (Transformation, Domain, Codomain)
 

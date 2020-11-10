@@ -5,9 +5,8 @@
 
 module Transformation.Rank2 where
 
-import Data.Functor.Compose (Compose(Compose, getCompose))
-import Data.Functor.Const (Const(Const, getConst))
-import qualified Rank2
+import Data.Functor.Compose (Compose(Compose))
+import Data.Functor.Const (Const(Const))
 import           Transformation (Transformation, Domain, Codomain)
 import qualified Transformation
 import qualified Transformation.Deep as Deep

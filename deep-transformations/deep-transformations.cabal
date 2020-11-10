@@ -39,6 +39,7 @@ library
                         Transformation.Deep, Transformation.Deep.TH,
                         Transformation.Full, Transformation.Full.TH,
                         Transformation.Rank2, Transformation.AG, Transformation.AG.Generics
+  ghc-options:         -Wall
   build-depends:        base >= 4.7 && < 5, rank2classes >= 1.4.1 && < 1.5,
                         template-haskell >= 2.11 && < 2.17, generic-lens == 2.0.*
   default-language:     Haskell2010

@@ -24,12 +24,9 @@
 
 module Transformation where
 
-import qualified Data.Functor as Rank1
 import Data.Functor.Product (Product(Pair))
 import Data.Functor.Sum (Sum(InL, InR))
 import Data.Kind (Type)
-import Data.Monoid (Ap)
-import Data.Semigroup (Semigroup((<>)))
 import qualified Rank2
 
 import Prelude hiding (($))

@@ -28,16 +28,12 @@ import Data.Kind (Type)
 import Data.Generics.Product.Subtype (Subtype(upcast))
 import Data.Proxy (Proxy(..))
 import GHC.Generics
-import qualified GHC.Generics as Generics
 import GHC.Records
-import GHC.TypeLits (Symbol, KnownSymbol, SomeSymbol(..), ErrorMessage (Text), TypeError)
+import GHC.TypeLits (Symbol, ErrorMessage (Text), TypeError)
 import Unsafe.Coerce (unsafeCoerce)
-import qualified Rank2
 import Transformation (Transformation, Domain, Codomain)
 import Transformation.AG
 import qualified Transformation
-import qualified Transformation.Deep as Deep
-import qualified Transformation.Full as Full
 import qualified Transformation.Shallow as Shallow
 
 -- | Transformation wrapper that allows automatic inference of attribute rules.
@@ -178,14 +174,14 @@ instance {-# overlaps #-} (MayHaveMonoidalField name a x, MayHaveMonoidalField n
          MayHaveMonoidalField name a (x :*: y) where
    getMonoidalField name (x :*: y) = getMonoidalField name x <> getMonoidalField name y
 
-instance {-# overlaps #-} TypeError (Text "Cannot get a single field value from a sum type") =>
+instance {-# overlaps #-} TypeError ('Text "Cannot get a single field value from a sum type") =>
          MayHaveMonoidalField name a (x :+: y) where
    getMonoidalField _ _ = error "getMonoidalField on sum type"
 
 instance {-# overlaps #-} FoundField a f => MayHaveMonoidalField name a (M1 i ('MetaSel ('Just name) su ss ds) f) where
-   getMonoidalField name (M1 x) = getFoundField x
+   getMonoidalField _ (M1 x) = getFoundField x
 
-instance {-# overlaps #-} Monoid a => MayHaveMonoidalField name a (M1 i ('MetaSel Nothing su ss ds) f) where
+instance {-# overlaps #-} Monoid a => MayHaveMonoidalField name a (M1 i ('MetaSel 'Nothing su ss ds) f) where
    getMonoidalField _ _ = mempty
 
 instance {-# overlaps #-} MayHaveMonoidalField name a f => MayHaveMonoidalField name a (M1 i ('MetaData n m p nt) f) where
@@ -195,7 +191,7 @@ instance {-# overlaps #-} MayHaveMonoidalField name a f => MayHaveMonoidalField 
    getMonoidalField name (M1 x) = getMonoidalField name x
 
 instance {-# overlappable #-} Monoid a => MayHaveMonoidalField name a f where
-   getMonoidalField name _ = mempty
+   getMonoidalField _ _ = mempty
 
 instance FoundField a f => FoundField a (M1 i j f) where
      getFoundField (M1 f) = getFoundField f
@@ -234,12 +230,12 @@ instance  {-# overlappable #-} (Traversable f, Applicative m, Shallow.Traversabl
 
 -- | The default 'bequest' method definition relies on generics to automatically pass down all same-named inherited
 -- attributes.
-bequestDefault :: forall t g shallow deep sem.
+bequestDefault :: forall t g shallow sem.
                   (sem ~ Semantics t, Domain t ~ shallow, Revelation t shallow,
                    Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem))
                => t -> shallow (g sem sem) -> Atts (Inherited t) (g sem sem) -> g sem (Synthesized t)
                -> g sem (Inherited t)
-bequestDefault t local inheritance synthesized = passDown inheritance (reveal t local)
+bequestDefault t local inheritance _synthesized = passDown inheritance (reveal t local)
 
 -- | Pass down the given record of inherited fields to child nodes.
 passDown :: forall t g shallow deep atts. (Shallow.Functor (PassDown t shallow atts) (g deep)) =>
@@ -249,18 +245,18 @@ passDown inheritance local = PassDown inheritance Shallow.<$> local
 -- | The default 'synthesizedField' method definition for 'Folded' fields.
 foldedField :: forall name t g a sem. (Monoid a, Shallow.Foldable (Accumulator t name a) (g sem)) =>
                Proxy name -> t -> g sem (Synthesized t) -> Folded a
-foldedField name t s = Shallow.foldMap (Accumulator :: Accumulator t name a) s
+foldedField _name _t s = Shallow.foldMap (Accumulator :: Accumulator t name a) s
 
 -- | The default 'synthesizedField' method definition for 'Mapped' fields.
 mappedField :: forall name t g f sem.
                   (Shallow.Functor (Replicator t f name) (g f),
                    Atts (Synthesized t) (g sem sem) ~ Atts (Synthesized t) (g f f)) =>
                   Proxy name -> t -> g sem (Synthesized t) -> g f f
-mappedField name t s = (Replicator :: Replicator t f name) Shallow.<$> (unsafeCoerce s :: g f (Synthesized t))
+mappedField _name _t s = (Replicator :: Replicator t f name) Shallow.<$> (unsafeCoerce s :: g f (Synthesized t))
 
 -- | The default 'synthesizedField' method definition for 'Traversed' fields.
 traversedField :: forall name t g m f sem.
                      (Shallow.Traversable (Traverser t m f name) (g f),
                       Atts (Synthesized t) (g sem sem) ~ Atts (Synthesized t) (g f f)) =>
                      Proxy name -> t -> g sem (Synthesized t) -> m (g f f)
-traversedField name t s = Shallow.traverse (Traverser :: Traverser t m f name) (unsafeCoerce s :: g f (Synthesized t))
+traversedField _name _t s = Shallow.traverse (Traverser :: Traverser t m f name) (unsafeCoerce s :: g f (Synthesized t))

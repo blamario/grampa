@@ -12,9 +12,7 @@ module Transformation.Full.TH (deriveDownFunctor, deriveDownFoldable, deriveDown
                                deriveUpFunctor, deriveUpFoldable, deriveUpTraversable)
 where
 
-import qualified Data.Traversable
 import Language.Haskell.TH
-import Language.Haskell.TH.Syntax (BangType, VarBangType)
 
 import qualified Transformation
 import qualified Transformation.Deep

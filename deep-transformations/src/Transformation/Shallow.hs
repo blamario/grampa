@@ -7,13 +7,10 @@
 
 module Transformation.Shallow where
 
-import Control.Applicative (Applicative, (<*>), liftA2)
-import Data.Data (Data, Typeable)
+import Control.Applicative (Applicative, liftA2)
 import Data.Functor.Compose (Compose)
 import Data.Functor.Const (Const)
-import Data.Kind (Type)
 import qualified Rank2
-import qualified Data.Functor
 import           Transformation (Transformation, Domain, Codomain)
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)

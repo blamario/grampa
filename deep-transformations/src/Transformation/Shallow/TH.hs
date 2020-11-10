@@ -23,7 +23,6 @@ import Language.Haskell.TH.Syntax (BangType, VarBangType, getQ, putQ)
 
 import qualified Transformation
 import qualified Transformation.Shallow
-import qualified Rank2.TH
 
 
 data Deriving = Deriving { _constructor :: Name, _variable :: Name }
@@ -33,9 +32,9 @@ deriveAll ty = foldr f (pure []) [deriveFunctor, deriveFoldable, deriveTraversab
    where f derive rest = (<>) <$> derive ty <*> rest
 
 deriveFunctor :: Name -> Q [Dec]
-deriveFunctor ty = do
+deriveFunctor typeName = do
    t <- varT <$> newName "t"
-   (instanceType, cs) <- reifyConstructors ty
+   (instanceType, cs) <- reifyConstructors typeName
    let shallowConstraint ty = conT ''Transformation.Shallow.Functor `appT` t `appT` ty
        baseConstraint ty = conT ''Transformation.At `appT` t `appT` ty
    (constraints, dec) <- genShallowmap shallowConstraint baseConstraint instanceType cs
@@ -44,10 +43,10 @@ deriveFunctor ty = do
                        [pure dec]]
 
 deriveFoldable :: Name -> Q [Dec]
-deriveFoldable ty = do
+deriveFoldable typeName = do
    t <- varT <$> newName "t"
    m <- varT <$> newName "m"
-   (instanceType, cs) <- reifyConstructors ty
+   (instanceType, cs) <- reifyConstructors typeName
    let shallowConstraint ty = conT ''Transformation.Shallow.Foldable `appT` t `appT` ty
        baseConstraint ty = conT ''Transformation.At `appT` t `appT` ty
    (constraints, dec) <- genFoldMap shallowConstraint baseConstraint instanceType cs
@@ -59,11 +58,11 @@ deriveFoldable ty = do
                        [pure dec]]
 
 deriveTraversable :: Name -> Q [Dec]
-deriveTraversable ty = do
+deriveTraversable typeName = do
    t <- varT <$> newName "t"
    m <- varT <$> newName "m"
    f <- varT <$> newName "f"
-   (instanceType, cs) <- reifyConstructors ty
+   (instanceType, cs) <- reifyConstructors typeName
    let shallowConstraint ty = conT ''Transformation.Shallow.Traversable `appT` t `appT` ty
        baseConstraint ty = conT ''Transformation.At `appT` t `appT` ty
    (constraints, dec) <- genTraverse shallowConstraint baseConstraint instanceType cs
@@ -117,7 +116,7 @@ genTraverse shallowConstraint baseConstraint instanceType cs = do
    return (concat constraints, FunD 'Transformation.Shallow.traverse clauses)
 
 genShallowmapClause :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> Q Type -> Con -> Q ([Type], Clause)
-genShallowmapClause shallowConstraint baseConstraint instanceType (NormalC name fieldTypes) = do
+genShallowmapClause shallowConstraint baseConstraint _instanceType (NormalC name fieldTypes) = do
    t          <- newName "t"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
    let pats = [varP t, parensP (conP name $ map varP fieldNames)]
@@ -128,7 +127,7 @@ genShallowmapClause shallowConstraint baseConstraint instanceType (NormalC name 
        newField x (_, fieldType) = genShallowmapField (varE t) fieldType shallowConstraint baseConstraint (varE x) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause pats body []
-genShallowmapClause shallowConstraint baseConstraint instanceType (RecC name fields) = do
+genShallowmapClause shallowConstraint baseConstraint _instanceType (RecC name fields) = do
    t <- newName "t"
    x <- newName "x"
    let body = normalB $ recConE name $ (snd <$>) <$> constraintsAndFields
@@ -157,7 +156,7 @@ genShallowmapClause shallowConstraint baseConstraint instanceType (ForallC _vars
    genShallowmapClause shallowConstraint baseConstraint instanceType con
 
 genFoldMapClause :: (Q Type -> Q Type) -> (Q Type -> Q Type) -> Q Type -> Con -> Q ([Type], Clause)
-genFoldMapClause shallowConstraint baseConstraint instanceType (NormalC name fieldTypes) = do
+genFoldMapClause shallowConstraint baseConstraint _instanceType (NormalC name fieldTypes) = do
    t          <- newName "t"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
    let pats = [varP t, conP name (map varP fieldNames)]
@@ -169,7 +168,7 @@ genFoldMapClause shallowConstraint baseConstraint instanceType (NormalC name fie
        newField x (_, fieldType) = genFoldMapField (varE t) fieldType shallowConstraint baseConstraint (varE x) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause pats (normalB body) []
-genFoldMapClause shallowConstraint baseConstraint instanceType (RecC name fields) = do
+genFoldMapClause shallowConstraint baseConstraint _instanceType (RecC name fields) = do
    t <- newName "t"
    x <- newName "x"
    let body | null fields = [| mempty |]
@@ -203,7 +202,7 @@ type GenTraverseFieldType = Q Exp -> Type -> (Q Type -> Q Type) -> (Q Type -> Q 
 
 genTraverseClause :: GenTraverseFieldType -> (Q Type -> Q Type) -> (Q Type -> Q Type) -> Q Type -> Con
                   -> Q ([Type], Clause)
-genTraverseClause genTraverseField shallowConstraint baseConstraint instanceType (NormalC name fieldTypes) = do
+genTraverseClause genField shallowConstraint baseConstraint _instanceType (NormalC name fieldTypes) = do
    t          <- newName "t"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
    let pats = [varP t, parensP (conP name $ map varP fieldNames)]
@@ -214,10 +213,10 @@ genTraverseClause genTraverseField shallowConstraint baseConstraint instanceType
        apply (a, False) b = ([| $(a) <$> $(b) |], True)
        apply (a, True) b = ([| $(a) <*> $(b) |], True)
        newField :: Name -> BangType -> Q ([Type], Exp)
-       newField x (_, fieldType) = genTraverseField (varE t) fieldType shallowConstraint baseConstraint (varE x) id
+       newField x (_, fieldType) = genField (varE t) fieldType shallowConstraint baseConstraint (varE x) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause pats (normalB body) []
-genTraverseClause genTraverseField shallowConstraint baseConstraint instanceType (RecC name fields) = do
+genTraverseClause genField shallowConstraint baseConstraint _instanceType (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
    let constraintsAndFields = map newNamedField fields
@@ -228,27 +227,27 @@ genTraverseClause genTraverseField shallowConstraint baseConstraint instanceType
        newNamedField :: VarBangType -> Q ([Type], (Name, Exp))
        newNamedField (fieldName, _, fieldType) =
           ((,) fieldName <$>)
-          <$> genTraverseField (varE f) fieldType shallowConstraint baseConstraint (appE (varE fieldName) (varE x)) id
+          <$> genField (varE f) fieldType shallowConstraint baseConstraint (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP f, x `asP` recP name []] (normalB body) []
-genTraverseClause genTraverseField shallowConstraint baseConstraint instanceType
+genTraverseClause genField shallowConstraint baseConstraint instanceType
                   (GadtC [name] fieldTypes (AppT resultType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      genTraverseClause genTraverseField
+      genTraverseClause genField
         (shallowConstraint . substitute resultType instanceType)
         (baseConstraint . substitute resultType instanceType)
         instanceType (NormalC name fieldTypes)
-genTraverseClause genTraverseField shallowConstraint baseConstraint instanceType
+genTraverseClause genField shallowConstraint baseConstraint instanceType
                   (RecGadtC [name] fields (AppT resultType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      genTraverseClause genTraverseField
+      genTraverseClause genField
                         (shallowConstraint . substitute resultType instanceType)
                         (baseConstraint . substitute resultType instanceType)
                         instanceType (RecC name fields)
-genTraverseClause genTraverseField shallowConstraint baseConstraint instanceType (ForallC _vars _cxt con) =
-   genTraverseClause genTraverseField shallowConstraint baseConstraint instanceType con
+genTraverseClause genField shallowConstraint baseConstraint instanceType (ForallC _vars _cxt con) =
+   genTraverseClause genField shallowConstraint baseConstraint instanceType con
 
 genShallowmapField :: Q Exp -> Type -> (Q Type -> Q Type) -> (Q Type -> Q Type) -> Q Exp -> (Q Exp -> Q Exp)
                 -> Q ([Type], Exp)

@@ -8,10 +8,8 @@
 
 module Transformation.AG where
 
-import Data.Functor.Identity
 import qualified Rank2
-import Transformation (Transformation, Domain, Codomain)
-import qualified Transformation
+import Transformation (Domain, Codomain)
 import qualified Transformation.Deep as Deep
 
 -- | Type family that maps a node type to the type of its attributes, indexed per type constructor.
@@ -38,8 +36,8 @@ type Rule t g =  forall sem . sem ~ Semantics t
 -- | The core function to tie the recursive knot, turning a 'Rule' for a node into its 'Semantics'.
 knit :: (Rank2.Apply (g sem), sem ~ Semantics t) => Rule t g -> g sem sem -> sem (g sem sem)
 knit r chSem = Rank2.Arrow knit'
-   where knit' inh = syn
-            where (syn, chInh) = r (inh, chSyn)
+   where knit' inherited = synthesized
+            where (synthesized, chInh) = r (inherited, chSyn)
                   chSyn = chSem Rank2.<*> chInh
 
 -- | The core type class for defining the attribute grammar. The instances of this class typically have a form like
