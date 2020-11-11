@@ -1,6 +1,7 @@
 Version 1.4.1
 ---------------
 * Fixed the templates for multi-constructor records
+* Made Rank2.TH.unsafeDeriveApply even more unsafe
 
 Version 1.4
 ---------------

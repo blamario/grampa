@@ -1,3 +1,14 @@
+Version 0.5
+---------------
+* Replaced `MonoidParsing` by `InputParsing`
+* Moved the `InputParsing` and `InputCharParser` classes into the `input-parsers` package
+* Added the `Expected` data type to eliminate the `Show` constraint on `string`
+* Fixed the signature of `scan` and `scanChars`
+* Deprecated `endOfInput` and `satisfyChar`
+* Replaced `Lexical g` with `LexicalParsing m`
+* Added modules `SortedMemoizing.Transformer` and `LeftRecursive.Transformer`
+* Added the `getAmbiguous` destructor
+
 Version 0.4.1.2
 ---------------
 * Fixed the doctests using cabal-doctest
