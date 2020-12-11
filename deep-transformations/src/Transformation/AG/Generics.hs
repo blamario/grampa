@@ -59,7 +59,7 @@ class Bequether t g deep shallow where
 class Synthesizer t g deep shallow where
    synthesis   :: forall sem. sem ~ Semantics t =>
                   t                                -- ^ transformation        
-               -> shallow (g deep deep)            -- ^ tre node
+               -> shallow (g deep deep)            -- ^ tree node
                -> Atts (Inherited t) (g sem sem)   -- ^ inherited attributes  
                -> g sem (Synthesized t)            -- ^ synthesized attributes
                -> Atts (Synthesized t) (g sem sem)
