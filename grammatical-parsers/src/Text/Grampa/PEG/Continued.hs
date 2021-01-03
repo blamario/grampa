@@ -14,6 +14,7 @@ import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Factorial(FactorialMonoid)
 import Data.Monoid.Textual(TextualMonoid)
 import Data.String (fromString)
+import Data.Witherable.Class (Filterable(mapMaybe))
 
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Null as Null
@@ -45,6 +46,11 @@ instance Show s => Show1 (Result g s) where
 instance Functor (Result g s) where
    fmap f (Parsed a rest) = Parsed (f a) rest
    fmap _ (NoParse failure) = NoParse failure
+
+instance Factorial.FactorialMonoid s => Filterable (Result g s) where
+   mapMaybe f (Parsed a rest) =
+      maybe (NoParse $ FailureInfo (Factorial.length rest) [Expected "filter"]) (`Parsed` rest) (f a)
+   mapMaybe _ (NoParse failure) = NoParse failure
    
 instance Functor (Parser g s) where
    fmap f (Parser p) = Parser (\input success-> p input (success . f))
@@ -67,6 +73,14 @@ alt :: forall g s a. Parser g s a -> Parser g s a -> Parser g s a
 Parser p `alt` Parser q = Parser r where
    r :: forall x. s -> (a -> s -> x) -> (FailureInfo s -> x) -> x
    r rest success failure = p rest success (\f1-> q rest success $ \f2 -> failure (f1 <> f2))
+   
+instance Factorial.FactorialMonoid s => Filterable (Parser g s) where
+   mapMaybe :: forall a b. (a -> Maybe b) -> Parser g s a -> Parser g s b
+   mapMaybe f (Parser p) = Parser q where
+      q :: forall x. s -> (b -> s -> x) -> (FailureInfo s -> x) -> x
+      q rest success failure = p rest (maybe filterFailure success . f) failure
+         where filterFailure _ = failure (FailureInfo (Factorial.length rest) [Expected "filter"])
+   {-# INLINABLE mapMaybe #-}
 
 instance Monad (Parser g s) where
    return = pure

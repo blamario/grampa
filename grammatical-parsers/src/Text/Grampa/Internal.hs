@@ -7,10 +7,11 @@ module Text.Grampa.Internal (BinTree(..), FailureInfo(..), ResultList(..), Resul
 import Control.Applicative (Applicative(..), Alternative(..))
 import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.List (nub)
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Semigroup (Semigroup((<>)))
+import Data.Witherable.Class (Filterable(mapMaybe))
 
 import Data.Monoid.Factorial (FactorialMonoid, length)
 
@@ -81,6 +82,11 @@ instance Alternative (ResultList g s) where
    empty = ResultList mempty mempty
    (<|>) = (<>)
 
+instance Filterable (ResultList g s) where
+   mapMaybe f (ResultList l failure) = ResultList (mapMaybe maybeROL l) failure
+      where maybeROL (ResultsOfLength l t rs) = ResultsOfLength l t <$> nonEmpty (mapMaybe f $ toList rs)
+   {-# INLINE mapMaybe #-}
+
 instance Semigroup (ResultList g s r) where
    ResultList rl1 f1 <> ResultList rl2 f2 = ResultList (merge rl1 rl2) (f1 <> f2)
       where merge [] rl = rl
@@ -116,6 +122,16 @@ instance Foldable BinTree where
    foldMap f (Fork left right) = foldMap f left `mappend` foldMap f right
    foldMap f (Leaf a) = f a
    foldMap _ EmptyTree = mempty
+
+instance Traversable BinTree where
+   traverse f (Fork left right) = Fork <$> traverse f left <*> traverse f right
+   traverse f (Leaf a) = Leaf <$> f a
+   traverse _ EmptyTree = pure EmptyTree
+
+instance Filterable BinTree where
+   mapMaybe f (Fork left right) = mapMaybe f left <> mapMaybe f right
+   mapMaybe f (Leaf a) = maybe EmptyTree Leaf (f a)
+   mapMaybe _ EmptyTree = EmptyTree
 
 instance Semigroup (BinTree a) where
    EmptyTree <> t = t

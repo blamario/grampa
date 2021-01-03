@@ -13,6 +13,7 @@ import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Factorial(FactorialMonoid)
 import Data.Monoid.Textual(TextualMonoid)
 import Data.String (fromString)
+import Data.Witherable.Class (Filterable(mapMaybe))
 
 import Data.Semigroup.Cancellative (LeftReductive(stripPrefix))
 import qualified Data.Monoid.Factorial as Factorial
@@ -28,24 +29,13 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
                           MultiParsing(..), ParseResults, ParseFailure(..), Expected(..))
 import Text.Grampa.Internal (FailureInfo(..))
-
-data Result (g :: (* -> *) -> *) s v = Parsed{parsedPrefix :: !v,
-                                              parsedSuffix :: !s}
-                                     | NoParse (FailureInfo s)
+import Text.Grampa.PEG.Continued (Result(..))
 
 -- | Parser type for Parsing Expression Grammars that uses a continuation-passing algorithm and keeps track of the
 -- parsed prefix length, fast for grammars in LL(1) class but with potentially exponential performance for longer
 -- ambiguous prefixes.
 newtype Parser (g :: (* -> *) -> *) s r =
    Parser{applyParser :: forall x. s -> (r -> Int -> s -> x) -> (FailureInfo s -> x) -> x}
-
-instance Show s => Show1 (Result g s) where
-   liftShowsPrec showsPrecSub _showList prec Parsed{parsedPrefix= r} rest = "Parsed " ++ showsPrecSub prec r rest
-   liftShowsPrec _showsPrec _showList _prec (NoParse f) rest = "NoParse " ++ shows f rest
-
-instance Functor (Result g s) where
-   fmap f (Parsed a rest) = Parsed (f a) rest
-   fmap _ (NoParse failure) = NoParse failure
    
 instance Functor (Parser g s) where
    fmap f (Parser p) = Parser (\input success-> p input (success . f))
@@ -68,6 +58,14 @@ alt :: forall g s a. Parser g s a -> Parser g s a -> Parser g s a
 Parser p `alt` Parser q = Parser r where
    r :: forall x. s -> (a -> Int -> s -> x) -> (FailureInfo s -> x) -> x
    r rest success failure = p rest success (\f1-> q rest success $ \f2 -> failure (f1 <> f2))
+   
+instance Factorial.FactorialMonoid s => Filterable (Parser g s) where
+   mapMaybe :: forall a b. (a -> Maybe b) -> Parser g s a -> Parser g s b
+   mapMaybe f (Parser p) = Parser q where
+      q :: forall x. s -> (b -> Int -> s -> x) -> (FailureInfo s -> x) -> x
+      q rest success failure = p rest (maybe filterFailure success . f) failure
+         where filterFailure _ _ = failure (FailureInfo (Factorial.length rest) [Expected "filter"])
+   {-# INLINABLE mapMaybe #-}
 
 instance Monad (Parser g s) where
    return = pure

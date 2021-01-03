@@ -14,6 +14,7 @@ import Data.Monoid.Textual(TextualMonoid)
 import Data.Semigroup (Semigroup(..))
 import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf))
 import Data.String (fromString)
+import Data.Witherable.Class (Filterable(mapMaybe))
 
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Null as Null
@@ -46,6 +47,11 @@ instance Show s => Show1 (Result g s) where
 instance Functor (Result g s) where
    fmap f (Parsed a rest) = Parsed (f a) rest
    fmap _ (NoParse failure) = NoParse failure
+
+instance Factorial.FactorialMonoid s => Filterable (Result g s) where
+   mapMaybe f (Parsed a rest) =
+      maybe (NoParse $ FailureInfo (Factorial.length rest) [Expected "filter"]) (`Parsed` rest) (f a)
+   mapMaybe _ (NoParse failure) = NoParse failure
    
 instance Functor (Parser g s) where
    fmap f (Parser p) = Parser (fmap f . p)
@@ -63,6 +69,10 @@ instance Alternative (Parser g s) where
       r rest = case p rest
                of x@Parsed{} -> x
                   NoParse{} -> q rest
+   
+instance Factorial.FactorialMonoid s => Filterable (Parser g s) where
+   mapMaybe f (Parser p) = Parser (mapMaybe f . p)
+   {-# INLINABLE mapMaybe #-}
 
 instance Monad (Parser g s) where
    return = pure

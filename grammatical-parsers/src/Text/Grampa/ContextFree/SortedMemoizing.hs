@@ -19,6 +19,7 @@ import qualified Data.Monoid.Textual as Textual
 import Data.Semigroup (Semigroup((<>)))
 import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf))
 import Data.String (fromString)
+import Data.Witherable.Class (Filterable(mapMaybe))
 
 import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
@@ -61,6 +62,9 @@ instance Alternative (Parser g i) where
       r rest = p rest <> q rest
    {-# INLINE (<|>) #-}
    {-# INLINABLE empty #-}
+
+instance Filterable (Parser g i) where
+  mapMaybe f (Parser p) = Parser (mapMaybe f . p)
 
 instance Monad (Parser g i) where
    return = pure

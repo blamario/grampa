@@ -20,6 +20,7 @@ import qualified Data.Monoid.Textual as Textual
 import Data.Semigroup (Semigroup((<>)))
 import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf))
 import Data.String (fromString)
+import Data.Witherable.Class (Filterable(mapMaybe))
 
 import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
@@ -56,8 +57,17 @@ instance (Show s, Show r) => Show (ResultInfo g s r) where
 instance Functor (ResultInfo g s) where
    fmap f (ResultInfo l t r) = ResultInfo l t (f r)
 
+instance Foldable (ResultInfo g s) where
+   foldMap f (ResultInfo _ _ r) = f r
+
+instance Traversable (ResultInfo g s) where
+   traverse f (ResultInfo l t r) = ResultInfo l t <$> f r
+
 instance Functor (ResultList g s) where
    fmap f (ResultList l failure) = ResultList ((f <$>) <$> l) failure
+
+instance Filterable (ResultList g s) where
+   mapMaybe f (ResultList l failure) = ResultList (mapMaybe (traverse f) l) failure
 
 instance Semigroup (ResultList g s r) where
    ResultList rl1 f1 <> ResultList rl2 f2 = ResultList (rl1 <> rl2) (f1 <> f2)
@@ -86,6 +96,10 @@ instance Alternative (Parser g i) where
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
    {-# INLINABLE (<|>) #-}
+
+instance Filterable (Parser g i) where
+   mapMaybe f (Parser p) = Parser (mapMaybe f . p)
+   {-# INLINABLE mapMaybe #-}
 
 instance Monad (Parser g i) where
    return = pure

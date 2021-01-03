@@ -25,6 +25,7 @@ import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
 import Data.String (fromString)
 import Data.Type.Equality ((:~:)(Refl))
+import Data.Witherable.Class (Filterable(mapMaybe))
 
 import qualified Text.Parser.Char as Char
 import Text.Parser.Char (CharParsing)
@@ -325,6 +326,21 @@ instance Alternative (p g s) => Alternative (Fixed p g s) where
    {-# INLINABLE (<|>) #-}
    {-# INLINABLE many #-}
    {-# INLINABLE some #-}
+
+instance Filterable (p g s) => Filterable (Fixed p g s) where
+   mapMaybe f (PositiveDirectParser p) = PositiveDirectParser (mapMaybe f p)
+   mapMaybe f p@DirectParser{} = DirectParser{
+      complete= mapMaybe f (complete p),
+      direct0= mapMaybe f (direct0 p),
+      direct1= mapMaybe f (direct1 p)}
+   mapMaybe f p@Parser{} = p{
+      complete= mapMaybe f (complete p),
+      direct= mapMaybe f (direct p),
+      direct0= mapMaybe f (direct0 p),
+      direct1= mapMaybe f (direct1 p),
+      indirect= mapMaybe f (indirect p),
+      isAmbiguous= Nothing}
+   {-# INLINABLE mapMaybe #-}
 
 union :: Const Bool x -> Const Bool x -> Const Bool x
 union (Const False) d = d

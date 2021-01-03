@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
+{-# LANGUAGE BangPatterns, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
 module Text.Grampa.ContextFree.SortedMemoizing.Transformer
        (FailureInfo(..), ResultListT(..), ParserT(..), (<<|>),
@@ -7,11 +7,13 @@ where
 
 import Control.Applicative
 import Control.Monad (MonadPlus(..), join, void)
+import qualified Control.Monad.Trans.Class as Trans (lift)
+import Control.Monad.Trans.State.Strict (StateT, evalStateT)
 import Data.Function (on)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Identity (Identity(..))
 import Data.List (genericLength, nub)
-import Data.List.NonEmpty (NonEmpty((:|)), groupBy, fromList, toList)
+import Data.List.NonEmpty (NonEmpty((:|)), groupBy, nonEmpty, fromList, toList)
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid, splitPrimePrefix)
 import Data.Monoid.Textual (TextualMonoid)
@@ -19,6 +21,7 @@ import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
 import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf))
 import Data.String (fromString)
+import Data.Witherable.Class (Filterable(mapMaybe))
 
 import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
@@ -69,6 +72,13 @@ instance Applicative m => Alternative (ParserT m g s) where
       r rest = p rest <> q rest
    {-# INLINE (<|>) #-}
    {-# INLINABLE empty #-}
+
+instance (Applicative m, Traversable m) => Filterable (ParserT m g s) where
+  mapMaybe f (Parser p) = Parser (mapMaybe f . p)
+
+-- | The 'StateT' instance dangerously assumes that the filtered parser is stateless.
+instance {-# overlaps #-} (Monad m, Traversable m, Monoid state) => Filterable (ParserT (StateT state m) g s) where
+  mapMaybe f (Parser p) = Parser (mapMaybe f . p)
 
 instance (Monad m, Traversable m) => Monad (ParserT m g s) where
    return = pure
@@ -379,6 +389,22 @@ instance Applicative m => AmbiguousAlternative (ResultListT m g s) where
                | l1 > l2 = rol2 : merge rl1' rest2
                | otherwise = ResultsOfLengthT (ROL l1 s1 $ liftA2 (liftA2 collect) r1 r2) : merge rest1 rest2
             collect (Ambiguous xs) (Ambiguous ys) = Ambiguous (xs <> ys)
+
+instance Traversable m => Filterable (ResultListT m g s) where
+   mapMaybe :: forall a b. (a -> Maybe b) -> ResultListT m g s a -> ResultListT m g s b
+   mapMaybe f (ResultList l failure) = ResultList (mapMaybe filterResults l) failure
+      where filterResults :: ResultsOfLengthT m g s a -> Maybe (ResultsOfLengthT m g s b)
+            filterResults (ResultsOfLengthT (ROL l t as)) =
+               ResultsOfLengthT . ROL l t <$> nonEmpty (mapMaybe (traverse f) $ toList as)
+
+instance {-# overlaps #-} (Monad m, Traversable m, Monoid state) => Filterable (ResultListT (StateT state m) g s) where
+   mapMaybe :: forall a b. (a -> Maybe b) -> ResultListT (StateT state m) g s a -> ResultListT (StateT state m) g s b
+   mapMaybe f (ResultList l failure) = ResultList (mapMaybe filterResults l) failure
+      where filterResults :: ResultsOfLengthT (StateT state m) g s a -> Maybe (ResultsOfLengthT (StateT state m) g s b)
+            filterResults (ResultsOfLengthT (ROL l t as)) =
+               ResultsOfLengthT . ROL l t <$> nonEmpty (mapMaybe traverseWithMonoid $ toList as)
+            traverseWithMonoid :: StateT state m a -> Maybe (StateT state m b)
+            traverseWithMonoid m = Trans.lift <$> traverse f (evalStateT m mempty)
 
 instance Semigroup (ResultListT m g s r) where
    ResultList rl1 f1 <> ResultList rl2 f2 = ResultList (merge rl1 rl2) (f1 <> f2)

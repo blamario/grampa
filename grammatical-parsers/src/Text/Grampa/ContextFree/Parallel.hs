@@ -19,6 +19,7 @@ import qualified Data.Monoid.Null as Null
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
 import Data.String (fromString)
+import Data.Witherable.Class (Filterable(mapMaybe))
 
 import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
@@ -53,6 +54,15 @@ instance (Show s, Show r) => Show (ResultInfo s r) where
 instance Functor (ResultInfo s) where
    fmap f (ResultInfo s r) = ResultInfo s (f r)
 
+instance Foldable (ResultInfo s) where
+   foldMap f (ResultInfo _ r) = f r
+
+instance Traversable (ResultInfo s) where
+   traverse f (ResultInfo s r) = ResultInfo s <$> f r
+
+instance Filterable (ResultList s) where
+   mapMaybe f (ResultList l failure) = ResultList (mapMaybe (traverse f) l) failure
+
 instance Functor (ResultList s) where
    fmap f (ResultList l failure) = ResultList ((f <$>) <$> l) failure
 
@@ -78,6 +88,9 @@ instance FactorialMonoid s => Alternative (Parser g s) where
    empty = Parser (\s-> ResultList mempty $ FailureInfo (Factorial.length s) [Expected "empty"])
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
+
+instance FactorialMonoid s => Filterable (Parser g s) where
+   mapMaybe f (Parser p) = Parser (mapMaybe f . p)
 
 instance Monad (Parser g s) where
    return = pure
