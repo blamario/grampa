@@ -1,7 +1,7 @@
-{-# LANGUAGE FlexibleInstances, RankNTypes #-}
+{-# LANGUAGE FlexibleInstances, GADTs, RankNTypes, TypeOperators #-}
 
 module Text.Grampa.Internal (BinTree(..), FailureInfo(..), ResultList(..), ResultsOfLength(..),
-                             AmbiguousAlternative(..),
+                             AmbiguousAlternative(..), AmbiguityDecidable(..), AmbiguityWitness(..),
                              fromResultList, noFailure) where
 
 import Control.Applicative (Applicative(..), Alternative(..))
@@ -11,6 +11,7 @@ import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.List (nub)
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Semigroup (Semigroup((<>)))
+import Data.Type.Equality ((:~:)(Refl))
 import Data.Witherable.Class (Filterable(mapMaybe))
 
 import Data.Monoid.Factorial (FactorialMonoid, length)
@@ -29,6 +30,18 @@ data BinTree a = Fork !(BinTree a) !(BinTree a)
                | Leaf !a
                | EmptyTree
                deriving (Show)
+
+data AmbiguityWitness a where
+   AmbiguityWitness :: (a :~: Ambiguous b) -> AmbiguityWitness a
+
+class AmbiguityDecidable a where
+   ambiguityWitness :: Maybe (AmbiguityWitness a)
+
+instance {-# overlappable #-} AmbiguityDecidable a where
+   ambiguityWitness = Nothing
+
+instance AmbiguityDecidable (Ambiguous a) where
+   ambiguityWitness = Just (AmbiguityWitness Refl)
 
 fromResultList :: (Eq s, FactorialMonoid s) => s -> ResultList g s r -> ParseResults s [(s, r)]
 fromResultList s (ResultList [] (FailureInfo pos msgs)) =

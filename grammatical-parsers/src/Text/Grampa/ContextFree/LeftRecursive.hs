@@ -37,7 +37,8 @@ import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing
                           AmbiguousParsing(..), Ambiguous(..),
                           ConsumedInputParsing(..), DeterministicParsing(..),
                           TailsParsing(parseTails, parseAllTails), Expected(..))
-import Text.Grampa.Internal (ResultList(..), FailureInfo(..), AmbiguousAlternative(ambiguousOr))
+import Text.Grampa.Internal (ResultList(..), FailureInfo(..),
+                             AmbiguousAlternative(ambiguousOr), AmbiguityDecidable(..), AmbiguityWitness(..))
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
@@ -57,9 +58,6 @@ data Fixed p g s a =
       complete, direct0, direct1 :: p g s a}
    | PositiveDirectParser {
       complete :: p g s a}
-
-data AmbiguityWitness a where
-   AmbiguityWitness :: (a :~: Ambiguous b) -> AmbiguityWitness a
 
 data SeparatedParser p (g :: (* -> *) -> *) s a = FrontParser (p g s a)
                                                 | CycleParser {
@@ -91,13 +89,13 @@ instance (Rank2.Apply g, Rank2.Distributive g) => Monoid (Union g) where
    mempty = Union (Rank2.cotraverse (Const . getConst) (Const False))
    mappend (Union g1) (Union g2) = Union (Rank2.liftA2 union g1 g2)
 
-mapPrimitive :: (p g s a -> p g s a) -> Fixed p g s a -> Fixed p g s a
+mapPrimitive :: forall p g s a b. AmbiguityDecidable b => (p g s a -> p g s b) -> Fixed p g s a -> Fixed p g s b
 mapPrimitive f p@PositiveDirectParser{} = PositiveDirectParser{complete= f (complete p)}
 mapPrimitive f p@DirectParser{} = DirectParser{complete= f (complete p),
                                                direct0= f (direct0 p),
                                                direct1= f (direct1 p)}
 mapPrimitive f p@Parser{} = Parser{complete= f (complete p),
-                                   isAmbiguous= isAmbiguous p,
+                                   isAmbiguous= ambiguityWitness @b,
                                    cyclicDescendants= cyclicDescendants p,
                                    indirect= f (indirect p),
                                    direct= f (direct p),
