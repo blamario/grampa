@@ -2,7 +2,7 @@
              RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
 module Text.Grampa.ContextFree.SortedMemoizing.Transformer
        (FailureInfo(..), ResultListT(..), ParserT(..), (<<|>),
-        lift, tmap, longest, peg, terminalPEG)
+        tbind, lift, tmap, longest, peg, terminalPEG)
 where
 
 import Control.Applicative
@@ -104,12 +104,22 @@ instance (Foldable m, Monad m, Traversable m) => MonadPlus (ParserT m g s) where
 lift :: m a -> ParserT m g s a
 lift m = Parser (\rest-> ResultList [ResultsOfLengthT $ ROL 0 rest (m:|[])] mempty)
 
--- | Modify the computation carried by the parser.
+-- | Transform the computation carried by the parser using the monadic bind ('>>=').
+tbind :: Monad m => ParserT m g s a -> (a -> m b) -> ParserT m g s b
+tbind (Parser p) f = Parser (bindResultList f . p)
+
+-- | Transform the computation carried by the parser.
 tmap :: (m a -> m b) -> ParserT m g s a -> ParserT m g s b
 tmap f (Parser p) = Parser (mapResultList f . p)
 
+bindResultList :: Monad m => (a -> m b) -> ResultListT m g s a -> ResultListT m g s b
+bindResultList f (ResultList successes failures) = ResultList (bindResults f <$> successes) failures
+
 mapResultList :: (m a -> m b) -> ResultListT m g s a -> ResultListT m g s b
 mapResultList f (ResultList successes failures) = ResultList (mapResults f <$> successes) failures
+
+bindResults :: Monad m => (a -> m b) -> ResultsOfLengthT m g s a -> ResultsOfLengthT m g s b
+bindResults f (ResultsOfLengthT (ROL len rest as)) = ResultsOfLengthT (ROL len rest ((>>= f) <$> as))
 
 mapResults :: (m a -> m b) -> ResultsOfLengthT m g s a -> ResultsOfLengthT m g s b
 mapResults f (ResultsOfLengthT rol) = ResultsOfLengthT (f <$> rol)
@@ -392,14 +402,14 @@ instance Applicative m => AmbiguousAlternative (ResultListT m g s) where
 
 instance Traversable m => Filterable (ResultListT m g s) where
    mapMaybe :: forall a b. (a -> Maybe b) -> ResultListT m g s a -> ResultListT m g s b
-   mapMaybe f (ResultList l failure) = ResultList (mapMaybe filterResults l) failure
+   mapMaybe f (ResultList rs failure) = ResultList (mapMaybe filterResults rs) failure
       where filterResults :: ResultsOfLengthT m g s a -> Maybe (ResultsOfLengthT m g s b)
             filterResults (ResultsOfLengthT (ROL l t as)) =
                ResultsOfLengthT . ROL l t <$> nonEmpty (mapMaybe (traverse f) $ toList as)
 
 instance {-# overlaps #-} (Monad m, Traversable m, Monoid state) => Filterable (ResultListT (StateT state m) g s) where
    mapMaybe :: forall a b. (a -> Maybe b) -> ResultListT (StateT state m) g s a -> ResultListT (StateT state m) g s b
-   mapMaybe f (ResultList l failure) = ResultList (mapMaybe filterResults l) failure
+   mapMaybe f (ResultList rs failure) = ResultList (mapMaybe filterResults rs) failure
       where filterResults :: ResultsOfLengthT (StateT state m) g s a -> Maybe (ResultsOfLengthT (StateT state m) g s b)
             filterResults (ResultsOfLengthT (ROL l t as)) =
                ResultsOfLengthT . ROL l t <$> nonEmpty (mapMaybe traverseWithMonoid $ toList as)

@@ -1,5 +1,5 @@
 module Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, SeparatedParser(..),
-                                                          lift, liftPositive, tmap,
+                                                          lift, liftPositive, tbind, tmap,
                                                           parseSeparated, separated)
 where
 
@@ -14,7 +14,11 @@ type ParserT m = Fixed (Transformer.ParserT m)
 lift :: Applicative m => m a -> ParserT m g s a
 lift = liftPure . Transformer.lift
 
--- | Modify the computation carried by the parser.
+-- | Transform the computation carried by the parser using the monadic bind ('>>=').
+tbind :: Monad m => ParserT m g s a -> (a -> m a) -> ParserT m g s a
+tbind p f = mapPrimitive (`Transformer.tbind` f) p
+
+-- | Transform the computation carried by the parser.
 tmap :: (m a -> m a) -> ParserT m g s a -> ParserT m g s a
 tmap = mapPrimitive . Transformer.tmap
 
