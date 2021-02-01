@@ -34,7 +34,7 @@ import Prelude hiding (takeWhile)
 type ParseResults s = Either (ParseFailure s)
 
 -- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset.
-data ParseFailure s = ParseFailure Int [Expected s] deriving (Eq, Show)
+data ParseFailure s = ParseFailure Int [Expected s] deriving (Eq, Functor, Show)
 data Expected s = Expected String
                 | ExpectedInput s
                 deriving (Functor, Eq, Ord, Read, Show)
