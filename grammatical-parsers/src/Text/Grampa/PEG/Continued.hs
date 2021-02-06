@@ -3,7 +3,7 @@
 module Text.Grampa.PEG.Continued (Parser(..), Result(..), alt) where
 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
-import Control.Monad (Monad(..), MonadPlus(..))
+import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..))
 
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
@@ -88,6 +88,9 @@ instance Monad (Parser g s) where
    Parser p >>= f = Parser r where
       r :: forall x. s -> (b -> s -> x) -> (FailureInfo s -> x) -> x
       r rest success failure = p rest (\a rest'-> applyParser (f a) rest' success failure) failure
+
+instance FactorialMonoid s => MonadFail (Parser g s) where
+   fail msg = Parser (\rest _ failure-> failure $ FailureInfo (Factorial.length rest) [Expected msg])
 
 instance FactorialMonoid s => MonadPlus (Parser g s) where
    mzero = empty

@@ -3,7 +3,7 @@
 module Text.Grampa.PEG.Backtrack (Parser(..), Result(..), alt) where
 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
-import Control.Monad (Monad(..), MonadPlus(..))
+import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..))
 
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
@@ -84,6 +84,9 @@ instance Monad (Parser g s) where
       r rest = case p rest
                of Parsed a rest' -> applyParser (f a) rest'
                   NoParse failure -> NoParse failure
+
+instance Factorial.FactorialMonoid s => MonadFail (Parser g s) where
+   fail msg = Parser (\rest-> NoParse $ FailureInfo (Factorial.length rest) [Expected msg])
 
 instance Factorial.FactorialMonoid s => MonadPlus (Parser g s) where
    mzero = empty

@@ -6,7 +6,7 @@ module Text.Grampa.ContextFree.SortedMemoizing
 where
 
 import Control.Applicative
-import Control.Monad (Monad(..), MonadPlus(..))
+import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List (genericLength)
 import Data.List.NonEmpty (NonEmpty((:|)))
@@ -75,6 +75,10 @@ instance Monad (Parser g i) where
       continue (ResultsOfLength l rest' rs) = foldMap (continue' l . flip applyParser rest' . f) rs
       continue' l (ResultList rs failure) = ResultList (adjust l <$> rs) failure
       adjust l (ResultsOfLength l' rest' rs) = ResultsOfLength (l+l') rest' rs
+
+instance MonadFail (Parser g s) where
+   fail msg = Parser p
+      where p rest = ResultList mempty (FailureInfo (genericLength rest) [Expected msg])
 
 instance MonadPlus (Parser g s) where
    mzero = empty

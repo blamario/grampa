@@ -5,7 +5,7 @@ module Text.Grampa.ContextFree.Memoizing (FailureInfo(..), ResultList(..), Parse
 where
 
 import Control.Applicative
-import Control.Monad (Monad(..), MonadPlus(..))
+import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..))
 import Data.Function (on)
 import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
@@ -109,6 +109,10 @@ instance Monad (Parser g i) where
       continue (ResultInfo l rest' a) = continue' l (applyParser (f a) rest')
       continue' l (ResultList rs failure) = ResultList (adjust l <$> rs) failure
       adjust l (ResultInfo l' rest' a) = ResultInfo (l+l') rest' a
+
+instance MonadFail (Parser g s) where
+   fail msg = Parser p
+      where p rest = ResultList mempty (FailureInfo (genericLength rest) [Expected msg])
 
 instance MonadPlus (Parser g s) where
    mzero = empty

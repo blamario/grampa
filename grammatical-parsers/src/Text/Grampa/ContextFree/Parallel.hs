@@ -4,7 +4,7 @@ module Text.Grampa.ContextFree.Parallel (FailureInfo(..), ResultList(..), Parser
 where
 
 import Control.Applicative
-import Control.Monad (Monad(..), MonadPlus(..))
+import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..))
 import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
@@ -98,6 +98,9 @@ instance Monad (Parser g s) where
       q rest = case p rest
                of ResultList results failure -> ResultList mempty failure <> foldMap continue results
       continue (ResultInfo rest' a) = applyParser (f a) rest'
+
+instance FactorialMonoid s => MonadFail (Parser g s) where
+   fail msg = Parser (\s-> ResultList mempty $ FailureInfo (Factorial.length s) [Expected msg])
 
 instance FactorialMonoid s => MonadPlus (Parser g s) where
    mzero = empty

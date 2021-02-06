@@ -6,7 +6,7 @@ module Text.Grampa.ContextFree.SortedMemoizing.Transformer
 where
 
 import Control.Applicative
-import Control.Monad (MonadPlus(..), join, void)
+import Control.Monad (MonadFail(fail), MonadPlus(..), join, void)
 import qualified Control.Monad.Trans.Class as Trans (lift)
 import Control.Monad.Trans.State.Strict (StateT, evalStateT)
 import Data.Function (on)
@@ -95,6 +95,10 @@ instance (Monad m, Traversable m) => Monad (ParserT m g s) where
       rejoin m = Parser (\rest-> rejoinResults $ flip applyParser rest <$> m)
       rejoinResults m = ResultList (fmap rejoinResultsOfLengthT $ sequence $ resultSuccesses <$> m) (foldMap resultFailures m)
       rejoinResultsOfLengthT m = ResultsOfLengthT (join <$> traverse getResultsOfLength m)
+
+instance (Monad m, Traversable m) => MonadFail (ParserT m g s) where
+   fail msg = Parser p
+      where p rest = ResultList mempty (FailureInfo (genericLength rest) [Expected msg])
 
 instance (Foldable m, Monad m, Traversable m) => MonadPlus (ParserT m g s) where
    mzero = empty

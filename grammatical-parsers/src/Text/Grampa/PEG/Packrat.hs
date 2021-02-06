@@ -3,7 +3,7 @@
 module Text.Grampa.PEG.Packrat (Parser(..), Result(..)) where
 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
-import Control.Monad (Monad(..), MonadPlus(..))
+import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..))
 
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
@@ -48,7 +48,7 @@ instance Functor (Result g s) where
    fmap f (Parsed a rest) = Parsed (f a) rest
    fmap _ (NoParse failure) = NoParse failure
 
-instance Factorial.FactorialMonoid s => Filterable (Result g s) where
+instance Filterable (Result g s) where
    mapMaybe f (Parsed a rest) =
       maybe (NoParse $ FailureInfo (Factorial.length rest) [Expected "filter"]) (`Parsed` rest) (f a)
    mapMaybe _ (NoParse failure) = NoParse failure
@@ -70,7 +70,7 @@ instance Alternative (Parser g s) where
                of x@Parsed{} -> x
                   NoParse{} -> q rest
    
-instance Factorial.FactorialMonoid s => Filterable (Parser g s) where
+instance Filterable (Parser g s) where
    mapMaybe f (Parser p) = Parser (mapMaybe f . p)
    {-# INLINABLE mapMaybe #-}
 
@@ -84,6 +84,9 @@ instance Monad (Parser g s) where
 instance MonadPlus (Parser g s) where
    mzero = empty
    mplus = (<|>)
+
+instance MonadFail (Parser g s) where
+   fail msg = Parser (\rest-> NoParse $ FailureInfo (genericLength rest) [Expected msg])
 
 instance Semigroup x => Semigroup (Parser g s x) where
    (<>) = liftA2 (<>)

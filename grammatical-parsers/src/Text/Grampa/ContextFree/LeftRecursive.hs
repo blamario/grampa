@@ -9,7 +9,7 @@ module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..)
 where
 
 import Control.Applicative
-import Control.Monad (Monad(..), MonadPlus(..), void)
+import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..), void)
 import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
 
 import Data.Functor.Compose (Compose(..))
@@ -373,6 +373,9 @@ instance (Alternative (p g s), Monad (p g s)) => Monad (Fixed p g s) where
       where d0 = direct0 p >>= direct0 . general' . cont
             d1 = (direct0 p >>= direct1 . general' . cont) <|> (direct1 p >>= complete . cont)
             p'@Parser{} = general' p
+
+instance (Alternative (p g s), MonadFail (p g s)) => MonadFail (Fixed p g s) where
+   fail msg = PositiveDirectParser{complete= fail msg}
 
 instance MonadPlus (p g s) => MonadPlus (Fixed p g s) where
    mzero = empty

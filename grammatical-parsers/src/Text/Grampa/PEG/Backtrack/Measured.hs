@@ -3,7 +3,7 @@
 module Text.Grampa.PEG.Backtrack.Measured (Parser(..), Result(..), alt) where
 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
-import Control.Monad (Monad(..), MonadPlus(..))
+import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..))
 
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
@@ -77,7 +77,7 @@ Parser p `alt` Parser q = Parser r where
                of x@Parsed{} -> x
                   NoParse{} -> q rest
    
-instance Factorial.FactorialMonoid s => Filterable (Parser g s) where
+instance FactorialMonoid s => Filterable (Parser g s) where
    mapMaybe f (Parser p) = Parser (mapMaybe f . p)
    {-# INLINABLE mapMaybe #-}
 
@@ -89,6 +89,9 @@ instance Monad (Parser g s) where
                                       of Parsed l' b rest'' -> Parsed (l+l') b rest''
                                          NoParse failure -> NoParse failure
                   NoParse failure -> NoParse failure
+
+instance FactorialMonoid s => MonadFail (Parser g s) where
+   fail msg = Parser (\rest-> NoParse $ FailureInfo (Factorial.length rest) [Expected msg])
 
 instance FactorialMonoid s => MonadPlus (Parser g s) where
    mzero = empty
