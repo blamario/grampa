@@ -296,11 +296,12 @@ instance (Applicative m, MonoidNull s) => DeterministicParsing (ParserT m g s) w
                            ResultList rl _ -> foldMap continue rl
          where continue (ResultsOfLengthT (ROL len' rest' results)) =
                   foldMap (\r-> q (len + len') (liftA2 (.) acc ((:) <$> r)) rest') results
-   skipAll (Parser p) = Parser (q 0) where
-      q !len rest = case p rest
-                    of ResultList [] _failure -> singleResult len rest ()
-                       ResultList rl _failure -> foldMap continue rl
-         where continue (ResultsOfLengthT (ROL len' rest' _)) = q (len + len') rest'
+   skipAll (Parser p) = Parser (q 0 (pure ())) where
+      q !len effects rest = case p rest
+                       of ResultList [] _failure -> ResultList [ResultsOfLengthT $ ROL len rest (effects:|[])] mempty
+                          ResultList rl _failure -> foldMap continue rl
+         where continue (ResultsOfLengthT (ROL len' rest' results)) =
+                  foldMap (\r-> q (len + len') (effects <* r) rest') results
 
 instance (Applicative m, MonoidNull s) => LookAheadParsing (ParserT m g s) where
    lookAhead (Parser p) = Parser (\input-> rewind input (p input))
