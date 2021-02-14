@@ -12,6 +12,7 @@ import Control.Applicative (Applicative, liftA2)
 import Data.Data (Data, Typeable)
 import Data.Functor.Compose (Compose)
 import Data.Functor.Const (Const)
+import qualified Data.Functor as Rank1
 import qualified Rank2
 import qualified Data.Functor
 import           Transformation (Transformation, Domain, Codomain)
@@ -32,10 +33,14 @@ class (Transformation t, Rank2.Traversable (g (Domain t))) => Traversable t g wh
    traverse :: Codomain t ~ Compose m f => t -> g (Domain t) (Domain t) -> m (g f f)
 
 -- | Like 'Data.Functor.Product.Product' for data types with two type constructor parameters
-data Product g1 g2 (p :: * -> *) (q :: * -> *) = Pair{fst :: q (g1 p p),
-                                                      snd :: q (g2 p p)}
+data Product g h (d :: * -> *) (s :: * -> *) = Pair{fst :: s (g d d),
+                                                    snd :: s (h d d)}
 
-instance Rank2.Functor (Product g1 g2 p) where
+-- | Like 'Data.Functor.Sum.Sum' for data types with two type constructor parameters
+data Sum g h (d :: * -> *) (s :: * -> *) = InL (s (g d d))
+                                         | InR (s (h d d))
+
+instance Rank2.Functor (Product g h p) where
    f <$> ~(Pair left right) = Pair (f left) (f right)
 
 instance Rank2.Apply (Product g h p) where
@@ -68,6 +73,36 @@ deriving instance (Typeable p, Typeable q, Typeable g1, Typeable g2,
                    Data (q (g1 p p)), Data (q (g2 p p))) => Data (Product g1 g2 p q)
 deriving instance (Show (q (g1 p p)), Show (q (g2 p p))) => Show (Product g1 g2 p q)
 
+instance Rank2.Functor (Sum g h p) where
+   f <$> InL left = InL (f left)
+   f <$> InR right = InR (f right)
+
+instance Rank2.Foldable (Sum g h p) where
+   foldMap f (InL left) = f left
+   foldMap f (InR right) = f right
+
+instance Rank2.Traversable (Sum g h p) where
+   traverse f (InL left) = InL Rank1.<$> f left
+   traverse f (InR right) = InR Rank1.<$> f right
+
+instance (Full.Functor t g, Full.Functor t h) => Functor t (Sum g h) where
+   t <$> InL left = InL (t Full.<$> left)
+   t <$> InR right = InR (t Full.<$> right)
+
+instance (Full.Traversable t g, Full.Traversable t h, Codomain t ~ Compose m f, Applicative m) =>
+         Traversable t (Sum g h) where
+   traverse t (InL left) = InL Rank1.<$> Full.traverse t left
+   traverse t (InR right) = InR Rank1.<$> Full.traverse t right
+
+deriving instance (Typeable p, Typeable q, Typeable g1, Typeable g2,
+                   Data (q (g1 p p)), Data (q (g2 p p))) => Data (Sum g1 g2 p q)
+deriving instance (Show (q (g1 p p)), Show (q (g2 p p))) => Show (Sum g1 g2 p q)
+
 -- | Alphabetical synonym for '<$>'
 fmap :: Functor t g => t -> g (Domain t) (Domain t) -> g (Codomain t) (Codomain t)
 fmap = (<$>)
+
+-- | Equivalent of 'Data.Either.either'
+eitherFromSum :: Sum g h d s -> Either (s (g d d)) (s (h d d))
+eitherFromSum (InL left) = Left left
+eitherFromSum (InR right) = Right right
