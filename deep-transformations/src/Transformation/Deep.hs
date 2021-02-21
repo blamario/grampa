@@ -89,6 +89,10 @@ instance (Full.Functor t g, Full.Functor t h) => Functor t (Sum g h) where
    t <$> InL left = InL (t Full.<$> left)
    t <$> InR right = InR (t Full.<$> right)
 
+instance (Full.Foldable t g, Full.Foldable t h, Codomain t ~ Const m) => Foldable t (Sum g h) where
+   foldMap t (InL left) = Full.foldMap t left
+   foldMap t (InR right) = Full.foldMap t right
+
 instance (Full.Traversable t g, Full.Traversable t h, Codomain t ~ Compose m f, Applicative m) =>
          Traversable t (Sum g h) where
    traverse t (InL left) = InL Rank1.<$> Full.traverse t left
