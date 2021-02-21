@@ -55,6 +55,10 @@ instance Applicative Ambiguous where
    pure a = Ambiguous (pure a)
    Ambiguous f <*> Ambiguous a = Ambiguous (f <*> a)
 
+instance Monad Ambiguous where
+   return = pure
+   Ambiguous a >>= f = Ambiguous (a >>= getAmbiguous . f)
+
 instance Foldable Ambiguous where
    foldMap f (Ambiguous a) = foldMap f a
 
