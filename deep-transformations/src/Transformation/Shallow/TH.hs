@@ -257,6 +257,8 @@ genShallowmapField trans fieldType shallowConstraint baseConstraint fieldAccess 
      AppT ty a | ty == VarT typeVar ->
         (,) <$> ((:[]) <$> baseConstraint (pure a))
             <*> (wrap (varE '(Transformation.$) `appE` trans) `appE` fieldAccess)
+     AppT t1 t2 | t2 == VarT typeVar -> (,) <$> traverse shallowConstraint [pure t1]
+                                            <*> appE (wrap [| ($trans Transformation.Shallow.<$>) |]) fieldAccess
      AppT t1 t2 | t1 /= VarT typeVar ->
         genShallowmapField trans t2 shallowConstraint baseConstraint fieldAccess (wrap . appE (varE '(<$>)))
      SigT ty _kind -> genShallowmapField trans ty shallowConstraint baseConstraint fieldAccess wrap
@@ -272,6 +274,8 @@ genFoldMapField trans fieldType shallowConstraint baseConstraint fieldAccess wra
         (,) <$> ((:[]) <$> baseConstraint (pure a))
             <*> (wrap (varE '(.) `appE` varE 'getConst `appE` (varE '(Transformation.$) `appE` trans))
                  `appE` fieldAccess)
+     AppT t1 t2 | t2 == VarT typeVar -> (,) <$> traverse shallowConstraint [pure t1]
+                                            <*> appE (wrap [| (Transformation.Shallow.foldMap $trans) |]) fieldAccess
      AppT t1 t2 | t1 /= VarT typeVar ->
                   genFoldMapField trans t2 shallowConstraint baseConstraint fieldAccess (wrap . appE (varE 'foldMap))
      SigT ty _kind -> genFoldMapField trans ty shallowConstraint baseConstraint fieldAccess wrap
@@ -286,6 +290,8 @@ genTraverseField trans fieldType shallowConstraint baseConstraint fieldAccess wr
         (,) <$> ((:[]) <$> baseConstraint (pure a))
             <*> (wrap (varE '(.) `appE` varE 'getCompose `appE` (varE '(Transformation.$) `appE` trans))
                  `appE` fieldAccess)
+     AppT t1 t2 | t2 == VarT typeVar -> (,) <$> traverse shallowConstraint [pure t1]
+                                            <*> appE (wrap [| (Transformation.Shallow.traverse $trans) |]) fieldAccess
      AppT t1 t2 | t1 /= VarT typeVar ->
         genTraverseField trans t2 shallowConstraint baseConstraint fieldAccess (wrap . appE (varE 'traverse))
      SigT ty _kind -> genTraverseField trans ty shallowConstraint baseConstraint fieldAccess wrap
