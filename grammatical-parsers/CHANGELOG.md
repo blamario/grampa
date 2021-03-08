@@ -1,3 +1,11 @@
+Version 0.5.1
+---------------
+* Fixed the `skipAll` implementation for the `SortedMemoizing.Transformer` parser
+* Added the `Filterable` and `MonadFail` instances to all parser types
+* Added instances `Monad Ambiguous` and `Functor ParseFailure`
+* Generalized the types of `LeftRecursive.Transformer.tmap` and `tbind`
+* Incremented dependencies' upper bounds
+
 Version 0.5
 ---------------
 * Replaced `MonoidParsing` by `InputParsing`
