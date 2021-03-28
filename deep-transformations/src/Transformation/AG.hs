@@ -8,8 +8,10 @@
 
 module Transformation.AG where
 
+import Data.Functor.Const (Const(getConst))
 import qualified Rank2
 import Transformation (Domain, Codomain)
+import qualified Transformation
 import qualified Transformation.Deep as Deep
 
 -- | Type family that maps a node type to the type of its attributes, indexed per type constructor.
@@ -40,6 +42,15 @@ knit r chSem = Rank2.Arrow knit'
             where (synthesized, chInh) = r (inherited, chSyn)
                   chSyn = chSem Rank2.<*> chInh
 
+newtype Rule' t g x = Rule' {getRule :: Rule t g}
+
+-- | Drop-in implementation of 'Transformation.$'
+applyDefault' :: (Domain t ~ p, Codomain t ~ Rule' t g, Transformation.At t (g q q),
+                  q ~ Semantics t, x ~ g q q, Rank2.Apply (g q))
+              => (forall a. p a -> a) -> t -> p x -> q x
+applyDefault' extract t x = knit (getRule $ t Transformation.$ x) (extract x)
+{-# INLINE applyDefault' #-}
+
 -- | The core type class for defining the attribute grammar. The instances of this class typically have a form like
 --
 -- > instance Attribution MyAttGrammar MyNode (Semantics MyAttGrammar) Identity where
@@ -56,7 +67,7 @@ knit r chSem = Rank2.Arrow knit'
 class Attribution t g deep shallow where
    -- | The attribution rule for a given transformation and node.
    attribution :: t -> shallow (g deep deep) -> Rule t g
-
+   
 -- | Drop-in implementation of 'Transformation.$'
 applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g q p)
              => (forall a. p a -> a) -> t -> p x -> q x
