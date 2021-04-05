@@ -1,4 +1,4 @@
-{-# Language FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
+{-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
              ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
 
 -- | A special case of an attribute grammar where every node has only a single inherited and a single synthesized
@@ -6,7 +6,7 @@
 
 module Transformation.AG.Monomorphic where
 
-import Control.Monad.Trans.State (State, state, evalState)
+import Data.Data (Data, Typeable)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Const (Const(..))
 import Data.Kind (Type)
@@ -19,6 +19,13 @@ import qualified Transformation.Full as Full
 data Atts a = Atts{
    inh :: a,
    syn :: a}
+   deriving (Data, Typeable, Show)
+
+instance Semigroup a => Semigroup (Atts a) where
+   Atts i1 s1 <> Atts i2 s2 = Atts (i1 <> i2) (s1 <> s2)
+
+instance Monoid a => Monoid (Atts a) where
+   mempty = Atts mempty mempty
 
 -- | A node's 'Semantics' maps its inherited attribute to its synthesized attribute.
 type Semantics a = Const (a -> a)
@@ -34,6 +41,9 @@ knit r chSem = Const knitted
    where knitted inherited = synthesized
             where Atts{syn= synthesized, inh= chInh} = r Atts{inh= inherited, syn= chSyn}
                   chSyn = Rank2.foldMap (($ chInh) . getConst) chSem
+
+instance {-# OVERLAPPABLE #-} Attribution t a g deep shallow where
+   attribution = const (const id)
 
 -- | Another way to tie the recursive knot, using a 'Rule' to add attributes to every node througha stateful calculation
 knitKeeping :: forall a f g sem. (Rank2.Foldable (g sem), sem ~ Compose ((,) (Atts a)) f, Monoid a, Foldable f, Functor f)
