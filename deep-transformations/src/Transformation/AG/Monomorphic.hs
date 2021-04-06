@@ -46,14 +46,15 @@ instance {-# OVERLAPPABLE #-} Attribution t a g deep shallow where
    attribution = const (const id)
 
 -- | Another way to tie the recursive knot, using a 'Rule' to add attributes to every node througha stateful calculation
-knitKeeping :: forall a f g sem. (Rank2.Foldable (g sem), sem ~ Compose ((,) (Atts a)) f, Monoid a, Foldable f, Functor f)
-            => Rule a -> f (g sem sem) -> Compose (State a) (Compose ((,) (Atts a)) f) (g sem sem)
-knitKeeping r x = Compose (state knitted)
-   where knitted :: a -> (Compose ((,) (Atts a)) f (g sem sem), a)
-         knitted inherited = (Compose (results{inh= inherited}, x), chInh)
+knitKeeping :: forall a f g sem. (Rank2.Foldable (g sem), sem ~ Compose ((->) a) (Compose ((,) (Atts a)) f),
+                              Monoid a, Foldable f, Functor f)
+            => Rule a -> f (g sem sem) -> sem (g sem sem)
+knitKeeping r x = Compose knitted
+   where knitted :: a -> Compose ((,) (Atts a)) f (g sem sem)
+         knitted inherited = Compose (results, x)
             where results@Atts{inh= chInh} = r Atts{inh= inherited, syn= chSyn}
-                  chSyn = foldMap (Rank2.foldMap (syn . fst . getCompose)) x
-                                        
+                  chSyn = foldMap (Rank2.foldMap (syn . fst . getCompose . ($ chInh) . getCompose)) x
+
 -- | The core type class for defining the attribute grammar. The instances of this class typically have a form like
 --
 -- > instance Attribution MyAttGrammar MyMonoid MyNode (Semantics MyAttGrammar) Identity where
@@ -67,29 +68,44 @@ class Attribution t a g (deep :: Type -> Type) shallow where
    attribution :: t -> shallow (g deep deep) -> Rule a
 
 -- | Drop-in implementation of 'Transformation.$'
-applyDefault :: (p ~ Domain t, q ~ Semantics a, x ~ g q q, Rank2.Foldable (g q), Attribution t a g q p,
-                 Monoid a)
+applyDefault :: (p ~ Domain t, q ~ Semantics a, x ~ g q q, Rank2.Foldable (g q), Attribution t a g q p, Monoid a)
              => (forall y. p y -> y) -> t -> p x -> q x
 applyDefault extract t x = knit (attribution t x) (extract x)
 {-# INLINE applyDefault #-}
 
--- | Drop-in implementation of 'Transformation.Full.<$>'
+-- | Drop-in implementation of 'Full.<$>'
 fullMapDefault :: (p ~ Domain t, q ~ Semantics a, q ~ Codomain t, x ~ g q q, Rank2.Foldable (g q),
                    Deep.Functor t g, Attribution t a g p p, Monoid a)
                => (forall y. p y -> y) -> t -> p (g p p) -> q (g q q)
 fullMapDefault extract t local = knit (attribution t local) (t Deep.<$> extract local)
 {-# INLINE fullMapDefault #-}
 
--- | Drop-in implementation of 'Transformation.Full.<$>' that stores all attributes with every original node
-applyDefaultWithAttributes :: (p ~ Domain t, q ~ Compose ((,) (Atts a)) p, x ~ g q q,
+-- | Drop-in implementation of 'Transformation.$' that stores all attributes with every original node
+applyDefaultWithAttributes :: (p ~ Domain t, q ~ Compose ((->) a) (Compose ((,) (Atts a)) p), x ~ g q q,
                                Attribution t a g q p, Rank2.Foldable (g q), Monoid a, Foldable p, Functor p)
-                           => t -> p x -> Compose (State a) q x
+                           => t -> p x -> q x
 applyDefaultWithAttributes t x = knitKeeping (attribution t x) x
 {-# INLINE applyDefaultWithAttributes #-}
 
--- | Drop-in implementation of 'Transformation.Full.<$>' that stores all attributes with every original node
-fullMapDefaultWithAttributes :: (Transformation t, Domain t ~ p, Codomain t ~ Compose (State a) q, Full.Traversable t g,
-                                 q ~ Compose ((,) (Atts a)) f)
-                             => t -> a -> p (g p p) -> q (g q q)
-fullMapDefaultWithAttributes t rootInheritance x = evalState (Full.traverse t x) rootInheritance
-{-# INLINE fullMapDefaultWithAttributes #-}
+-- | Drop-in implementation of 'Full.traverse' that stores all attributes with every original node
+traverseDefaultWithAttributes :: forall t p q r a g.
+                                 (Transformation t, Domain t ~ p, Codomain t ~ Compose ((->) a) q,
+                                 q ~ Compose ((,) (Atts a)) p, r ~ Compose ((->) a) q,
+                                 Traversable p, Full.Functor t g, Deep.Traversable (Feeder a p) g,
+                                 Transformation.At t (g r r))
+                              => t -> p (g p p) -> a -> q (g q q)
+traverseDefaultWithAttributes t x rootInheritance = Full.traverse Feeder (t Full.<$> x) rootInheritance
+{-# INLINE traverseDefaultWithAttributes #-}
+
+data Feeder a (f :: Type -> Type) = Feeder
+
+instance Transformation (Feeder a f) where
+   type Domain (Feeder a f) = Compose ((->) a) (Compose ((,) (Atts a)) f)
+   type Codomain (Feeder a f) = Compose ((->) a) (Compose ((,) (Atts a)) f)
+
+instance Transformation.At (Feeder a f) g where
+   Feeder $ x = x
+
+instance (Traversable f, Deep.Traversable (Feeder a f) g) => Full.Traversable (Feeder a f) g where
+   traverse t x inheritance = Compose (atts{inh= inheritance}, traverse (Deep.traverse t) y (inh atts))
+      where Compose (atts, y) = getCompose x inheritance
