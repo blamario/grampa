@@ -22,6 +22,7 @@ import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(.
 -- | Like "Transformation.Deep".'Deep.Functor' except it maps an additional wrapper around the entire tree
 class (Transformation t, Rank2.Functor (g (Domain t))) => Functor t g where
    (<$>) :: t -> Domain t (g (Domain t) (Domain t)) -> Codomain t (g (Codomain t) (Codomain t))
+   infixl 4 <$>
 
 -- | Like "Transformation.Deep".'Deep.Foldable' except the entire tree is also wrapped
 class (Transformation t, Rank2.Foldable (g (Domain t))) => Foldable t g where

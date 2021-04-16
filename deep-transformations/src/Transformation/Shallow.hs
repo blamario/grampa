@@ -18,6 +18,7 @@ import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(.
 -- | Like Rank2.'Rank2.Functor' except it takes a 'Transformation' instead of a polymorphic function
 class (Transformation t, Rank2.Functor g) => Functor t g where
    (<$>) :: t -> g (Domain t) -> g (Codomain t)
+   infixl 4 <$>
 
 -- | Like Rank2.'Rank2.Foldable' except it takes a 'Transformation' instead of a polymorphic function
 class (Transformation t, Rank2.Foldable g) => Foldable t g where

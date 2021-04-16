@@ -23,6 +23,7 @@ import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(.
 -- | Like "Transformation.Shallow".'Transformation.Shallow.Functor' except it maps all descendants and not only immediate children
 class (Transformation t, Rank2.Functor (g (Domain t))) => Functor t g where
    (<$>) :: t -> g (Domain t) (Domain t) -> g (Codomain t) (Codomain t)
+   infixl 4 <$>
 
 -- | Like "Transformation.Shallow".'Transformation.Shallow.Foldable' except it folds all descendants and not only immediate children
 class (Transformation t, Rank2.Foldable (g (Domain t))) => Foldable t g where

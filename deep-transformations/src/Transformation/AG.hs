@@ -8,7 +8,6 @@
 
 module Transformation.AG where
 
-import Data.Functor.Const (Const(getConst))
 import qualified Rank2
 import Transformation (Domain, Codomain)
 import qualified Transformation
