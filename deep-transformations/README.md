@@ -279,11 +279,17 @@ instance Transformation DeadCodeEliminator where
    type Domain DeadCodeEliminator = Identity
    type Codomain DeadCodeEliminator = AG.Semantics DeadCodeEliminator
 
+instance DeadCodeEliminator `Transformation.At` Decl Sem Sem where
+  ($) = AG.applyDefault runIdentity
+
+instance DeadCodeEliminator `Transformation.At` Expr Sem Sem where
+  ($) = AG.applyDefault runIdentity
+
 instance Full.Functor DeadCodeEliminator Decl where
-  (<$>) = AG.fullMapDefault runIdentity
+  (<$>) = Full.mapUpDefault
 
 instance Full.Functor DeadCodeEliminator Expr where
-  (<$>) = AG.fullMapDefault runIdentity
+  (<$>) = Full.mapUpDefault
 ~~~
 
 We also need another bit of a boilerplate instance that can be automatically generated with Template Haskell functions
@@ -359,11 +365,11 @@ Let's see a few simple `attribution` rules first. The rules for leaf nodes can i
 because they don't have any children.
 
 ~~~ {.haskell}
-instance AG.Attribution DeadCodeEliminator Expr Identity Identity where
-  attribution DeadCodeEliminator (Identity e@(EVar v)) (AG.Inherited env, _) =
-    (AG.Synthesized (maybe e id $ env v), EVar v)
-  attribution DeadCodeEliminator (Identity e@(Con n)) (AG.Inherited env, _) =
-    (AG.Synthesized e, Con n)
+instance AG.Attribution DeadCodeEliminator Expr Sem Identity where
+  attribution DeadCodeEliminator (Identity (EVar v)) (AG.Inherited env, _) =
+    (AG.Synthesized (maybe (EVar v) id $ env v), EVar v)
+  attribution DeadCodeEliminator (Identity (Con n)) (AG.Inherited env, _) =
+    (AG.Synthesized (Con n), Con n)
 ~~~
 
 The `Add` and `Mul` nodes' rules need only to pass their inheritance down and to re-join the synthesized child
@@ -388,7 +394,7 @@ The only non-trivial rule is for the `Let` node. It needs to pass the list of va
   attribution DeadCodeEliminator (Identity (Let _decl expr))
               (AG.Inherited env, (Let (AG.Synthesized ~(env', decl')) (AG.Synthesized expr'))) =
     (AG.Synthesized (maybe id (bin Let) decl' expr'),
-     Let (AG.Inherited (env, Full.foldMap GetVariables expr)) (AG.Inherited $ \v-> env' v <|> env v))
+     Let (AG.Inherited (env, Deep.foldMap GetVariables expr')) (AG.Inherited $ \v-> env' v <|> env v))
 ~~~
 
 ### Declaration rules
@@ -396,7 +402,7 @@ The only non-trivial rule is for the `Let` node. It needs to pass the list of va
 The rules for `Decl` are a bit more involved.
 
 ~~~ {.haskell}
-instance AG.Attribution DeadCodeEliminator Decl Identity Identity where
+instance AG.Attribution DeadCodeEliminator Decl Sem Identity where
 ~~~
 
 A single variable binding can be in three distinct situations. If the variable is not referenced at all, we can just
