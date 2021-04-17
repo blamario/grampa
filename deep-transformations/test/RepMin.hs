@@ -50,9 +50,11 @@ instance (Transformation t, Full.Functor t (Tree a)) => Deep.Functor t (Root a) 
 -- | The transformation type
 data RepMin = RepMin
 
+type Sem = AG.Semantics RepMin
+
 instance Transformation RepMin where
    type Domain RepMin = Identity
-   type Codomain RepMin = AG.Semantics RepMin
+   type Codomain RepMin = Sem
 
 -- | Inherited attributes' type
 data InhRepMin = InhRepMin{global :: Int}
@@ -71,21 +73,26 @@ type instance AG.Atts (Synthesized RepMin) (Root Int f' f) = SynRepMin
 type instance AG.Atts (Inherited a) Int = ()
 type instance AG.Atts (Synthesized a) Int = Int
 
+instance Transformation.At RepMin (Tree Int Sem Sem) where
+  ($) = AG.applyDefault runIdentity
+instance Transformation.At RepMin (Root Int Sem Sem) where
+  ($) = AG.applyDefault runIdentity
+
 instance Full.Functor RepMin (Tree Int) where
-  (<$>) = AG.fullMapDefault runIdentity
+  (<$>) = Full.mapUpDefault
 instance Full.Functor RepMin (Root Int) where
-  (<$>) = AG.fullMapDefault runIdentity
+  (<$>) = Full.mapUpDefault
 
 -- | The semantics of the primitive 'Int' type must be defined manually.
 instance Transformation.At RepMin Int where
    RepMin $ Identity n = Rank2.Arrow (const $ Synthesized n)
 
-instance AG.Attribution RepMin (Root Int) Identity Identity where
+instance AG.Attribution RepMin (Root Int) Sem Identity where
    attribution RepMin self (inherited, Root root) = (Synthesized SynRepMin{local= local (syn root),
                                                                            tree= tree (syn root)},
                                                      Root{root= Inherited InhRepMin{global= local (syn root)}})
 
-instance AG.Attribution RepMin (Tree Int) Identity Identity where
+instance AG.Attribution RepMin (Tree Int) Sem Identity where
    attribution _ _ (inherited, Fork left right) = (Synthesized SynRepMin{local= local (syn left)
                                                                                 `min` local (syn right),
                                                                          tree= tree (syn left) `fork` tree (syn right)},
