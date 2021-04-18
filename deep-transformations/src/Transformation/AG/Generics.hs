@@ -52,15 +52,14 @@ type instance Atts (Synthesized (Auto t)) x = Atts (Synthesized t) x
 type instance Atts (Inherited (Keep t)) x = Atts (Inherited t) x
 type instance Atts (Synthesized (Keep t)) x = Atts (Synthesized t) x
 
-instance {-# overlappable #-} (Transformation (Auto t), Domain (Auto t) ~ f, Codomain (Auto t) ~ Semantics (Auto t),
-                               Rank2.Apply (g (Semantics (Auto t))), Attribution (Auto t) g (Semantics (Auto t)) f,
-                               Foldable f) =>
+instance {-# overlappable #-} (Revelation (Auto t), Domain (Auto t) ~ f, Codomain (Auto t) ~ Semantics (Auto t),
+                               Rank2.Apply (g (Semantics (Auto t))), Attribution (Auto t) g (Semantics (Auto t)) f) =>
                               Auto t `At` g (Semantics (Auto t)) (Semantics (Auto t)) where
-   ($) = applyDefault (foldr const $ error "Missing node")
+   t $ x = applyDefault (reveal t) t x
    {-# INLINE ($) #-}
 
 instance {-# overlappable #-}
-         (Transformation (Keep t), p ~ Transformation.Domain (Keep t), Foldable p, Rank2.Apply (g q),
+         (Revelation (Keep t), p ~ Transformation.Domain (Keep t), Rank2.Apply (g q),
           q ~ Transformation.Codomain (Keep t), q ~ PreservingSemantics (Keep t) p, s ~ Semantics (Keep t),
           Atts (Inherited (Keep t)) (g q q) ~ Atts (Inherited (Keep t)) (g s s),
           Atts (Synthesized (Keep t)) (g q q) ~ Atts (Synthesized (Keep t)) (g s s),
@@ -69,7 +68,7 @@ instance {-# overlappable #-}
          Keep t `At` g (PreservingSemantics (Keep t) p) (PreservingSemantics (Keep t) p) where
    ($) :: Keep t -> p (g (PreservingSemantics (Keep t) p) (PreservingSemantics (Keep t) p))
        -> PreservingSemantics (Keep t) p (g (PreservingSemantics (Keep t) p) (PreservingSemantics (Keep t) p))
-   ($) = applyDefaultWithAttributes (foldr const $ error "Missing node")
+   t $ x = applyDefaultWithAttributes (reveal t) t x
    {-# INLINE ($) #-}
 
 instance (Transformation (Auto t), Domain (Auto t) ~ f, Functor f, Codomain (Auto t) ~ Semantics (Auto t),
@@ -86,9 +85,9 @@ instance (Transformation (Keep t), Domain (Keep t) ~ f, Functor f, Codomain (Kee
 instance {-# overlappable #-} (Bequether (Auto t) g d s, Synthesizer (Auto t) g d s) => Attribution (Auto t) g d s where
    attribution t l (Inherited i, s) = (Synthesized $ synthesis t l i s, bequest t l i s)
 
-class (Transformation t, dom ~ Domain t) => Revelation t dom where
+class Transformation t => Revelation t where
    -- | Extract the value from the transformation domain
-   reveal :: t -> dom x -> x
+   reveal :: t -> Domain t x -> x
 
 -- | A half of the 'Attribution' class used to specify all inherited attributes.
 class Bequether t g deep shallow where
@@ -118,13 +117,7 @@ class SynthesizedField (name :: Symbol) result t g deep shallow where
                      -> g sem (Synthesized t)           -- ^ synthesized attributes
                      -> result
 
-instance (Transformation t, Domain t ~ Identity) => Revelation t Identity where
-   reveal _ (Identity x) = x
-
-instance (Transformation t, Domain t ~ (,) a) => Revelation t ((,) a) where
-   reveal _ (_, x) = x
-
-instance {-# overlappable #-} (sem ~ Semantics t, Domain t ~ shallow, Revelation t shallow,
+instance {-# overlappable #-} (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
                                Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem)) =>
                               Bequether t g (Semantics t) shallow where
    bequest = bequestDefault
@@ -275,7 +268,7 @@ instance  {-# overlappable #-} (Traversable f, Applicative m, Shallow.Traversabl
 -- | The default 'bequest' method definition relies on generics to automatically pass down all same-named inherited
 -- attributes.
 bequestDefault :: forall t g shallow sem.
-                  (sem ~ Semantics t, Domain t ~ shallow, Revelation t shallow,
+                  (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
                    Shallow.Functor (PassDown t sem (Atts (Inherited t) (g sem sem))) (g sem))
                => t -> shallow (g sem sem) -> Atts (Inherited t) (g sem sem) -> g sem (Synthesized t)
                -> g sem (Inherited t)

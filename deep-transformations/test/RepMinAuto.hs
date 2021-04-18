@@ -46,6 +46,9 @@ instance Transformation (Auto RepMin) where
    type Domain (Auto RepMin) = Identity
    type Codomain (Auto RepMin) = Sem
 
+instance AG.Revelation (Auto RepMin) where
+   reveal (Auto RepMin) = runIdentity
+   
 -- | Inherited attributes' type
 data InhRepMin = InhRepMin{global :: Int}
                deriving (Generic, Show)
