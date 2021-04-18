@@ -31,13 +31,28 @@ import GHC.Generics
 import GHC.Records
 import GHC.TypeLits (Symbol, ErrorMessage (Text), TypeError)
 import Unsafe.Coerce (unsafeCoerce)
-import Transformation (Transformation, Domain, Codomain)
+import qualified Rank2
+import Transformation (Transformation, Domain, Codomain, At)
 import Transformation.AG
 import qualified Transformation
 import qualified Transformation.Shallow as Shallow
+import qualified Transformation.Deep as Deep
+import qualified Transformation.Full as Full
 
 -- | Transformation wrapper that allows automatic inference of attribute rules.
 newtype Auto t = Auto t
+
+instance {-# overlappable #-} (Transformation (Auto t), Domain (Auto t) ~ f, Codomain (Auto t) ~ Semantics (Auto t),
+                               Rank2.Apply (g (Semantics (Auto t))), Attribution (Auto t) g (Semantics (Auto t)) f,
+                               Foldable f) =>
+                              Auto t `At` g (Semantics (Auto t)) (Semantics (Auto t)) where
+   ($) = applyDefault (foldr const $ error "Missing node")
+   {-# INLINE ($) #-}
+
+instance (Transformation (Auto t), Domain (Auto t) ~ f, Functor f, Codomain (Auto t) ~ Semantics (Auto t),
+          Deep.Functor (Auto t) g, Auto t `At` g (Semantics (Auto t)) (Semantics (Auto t))) =>
+         Full.Functor (Auto t) g where
+   (<$>) = Full.mapUpDefault
 
 instance {-# overlappable #-} (Bequether (Auto t) g d s, Synthesizer (Auto t) g d s) => Attribution (Auto t) g d s where
    attribution t l (Inherited i, s) = (Synthesized $ synthesis t l i s, bequest t l i s)

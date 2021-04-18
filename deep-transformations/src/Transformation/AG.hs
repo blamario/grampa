@@ -11,7 +11,7 @@ module Transformation.AG where
 import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Rank2
-import Transformation (Domain)
+import qualified Transformation
 
 -- | Type family that maps a node type to the type of its attributes, indexed per type constructor.
 type family Atts (f :: * -> *) a
@@ -87,7 +87,7 @@ knitKeeping extract rule x = Rank2.Arrow knitted
 class Attribution t g deep shallow where
    -- | The attribution rule for a given transformation and node.
    attribution :: t -> shallow (g deep deep) -> Rule t g
-   
+
 -- | Drop-in implementation of 'Transformation.$'
 applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g q p)
              => (forall a. p a -> a) -> t -> p x -> q x
@@ -95,7 +95,7 @@ applyDefault extract t x = knit (attribution t x) (extract x)
 {-# INLINE applyDefault #-}
 
 -- | Drop-in implementation of 'Transformation.$' that preserves all attributes with every original node
-applyDefaultWithAttributes :: (p ~ Domain t, q ~ PreservingSemantics t p, x ~ g q q, Rank2.Apply (g q),
+applyDefaultWithAttributes :: (p ~ Transformation.Domain t, q ~ PreservingSemantics t p, x ~ g q q, Rank2.Apply (g q),
                                Atts (Inherited t) (g q q) ~ Atts (Inherited t) (g (Semantics t) (Semantics t)),
                                Atts (Synthesized t) (g q q) ~ Atts (Synthesized t) (g (Semantics t) (Semantics t)),
                                g q (Synthesized t) ~ g (Semantics t) (Synthesized t),

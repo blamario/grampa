@@ -36,10 +36,6 @@ $(concat <$>
         [Rank2.TH.deriveFunctor, Rank2.TH.deriveFoldable, Rank2.TH.deriveTraversable, Rank2.TH.unsafeDeriveApply,
          Transformation.Shallow.TH.deriveAll, Transformation.Deep.TH.deriveAll]))
 
-instance (Transformation t, Transformation.At t a, Transformation.At t (Tree a (Codomain t) (Codomain t)),
-          Functor (Domain t)) => Full.Functor t (Tree a) where
-   (<$>) = Full.mapUpDefault
-
 -- | The transformation type. It will always appear wrapped in 'Auto' to enable automatic attribute derivation.
 data RepMin = RepMin
 
@@ -73,11 +69,6 @@ type instance AG.Atts (Synthesized (Auto RepMin)) (Root Int f' f) = SynRepMin Ro
 
 type instance AG.Atts (Inherited a) Int = InhRepMin
 type instance AG.Atts (Synthesized a) Int = SynRepLeaf
-
-instance Transformation.At (Auto RepMin) (Tree Int Sem Sem) where
-   ($) = AG.applyDefault runIdentity
-instance Transformation.At (Auto RepMin) (Root Int Sem Sem) where
-   ($) = AG.applyDefault runIdentity
 
 -- | The semantics of the primitive 'Int' type must be defined manually.
 instance Transformation.At (Auto RepMin) Int where
