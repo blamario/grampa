@@ -1,5 +1,5 @@
 {-# Language DataKinds, DefaultSignatures, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving,
-             MultiParamTypeClasses, PolyKinds, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
+             InstanceSigs, MultiParamTypeClasses, PolyKinds, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
              TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | This module can be used to scrap the boilerplate attribute declarations. In particular:
@@ -14,7 +14,7 @@
 -- * If the attribute additionally carries an applicative effect, the 'Mapped' wrapper can be replaced by 'Traversed'.
 
 module Transformation.AG.Generics (-- * Type wrappers for automatic attribute inference
-                                   Auto(..), Folded(..), Mapped(..), Traversed(..),
+                                   Auto(..), Keep(..), Folded(..), Mapped(..), Traversed(..),
                                    -- * Type classes replacing 'Attribution'
                                    Bequether(..), Synthesizer(..), SynthesizedField(..), Revelation(..),
                                    -- * The default behaviour on generic datatypes
@@ -42,8 +42,15 @@ import qualified Transformation.Full as Full
 -- | Transformation wrapper that allows automatic inference of attribute rules.
 newtype Auto t = Auto t
 
+-- | Transformation wrapper that allows automatic inference of attribute rules and preservation of all attributes with
+-- the original nodes.
+newtype Keep t = Keep t
+
 type instance Atts (Inherited (Auto t)) x = Atts (Inherited t) x
 type instance Atts (Synthesized (Auto t)) x = Atts (Synthesized t) x
+
+type instance Atts (Inherited (Keep t)) x = Atts (Inherited t) x
+type instance Atts (Synthesized (Keep t)) x = Atts (Synthesized t) x
 
 instance {-# overlappable #-} (Transformation (Auto t), Domain (Auto t) ~ f, Codomain (Auto t) ~ Semantics (Auto t),
                                Rank2.Apply (g (Semantics (Auto t))), Attribution (Auto t) g (Semantics (Auto t)) f,
@@ -52,9 +59,28 @@ instance {-# overlappable #-} (Transformation (Auto t), Domain (Auto t) ~ f, Cod
    ($) = applyDefault (foldr const $ error "Missing node")
    {-# INLINE ($) #-}
 
+instance {-# overlappable #-}
+         (Transformation (Keep t), p ~ Transformation.Domain (Keep t), Foldable p, Rank2.Apply (g q),
+          q ~ Transformation.Codomain (Keep t), q ~ PreservingSemantics (Keep t) p, s ~ Semantics (Keep t),
+          Atts (Inherited (Keep t)) (g q q) ~ Atts (Inherited (Keep t)) (g s s),
+          Atts (Synthesized (Keep t)) (g q q) ~ Atts (Synthesized (Keep t)) (g s s),
+          g q (Synthesized (Keep t)) ~ g s (Synthesized (Keep t)),
+          g q (Inherited (Keep t)) ~ g s (Inherited (Keep t)), Attribution (Keep t) g q p) =>
+         Keep t `At` g (PreservingSemantics (Keep t) p) (PreservingSemantics (Keep t) p) where
+   ($) :: Keep t -> p (g (PreservingSemantics (Keep t) p) (PreservingSemantics (Keep t) p))
+       -> PreservingSemantics (Keep t) p (g (PreservingSemantics (Keep t) p) (PreservingSemantics (Keep t) p))
+   ($) = applyDefaultWithAttributes (foldr const $ error "Missing node")
+   {-# INLINE ($) #-}
+
 instance (Transformation (Auto t), Domain (Auto t) ~ f, Functor f, Codomain (Auto t) ~ Semantics (Auto t),
           Deep.Functor (Auto t) g, Auto t `At` g (Semantics (Auto t)) (Semantics (Auto t))) =>
          Full.Functor (Auto t) g where
+   (<$>) = Full.mapUpDefault
+
+instance (Transformation (Keep t), Domain (Keep t) ~ f, Functor f, Codomain (Keep t) ~ PreservingSemantics (Keep t) f,
+          Functor f, Deep.Functor (Keep t) g,
+          Keep t `At` g (PreservingSemantics (Keep t) f) (PreservingSemantics (Keep t) f)) =>
+         Full.Functor (Keep t) g where
    (<$>) = Full.mapUpDefault
 
 instance {-# overlappable #-} (Bequether (Auto t) g d s, Synthesizer (Auto t) g d s) => Attribution (Auto t) g d s where
