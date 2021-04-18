@@ -62,13 +62,13 @@ data SynRepLeaf = SynRepLeaf{local :: AG.Folded (Min Int),
                              tree :: AG.Mapped Identity Int}
                   deriving (Generic, Show)
 
-type instance AG.Atts (Inherited (Auto RepMin)) (Tree Int f' f) = InhRepMin
-type instance AG.Atts (Synthesized (Auto RepMin)) (Tree Int f' f) = SynRepMin Tree
-type instance AG.Atts (Inherited (Auto RepMin)) (Root Int f' f) = ()
-type instance AG.Atts (Synthesized (Auto RepMin)) (Root Int f' f) = SynRepMin Root
+type instance AG.Atts (Inherited RepMin) (Tree Int f' f) = InhRepMin
+type instance AG.Atts (Synthesized RepMin) (Tree Int f' f) = SynRepMin Tree
+type instance AG.Atts (Inherited RepMin) (Root Int f' f) = ()
+type instance AG.Atts (Synthesized RepMin) (Root Int f' f) = SynRepMin Root
 
-type instance AG.Atts (Inherited a) Int = InhRepMin
-type instance AG.Atts (Synthesized a) Int = SynRepLeaf
+type instance AG.Atts (Inherited RepMin) Int = InhRepMin
+type instance AG.Atts (Synthesized RepMin) Int = SynRepLeaf
 
 -- | The semantics of the primitive 'Int' type must be defined manually.
 instance Transformation.At (Auto RepMin) Int where

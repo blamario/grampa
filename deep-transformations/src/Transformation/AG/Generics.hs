@@ -42,6 +42,9 @@ import qualified Transformation.Full as Full
 -- | Transformation wrapper that allows automatic inference of attribute rules.
 newtype Auto t = Auto t
 
+type instance Atts (Inherited (Auto t)) x = Atts (Inherited t) x
+type instance Atts (Synthesized (Auto t)) x = Atts (Synthesized t) x
+
 instance {-# overlappable #-} (Transformation (Auto t), Domain (Auto t) ~ f, Codomain (Auto t) ~ Semantics (Auto t),
                                Rank2.Apply (g (Semantics (Auto t))), Attribution (Auto t) g (Semantics (Auto t)) f,
                                Foldable f) =>
