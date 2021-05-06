@@ -764,18 +764,18 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                      | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps marginal)) = t'
                      | hasSuccess t = t
                      | otherwise =
-                        let expected = expectations t
-                            FailureInfo pos expected' =
-                               failureOf (if getAny (Rank2.foldMap (Any . getConst) $
-                                                     Rank2.liftA2 (combineFailures expected) deps marginal)
-                                          then t' else t)
-                        in failWith (FailureInfo pos expected')
+                        failWith (failureOf $
+                                  if getAny (Rank2.foldMap (Any . getConst) $
+                                             Rank2.liftA2 (combineFailures $ failureOf t) deps marginal)
+                                  then t' else t)
                      where combine :: Const Bool x -> GrammarFunctor (p g s) x -> Const Bool x
-                           combineFailures :: [Expected s] -> Const Bool x -> GrammarFunctor (p g s) x -> Const Bool x
+                           combineFailures :: FailureInfo s -> Const Bool x -> GrammarFunctor (p g s) x -> Const Bool x
                            combine (Const False) _ = Const False
                            combine (Const True) results = Const (hasSuccess results)
                            combineFailures _ (Const False) _ = Const False
-                           combineFailures expected (Const True) rl = Const (any (`notElem` expected) $ expectations rl)
+                           combineFailures (FailureInfo pos expected) (Const True) rl =
+                              Const (pos > pos' || pos == pos' && any (`notElem` expected) expected')
+                              where FailureInfo pos' expected' = failureOf rl
 
          recurseTotal s initialAppends parsedTail total = Rank2.liftA2 reparse initialAppends indirects
             where reparse :: (GrammarFunctor (p g s) Rank2.~> GrammarFunctor (p g s)) a -> p g s a -> GrammarFunctor (p g s) a
