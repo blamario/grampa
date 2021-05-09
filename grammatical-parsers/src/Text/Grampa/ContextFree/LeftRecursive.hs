@@ -64,15 +64,20 @@ data SeparatedParser p (g :: (* -> *) -> *) s a = FrontParser (p g s a)
                                                      cycleParser  :: p g s a,
                                                      backParser   :: p g s a,
                                                      appendResultsArrow :: ResultAppend p g s a,
-                                                     dependencies :: g (Const Bool)}
+                                                     dependencies :: Dependencies g}
                                                 | BackParser {
                                                      backParser :: p g s a}
 
 data ParserFlags g = ParserFlags {
    nullable :: Bool,
-   dependsOn :: g (Const Bool)}
+   dependsOn :: Dependencies g}
 
-deriving instance Show (g (Const Bool)) => Show (ParserFlags g)
+deriving instance Show (Dependencies g) => Show (ParserFlags g)
+
+data Dependencies g = DynamicDependencies
+                    | StaticDependencies (g (Const Bool))
+
+deriving instance Show (g (Const Bool)) => Show (Dependencies g)
 
 data ParserFunctor p g s a = ParserResultsFunctor {parserResults :: GrammarFunctor (p g s) a}
                            | ParserFlagsFunctor {parserFlags :: ParserFlags g}
@@ -123,7 +128,7 @@ general' p@PositiveDirectParser{} = Parser{
    direct1= complete p,
    indirect= empty,
    isAmbiguous= Nothing,
-   cyclicDescendants= \cd-> ParserFlags False (const (Const False) Rank2.<$> cd)}
+   cyclicDescendants= \cd-> ParserFlags False (StaticDependencies $ const (Const False) Rank2.<$> cd)}
 general' p@DirectParser{} = Parser{
    complete= complete p,
    direct = complete p,
@@ -131,7 +136,7 @@ general' p@DirectParser{} = Parser{
    direct1= direct1 p,
    indirect= empty,
    isAmbiguous= Nothing,
-   cyclicDescendants= \cd-> ParserFlags True (const (Const False) Rank2.<$> cd)}
+   cyclicDescendants= \cd-> ParserFlags True (StaticDependencies $ const (Const False) Rank2.<$> cd)}
 general' p@Parser{} = p
 
 -- | Parser of general context-free grammars, including left recursion.
@@ -186,10 +191,11 @@ instance (Eq s, LeftReductive s, FactorialMonoid s, Alternative (p g s),
       where ind = nonTerminal (parserResults . f . Rank2.fmap ParserResultsFunctor)
             addSelf g = Rank2.liftA2 adjust bits g
             adjust :: forall b. Const (g (Const Bool)) b -> Const (ParserFlags g) b -> Const (ParserFlags g) b
-            adjust (Const bit) (Const (ParserFlags n d)) =
+            adjust (Const bit) (Const (ParserFlags n (StaticDependencies d))) =
                Const ParserFlags{
                   nullable= n, 
-                  dependsOn= Rank2.liftA2 union bit d}
+                  dependsOn= StaticDependencies (Rank2.liftA2 union bit d)}
+            adjust _ flags@(Const (ParserFlags n DynamicDependencies)) = flags
    {-# INLINE nonTerminal #-}
    recursive = general
 
@@ -239,7 +245,7 @@ instance Alternative (p g s) => Applicative (Fixed p g s) where
            pcd@(ParserFlags pn pd) = cyclicDescendants p' deps
            ParserFlags qn qd = cyclicDescendants q deps
         in if pn
-           then ParserFlags qn (Rank2.liftA2 union pd qd)
+           then ParserFlags qn (depUnion pd qd)
            else pcd}
       where p'@Parser{} = general' p
    p <*> q = Parser{
@@ -253,7 +259,7 @@ instance Alternative (p g s) => Applicative (Fixed p g s) where
            pcd@(ParserFlags pn pd) = cyclicDescendants p' deps
            ParserFlags qn qd = cyclicDescendants q' deps
         in if pn
-           then ParserFlags qn (Rank2.liftA2 union pd qd)
+           then ParserFlags qn (depUnion pd qd)
            else pcd}
       where p'@Parser{} = general' p
             q'@Parser{} = general' q
@@ -284,7 +290,7 @@ instance Alternative (p g s) => Alternative (Fixed p g s) where
                     cyclicDescendants= \deps-> let
                          ParserFlags pn pd = cyclicDescendants p' deps
                          ParserFlags qn qd = cyclicDescendants q' deps
-                      in ParserFlags (pn || qn) (Rank2.liftA2 union pd qd)}
+                      in ParserFlags (pn || qn) (depUnion pd qd)}
       where p'@Parser{} = general p
             q'@Parser{} = general q
    many (PositiveDirectParser p) = DirectParser{
@@ -344,6 +350,10 @@ union :: Const Bool x -> Const Bool x -> Const Bool x
 union (Const False) d = d
 union (Const True) _ = Const True
 
+depUnion :: Rank2.Apply g => Dependencies g -> Dependencies g -> Dependencies g
+depUnion (StaticDependencies d1) (StaticDependencies d2) = StaticDependencies (Rank2.liftA2 union d1 d2)
+depUnion _ _ = DynamicDependencies
+
 instance (Alternative (p g s), Monad (p g s)) => Monad (Fixed p g s) where
    return = pure
    (>>) = (*>)
@@ -355,7 +365,7 @@ instance (Alternative (p g s), Monad (p g s)) => Monad (Fixed p g s) where
       direct1= d1,
       indirect= direct0 p >>= indirect . general' . cont,
       isAmbiguous= Nothing,
-      cyclicDescendants= \cd-> (ParserFlags True $ Rank2.fmap (const $ Const True) cd)}
+      cyclicDescendants= const (ParserFlags True DynamicDependencies)}
       where d0 = direct0 p >>= direct0 . general' . cont
             d1 = (direct0 p >>= direct1 . general' . cont) <|> (direct1 p >>= complete . cont)
    p >>= cont = Parser{
@@ -368,7 +378,7 @@ instance (Alternative (p g s), Monad (p g s)) => Monad (Fixed p g s) where
       cyclicDescendants= \cd->
          let pcd@(ParserFlags pn _) = cyclicDescendants p' cd
          in if pn
-            then ParserFlags True (Rank2.fmap (const $ Const True) cd)
+            then ParserFlags True DynamicDependencies
             else pcd}
       where d0 = direct0 p >>= direct0 . general' . cont
             d1 = (direct0 p >>= direct1 . general' . cont) <|> (direct1 p >>= complete . cont)
@@ -466,7 +476,7 @@ instance (InputParsing (Fixed p g s), DeterministicParsing (p g s)) => Determini
                     cyclicDescendants= \deps-> let
                             ParserFlags pn pd = cyclicDescendants p' deps
                             ParserFlags qn qd = cyclicDescendants q' deps
-                         in ParserFlags (pn || qn) (Rank2.liftA2 union pd qd)}
+                         in ParserFlags (pn || qn) (depUnion pd qd)}
       where p'@Parser{} = general p
             q'@Parser{} = general q
    takeSome p = (:) <$> p <*> takeMany p
@@ -650,21 +660,23 @@ separated :: forall p g s. (Alternative (p g s), Rank2.Apply g, Rank2.Distributi
                             AmbiguousAlternative (GrammarFunctor (p g s))) =>
              g (Fixed p g s) -> g (SeparatedParser p g s)
 separated g = Rank2.liftA4 reseparate circulars cycleFollowers descendants g
-   where descendants :: g (Const (g (Const Bool)))
+   where descendants :: g (Const (Dependencies g))
          cycleFollowers, circulars :: g (Const Bool)
          cyclicDescendantses :: g (Const (ParserFlags g))
          appendResults :: forall a. Maybe (AmbiguityWitness a)
                        -> GrammarFunctor (p g s) a -> GrammarFunctor (p g s) a -> GrammarFunctor (p g s) a
          leftRecursive :: forall a. Const (g (Const Bool)) a -> Const (ParserFlags g) a -> Const Bool a
          leftRecursiveDeps :: forall a. Const Bool a -> Const (ParserFlags g) a -> Const (g (Const Bool)) a
-         reseparate :: forall a. Const Bool a -> Const Bool a -> Const (g (Const Bool)) a -> Fixed p g s a
+         reseparate :: forall a. Const Bool a -> Const Bool a -> Const (Dependencies g) a -> Fixed p g s a
                     -> SeparatedParser p g s a
-         reseparate (Const circular) (Const follower) (Const deps) p
+         reseparate (Const circular) (Const follower) (Const d@(StaticDependencies deps)) p
             | circular || leader && follower =
-              CycleParser (indirect p) (direct p) (Rank2.Arrow (Rank2.Arrow . appendResults (isAmbiguous p))) deps
+              CycleParser (indirect p) (direct p) (Rank2.Arrow (Rank2.Arrow . appendResults (isAmbiguous p))) d
             | follower = BackParser (complete p)
             | otherwise = FrontParser (complete p)
             where leader = getAny (Rank2.foldMap (Any . getConst) $ Rank2.liftA2 intersection circulars deps)
+         reseparate _ _ (Const d@DynamicDependencies) p =
+              CycleParser (indirect p) (direct p) (Rank2.Arrow (Rank2.Arrow . appendResults (isAmbiguous p))) d
          appendResults (Just (AmbiguityWitness Refl)) = ambiguousOr
          appendResults Nothing = (<|>)
          descendants = Rank2.fmap (Const . dependsOn . getConst) cyclicDescendantses
@@ -672,10 +684,14 @@ separated g = Rank2.liftA4 reseparate circulars cycleFollowers descendants g
          circulars = Rank2.liftA2 leftRecursive bits cyclicDescendantses
          cycleFollowers = getUnion (Rank2.foldMap (Union . getConst) $
                                     Rank2.liftA2 leftRecursiveDeps circulars cyclicDescendantses)
-         leftRecursive (Const bit) (Const flags) =
-            Const (getAny $ Rank2.foldMap (Any . getConst) $ Rank2.liftA2 intersection bit $ dependsOn flags)
-         leftRecursiveDeps (Const True) (Const flags) = Const (dependsOn flags)
-         leftRecursiveDeps (Const False) (Const flags) = Const (Rank2.fmap (const $ Const False) (dependsOn flags))
+         leftRecursive (Const bit) (Const ParserFlags{dependsOn= StaticDependencies deps}) =
+            Const (getAny $ Rank2.foldMap (Any . getConst) $ Rank2.liftA2 intersection bit deps)
+         leftRecursive _ (Const ParserFlags{dependsOn= DynamicDependencies}) = Const True
+         leftRecursiveDeps (Const True) (Const ParserFlags{dependsOn= StaticDependencies deps}) = Const deps
+         leftRecursiveDeps (Const False) (Const ParserFlags{dependsOn= StaticDependencies deps}) =
+            Const (Rank2.fmap (const $ Const False) deps)
+         leftRecursiveDeps _ (Const ParserFlags{dependsOn= DynamicDependencies}) =
+            Const (Rank2.fmap (const $ Const True) g)
          intersection (Const a) (Const b) = Const (a && b)
 {-# INLINABLE separated #-}
 
@@ -686,26 +702,29 @@ fixDescendants gf = go initial
          go cd
             | getAll (Rank2.foldMap (All . getConst) $ Rank2.liftA2 agree cd cd') = cd
             | otherwise = go cd'
-            where cd' = Rank2.liftA2 depsUnion cd (Rank2.fmap (\(Const f)-> Const (f cd)) gf)
-         agree (Const (ParserFlags _xn xd)) (Const (ParserFlags _yn yd)) =
+            where cd' = Rank2.liftA2 flagUnion cd (Rank2.fmap (\(Const f)-> Const (f cd)) gf)
+         agree (Const (ParserFlags _xn (StaticDependencies xd))) (Const (ParserFlags _yn (StaticDependencies yd))) =
             Const (getAll (Rank2.foldMap (All . getConst) (Rank2.liftA2 agree' xd yd)))
+         agree (Const (ParserFlags _xn DynamicDependencies)) (Const (ParserFlags _yn DynamicDependencies)) = Const True
+         agree _ _ = Const False
          agree' (Const x) (Const y) = Const (x == y)
-         depsUnion (Const ParserFlags{dependsOn= old}) (Const (ParserFlags n new)) = 
-            Const (ParserFlags n $ Rank2.liftA2 union old new)
-         initial = Rank2.liftA2 (\_ (Const n)-> Const (ParserFlags n (const (Const False) Rank2.<$> gf))) gf nullabilities
-         nullabilities = fixNullabilities gf
+         flagUnion (Const ParserFlags{dependsOn= old}) (Const (ParserFlags n new)) = 
+            Const (ParserFlags n $ depUnion old new)
+         initial = Rank2.liftA2 (\_ (Const n)-> Const (ParserFlags n deps)) gf nullabilities
+         deps = StaticDependencies (const (Const False) Rank2.<$> gf)
+         StaticDependencies nullabilities = fixNullabilities gf
 {-# INLINABLE fixDescendants #-}
 
 fixNullabilities :: forall g. (Rank2.Apply g, Rank2.Traversable g)
-                    => g (Const (g (Const (ParserFlags g)) -> (ParserFlags g))) -> g (Const Bool)
-fixNullabilities gf = Rank2.fmap (Const . nullable . getConst) (go initial)
+                    => g (Const (g (Const (ParserFlags g)) -> (ParserFlags g))) -> Dependencies g
+fixNullabilities gf = StaticDependencies (Const . nullable . getConst Rank2.<$> go initial)
    where go :: g (Const (ParserFlags g)) -> g (Const (ParserFlags g))
          go cd
             | getAll (Rank2.foldMap (All . getConst) $ Rank2.liftA2 agree cd cd') = cd
             | otherwise = go cd'
             where cd' = Rank2.fmap (\(Const f)-> Const (f cd)) gf
          agree (Const flags1) (Const flags2) = Const (nullable flags1 == nullable flags2)
-         initial = const (Const (ParserFlags True (const (Const False) Rank2.<$> gf))) Rank2.<$> gf
+         initial = const (Const (ParserFlags True (StaticDependencies $ const (Const False) Rank2.<$> gf))) Rank2.<$> gf
 {-# INLINABLE fixNullabilities #-}
 
 -- | Parse the given input using a context-free grammar separated into two parts: the first specifying all the
@@ -735,8 +754,8 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
          recurseMarginal :: s -> [(s, g (GrammarFunctor (p g s)))]
                       -> g (GrammarFunctor (p g s))
                       -> g (GrammarFunctor (p g s))
-         maybeDependencies :: g (Const (Maybe (g (Const Bool))))
-         maybeDependency :: SeparatedParser p g s r -> Const (Maybe (g (Const Bool))) r
+         maybeDependencies :: g (Const (Maybe (Dependencies g)))
+         maybeDependency :: SeparatedParser p g s r -> Const (Maybe (Dependencies g)) r
          appends :: g (ResultAppend p g s)
          parserAppend :: SeparatedParser p g s r -> ResultAppend p g s r
 
@@ -756,11 +775,11 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
 
          whileAnyContinues ft fm total marginal =
             Rank2.liftA3 choiceWhile maybeDependencies total (whileAnyContinues ft fm (ft total) (fm marginal))
-            where choiceWhile :: Const (Maybe (g (Const Bool))) x
+            where choiceWhile :: Const (Maybe (Dependencies g)) x
                               -> GrammarFunctor (p g s) x -> GrammarFunctor (p g s) x
                               -> GrammarFunctor (p g s) x
                   choiceWhile (Const Nothing) t _ = t
-                  choiceWhile (Const (Just deps)) t t'
+                  choiceWhile (Const (Just (StaticDependencies deps))) t t'
                      | getAny (Rank2.foldMap (Any . getConst) (Rank2.liftA2 combine deps marginal)) = t'
                      | hasSuccess t = t
                      | otherwise =
@@ -776,6 +795,10 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                            combineFailures (FailureInfo pos expected) (Const True) rl =
                               Const (pos > pos' || pos == pos' && any (`notElem` expected) expected')
                               where FailureInfo pos' expected' = failureOf rl
+                  choiceWhile (Const (Just DynamicDependencies)) t t'
+                     | getAny (Rank2.foldMap (Any . hasSuccess) marginal) = t'
+                     | FailureInfo _ [] <- failureOf t = t'
+                     | otherwise = t
 
          recurseTotal s initialAppends parsedTail total = Rank2.liftA2 reparse initialAppends indirects
             where reparse :: (GrammarFunctor (p g s) Rank2.~> GrammarFunctor (p g s)) a -> p g s a -> GrammarFunctor (p g s) a

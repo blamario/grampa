@@ -32,6 +32,7 @@ import Test.QuickCheck (verbose)
 import Test.QuickCheck.Checkers (Binop, EqProp(..), TestBatch, unbatch)
 import Test.QuickCheck.Classes (functor, monad, monoid, applicative, alternative,
                                 monadFunctor, monadApplicative, monadOr, monadPlus)
+import Witherable (filter)
 
 import qualified Rank2
 import qualified Rank2.TH
@@ -42,7 +43,7 @@ import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 import qualified Test.Ambiguous
 import qualified Test.Examples
 
-import Prelude hiding (null, takeWhile)
+import Prelude hiding (filter, null, takeWhile)
 
 data Recursive f = Recursive{start :: f String,
                              rec :: f [String],
@@ -60,6 +61,18 @@ recursiveManyGrammar Recursive{..} = Recursive{
    rec= (:) <$> one <*> rec <|> pure [],
    one = string "(" *> start <* string ")",
    next= string "]"}
+
+filteredGrammar Recursive{..} = Recursive{
+   start= concat <$> rec,
+   rec= filter (not . null) (many one),
+   one = string "1",
+   next= string "2" <|> (next >>= error "next")}
+
+monadicGrammar Recursive{..} = Recursive{
+   start= concat <$> rec,
+   rec= many one >>= \x-> if null x then fail "empty" else return x,
+   one = string "1",
+   next= string "2" <|> (next >>= error "next")}
 
 nameListGrammar :: Recursive (LeftRecursive.Parser Recursive String)
 nameListGrammar = fixGrammar nameListGrammarBuilder
@@ -88,12 +101,20 @@ simpleParse :: (Eq s, FactorialMonoid s, LeftReductive s) => Parallel.Parser (Ra
 simpleParse p input = getCompose . getCompose $ simply parsePrefix p input
 
 tests = testGroup "Grampa" [
-           let g = fixGrammar recursiveManyGrammar :: Recursive (LeftRecursive.Parser Recursive String)
+           let g, gm, gf :: Recursive (LeftRecursive.Parser Recursive String)
+               g = fixGrammar recursiveManyGrammar
+               gf = fixGrammar filteredGrammar
+               gm = fixGrammar monadicGrammar
            in testGroup "recursive"
               [testProperty "minimal" $ start (parseComplete g "()") == Compose (Right [""]),
                testProperty "bracketed" $ start (parseComplete g "[()]") == Compose (Right [""]),
                testProperty "name list" $
-                 start (parseComplete nameListGrammar "foo, bar") == Compose (Right ["foo bar"])],
+                 start (parseComplete nameListGrammar "foo, bar") == Compose (Right ["foo bar"]),
+               testProperty "filtered" $
+                 start (parseComplete gf "") === Compose (Left (ParseFailure 0 [ExpectedInput "1"])),
+               testProperty "monadic" $
+                 start (parseComplete gm "") === Compose (Left (ParseFailure 0 [Expected "empty"]))
+              ],
            testGroup "arithmetic"
              [testProperty "arithmetic"   $ \tree-> Test.Examples.parseArithmetical (show tree) === Right tree,
               testProperty "boolean"      $ \tree-> Test.Examples.parseBoolean (show tree) === Right tree,

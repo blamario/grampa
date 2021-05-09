@@ -1,5 +1,5 @@
 name:                grammatical-parsers
-version:             0.5.1
+version:             0.5.2
 synopsis:            parsers that combine into grammars
 description:
   /Gram/matical-/pa/rsers, or Grampa for short, is a library of parser types whose values are meant to be assigned
@@ -79,6 +79,7 @@ test-suite           quicktests
   x-uses-tf:         true
   build-depends:     base >=4.9 && < 5, containers >= 0.5.7.0 && < 0.7,
                      monoid-subclasses < 1.2, parsers < 0.13,
+                     witherable == 0.4.*,
                      rank2classes >= 1.0.2 && < 1.5, grammatical-parsers,
                      QuickCheck >= 2 && < 3, checkers >= 0.4.6 && < 0.6, size-based < 0.2,
                      testing-feat >= 1.1 && < 1.2,
