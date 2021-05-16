@@ -74,6 +74,12 @@ monadicGrammar Recursive{..} = Recursive{
    one = string "1",
    next= string "2" <|> (next >>= error "next")}
 
+nullRecursiveGrammar Recursive{..} = Recursive{
+   start= rec >>= \a-> (concat a <>) <$> next,
+   rec= many one,
+   one = string "1",
+   next= string "2" <|> (next >>= \n-> (n <>) <$> string "3" )}
+
 nameListGrammar :: Recursive (LeftRecursive.Parser Recursive String)
 nameListGrammar = fixGrammar nameListGrammarBuilder
 nameListGrammarBuilder g@Recursive{..} = Recursive{
@@ -101,10 +107,11 @@ simpleParse :: (Eq s, FactorialMonoid s, LeftReductive s) => Parallel.Parser (Ra
 simpleParse p input = getCompose . getCompose $ simply parsePrefix p input
 
 tests = testGroup "Grampa" [
-           let g, gm, gf :: Recursive (LeftRecursive.Parser Recursive String)
+           let g, gf, gm, gn :: Recursive (LeftRecursive.Parser Recursive String)
                g = fixGrammar recursiveManyGrammar
                gf = fixGrammar filteredGrammar
                gm = fixGrammar monadicGrammar
+               gn = fixGrammar nullRecursiveGrammar
            in testGroup "recursive"
               [testProperty "minimal" $ start (parseComplete g "()") == Compose (Right [""]),
                testProperty "bracketed" $ start (parseComplete g "[()]") == Compose (Right [""]),
@@ -113,7 +120,9 @@ tests = testGroup "Grampa" [
                testProperty "filtered" $
                  start (parseComplete gf "") === Compose (Left (ParseFailure 0 [ExpectedInput "1"])),
                testProperty "monadic" $
-                 start (parseComplete gm "") === Compose (Left (ParseFailure 0 [Expected "empty"]))
+                 start (parseComplete gm "") === Compose (Left (ParseFailure 0 [Expected "empty"])),
+               testProperty "null monadic" $
+                 start (parseComplete gn "23") === Compose (Right ["23"])
               ],
            testGroup "arithmetic"
              [testProperty "arithmetic"   $ \tree-> Test.Examples.parseArithmetical (show tree) === Right tree,

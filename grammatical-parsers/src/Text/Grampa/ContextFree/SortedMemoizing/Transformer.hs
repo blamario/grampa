@@ -161,7 +161,11 @@ instance (Applicative m, Eq s, LeftReductive s, FactorialMonoid s, Rank2.Functor
    parsingResult s = Compose . Compose . fmap (fmap sequenceA) . fromResultList s
    nonTerminal :: (ParserInput (ParserT m g s) ~ s) => (g (ResultListT m g s) -> ResultListT m g s a) -> ParserT m g s a
    nonTerminal f = Parser p where
-      p ((_, d) : _) = f d
+      p rest@((_, d) : _) = ResultList rs' failure
+         where ResultList rs failure = f d
+               rs' = sync <$> rs
+               sync (ResultsOfLengthT (ROL 0 _remainder r)) = ResultsOfLengthT (ROL 0 rest r)
+               sync rs = rs
       p _ = ResultList mempty (FailureInfo 0 [Expected "NonTerminal at endOfInput"])
    {-# INLINE nonTerminal #-}
 
