@@ -5,7 +5,6 @@ module Text.Grampa.PEG.Continued.Measured (Parser(..), Result(..), alt) where
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
 import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..))
 
-import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.List (nub)
 import Data.Semigroup (Semigroup(..))
