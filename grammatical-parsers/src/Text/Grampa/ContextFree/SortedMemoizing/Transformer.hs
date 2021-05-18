@@ -34,7 +34,7 @@ import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing
                           ConsumedInputParsing(..), DeterministicParsing(..),
                           AmbiguousParsing(..), Ambiguous(Ambiguous),
                           TailsParsing(..), ParseResults, ParseFailure(..), Expected(..))
-import Text.Grampa.Internal (FailureInfo(..), AmbiguousAlternative(..))
+import Text.Grampa.Internal (FailureInfo(..), FallibleResults(..), AmbiguousAlternative(..))
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
 import Prelude hiding (iterate, length, null, showList, span, takeWhile)
@@ -439,3 +439,9 @@ instance Semigroup (ResultListT m g s r) where
 instance Monoid (ResultListT m g s r) where
    mempty = ResultList mempty mempty
    mappend = (<>)
+
+instance FallibleResults (ResultListT m g) where
+   hasSuccess (ResultList [] _) = False
+   hasSuccess _ = True
+   failureOf (ResultList _ failure) = failure
+   failWith = ResultList []

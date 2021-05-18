@@ -4,10 +4,9 @@ module Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, SeparatedPars
                                                           parseSeparated, separated)
 where
 
-import Text.Grampa.ContextFree.LeftRecursive (Fixed, SeparatedParser(..), FallibleWithExpectations(..),
+import Text.Grampa.ContextFree.LeftRecursive (Fixed, SeparatedParser(..),
                                               liftPositive, liftPure, mapPrimitive, parseSeparated, separated)
 import qualified Text.Grampa.ContextFree.SortedMemoizing.Transformer as Transformer
-import Text.Grampa.ContextFree.SortedMemoizing.Transformer (ResultListT(ResultList), FailureInfo(FailureInfo))
 import Text.Grampa.Internal (AmbiguityDecidable)
 
 type ParserT m = Fixed (Transformer.ParserT m)
@@ -23,10 +22,3 @@ tbind p f = mapPrimitive (`Transformer.tbind` f) p
 -- | Transform the computation carried by the parser.
 tmap :: AmbiguityDecidable b => (m a -> m b) -> ParserT m g s a -> ParserT m g s b
 tmap = mapPrimitive . Transformer.tmap
-
-instance FallibleWithExpectations (ResultListT m g) where
-   hasSuccess (ResultList [] _) = False
-   hasSuccess _ = True
-   failureOf (ResultList _ failure) = failure
-   failWith = ResultList []
-   expectations (ResultList _ (FailureInfo _ expected)) = expected

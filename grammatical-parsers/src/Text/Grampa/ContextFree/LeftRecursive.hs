@@ -2,7 +2,7 @@
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies, TypeOperators,
              UndecidableInstances #-}
 {-# OPTIONS -fno-full-laziness #-}
-module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..), FallibleWithExpectations(..),
+module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..),
                                               longest, peg, terminalPEG,
                                               liftPositive, liftPure, mapPrimitive,
                                               parseSeparated, separated)
@@ -35,8 +35,8 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           AmbiguousParsing(..), ConsumedInputParsing(..), DeterministicParsing(..),
-                          TailsParsing(parseTails, parseAllTails), Expected(..))
-import Text.Grampa.Internal (ResultList(..), FailureInfo(..),
+                          TailsParsing(parseTails, parseAllTails))
+import Text.Grampa.Internal (ResultList(..), FailureInfo(..), FallibleResults(..),
                              AmbiguousAlternative(ambiguousOr), AmbiguityDecidable(..), AmbiguityWitness(..))
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
@@ -147,7 +147,7 @@ general' p@Parser{} = p
 instance (Eq s, LeftReductive s, FactorialMonoid s, Alternative (p g s),
           TailsParsing (p g s), GrammarConstraint (p g s) g, ParserGrammar (p g s) ~ g,
           Functor (ResultFunctor (p g s)),
-          s ~ ParserInput (p g s), GrammarFunctor (p g s) ~ rl s, FallibleWithExpectations rl,
+          s ~ ParserInput (p g s), GrammarFunctor (p g s) ~ rl s, FallibleResults rl,
           AmbiguousAlternative (GrammarFunctor (p g s))) =>
          MultiParsing (Fixed p g s) where
    type GrammarConstraint (Fixed p g s) g' = (GrammarConstraint (p g s) g', g ~ g',
@@ -170,7 +170,7 @@ instance (Eq s, LeftReductive s, FactorialMonoid s, Alternative (p g s),
 instance (Eq s, LeftReductive s, FactorialMonoid s, Alternative (p g s),
           TailsParsing (p g s), GrammarConstraint (p g s) g, ParserGrammar (p g s) ~ g,
           Functor (ResultFunctor (p g s)),
-          s ~ ParserInput (p g s), GrammarFunctor (p g s) ~ rl s, FallibleWithExpectations rl,
+          s ~ ParserInput (p g s), GrammarFunctor (p g s) ~ rl s, FallibleResults rl,
           AmbiguousAlternative (GrammarFunctor (p g s))) =>
          GrammarParsing (Fixed p g s) where
    type ParserGrammar (Fixed p g s) = g
@@ -649,7 +649,7 @@ terminalPEG p@Parser{} = Parser{complete= Memoizing.terminalPEG (complete p),
 parseRecursive :: forall p g s rl. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g,
                                     Eq s, FactorialMonoid s, LeftReductive s, Alternative (p g s),
                                     TailsParsing (p g s), GrammarConstraint (p g s) g,
-                                    s ~ ParserInput (p g s), GrammarFunctor (p g s) ~ rl s, FallibleWithExpectations rl,
+                                    s ~ ParserInput (p g s), GrammarFunctor (p g s) ~ rl s, FallibleResults rl,
                                     AmbiguousAlternative (GrammarFunctor (p g s))) =>
                   g (Fixed p g s) -> s -> [(s, g (GrammarFunctor (p g s)))]
 parseRecursive = parseSeparated . separated
@@ -731,7 +731,7 @@ fixNullabilities gf = StaticDependencies (Const . nullable . getConst Rank2.<$> 
 -- dependencies among the grammar productions.
 parseSeparated :: forall p g rl s. (Rank2.Apply g, Rank2.Foldable g, Eq s, FactorialMonoid s, LeftReductive s,
                                     TailsParsing (p g s), GrammarConstraint (p g s) g,
-                                    GrammarFunctor (p g s) ~ rl s, FallibleWithExpectations rl,
+                                    GrammarFunctor (p g s) ~ rl s, FallibleResults rl,
                                     s ~ ParserInput (p g s)) =>
                   g (SeparatedParser p g s) -> s -> [(s, g (GrammarFunctor (p g s)))]
 parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
@@ -814,16 +814,3 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
          recurseMarginal s parsedTail marginal =
             flip parseTails ((s, marginal) : parsedTail) Rank2.<$> indirects
 {-# NOINLINE parseSeparated #-}
-
-class FallibleWithExpectations f where
-   hasSuccess   :: f s a -> Bool
-   failureOf    :: f s a -> FailureInfo s
-   failWith     :: FailureInfo s -> f s a
-   expectations :: f s a -> [Expected s]
-
-instance FallibleWithExpectations (ResultList g) where
-   hasSuccess (ResultList [] _) = False
-   hasSuccess _ = True
-   failureOf (ResultList _ failure) = failure
-   failWith = ResultList []
-   expectations (ResultList _ (FailureInfo _ expected)) = expected

@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances, GADTs, RankNTypes, TypeOperators #-}
 
-module Text.Grampa.Internal (BinTree(..), FailureInfo(..), ResultList(..), ResultsOfLength(..),
+module Text.Grampa.Internal (BinTree(..), FailureInfo(..), ResultList(..), ResultsOfLength(..), FallibleResults(..),
                              AmbiguousAlternative(..), AmbiguityDecidable(..), AmbiguityWitness(..),
                              fromResultList, noFailure) where
 
@@ -154,3 +154,14 @@ instance Semigroup (BinTree a) where
 instance Monoid (BinTree a) where
    mempty = EmptyTree
    mappend = (<>)
+
+class FallibleResults f where
+   hasSuccess   :: f s a -> Bool
+   failureOf    :: f s a -> FailureInfo s
+   failWith     :: FailureInfo s -> f s a
+
+instance FallibleResults (ResultList g) where
+   hasSuccess (ResultList [] _) = False
+   hasSuccess _ = True
+   failureOf (ResultList _ failure) = failure
+   failWith = ResultList []
