@@ -34,8 +34,7 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          AmbiguousParsing(..), Ambiguous(..),
-                          ConsumedInputParsing(..), DeterministicParsing(..),
+                          AmbiguousParsing(..), ConsumedInputParsing(..), DeterministicParsing(..),
                           TailsParsing(parseTails, parseAllTails), Expected(..))
 import Text.Grampa.Internal (ResultList(..), FailureInfo(..),
                              AmbiguousAlternative(ambiguousOr), AmbiguityDecidable(..), AmbiguityWitness(..))
@@ -195,7 +194,7 @@ instance (Eq s, LeftReductive s, FactorialMonoid s, Alternative (p g s),
                Const ParserFlags{
                   nullable= n, 
                   dependsOn= StaticDependencies (Rank2.liftA2 union bit d)}
-            adjust _ flags@(Const (ParserFlags n DynamicDependencies)) = flags
+            adjust _ flags@(Const (ParserFlags _ DynamicDependencies)) = flags
    {-# INLINE nonTerminal #-}
    recursive = general
 
@@ -744,11 +743,13 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                   f :: forall a. SeparatedParser p g s a -> GrammarFunctor (p g s) a -> GrammarFunctor (p g s) a
                   f (FrontParser p) _ = parseTails p ((s,d''):parsedTail)
                   f _ result = result
-         fixRecursive :: s -> [(s, g (GrammarFunctor (p g s)))] -> g (GrammarFunctor (p g s)) -> g (GrammarFunctor (p g s))
+         fixRecursive :: s -> [(s, g (GrammarFunctor (p g s)))]
+                      -> g (GrammarFunctor (p g s)) -> g (GrammarFunctor (p g s))
          whileAnyContinues :: (g (GrammarFunctor (p g s)) -> g (GrammarFunctor (p g s)))
                            -> (g (GrammarFunctor (p g s)) -> g (GrammarFunctor (p g s)))
                            -> g (GrammarFunctor (p g s)) -> g (GrammarFunctor (p g s)) -> g (GrammarFunctor (p g s))
-         recurseTotal :: s -> g (GrammarFunctor (p g s) Rank2.~> GrammarFunctor (p g s)) -> [(s, g (GrammarFunctor (p g s)))]
+         recurseTotal :: s -> g (GrammarFunctor (p g s) Rank2.~> GrammarFunctor (p g s))
+                      -> [(s, g (GrammarFunctor (p g s)))]
                       -> g (GrammarFunctor (p g s))
                       -> g (GrammarFunctor (p g s))
          recurseMarginal :: s -> [(s, g (GrammarFunctor (p g s)))]
@@ -768,11 +769,15 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
          maybeDependency p@CycleParser{} = Const (Just $ dependencies p)
          maybeDependency _ = Const Nothing
 
+         -- Fix the recursive knot on the head of the input, given its already-fixed tail and the initial record of
+         -- directly parsed results.
          fixRecursive s parsedTail initial =
             whileAnyContinues (recurseTotal s (appends Rank2.<*> initial) parsedTail)
                               (recurseMarginal s parsedTail)
                               initial initial
 
+         -- Loop accumulating the total parsing results from marginal results as long as there is any new marginal
+         -- result to expand a total one or a new failure expactation to augment an existing failure.
          whileAnyContinues ft fm total marginal =
             Rank2.liftA3 choiceWhile maybeDependencies total (whileAnyContinues ft fm (ft total) (fm marginal))
             where choiceWhile :: Const (Maybe (Dependencies g)) x
@@ -800,9 +805,12 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                      | FailureInfo _ [] <- failureOf t = t'
                      | otherwise = t
 
+         -- Adds another round of indirect parsing results to the total results accumulated so far.
          recurseTotal s initialAppends parsedTail total = Rank2.liftA2 reparse initialAppends indirects
-            where reparse :: (GrammarFunctor (p g s) Rank2.~> GrammarFunctor (p g s)) a -> p g s a -> GrammarFunctor (p g s) a
+            where reparse :: (GrammarFunctor (p g s) Rank2.~> GrammarFunctor (p g s)) a -> p g s a
+                          -> GrammarFunctor (p g s) a
                   reparse append p = Rank2.apply append (parseTails p $ (s, total) : parsedTail)
+         -- Calculates the next round of indirect parsing results from the previous marginal round.
          recurseMarginal s parsedTail marginal =
             flip parseTails ((s, marginal) : parsedTail) Rank2.<$> indirects
 {-# NOINLINE parseSeparated #-}

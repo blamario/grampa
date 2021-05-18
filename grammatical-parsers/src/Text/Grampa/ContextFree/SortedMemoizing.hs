@@ -97,10 +97,11 @@ instance (Eq s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g 
    parsingResult s = Compose . fromResultList s
    nonTerminal :: (Rank2.Functor g, ParserInput (Parser g s) ~ s) => (g (ResultList g s) -> ResultList g s a) -> Parser g s a
    nonTerminal f = Parser p where
-      p rest@((_, d) : _) = ResultList rs' failure
+      p input@((_, d) : _) = ResultList rs' failure
          where ResultList rs failure = f d
                rs' = sync <$> rs
-               sync (ResultsOfLength 0 _remainder r) = ResultsOfLength 0 rest r
+               -- in left-recursive grammars the stored input remainder may be wrong, so revert to the complete input
+               sync (ResultsOfLength 0 _remainder r) = ResultsOfLength 0 input r
                sync rs = rs
       p _ = ResultList mempty (FailureInfo 0 [Expected "NonTerminal at endOfInput"])
    {-# INLINE nonTerminal #-}
