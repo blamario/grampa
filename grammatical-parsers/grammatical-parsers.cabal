@@ -50,7 +50,7 @@ library
                        parsers < 0.13,
                        input-parsers < 0.3,
                        attoparsec >= 0.13 && < 0.14,
-                       witherable-class < 0.1,
+                       witherable == 0.4.*,
                        rank2classes >= 1.0.2 && < 1.5
 
 executable             arithmetic

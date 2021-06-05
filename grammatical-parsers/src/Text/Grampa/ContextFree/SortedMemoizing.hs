@@ -19,7 +19,7 @@ import qualified Data.Monoid.Textual as Textual
 import Data.Semigroup (Semigroup((<>)))
 import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf))
 import Data.String (fromString)
-import Data.Witherable.Class (Filterable(mapMaybe))
+import Witherable (Filterable(mapMaybe))
 
 import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)

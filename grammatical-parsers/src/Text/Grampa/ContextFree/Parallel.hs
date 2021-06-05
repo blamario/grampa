@@ -19,7 +19,7 @@ import qualified Data.Monoid.Null as Null
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
 import Data.String (fromString)
-import Data.Witherable.Class (Filterable(mapMaybe))
+import Witherable (Filterable(mapMaybe))
 
 import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)

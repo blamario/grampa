@@ -12,7 +12,7 @@ import Data.List (nub)
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Semigroup (Semigroup((<>)))
 import Data.Type.Equality ((:~:)(Refl))
-import Data.Witherable.Class (Filterable(mapMaybe))
+import Witherable (Filterable(mapMaybe))
 
 import Data.Monoid.Factorial (FactorialMonoid, length)
 

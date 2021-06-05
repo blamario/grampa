@@ -14,7 +14,7 @@ import Data.Monoid.Textual(TextualMonoid)
 import Data.Semigroup (Semigroup(..))
 import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf))
 import Data.String (fromString)
-import Data.Witherable.Class (Filterable(mapMaybe))
+import Witherable (Filterable(mapMaybe))
 
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Null as Null

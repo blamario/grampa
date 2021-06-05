@@ -12,7 +12,7 @@ import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Factorial(FactorialMonoid)
 import Data.Monoid.Textual(TextualMonoid)
 import Data.String (fromString)
-import Data.Witherable.Class (Filterable(mapMaybe))
+import Witherable (Filterable(mapMaybe))
 
 import Data.Semigroup.Cancellative (LeftReductive(stripPrefix))
 import qualified Data.Monoid.Factorial as Factorial
