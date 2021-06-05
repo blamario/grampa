@@ -13,6 +13,7 @@ import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Factorial(FactorialMonoid)
 import Data.Monoid.Textual(TextualMonoid)
 import Data.String (fromString)
+import Debug.Trace (trace)
 import Witherable (Filterable(mapMaybe))
 
 import qualified Data.Monoid.Factorial as Factorial
@@ -28,7 +29,7 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
                           MultiParsing(..), ParseResults, ParseFailure(..), Expected(..))
-import Text.Grampa.Internal (FailureInfo(..))
+import Text.Grampa.Internal (FailureInfo(..), TraceableParsing(..))
 
 data Result (g :: (* -> *) -> *) s v = Parsed{parsedLength :: !Int,
                                               parsedResult :: !v,
@@ -189,6 +190,13 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => ConsumedInputParsi
       where q rest = case p rest
                      of Parsed l prefix suffix -> Parsed l (Factorial.take l rest, prefix) suffix
                         NoParse failure -> NoParse failure
+
+instance InputParsing (Parser g s)  => TraceableParsing (Parser g s) where
+   traceInput description (Parser p) = Parser q
+      where q s = case traceWith "Parsing " (p s)
+                  of r@Parsed{} -> traceWith "Parsed " r
+                     r@NoParse{} -> traceWith "Failed " r
+               where traceWith prefix = trace (prefix <> description s)
 
 instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p

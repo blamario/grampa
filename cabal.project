@@ -2,3 +2,4 @@ packages:
    rank2classes/
    grammatical-parsers/
    deep-transformations/
+   ../input-parsers/

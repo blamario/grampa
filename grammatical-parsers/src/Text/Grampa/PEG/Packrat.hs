@@ -14,6 +14,7 @@ import Data.Monoid.Textual(TextualMonoid)
 import Data.Semigroup (Semigroup(..))
 import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf))
 import Data.String (fromString)
+import Debug.Trace (trace)
 import Witherable (Filterable(mapMaybe))
 
 import qualified Data.Monoid.Factorial as Factorial
@@ -29,7 +30,7 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..),
                           GrammarParsing(..), MultiParsing(..),
                           TailsParsing(parseTails), ParseResults, ParseFailure(..), Expected(..))
-import Text.Grampa.Internal (FailureInfo(..))
+import Text.Grampa.Internal (FailureInfo(..), TraceableParsing(..))
 
 data Result g s v = Parsed{parsedPrefix :: !v, 
                            parsedSuffix :: ![(s, g (Result g s))]}
@@ -190,6 +191,15 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
       p rest@((s', _) : _)
          | s `isPrefixOf` s' = Parsed s (Factorial.drop (Factorial.length s) rest)
       p rest = NoParse (FailureInfo (genericLength rest) [ExpectedInput s])
+
+instance (InputParsing (Parser g s), Monoid s)  => TraceableParsing (Parser g s) where
+   traceInput description (Parser p) = Parser q
+      where q rest = case traceWith "Parsing " (p rest)
+                  of r@Parsed{} -> traceWith "Parsed " r
+                     r@NoParse{} -> traceWith "Failed " r
+               where traceWith prefix = trace (prefix <> description (case rest
+                                                                      of ((s, _):_) -> s
+                                                                         [] -> mempty))
 
 instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p

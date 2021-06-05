@@ -22,6 +22,7 @@ import qualified Data.Monoid.Textual as Textual
 import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf))
 import Data.String (fromString)
 import Witherable (Filterable(mapMaybe))
+import Debug.Trace (trace)
 
 import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
@@ -34,7 +35,7 @@ import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing
                           ConsumedInputParsing(..), DeterministicParsing(..),
                           AmbiguousParsing(..), Ambiguous(Ambiguous),
                           TailsParsing(..), ParseResults, ParseFailure(..), Expected(..))
-import Text.Grampa.Internal (FailureInfo(..), FallibleResults(..), AmbiguousAlternative(..))
+import Text.Grampa.Internal (FailureInfo(..), FallibleResults(..), AmbiguousAlternative(..), TraceableParsing(..))
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
 import Prelude hiding (iterate, length, null, showList, span, takeWhile)
@@ -228,6 +229,13 @@ instance (Applicative m, LeftReductive s, FactorialMonoid s) => InputParsing (Pa
                  predicate first = ResultList mempty (FailureInfo (genericLength rest) [Expected "notSatisfy"])
             p rest = singleResult 0 rest ()
    {-# INLINABLE string #-}
+
+instance InputParsing (ParserT m g s)  => TraceableParsing (ParserT m g s) where
+   traceInput description (Parser p) = Parser q
+      where q rest@((s, _):_) = case traceWith "Parsing " (p rest)
+                                of rl@(ResultList [] _) -> traceWith "Failed " rl
+                                   rl -> traceWith "Parsed " rl
+               where traceWith prefix = trace (prefix <> description s)
 
 instance (Applicative m, Show s, TextualMonoid s) => InputCharParsing (ParserT m g s) where
    satisfyCharInput predicate = Parser p

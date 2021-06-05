@@ -37,7 +37,8 @@ import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing
                           AmbiguousParsing(..), ConsumedInputParsing(..), DeterministicParsing(..),
                           TailsParsing(parseTails, parseAllTails))
 import Text.Grampa.Internal (ResultList(..), FailureInfo(..), FallibleResults(..),
-                             AmbiguousAlternative(ambiguousOr), AmbiguityDecidable(..), AmbiguityWitness(..))
+                             AmbiguousAlternative(ambiguousOr), AmbiguityDecidable(..), AmbiguityWitness(..),
+                             TraceableParsing(..))
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
@@ -554,7 +555,24 @@ instance (LeftReductive s, FactorialMonoid s, InputParsing (p g s), ParserInput 
    takeWhile predicate = primitive (mempty <$ notSatisfy predicate)
                                                (takeWhile1 predicate) (takeWhile predicate)
    takeWhile1 predicate = liftPositive (takeWhile1 predicate)
+
    {-# INLINABLE string #-}
+
+instance (LeftReductive s, FactorialMonoid s, Show s, TraceableParsing (p g s), ParserInput (p g s) ~ s) =>
+         TraceableParsing (Fixed p g s) where
+   traceInput description p@PositiveDirectParser{} = p{
+      complete= traceInput (\s-> "direct+ " <> description s) (complete p)}
+   traceInput description p@DirectParser{} = p{
+      complete= traceInput (\s-> "direct " <> description s) (complete p),
+      direct0= traceInput (\s-> "direct0 " <> description s) (direct0 p),
+      direct1= traceInput (\s-> "direct1 " <> description s) (direct1 p)}
+   traceInput description p@Parser{} = p{
+      complete= traceBy "complete" (complete p),
+      direct= traceBy "direct" (direct p),
+      direct0= traceBy "direct0" (direct0 p),
+      direct1= traceBy "direct1" (direct1 p),
+      indirect= traceBy "indirect" (indirect p)}
+      where traceBy mode = traceInput (\s-> "(" <> mode <> ") " <> description s)
 
 instance (LeftReductive s, FactorialMonoid s,
           ConsumedInputParsing (p g s), ParserInput (p g s) ~ s) => ConsumedInputParsing (Fixed p g s) where

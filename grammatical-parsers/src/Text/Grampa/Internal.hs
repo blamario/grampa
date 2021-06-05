@@ -1,7 +1,8 @@
-{-# LANGUAGE FlexibleInstances, GADTs, RankNTypes, TypeOperators #-}
+{-# LANGUAGE ConstrainedClassMethods, FlexibleContexts, FlexibleInstances, GADTs, RankNTypes, TypeOperators #-}
 
 module Text.Grampa.Internal (BinTree(..), FailureInfo(..), ResultList(..), ResultsOfLength(..), FallibleResults(..),
                              AmbiguousAlternative(..), AmbiguityDecidable(..), AmbiguityWitness(..),
+                             TraceableParsing(..),
                              fromResultList, noFailure) where
 
 import Control.Applicative (Applicative(..), Alternative(..))
@@ -16,7 +17,7 @@ import Witherable (Filterable(mapMaybe))
 
 import Data.Monoid.Factorial (FactorialMonoid, length)
 
-import Text.Grampa.Class (Ambiguous(..), Expected(..), ParseFailure(..), ParseResults)
+import Text.Grampa.Class (Ambiguous(..), Expected(..), ParseFailure(..), ParseResults, InputParsing(..))
 
 import Prelude hiding (length, showList)
 
@@ -165,3 +166,9 @@ instance FallibleResults (ResultList g) where
    hasSuccess _ = True
    failureOf (ResultList _ failure) = failure
    failWith = ResultList []
+
+class InputParsing m => TraceableParsing m where
+   traceInput :: (ParserInput m -> String) -> m a -> m a
+   traceAs :: Show (ParserInput m) => String -> m a -> m a
+   traceAs description = traceInput (\input-> description <> " @ " <> show input)
+

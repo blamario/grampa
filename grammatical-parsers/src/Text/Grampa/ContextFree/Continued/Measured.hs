@@ -13,6 +13,7 @@ import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Factorial(FactorialMonoid)
 import Data.Monoid.Textual(TextualMonoid)
 import Data.String (fromString)
+import Debug.Trace (trace)
 import Witherable (Filterable(mapMaybe))
 
 import qualified Data.Monoid.Factorial as Factorial
@@ -28,7 +29,7 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
                           MultiParsing(..), ParseResults, ParseFailure(..), Expected(..))
-import Text.Grampa.Internal (FailureInfo(..))
+import Text.Grampa.Internal (FailureInfo(..), TraceableParsing(..))
 
 data Result (g :: (* -> *) -> *) s v = Parsed{parsedPrefix :: !v,
                                               parsedSuffix :: !s}
@@ -214,6 +215,15 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => ConsumedInputParsi
       where q :: forall x. s -> ((s, a) -> Int -> s -> (FailureInfo s -> x) -> x) -> (FailureInfo s -> x) -> x
             q rest success failure = p rest success' failure
                where success' r !len suffix failure' = success (Factorial.take len rest, r) len suffix failure'
+
+instance InputParsing (Parser g s)  => TraceableParsing (Parser g s) where
+   traceInput :: forall a. (s -> String) -> Parser g s a -> Parser g s a
+   traceInput description (Parser p) = Parser q
+      where q :: forall x. s -> (a -> Int -> s -> (FailureInfo s -> x) -> x) -> (FailureInfo s -> x) -> x
+            q rest success failure = traceWith "Parsing " (p rest success' failure')
+               where traceWith prefix = trace (prefix <> description rest)
+                     failure' f = traceWith "Failed " (failure f)
+                     success' r !len suffix failure'' = traceWith "Parsed " (success r len suffix failure'')
 
 instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p

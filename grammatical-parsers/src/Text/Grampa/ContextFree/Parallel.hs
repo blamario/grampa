@@ -19,6 +19,7 @@ import qualified Data.Monoid.Null as Null
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
 import Data.String (fromString)
+import Debug.Trace (trace)
 import Witherable (Filterable(mapMaybe))
 
 import qualified Text.Parser.Char
@@ -30,7 +31,7 @@ import qualified Rank2
 
 import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), Expected(..))
-import Text.Grampa.Internal (BinTree(..), FailureInfo(..), noFailure)
+import Text.Grampa.Internal (BinTree(..), FailureInfo(..), noFailure, TraceableParsing(..))
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
 
@@ -164,6 +165,13 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Pars
    string s = Parser p where
       p s' | Just suffix <- Cancellative.stripPrefix s s' = ResultList (Leaf $ ResultInfo suffix s) noFailure
            | otherwise = ResultList mempty (FailureInfo (Factorial.length s') [ExpectedInput s])
+
+instance InputParsing (Parser g s)  => TraceableParsing (Parser g s) where
+   traceInput description (Parser p) = Parser q
+      where q s = case traceWith "Parsing " (p s)
+                  of rl@(ResultList EmptyTree _) -> traceWith "Failed " rl
+                     rl -> traceWith "Parsed " rl
+               where traceWith prefix = trace (prefix <> description s)
 
 instance TextualMonoid s => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p
