@@ -415,16 +415,16 @@ instance (Apply f, Apply g) => Apply ((Generics.:*:) f g) where
    (x1 Generics.:*: y1) <*> (x2 Generics.:*: y2) = (x1 <*> x2) Generics.:*: (y1 <*> y2)
 
 instance Applicative Empty where
-   pure = const Empty
+   pure _ = Empty
 
 instance Applicative Proxy where
-   pure = const Proxy
+   pure _ = Proxy
 
 instance (Semigroup x, Monoid x) => Applicative (Const x) where
-   pure = const (Const mempty)
+   pure _ = Const mempty
 
 instance Applicative (Only x) where
-   pure = Only
+   pure f = Only f
 
 instance Applicative g => Applicative (Identity g) where
    pure f = Identity (pure f)
