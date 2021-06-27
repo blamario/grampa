@@ -468,15 +468,15 @@ instance (InputParsing (Fixed p g s), DeterministicParsing (p g s)) => Determini
       direct0 = direct0 p <<|> direct0 q,
       direct1= direct1 p <<|> direct1 q}
    p <<|> q = Parser{complete= complete p' <<|> complete q',
-                    direct= direct p' <<|> direct q',
-                    direct0= direct0 p' <<|> direct0 q',
-                    direct1= direct1 p' <<|> direct1 q',
-                    indirect= indirect p' <<|> indirect q',
-                    isAmbiguous= Nothing,
-                    cyclicDescendants= \deps-> let
-                            ParserFlags pn pd = cyclicDescendants p' deps
-                            ParserFlags qn qd = cyclicDescendants q' deps
-                         in ParserFlags (pn || qn) (depUnion pd qd)}
+                     direct= direct p' <<|> notFollowedBy (void $ complete p') *> direct q',
+                     direct0= direct0 p' <<|> notFollowedBy (void $ complete p') *> direct0 q',
+                     direct1= direct1 p' <<|> notFollowedBy (void $ complete p') *> direct1 q',
+                     indirect= indirect p' <<|> notFollowedBy (void $ complete p') *> indirect q',
+                     isAmbiguous= Nothing,
+                     cyclicDescendants= \deps-> let
+                           ParserFlags pn pd = cyclicDescendants p' deps
+                           ParserFlags qn qd = cyclicDescendants q' deps
+                        in ParserFlags (pn || qn) (depUnion pd qd)}
       where p'@Parser{} = general p
             q'@Parser{} = general q
    takeSome p = (:) <$> p <*> takeMany p

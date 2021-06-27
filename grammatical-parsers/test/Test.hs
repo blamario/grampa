@@ -18,7 +18,7 @@ import Data.Typeable (Typeable)
 import Data.Word (Word8, Word64)
 
 import Data.Functor.Compose (Compose(..))
-import Text.Parser.Combinators (choice, eof, sepBy1, skipMany)
+import Text.Parser.Combinators (choice, eof, sepBy, sepBy1, skipMany)
 import qualified Text.Parser.Char as Char
 import Text.Parser.Token (whiteSpace)
 
@@ -38,6 +38,7 @@ import qualified Rank2
 import qualified Rank2.TH
 import Text.Grampa hiding (symbol)
 import qualified Text.Grampa.ContextFree.Parallel as Parallel
+import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
 
 import qualified Test.Ambiguous
@@ -103,8 +104,34 @@ main = defaultMain tests
 
 type Parser = Parallel.Parser
 
-simpleParse :: (Eq s, FactorialMonoid s, LeftReductive s) => Parallel.Parser (Rank2.Only r) s r -> s -> ParseResults s [(s, r)]
+simpleParse :: (Eq s, FactorialMonoid s, LeftReductive s) =>
+               Parallel.Parser (Rank2.Only r) s r -> s -> ParseResults s [(s, r)]
 simpleParse p input = getCompose . getCompose $ simply parsePrefix p input
+
+memoizingParse :: (Eq s, FactorialMonoid s, LeftReductive s) =>
+                  Memoizing.Parser (Rank2.Only r) s r -> s -> ParseResults s [(s, r)]
+memoizingParse p input = getCompose . getCompose $ simply parsePrefix p input
+
+leftRecursiveParse :: (Eq s, FactorialMonoid s, LeftReductive s) =>
+                      LeftRecursive.Parser (Rank2.Only r) s r -> s -> ParseResults s [(s, r)]
+leftRecursiveParse p input = getCompose . getCompose $ simply parsePrefix p input
+
+languagePragma :: (DeterministicParsing p, Monad p, InputCharParsing p, ParserInput p ~ String) => p [String]
+languagePragma = do spaceChars
+                    lang <- isLanguagePragma
+                            <$> takeOptional (string "{-#" *> spaceChars *> takeCharsWhile isLetter <* spaceChars)
+                    if lang
+                       then extension `sepBy` (string "," *> spaceChars) <* string "#-}" <* spaceChars
+                       else comment *> languagePragma <<|> pure []
+   where spaceChars = takeCharsWhile isSpace
+         isLanguagePragma (Just pragmaName) = pragmaName == "LANGUAGE"
+         isLanguagePragma Nothing = False
+         extension = takeCharsWhile isLetter <* spaceChars
+         comment = string "--" <* takeCharsWhile (/= '\n') <|> blockComment
+         blockComment = string "{-"
+                        *> skipMany (blockComment
+                                     <<|> notFollowedBy (string "-}") *> anyToken *> takeCharsWhile  (/= '-'))
+                        *> string "-}"
 
 tests = testGroup "Grampa" [
            let g, gf, gm, gn :: Recursive (LeftRecursive.Parser Recursive String)
@@ -124,6 +151,11 @@ tests = testGroup "Grampa" [
                testProperty "null monadic" $
                  start (parseComplete gn "23") === Compose (Right ["23"])
               ],
+           testGroup "languagePragma"
+             [testProperty "Parallel" $ simpleParse languagePragma "{-# LANGUAGE Foo #-}" === Right [("", ["Foo"])],
+              testProperty "Memoizing" $ memoizingParse languagePragma "{-# LANGUAGE Foo #-}" === Right [("", ["Foo"])],
+              testProperty "LeftRecursive" $
+              leftRecursiveParse languagePragma "{-# LANGUAGE Foo #-}" === Right [("", ["Foo"])]],
            testGroup "arithmetic"
              [testProperty "arithmetic"   $ \tree-> Test.Examples.parseArithmetical (show tree) === Right tree,
               testProperty "boolean"      $ \tree-> Test.Examples.parseBoolean (show tree) === Right tree,
