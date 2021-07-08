@@ -1,5 +1,5 @@
--- | Collection of parsing algorithms with a common interface, operating on grammars represented as records with rank-2
--- field types.
+-- | A collection of parsing algorithms with a common interface, operating on grammars represented as records with
+-- rank-2 field types.
 {-# LANGUAGE FlexibleContexts, KindSignatures, OverloadedStrings, RankNTypes, ScopedTypeVariables #-}
 module Text.Grampa (
    -- * Parsing methods
@@ -46,7 +46,8 @@ type GrammarBuilder (g  :: (* -> *) -> *)
                     (s  :: *)
    = g (p g' s) -> g (p g' s)
 
--- | Apply the given 'parse' function to the given grammar-free parser and its input.
+-- | Apply the given parsing function (typically `parseComplete` or `parsePrefix`) to the given grammar-agnostic
+-- parser and its input.
 simply :: (Rank2.Only r (p (Rank2.Only r) s) -> s -> Rank2.Only r f) -> p (Rank2.Only r) s r -> s -> f r
 simply parseGrammar p input = Rank2.fromOnly (parseGrammar (Rank2.Only p) input)
 

@@ -35,8 +35,9 @@ type ParseResults s = Either (ParseFailure s)
 
 -- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset.
 data ParseFailure s = ParseFailure Int [Expected s] deriving (Eq, Functor, Show)
-data Expected s = Expected String
-                | ExpectedInput s
+
+data Expected s = Expected String -- ^ a readable description of the expected input
+                | ExpectedInput s -- ^ a literal piece of expected input
                 deriving (Functor, Eq, Ord, Read, Show)
 
 -- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of

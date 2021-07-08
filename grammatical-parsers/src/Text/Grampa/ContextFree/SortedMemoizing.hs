@@ -92,6 +92,8 @@ instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
+-- | Memoizing parser guarantees O(n²) performance for grammars with unambiguous productions. Can be wrapped with
+-- 'Text.Grampa.ContextFree.LeftRecursive.Fixed' to provide left recursion support.
 instance (Eq s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) where
    type ParserGrammar (Parser g s) = g
    type GrammarFunctor (Parser g s) = ResultList g s
@@ -103,15 +105,15 @@ instance (Eq s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g 
                rs' = sync <$> rs
                -- in left-recursive grammars the stored input remainder may be wrong, so revert to the complete input
                sync (ResultsOfLength 0 _remainder r) = ResultsOfLength 0 input r
-               sync rs = rs
+               sync rol = rol
       p _ = ResultList mempty (FailureInfo 0 [Expected "NonTerminal at endOfInput"])
    {-# INLINE nonTerminal #-}
 
 instance (Eq s, LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s) where
    parseTails = applyParser
 
--- | Memoizing parser guarantees O(n²) performance for grammars with unambiguous productions, but provides no left
--- recursion support.
+-- | Memoizing parser guarantees O(n²) performance for grammars with unambiguous productions. Can be wrapped with
+-- 'Text.Grampa.ContextFree.LeftRecursive.Fixed' to provide left recursion support.
 --
 -- @
 -- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>
@@ -189,6 +191,7 @@ instance InputParsing (Parser g s)  => TraceableParsing (Parser g s) where
                                 of rl@(ResultList [] _) -> traceWith "Failed " rl
                                    rl -> traceWith "Parsed " rl
                where traceWith prefix = trace (prefix <> description s)
+            q [] = p []
 
 instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p

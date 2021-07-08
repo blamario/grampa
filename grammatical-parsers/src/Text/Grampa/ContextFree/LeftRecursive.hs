@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs,
+{-# LANGUAGE ConstraintKinds, FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies, TypeOperators,
              UndecidableInstances #-}
 {-# OPTIONS -fno-full-laziness #-}
@@ -139,18 +139,18 @@ general' p@DirectParser{} = Parser{
    cyclicDescendants= \cd-> ParserFlags True (StaticDependencies $ const (Const False) Rank2.<$> cd)}
 general' p@Parser{} = p
 
--- | Parser of general context-free grammars, including left recursion.
+type LeftRecParsing p g s f = (Eq s, LeftReductive s, FactorialMonoid s, Alternative (p g s),
+                               TailsParsing (p g s), GrammarConstraint (p g s) g, ParserGrammar (p g s) ~ g,
+                               Functor (ResultFunctor (p g s)), s ~ ParserInput (p g s), FallibleResults f,
+                               AmbiguousAlternative (GrammarFunctor (p g s)))
+
+-- | Parser transformer for left-recursive grammars.
 --
 -- @
 -- 'parseComplete' :: ("Rank2".'Rank2.Apply' g, "Rank2".'Rank2.Traversable' g, 'FactorialMonoid' s) =>
---                  g (LeftRecursive.'Fixed g s) -> s -> g ('Compose' ('ParseResults' s) [])
+--                  g (LeftRecursive.'Parser' g s) -> s -> g ('Compose' ('ParseResults' s) [])
 -- @
-instance (Eq s, LeftReductive s, FactorialMonoid s, Alternative (p g s),
-          TailsParsing (p g s), GrammarConstraint (p g s) g, ParserGrammar (p g s) ~ g,
-          Functor (ResultFunctor (p g s)),
-          s ~ ParserInput (p g s), GrammarFunctor (p g s) ~ rl s, FallibleResults rl,
-          AmbiguousAlternative (GrammarFunctor (p g s))) =>
-         MultiParsing (Fixed p g s) where
+instance (GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) => MultiParsing (Fixed p g s) where
    type GrammarConstraint (Fixed p g s) g' = (GrammarConstraint (p g s) g', g ~ g',
                                               Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
    type ResultFunctor (Fixed p g s) = ResultFunctor (p g s)
@@ -168,12 +168,8 @@ instance (Eq s, LeftReductive s, FactorialMonoid s, Alternative (p g s),
       where g' = separated g
    {-# INLINE parseComplete #-}
 
-instance (Eq s, LeftReductive s, FactorialMonoid s, Alternative (p g s),
-          TailsParsing (p g s), GrammarConstraint (p g s) g, ParserGrammar (p g s) ~ g,
-          Functor (ResultFunctor (p g s)),
-          s ~ ParserInput (p g s), GrammarFunctor (p g s) ~ rl s, FallibleResults rl,
-          AmbiguousAlternative (GrammarFunctor (p g s))) =>
-         GrammarParsing (Fixed p g s) where
+-- | Parser transformer for left-recursive grammars.
+instance (GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) => GrammarParsing (Fixed p g s) where
    type ParserGrammar (Fixed p g s) = g
    type GrammarFunctor (Fixed p g s) = ParserFunctor p g s
    parsingResult :: s -> ParserFunctor p g s a -> ResultFunctor (p g s) (s, a)

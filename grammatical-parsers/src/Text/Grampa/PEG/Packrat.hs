@@ -137,6 +137,7 @@ instance (Show s, Textual.TextualMonoid s) => CharParsing (Parser g s) where
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
+-- | Packrat parser
 instance (Eq s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) where
    type ParserGrammar (Parser g s) = g
    type GrammarFunctor (Parser g s) = Result g s

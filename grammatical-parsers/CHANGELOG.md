@@ -1,3 +1,13 @@
+Version 0.5.2
+---------------
+* Switched from the deprecated `witherable-class` package to `witherable`
+* Deprecated the `ContextFree.Memoizing` module
+* Fixed and tested the `<<|>` instance of the `LeftRecursive` parser
+* Fixed and tested a with left-recursive monadic empty match
+* Fixed an infinite loop in the expected set closure calculation
+* Improved documentation
+* Added the `TraceableParsing` class for easier debugging, not exposed
+
 Version 0.5.1
 ---------------
 * Fixed the `skipAll` implementation for the `SortedMemoizing.Transformer` parser
