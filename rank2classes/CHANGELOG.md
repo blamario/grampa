@@ -1,3 +1,7 @@
+Version 1.4.2
+---------------
+* Fixed compatibility with GHC 9 - PR by Felix Yan
+
 Version 1.4.1
 ---------------
 * Fixed the templates for multi-constructor records
