@@ -45,7 +45,7 @@ fst (Pair x _) = x
 snd :: Product g h p -> h p
 snd (Pair _ y) = y
 
--- | Equivalent of 'Functor' for rank 2 data types, satisfying the usual functor laws
+-- | Equivalent of 'Rank1.Functor' for rank 2 data types, satisfying the usual functor laws
 --
 -- > id <$> g == g
 -- > (p . q) <$> g == p <$> (q <$> g)
@@ -58,11 +58,11 @@ fmap :: Functor g => (forall a. p a -> q a) -> g p -> g q
 fmap f g = f <$> g
 {-# INLINE fmap #-}
 
--- | Equivalent of 'Foldable' for rank 2 data types
+-- | Equivalent of 'Rank1.Foldable' for rank 2 data types
 class Foldable g where
    foldMap :: Monoid m => (forall a. p a -> m) -> g p -> m
 
--- | Equivalent of 'Traversable' for rank 2 data types
+-- | Equivalent of 'Rank1.Traversable' for rank 2 data types
 class (Functor g, Foldable g) => Traversable g where
    {-# MINIMAL traverse | sequence #-}
    traverse :: Rank1.Applicative m => (forall a. p a -> m (q a)) -> g p -> m (g q)
