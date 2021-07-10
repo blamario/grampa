@@ -39,7 +39,7 @@ library
   -- other-modules:
   ghc-options:         -Wall
   build-depends:       base >=4.10 && <5,
-                       transformers >= 0.5 && < 0.6,
+                       transformers >= 0.5 && < 0.7,
                        distributive < 0.7
 
   if flag(use-template-haskell)
