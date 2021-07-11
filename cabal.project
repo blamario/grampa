@@ -3,3 +3,5 @@ packages:
    grammatical-parsers/
    deep-transformations/
    ../input-parsers/
+
+allow-newer: size-based:template-haskell
