@@ -1,4 +1,4 @@
-{-# LANGUAGE ConstraintKinds, FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs,
+{-# LANGUAGE ConstraintKinds, CPP, FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies, TypeOperators,
              UndecidableInstances #-}
 {-# OPTIONS -fno-full-laziness #-}
@@ -9,7 +9,10 @@ module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..)
 where
 
 import Control.Applicative
-import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..), void)
+import Control.Monad (Monad(..), MonadPlus(..), void)
+#if MIN_VERSION_base(4,13,0)
+import Control.Monad (MonadFail(fail))
+#endif
 import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
 
 import Data.Functor.Compose (Compose(..))
@@ -380,7 +383,9 @@ instance (Alternative (p g s), Monad (p g s)) => Monad (Fixed p g s) where
             d1 = (direct0 p >>= direct1 . general' . cont) <|> (direct1 p >>= complete . cont)
             p'@Parser{} = general' p
 
+#if MIN_VERSION_base(4,13,0)
 instance (Alternative (p g s), MonadFail (p g s)) => MonadFail (Fixed p g s) where
+#endif
    fail msg = PositiveDirectParser{complete= fail msg}
 
 instance MonadPlus (p g s) => MonadPlus (Fixed p g s) where

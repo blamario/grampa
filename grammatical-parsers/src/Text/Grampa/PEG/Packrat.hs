@@ -1,9 +1,12 @@
-{-# LANGUAGE TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE CPP, TypeFamilies, UndecidableInstances #-}
 -- | Packrat parser
 module Text.Grampa.PEG.Packrat (Parser(..), Result(..)) where
 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
-import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..))
+import Control.Monad (Monad(..), MonadPlus(..))
+#if MIN_VERSION_base(4,13,0)
+import Control.Monad (MonadFail(fail))
+#endif
 
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
@@ -82,12 +85,14 @@ instance Monad (Parser g s) where
                of Parsed a rest' -> applyParser (f a) rest'
                   NoParse failure -> NoParse failure
 
+#if MIN_VERSION_base(4,13,0)
+instance MonadFail (Parser g s) where
+#endif
+   fail msg = Parser (\rest-> NoParse $ FailureInfo (genericLength rest) [Expected msg])
+
 instance MonadPlus (Parser g s) where
    mzero = empty
    mplus = (<|>)
-
-instance MonadFail (Parser g s) where
-   fail msg = Parser (\rest-> NoParse $ FailureInfo (genericLength rest) [Expected msg])
 
 instance Semigroup x => Semigroup (Parser g s x) where
    (<>) = liftA2 (<>)

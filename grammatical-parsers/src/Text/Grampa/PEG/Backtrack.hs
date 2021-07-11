@@ -1,9 +1,12 @@
-{-# LANGUAGE TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE CPP, TypeFamilies, UndecidableInstances #-}
 -- | Backtracking parser for Parsing Expression Grammars
 module Text.Grampa.PEG.Backtrack (Parser(..), Result(..), alt) where
 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
-import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..))
+import Control.Monad (Monad(..), MonadPlus(..))
+#if MIN_VERSION_base(4,13,0)
+import Control.Monad (MonadFail(fail))
+#endif
 
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
@@ -86,8 +89,10 @@ instance Monad (Parser g s) where
                of Parsed a rest' -> applyParser (f a) rest'
                   NoParse failure -> NoParse failure
 
+#if MIN_VERSION_base(4,13,0)
 instance Factorial.FactorialMonoid s => MonadFail (Parser g s) where
    fail msg = Parser (\rest-> NoParse $ FailureInfo (Factorial.length rest) [Expected msg])
+#endif
 
 instance Factorial.FactorialMonoid s => MonadPlus (Parser g s) where
    mzero = empty

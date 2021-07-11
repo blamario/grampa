@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
+{-# LANGUAGE CPP, FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
 module Text.Grampa.ContextFree.Memoizing
        {-# DEPRECATED "Use Text.Grampa.ContextFree.SortedMemoizing instead" #-}
@@ -7,7 +7,10 @@ module Text.Grampa.ContextFree.Memoizing
 where
 
 import Control.Applicative
-import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..))
+import Control.Monad (Monad(..), MonadPlus(..))
+#if MIN_VERSION_base(4,13,0)
+import Control.Monad (MonadFail(fail))
+#endif
 import Data.Function (on)
 import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
@@ -113,7 +116,9 @@ instance Monad (Parser g i) where
       continue' l (ResultList rs failure) = ResultList (adjust l <$> rs) failure
       adjust l (ResultInfo l' rest' a) = ResultInfo (l+l') rest' a
 
+#if MIN_VERSION_base(4,13,0)
 instance MonadFail (Parser g s) where
+#endif
    fail msg = Parser p
       where p rest = ResultList mempty (FailureInfo (genericLength rest) [Expected msg])
 

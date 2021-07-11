@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
+{-# LANGUAGE BangPatterns, CPP, FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
 module Text.Grampa.ContextFree.SortedMemoizing 
        (FailureInfo(..), ResultList(..), Parser(..),
@@ -6,7 +6,10 @@ module Text.Grampa.ContextFree.SortedMemoizing
 where
 
 import Control.Applicative
-import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..))
+import Control.Monad (Monad(..), MonadPlus(..))
+#if MIN_VERSION_base(4,13,0)
+import Control.Monad (MonadFail(fail))
+#endif
 import Data.Functor.Compose (Compose(..))
 import Data.List (genericLength)
 import Data.List.NonEmpty (NonEmpty((:|)))
@@ -77,7 +80,9 @@ instance Monad (Parser g i) where
       continue' l (ResultList rs failure) = ResultList (adjust l <$> rs) failure
       adjust l (ResultsOfLength l' rest' rs) = ResultsOfLength (l+l') rest' rs
 
+#if MIN_VERSION_base(4,13,0)
 instance MonadFail (Parser g s) where
+#endif
    fail msg = Parser p
       where p rest = ResultList mempty (FailureInfo (genericLength rest) [Expected msg])
 

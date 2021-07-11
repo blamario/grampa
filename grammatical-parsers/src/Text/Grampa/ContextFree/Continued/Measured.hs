@@ -1,9 +1,12 @@
-{-# LANGUAGE BangPatterns, InstanceSigs, RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE CPP, BangPatterns, InstanceSigs, RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
 -- | Continuation-passing parser for context-free grammars that keeps track of the parsed prefix length
 module Text.Grampa.ContextFree.Continued.Measured (Parser(..), Result(..), alt) where
 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
-import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..))
+import Control.Monad (Monad(..), MonadPlus(..))
+#if MIN_VERSION_base(4,13,0)
+import Control.Monad (MonadFail(fail))
+#endif
 
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
@@ -80,7 +83,11 @@ instance Factorial.FactorialMonoid s => Filterable (Parser g s) where
          where filterFailure _ _ _ = failure (FailureInfo (Factorial.length rest) [Expected "filter"])
    {-# INLINABLE mapMaybe #-}
 
+#if MIN_VERSION_base(4,13,0)
 instance Monad (Parser g s) where
+#else
+instance Factorial.FactorialMonoid s => Monad (Parser g s) where
+#endif
    return = pure
    (>>=) :: forall a b. Parser g s a -> (a -> Parser g s b) -> Parser g s b
    Parser p >>= f = Parser r where
@@ -89,7 +96,9 @@ instance Monad (Parser g s) where
                                  (\a len rest'-> applyParser (f a) rest' $ \b len'-> success b $! len + len')
                                  failure
 
+#if MIN_VERSION_base(4,13,0)
 instance Factorial.FactorialMonoid s => MonadFail (Parser g s) where
+#endif
    fail msg = Parser (\rest _ failure-> failure $ FailureInfo (Factorial.length rest) [Expected msg])
 
 instance Factorial.FactorialMonoid s => MonadPlus (Parser g s) where

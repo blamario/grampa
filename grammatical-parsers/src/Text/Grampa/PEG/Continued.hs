@@ -1,9 +1,12 @@
-{-# LANGUAGE InstanceSigs, RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE CPP, InstanceSigs, RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
 -- | Continuation-passing parser for Parsing Expression Grammars
 module Text.Grampa.PEG.Continued (Parser(..), Result(..), alt) where
 
 import Control.Applicative (Applicative(..), Alternative(..), liftA2)
-import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..))
+import Control.Monad (Monad(..), MonadPlus(..))
+#if MIN_VERSION_base(4,13,0)
+import Control.Monad (MonadFail(fail))
+#endif
 
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
@@ -83,14 +86,20 @@ instance Factorial.FactorialMonoid s => Filterable (Parser g s) where
          where filterFailure _ = failure (FailureInfo (Factorial.length rest) [Expected "filter"])
    {-# INLINABLE mapMaybe #-}
 
+#if MIN_VERSION_base(4,13,0)
 instance Monad (Parser g s) where
+#else
+instance Factorial.FactorialMonoid s => Monad (Parser g s) where
+#endif
    return = pure
    (>>=) :: forall a b. Parser g s a -> (a -> Parser g s b) -> Parser g s b
    Parser p >>= f = Parser r where
       r :: forall x. s -> (b -> s -> x) -> (FailureInfo s -> x) -> x
       r rest success failure = p rest (\a rest'-> applyParser (f a) rest' success failure) failure
 
+#if MIN_VERSION_base(4,13,0)
 instance FactorialMonoid s => MonadFail (Parser g s) where
+#endif
    fail msg = Parser (\rest _ failure-> failure $ FailureInfo (Factorial.length rest) [Expected msg])
 
 instance FactorialMonoid s => MonadPlus (Parser g s) where

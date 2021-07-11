@@ -297,7 +297,7 @@ instance (Show s, Monoid s) => Applicative (DescribedParser s) where
    pure x = DescribedParser "pure ?" (pure x)
    DescribedParser d1 p1 <*> DescribedParser d2 p2 = DescribedParser (d1 ++ " <*> " ++ d2) (p1 <*> p2)
 
-instance (Show s, Monoid s) => Monad (DescribedParser s) where
+instance (Show s, FactorialMonoid s) => Monad (DescribedParser s) where
    return x = DescribedParser "return ?" (return x)
    DescribedParser d1 p1 >>= f = DescribedParser (d1 ++ " >>= ?") (p1 >>= \x-> let DescribedParser _ p = f x in p)
    DescribedParser d1 p1 >> DescribedParser d2 p2 = DescribedParser (d1 ++ " >> " ++ d2) (p1 >> p2)

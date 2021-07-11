@@ -1,10 +1,13 @@
-{-# LANGUAGE FlexibleContexts, InstanceSigs, GeneralizedNewtypeDeriving,
+{-# LANGUAGE CPP, FlexibleContexts, InstanceSigs, GeneralizedNewtypeDeriving,
              RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
 module Text.Grampa.ContextFree.Parallel (FailureInfo(..), ResultList(..), Parser, fromResultList)
 where
 
 import Control.Applicative
-import Control.Monad (Monad(..), MonadFail(fail), MonadPlus(..))
+import Control.Monad (Monad(..), MonadPlus(..))
+#if MIN_VERSION_base(4,13,0)
+import Control.Monad (MonadFail(fail))
+#endif
 import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
@@ -93,14 +96,20 @@ instance FactorialMonoid s => Alternative (Parser g s) where
 instance FactorialMonoid s => Filterable (Parser g s) where
    mapMaybe f (Parser p) = Parser (mapMaybe f . p)
 
+#if MIN_VERSION_base(4,13,0)
 instance Monad (Parser g s) where
+#else
+instance Factorial.FactorialMonoid s => Monad (Parser g s) where
+#endif
    return = pure
    Parser p >>= f = Parser q where
       q rest = case p rest
                of ResultList results failure -> ResultList mempty failure <> foldMap continue results
       continue (ResultInfo rest' a) = applyParser (f a) rest'
 
+#if MIN_VERSION_base(4,13,0)
 instance FactorialMonoid s => MonadFail (Parser g s) where
+#endif
    fail msg = Parser (\s-> ResultList mempty $ FailureInfo (Factorial.length s) [Expected msg])
 
 instance FactorialMonoid s => MonadPlus (Parser g s) where
