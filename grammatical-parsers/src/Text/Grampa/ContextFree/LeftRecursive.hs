@@ -693,7 +693,7 @@ separated g = Rank2.liftA4 reseparate circulars cycleFollowers descendants g
          appendResults (Just (AmbiguityWitness Refl)) = ambiguousOr
          appendResults Nothing = (<|>)
          descendants = Rank2.fmap (Const . dependsOn . getConst) cyclicDescendantses
-         cyclicDescendantses = fixDescendants (Rank2.fmap (Const . cyclicDescendants . general) g)
+         cyclicDescendantses = fixDescendants (Rank2.fmap (\p-> Const $ cyclicDescendants $ general p) g)
          circulars = Rank2.liftA2 leftRecursive bits cyclicDescendantses
          cycleFollowers = getUnion (Rank2.foldMap (Union . getConst) $
                                     Rank2.liftA2 leftRecursiveDeps circulars cyclicDescendantses)
