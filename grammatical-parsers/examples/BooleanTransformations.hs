@@ -10,6 +10,7 @@ import Data.List (isPrefixOf)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Identity (Identity(..))
 import Data.Maybe (mapMaybe)
+import Data.Semigroup ((<>))
 import System.Environment (getArgs)
 import Text.Parser.Token (TokenParsing(..), symbol)
 import qualified Text.Grampa

@@ -129,8 +129,8 @@ instance (LeftReductive s, FactorialMonoid s) => MultiParsing (Parser g s) where
    type ResultFunctor (Parser g s) = Compose (ParseResults s) []
    -- | Returns the list of all possible input prefix parses paired with the remaining input suffix.
    parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input) (snd $ head $ parseGrammarTails g input)
-   parseComplete :: (ParserInput (Parser g s) ~ s, Rank2.Functor g, Eq s, FactorialMonoid s) =>
-                    g (Parser g s) -> s -> g (Compose (ParseResults s) [])
+   -- parseComplete :: (ParserInput (Parser g s) ~ s, Rank2.Functor g, Eq s, FactorialMonoid s) =>
+   --                  g (Parser g s) -> s -> g (Compose (ParseResults s) [])
    parseComplete g input = Rank2.fmap ((snd <$>) . Compose . fromResultList input)
                               (snd $ head $ parseAllTails close $ parseGrammarTails g input)
       where close = Rank2.fmap (<* eof) g

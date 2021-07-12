@@ -22,6 +22,7 @@ import Data.Monoid.Factorial (FactorialMonoid, splitPrimePrefix)
 import Data.Monoid.Textual (TextualMonoid)
 import qualified Data.Monoid.Factorial as Factorial
 import qualified Data.Monoid.Textual as Textual
+import Data.Semigroup (Semigroup((<>)))
 import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf))
 import Data.String (fromString)
 import Witherable (Filterable(mapMaybe))
@@ -154,8 +155,8 @@ instance (Applicative m, LeftReductive s, FactorialMonoid s) => MultiParsing (Pa
    -- | Returns the list of all possible input prefix parses paired with the remaining input suffix.
    parsePrefix g input = Rank2.fmap (Compose . Compose . Compose . fmap (fmap sequenceA) . fromResultList input)
                                     (snd $ head $ parseGrammarTails g input)
-   parseComplete :: (ParserInput (ParserT m g s) ~ s, Rank2.Functor g, Eq s, FactorialMonoid s) =>
-                    g (ParserT m g s) -> s -> g (Compose (Compose (ParseResults s) []) m)
+   -- parseComplete :: (ParserInput (ParserT m g s) ~ s, Rank2.Functor g, Eq s, FactorialMonoid s) =>
+   --                  g (ParserT m g s) -> s -> g (Compose (Compose (ParseResults s) []) m)
    parseComplete g input = Rank2.fmap (Compose . fmap snd . Compose . fromResultList input)
                               (snd $ head $ parseAllTails close $ parseGrammarTails g input)
       where close = Rank2.fmap (<* eof) g

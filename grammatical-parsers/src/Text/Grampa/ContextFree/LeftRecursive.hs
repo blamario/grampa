@@ -157,13 +157,13 @@ instance (GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) => MultiParsing 
    type GrammarConstraint (Fixed p g s) g' = (GrammarConstraint (p g s) g', g ~ g',
                                               Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
    type ResultFunctor (Fixed p g s) = ResultFunctor (p g s)
-   parsePrefix :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, Eq s, FactorialMonoid s) =>
-                  g (Fixed p g s) -> s -> g (Compose (ResultFunctor (p g s)) ((,) s))
+   -- parsePrefix :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, Eq s, FactorialMonoid s) =>
+   --                g (Fixed p g s) -> s -> g (Compose (ResultFunctor (p g s)) ((,) s))
    parsePrefix g input = Rank2.fmap (Compose . parsingResult @(p g s) input)
                                     (snd $ head $ parseRecursive g input)
    {-# INLINE parsePrefix #-}
-   parseComplete :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, Eq s, FactorialMonoid s) =>
-                    g (Fixed p g s) -> s -> g (ResultFunctor (p g s))
+   -- parseComplete :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, Eq s, FactorialMonoid s) =>
+   --                  g (Fixed p g s) -> s -> g (ResultFunctor (p g s))
    parseComplete g = \input-> let close :: g (p g s)
                                   close = Rank2.fmap (<* eof) selfReferring
                               in Rank2.fmap ((snd <$>) . parsingResult @(p g s) input)
