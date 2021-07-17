@@ -10,6 +10,7 @@ import Data.Data (Data, Typeable)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Const (Const(..))
 import Data.Kind (Type)
+import Data.Semigroup (Semigroup(..))
 import qualified Rank2
 import Transformation (Transformation, Domain, Codomain, At)
 import qualified Transformation

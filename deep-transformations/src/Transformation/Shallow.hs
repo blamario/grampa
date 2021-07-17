@@ -32,7 +32,7 @@ instance (Functor t g, Functor t h) => Functor t (Rank2.Product g h) where
    t <$> Rank2.Pair left right = Rank2.Pair (t <$> left) (t <$> right)
 
 instance (Foldable t g, Foldable t h, Codomain t ~ Const m, Monoid m) => Foldable t (Rank2.Product g h) where
-   foldMap t (Rank2.Pair left right) = foldMap t left <> foldMap t right
+   foldMap t (Rank2.Pair left right) = foldMap t left `mappend` foldMap t right
 
 instance (Traversable t g, Traversable t h, Codomain t ~ Compose m f, Applicative m) => Traversable t (Rank2.Product g h) where
    traverse t (Rank2.Pair left right) = liftA2 Rank2.Pair (traverse t left) (traverse t right)

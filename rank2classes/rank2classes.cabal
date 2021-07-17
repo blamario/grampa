@@ -16,7 +16,7 @@ copyright:           (c) 2017 Mario Blažević
 category:            Control, Data, Generics
 build-type:          Custom
 cabal-version:       >=1.10
-tested-with:         GHC==9.0.1, GHC==8.10.4, GHC==8.8.4, GHC==8.6.5, GHC==8.4.4, GHC==8.2.2, GHC==8.0.2
+tested-with:         GHC==9.0.1, GHC==8.10.4, GHC==8.8.4, GHC==8.6.5, GHC==8.4.4, GHC==8.2.2
 extra-source-files:  README.md, CHANGELOG.md, test/MyModule.lhs
 source-repository head
   type:              git
@@ -38,7 +38,7 @@ library
   default-language:    Haskell2010
   -- other-modules:
   ghc-options:         -Wall
-  build-depends:       base >=4.10 && <5,
+  build-depends:       base >=4.9 && <5,
                        transformers >= 0.5 && < 0.7,
                        distributive < 0.7
 

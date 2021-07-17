@@ -31,6 +31,7 @@ import Control.Applicative
 import Data.Coerce (coerce)
 import Data.Functor.Const
 import Data.Functor.Identity
+import Data.Monoid
 import qualified Rank2
 import Transformation (Transformation, At)
 import qualified Transformation

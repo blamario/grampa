@@ -50,9 +50,9 @@ foldMapDownDefault, foldMapUpDefault :: (t `Transformation.At` g (Domain t) (Dom
                                          Codomain t ~ Const m, Data.Foldable.Foldable (Domain t), Monoid m)
                                      => t -> Domain t (g (Domain t) (Domain t)) -> m
 -- | Default implementation for 'foldMap' that folds the wrapper and then the tree
-foldMapDownDefault t x = getConst (t Transformation.$ x) <> Data.Foldable.foldMap (Deep.foldMap t) x
+foldMapDownDefault t x = getConst (t Transformation.$ x) `mappend` Data.Foldable.foldMap (Deep.foldMap t) x
 -- | Default implementation for 'foldMap' that folds the tree and then the wrapper
-foldMapUpDefault   t x = Data.Foldable.foldMap (Deep.foldMap t) x <> getConst (t Transformation.$ x)
+foldMapUpDefault   t x = Data.Foldable.foldMap (Deep.foldMap t) x `mappend` getConst (t Transformation.$ x)
 
 -- | Default implementation for 'traverse' that traverses the wrapper and then the tree
 traverseDownDefault :: (Deep.Traversable t g, t `Transformation.At` g (Domain t) (Domain t),

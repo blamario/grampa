@@ -27,6 +27,7 @@ import Data.Functor.Identity (Identity(..))
 import Data.Kind (Type)
 import Data.Generics.Product.Subtype (Subtype(upcast))
 import Data.Proxy (Proxy(..))
+import Data.Semigroup (Semigroup(..))
 import GHC.Generics
 import GHC.Records
 import GHC.TypeLits (Symbol, ErrorMessage (Text), TypeError)
