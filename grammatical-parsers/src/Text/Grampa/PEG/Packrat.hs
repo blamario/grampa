@@ -261,7 +261,6 @@ reparseTails final parsed@((s, _):_) = (s, gd):parsed
    where gd = Rank2.fmap (`applyParser` parsed) final
 
 fromResult :: (Eq s, FactorialMonoid s) => s -> Result g s r -> ParseResults s (s, r)
-fromResult s (NoParse (FailureInfo pos msgs)) =
-   Left (ParseFailure (Factorial.length s - pos + 1) (nub msgs))
+fromResult s (NoParse (FailureInfo pos msgs)) = Left (ParseFailure (fromIntegral $ pos - 1) (nub msgs))
 fromResult _ (Parsed prefix []) = Right (mempty, prefix)
 fromResult _ (Parsed prefix ((s, _):_)) = Right (s, prefix)

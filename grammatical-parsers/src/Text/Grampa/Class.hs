@@ -1,10 +1,11 @@
 {-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, DeriveDataTypeable, DeriveFunctor,
-             FlexibleContexts, FlexibleInstances, OverloadedStrings, RankNTypes, ScopedTypeVariables, TypeApplications,
-             TypeFamilies, TypeSynonymInstances, UndecidableInstances #-}
+             FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, OverloadedStrings,
+             RankNTypes, ScopedTypeVariables, TypeApplications, TypeFamilies, TypeSynonymInstances,
+             UndecidableInstances #-}
 module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
                           AmbiguousParsing(..), DeterministicParsing(..), InputParsing(..), InputCharParsing(..),
                           ConsumedInputParsing(..), LexicalParsing(..), TailsParsing(..),
-                          ParseResults, ParseFailure(..), Expected(..),
+                          ParseResults, ParseFailure(..), Expected(..), Pos,
                           Ambiguous(..), completeParser) where
 
 import Control.Applicative (Alternative(empty), liftA2)
@@ -20,10 +21,12 @@ import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 import Data.Semigroup (Semigroup((<>)))
+import Data.Ord (Down)
 import Text.Parser.Combinators (Parsing((<?>)))
 import Text.Parser.Token (TokenParsing)
 import Text.Parser.Deterministic (DeterministicParsing(..))
 import Text.Parser.Input (ConsumedInputParsing(..), InputParsing(..), InputCharParsing(..))
+import Text.Parser.Input.Position (Position)
 import qualified Text.Parser.Char
 import Data.Kind (Constraint)
 
@@ -31,14 +34,17 @@ import qualified Rank2
 
 import Prelude hiding (takeWhile)
 
-type ParseResults s = Either (ParseFailure s)
+type ParseResults s = Either (ParseFailure Pos s)
 
 -- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset.
-data ParseFailure s = ParseFailure Int [Expected s] deriving (Eq, Functor, Show)
+data ParseFailure pos s = ParseFailure pos [Expected s] deriving (Eq, Functor, Show)
 
 data Expected s = Expected String -- ^ a readable description of the expected input
                 | ExpectedInput s -- ^ a literal piece of expected input
                 deriving (Functor, Eq, Ord, Read, Show)
+
+-- | Opaque type representing a position in the input.
+newtype Pos = Pos (Down Int) deriving (Eq, Ord, Num, Position, Show)
 
 -- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of
 -- alternative results.

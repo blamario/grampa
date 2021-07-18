@@ -5,7 +5,7 @@ module Text.Grampa (
    -- * Parsing methods
    failureDescription, simply,
    -- * Types
-   Grammar, GrammarBuilder, ParseResults, ParseFailure(..), Expected(..), Ambiguous(..), Position,
+   Grammar, GrammarBuilder, ParseResults, ParseFailure(..), Expected(..), Ambiguous(..), Position, Pos,
    -- * Parser combinators and primitives
    DeterministicParsing(..), AmbiguousParsing(..),
    InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
@@ -33,7 +33,8 @@ import qualified Rank2
 import Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
                           InputParsing(..), InputCharParsing(..),
                           ConsumedInputParsing(..), DeterministicParsing(..), LexicalParsing(..),
-                          AmbiguousParsing(..), Ambiguous(..), ParseResults, ParseFailure(..), Expected(..))
+                          AmbiguousParsing(..), Ambiguous(..),
+                          ParseResults, ParseFailure(..), Expected(..), Pos)
 
 -- | A type synonym for a fixed grammar record type @g@ with a given parser type @p@ on input streams of type @s@
 type Grammar (g  :: (* -> *) -> *) p s = g (p g s)
@@ -53,9 +54,9 @@ simply parseGrammar p input = Rank2.fromOnly (parseGrammar (Rank2.Only p) input)
 
 -- | Given the textual parse input, the parse failure on the input, and the number of lines preceding the failure to
 -- show, produce a human-readable failure description.
-failureDescription :: forall s. (Ord s, TextualMonoid s) => s -> ParseFailure s -> Int -> s
+failureDescription :: forall s pos. (Ord s, TextualMonoid s, Position pos) => s -> ParseFailure pos s -> Int -> s
 failureDescription input (ParseFailure pos expected) contextLineCount =
-   Position.context input (Position.fromStart pos) contextLineCount
+   Position.context input pos contextLineCount
    <> "expected " <> oxfordComma (fromExpected <$> nub (sort expected))
    where oxfordComma :: [s] -> s
          oxfordComma [] = ""

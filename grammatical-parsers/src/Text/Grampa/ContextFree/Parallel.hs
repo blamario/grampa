@@ -259,7 +259,6 @@ instance TextualMonoid s => CharParsing (Parser g s) where
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
 fromResultList :: (Eq s, FactorialMonoid s) => s -> ResultList s r -> ParseResults s [(s, r)]
-fromResultList s (ResultList EmptyTree (FailureInfo pos msgs)) = 
-   Left (ParseFailure (Factorial.length s - pos) (nub msgs))
+fromResultList s (ResultList EmptyTree (FailureInfo pos msgs)) = Left (ParseFailure (fromIntegral pos) (nub msgs))
 fromResultList _ (ResultList rl _failure) = Right (f <$> toList rl)
    where f (ResultInfo s r) = (s, r)

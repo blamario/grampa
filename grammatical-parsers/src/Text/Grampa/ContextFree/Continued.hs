@@ -31,7 +31,7 @@ import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          ParseResults, ParseFailure(..), Expected(..))
+                          ParseResults, ParseFailure(..), Expected(..), Pos)
 import Text.Grampa.Internal (FailureInfo(..), TraceableParsing(..))
 
 data Result (g :: (* -> *) -> *) s v = Parsed{parsedPrefix :: !v,
@@ -269,5 +269,5 @@ instance (Cancellative.LeftReductive s, Factorial.FactorialMonoid s) => MultiPar
    parseComplete g input = Rank2.fmap (\p-> applyParser p input (const . const . Right) (Left . fromFailure input))
                                       (Rank2.fmap (<* eof) g)
 
-fromFailure :: (Eq s, FactorialMonoid s) => s -> FailureInfo s -> ParseFailure s
-fromFailure s (FailureInfo pos msgs) = ParseFailure (Factorial.length s - pos + 1) (nub msgs)
+fromFailure :: (Eq s, FactorialMonoid s) => s -> FailureInfo s -> ParseFailure Pos s
+fromFailure s (FailureInfo pos msgs) = ParseFailure (fromIntegral $ pos - 1) (nub msgs)

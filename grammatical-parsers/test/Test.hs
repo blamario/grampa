@@ -194,10 +194,11 @@ tests = testGroup "Grampa" [
               testProperty "string success" $ \(xs::[Word8]) ys->
                    simpleParse (string xs) (xs <> ys) == Right [(ys, xs)],
               testProperty "string" $ \(xs::[Word8]) ys-> not (xs `isPrefixOf` ys)
-                ==> simpleParse (string xs) ys == Left (ParseFailure 0 [ExpectedInput xs]),
-              testProperty "eof mempty" $ simpleParse eof "" == Right [("", ())],
+                ==> simpleParse (string xs) ys === Left (ParseFailure (fromIntegral $ length ys) [ExpectedInput xs]),
+              testProperty "eof mempty" $ simpleParse eof "" === Right [("", ())],
               testProperty "eof failure" $ \s->
-                   s /= "" ==> simpleParse eof s == Left (ParseFailure 0 [Expected "end of input"])],
+                   s /= "" ==> simpleParse eof s
+                               === Left (ParseFailure (fromIntegral $ length s) [Expected "end of input"])],
            testGroup "lookAhead"
              [testProperty "lookAhead" lookAheadP,
               testProperty "lookAhead p *> p" lookAheadConsumeP,
@@ -272,7 +273,7 @@ instance (Show s, MonoidNull s, Monoid r) => Monoid (DescribedParser s r) where
    mempty = DescribedParser "mempty" mempty
    DescribedParser d1 p1 `mappend` DescribedParser d2 p2 = DescribedParser (d1 ++ " <> " ++ d2) (mappend p1 p2)
 
-instance EqProp (ParseFailure s) where
+instance EqProp (ParseFailure Pos s) where
    ParseFailure pos1 msg1 =-= ParseFailure pos2 msg2 = property (pos1 == pos2)
 
 instance (Ord r, Show r, EqProp r, Eq s, EqProp s, Show s, FactorialMonoid s, LeftReductive s, Arbitrary s) =>

@@ -377,8 +377,7 @@ terminalPEG p = Parser q where
                           Backtrack.NoParse failure -> ResultList mempty failure
 
 fromResultList :: (Functor m, Eq s, FactorialMonoid s) => s -> ResultListT m g s r -> ParseResults s [(s, m r)]
-fromResultList s (ResultList [] (FailureInfo pos msgs)) =
-   Left (ParseFailure (Factorial.length s - pos + 1) (nub msgs))
+fromResultList s (ResultList [] (FailureInfo pos msgs)) = Left (ParseFailure (fromIntegral $ pos - 1) (nub msgs))
 fromResultList _ (ResultList rl _failure) = Right (foldMap f rl)
    where f (ResultsOfLengthT (ROL _ ((s, _):_) r)) = (,) s <$> toList r
          f (ResultsOfLengthT (ROL _ [] r)) = (,) mempty <$> toList r

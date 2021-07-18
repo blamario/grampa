@@ -228,5 +228,5 @@ instance (Cancellative.LeftReductive s, Factorial.FactorialMonoid s) => MultiPar
 
 fromResult :: (Eq s, FactorialMonoid s) => s -> Result g s r -> ParseResults s (s, r)
 fromResult s (NoParse (FailureInfo pos msgs)) =
-   Left (ParseFailure (Factorial.length s - pos + 1) (nub msgs))
+   Left (ParseFailure (fromIntegral $ Factorial.length s - pos + 1) (nub msgs))
 fromResult _ (Parsed prefix suffix) = Right (suffix, prefix)

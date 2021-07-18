@@ -11,6 +11,7 @@ import Data.Functor.Classes (Show1(..))
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.List (nub)
 import Data.Monoid (Monoid(mappend, mempty))
+import Data.Ord (Down(Down))
 import Data.Semigroup (Semigroup((<>)))
 import Data.Type.Equality ((:~:)(Refl))
 import Witherable (Filterable(mapMaybe))
@@ -45,8 +46,7 @@ instance AmbiguityDecidable (Ambiguous a) where
    ambiguityWitness = Just (AmbiguityWitness Refl)
 
 fromResultList :: (Eq s, FactorialMonoid s) => s -> ResultList g s r -> ParseResults s [(s, r)]
-fromResultList s (ResultList [] (FailureInfo pos msgs)) =
-   Left (ParseFailure (length s - pos + 1) (nub msgs))
+fromResultList s (ResultList [] (FailureInfo pos msgs)) = Left (ParseFailure (fromIntegral $ pos - 1) (nub msgs))
 fromResultList _ (ResultList rl _failure) = Right (foldMap f rl)
    where f (ResultsOfLength _ ((s, _):_) r) = (,) s <$> toList r
          f (ResultsOfLength _ [] r) = (,) mempty <$> toList r
