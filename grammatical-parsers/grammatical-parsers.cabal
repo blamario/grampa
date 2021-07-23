@@ -82,8 +82,7 @@ test-suite           quicktests
                      monoid-subclasses < 1.2, parsers < 0.13,
                      witherable == 0.4.*,
                      rank2classes >= 1.0.2 && < 1.5, grammatical-parsers,
-                     QuickCheck >= 2 && < 3, checkers >= 0.4.6 && < 0.6, size-based < 0.2,
-                     testing-feat >= 1.1 && < 1.2,
+                     QuickCheck >= 2 && < 3, checkers >= 0.4.6 && < 0.6,
                      tasty >= 0.7, tasty-quickcheck >= 0.7
   main-is:           Test.hs
   other-modules:     Test.Ambiguous, Test.Examples,

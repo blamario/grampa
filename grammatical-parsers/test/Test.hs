@@ -2,7 +2,7 @@
              ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 module Main where
 
-import Control.Applicative (Applicative, Alternative, Const(..), pure, empty, many, optional, (<*>), (*>), (<|>))
+import Control.Applicative (Applicative, Alternative, Const(..), pure, empty, liftA2, many, optional, (<*>), (*>), (<|>))
 import Control.Arrow (first)
 import Control.Monad (MonadPlus(mzero, mplus), guard, liftM, liftM2, void)
 import Data.Char (isSpace, isLetter)
@@ -22,12 +22,9 @@ import Text.Parser.Combinators (choice, eof, sepBy, sepBy1, skipMany)
 import qualified Text.Parser.Char as Char
 import Text.Parser.Token (whiteSpace)
 
-import Control.Enumerable (Shareable, Sized, share)
-import Test.Feat (Enumerable(..), c0, c1, uniform)
-import Test.Feat.Enumerate (pay)
 import Test.Tasty (TestTree, defaultMain, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Positive(..), Property,
-                              (===), (==>), (.&&.), forAll, mapSize, property, sized, testProperty, within)
+import Test.Tasty.QuickCheck (Arbitrary(..), CoArbitrary, Gen, Positive(..), Property,
+                              (===), (==>), (.&&.), elements, forAll, mapSize, oneof, property, resize, sized, testProperty, within)
 import Test.QuickCheck (verbose)
 import Test.QuickCheck.Checkers (Binop, EqProp(..), TestBatch, unbatch)
 import Test.QuickCheck.Classes (functor, monad, monoid, applicative, alternative,
@@ -254,9 +251,6 @@ tests = testGroup "Grampa" [
             notFollowedBy (notFollowedBy p) =-= (void (lookAhead p) :: Parser (Rank2.Only ()) String ())
          lookAheadTokenP x xs = simpleParse (lookAhead anyToken) (x:xs) == Right [(x:xs, [x])]
 
-instance Enumerable (DescribedParser s r) => Arbitrary (DescribedParser s r) where
-   arbitrary = sized uniform
-
 testBatch :: TestBatch -> TestTree
 testBatch (label, tests) = testGroup label (uncurry testProperty . (within 5000000 <$>) <$> tests)
 
@@ -310,55 +304,75 @@ instance (Show s, FactorialMonoid s) => MonadPlus (DescribedParser s) where
    mzero = DescribedParser "mzero" mzero
    DescribedParser d1 p1 `mplus` DescribedParser d2 p2 = DescribedParser (d1 ++ " `mplus` " ++ d2) (mplus p1 p2)
 
-instance forall s. (Semigroup s, FactorialMonoid s, LeftReductive s, Ord s, Typeable s, Show s, Enumerable s) =>
-         Enumerable (DescribedParser s s) where
-   enumerate = share (choice [c0 (DescribedParser "anyToken" anyToken),
-                              c0 (DescribedParser "getInput" getInput),
-                              c0 (DescribedParser "empty" empty),
-                              c0 (DescribedParser "mempty" mempty),
-                              pay (c1 $ \s-> DescribedParser "string" (string s)),
-                              pay (c1 $ \pred-> DescribedParser "satisfy" (satisfy pred)),
-                              pay (c1 $ \pred-> DescribedParser "takeWhile" (takeWhile pred)),
-                              pay (c1 $ \pred-> DescribedParser "takeWhile1" (takeWhile1 pred)),
-                              binary " *> " (*>),
-                              binary " <> " (<>),
-                              binary " <|> " (<|>)])
+instance forall s. (Semigroup s, FactorialMonoid s, LeftReductive s, Ord s, Typeable s, Show s,
+                    Arbitrary s, CoArbitrary s) =>
+         Arbitrary (DescribedParser s s) where
+   arbitrary = sized tree
+     where tree 0 = elements [DescribedParser "anyToken" anyToken,
+                              DescribedParser "getInput" getInput,
+                              DescribedParser "empty" empty,
+                              DescribedParser "mempty" mempty]
+           tree n = oneof [pure (DescribedParser "anyToken" anyToken),
+                           pure (DescribedParser "getInput" getInput),
+                           pure (DescribedParser "empty" empty),
+                           pure (DescribedParser "mempty" mempty),
+                           (\s-> DescribedParser "string" $ string s) <$> resize (n - 1) arbitrary,
+                           (\p-> DescribedParser "satisfy" $ satisfy p) <$> resize (n - 1) arbitrary,
+                           (\p-> DescribedParser "takeWhile" $ takeWhile p) <$> resize (n - 1) arbitrary,
+                           (\p-> DescribedParser "takeWhile1" $ takeWhile1 p) <$> resize (n - 1) arbitrary,
+                           binary " *> " (*>) branch branch,
+                           binary " <> " (<>) branch branch,
+                           binary " <|> " (<|>) branch branch]
+             where branch = tree (n `div` 2)
 
-instance forall s r. (Ord s, Semigroup s, FactorialMonoid s, LeftReductive s, Show s, Enumerable s) =>
-         Enumerable (DescribedParser s ()) where
-   enumerate = share (choice [c0 (DescribedParser "eof" eof),
-                              pay (c1 $ \(DescribedParser d p :: DescribedParser s s)-> DescribedParser ("void " <> d) (void p)),
-                              pay (c1 $ \(DescribedParser d p :: DescribedParser s s)->
-                                    DescribedParser ("(notFollowedBy " <> d <> ")") (notFollowedBy p))])
+instance forall s r. (Ord s, Semigroup s, FactorialMonoid s, LeftReductive s, Show s,
+                      Arbitrary s, CoArbitrary s, Typeable s) =>
+         Arbitrary (DescribedParser s ()) where
+   arbitrary = oneof [pure (DescribedParser "eof" eof),
+                      (\(DescribedParser d p :: DescribedParser s s)->
+                        DescribedParser ("void " <> d) (void p)) <$> sized (\n-> resize (max (n - 1) 0) arbitrary),
+                      (\(DescribedParser d p :: DescribedParser s s)->
+                        DescribedParser ("notFollowedBy " <> d) (notFollowedBy p))
+                      <$> sized (\n-> resize (max (n - 1) 0) arbitrary)]
 
-instance forall s r. (Show s, Semigroup s, FactorialMonoid s, Typeable s) => Enumerable (DescribedParser s [Bool]) where
-   enumerate = share (choice [c0 (DescribedParser "empty" empty),
-                              c0 (DescribedParser "mempty" mempty),
-                              pay (c1 $ \r-> DescribedParser ("(pure " ++ shows r ")") (pure r)),
-                              pay (c1 $ \(DescribedParser d p)-> DescribedParser ("(lookAhead " <> d <> ")") (lookAhead p)),
-                              binary " *> " (*>),
-                              binary " <> " (<>),
-                              binary " <|> " (<|>)])
+instance forall s r. (Show s, Semigroup s, FactorialMonoid s, Typeable s) => Arbitrary (DescribedParser s [Bool]) where
+   arbitrary = sized tree
+     where tree 0 = elements [DescribedParser "empty" empty,
+                              DescribedParser "mempty" mempty]
+           tree n = oneof [pure (DescribedParser "empty" empty),
+                           pure (DescribedParser "mempty" mempty),
+                           (\r-> DescribedParser ("(pure " ++ shows r ")") (pure r)) <$> resize (n - 1) arbitrary,
+                           (\(DescribedParser d p)-> DescribedParser ("(lookAhead " <> d <> ")") (lookAhead p))
+                            <$> tree (n - 1),
+                           binary " *> " (*>) branch branch,
+                           binary " <> " (<>) branch branch,
+                           binary " <|> " (<|>) branch branch]
+             where branch = tree (n `div` 2)
 
 instance forall s r. (Show s, Semigroup s, FactorialMonoid s, Typeable s) =>
-         Enumerable (DescribedParser s ([Bool] -> [Bool])) where
-   enumerate = share (choice [c0 (DescribedParser "empty" empty),
-                              c0 (DescribedParser "mempty" mempty),
-                              pay (c1 $ \r-> DescribedParser ("(pure " ++ shows r ")") (pure r)),
-                              pay (c1 $ \(DescribedParser d p)-> DescribedParser ("(lookAhead " <> d <> ")") (lookAhead p)),
-                              binary " *> " (*>),
-                              binary " <> " (<>),
-                              binary " <|> " (<|>)])
+         Arbitrary (DescribedParser s ([Bool] -> [Bool])) where
+   arbitrary = sized tree
+     where tree 0 = oneof [pure (DescribedParser "empty" empty),
+                           pure (DescribedParser "mempty" mempty)]
+           tree n = oneof [pure (DescribedParser "empty" empty),
+                           pure (DescribedParser "mempty" mempty),
+                           (\r-> DescribedParser ("(pure " ++ shows r ")") (pure r)) <$> resize (n - 1) arbitrary,
+                           (\(DescribedParser d p)-> DescribedParser ("(lookAhead " <> d <> ")") (lookAhead p))
+                            <$> tree (n - 1),
+                           binary " *> " (*>) branch branch,
+                           binary " <> " (<>) branch branch,
+                           binary " <|> " (<|>) branch branch]
+             where branch = tree (n `div` 2)
 
-binary :: forall f s a. (Typeable f, Sized f, Enumerable (DescribedParser s a))
-       => String
+binary :: String
        -> (forall g. Rank2.Functor g => Parser g s a -> Parser g s a -> Parser g s a)
-       -> Shareable f (DescribedParser s a)
-binary nm op = pay $ c1 (\(DescribedParser d1 p1, DescribedParser d2 p2)-> 
-                          DescribedParser (d1 <> nm <> d2) (op p1 p2))
+       -> Gen (DescribedParser s a)
+       -> Gen (DescribedParser s a)
+       -> Gen (DescribedParser s a)
+binary nm op = liftA2 (\(DescribedParser d1 p1) (DescribedParser d2 p2)-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
 
-instance {-# OVERLAPS #-} (Ord s, Enumerable s) => Enumerable (s -> Bool) where
-   enumerate = share (pay (c1 (<=)) <|> pay (c1 const))
+--instance {-# OVERLAPS #-} (Ord s, Arbitrary s) => Arbitrary (s -> Bool) where
+--   arbitrary = elements [(<=), const False]
 
 -- instance Enumerable ([Bool] -> [Bool]) where
 --    enumerate = share (choice [c0 id, c0 (map not), pay (c1 const)])

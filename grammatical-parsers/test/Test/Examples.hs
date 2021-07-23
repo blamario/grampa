@@ -1,18 +1,14 @@
 {-# Language FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, ScopedTypeVariables #-}
 module Test.Examples where
 
-import Control.Applicative (empty, (<|>))
+import Control.Applicative (empty, liftA2, liftA3, (<|>))
 import Data.Functor.Compose (Compose(..))
 import Data.Monoid (Monoid(..), (<>))
 import Data.Monoid.Textual (TextualMonoid, toString)
 import Text.Parser.Combinators (choice)
 
-import Control.Enumerable (share)
-import Test.Feat (Enumerable(..), Enumerate, c0, c1, c2, c3, uniform)
-import Test.Feat.Enumerate (pay)
-import Test.Feat.Modifiers (Nat(..))
-import Test.Tasty.QuickCheck (Arbitrary(..), Gen, Positive(..), Property, testProperty, (===), (==>), (.&&.),
-                              forAll, mapSize, oneof, resize, sized, whenFail)
+import Test.Tasty.QuickCheck (Arbitrary(..), Gen, NonNegative(..), Property, testProperty, (===), (==>), (.&&.),
+                              elements, forAll, mapSize, oneof, resize, sized, whenFail)
 import Data.Word (Word8)
 
 import qualified Rank2
@@ -52,13 +48,13 @@ type ArithmeticComparisonsBoolean = Rank2.Product ArithmeticComparisons (Boolean
 type ACBC = Rank2.Product ArithmeticComparisonsBoolean (Conditionals.Conditionals BooleanTree
                                                         (ConditionalTree ArithmeticTree))
 
-data ArithmeticTree = Number (Nat Int)
-                   | Add ArithmeticTree ArithmeticTree
-                   | Multiply ArithmeticTree ArithmeticTree
-                   | Negate ArithmeticTree
-                   | Subtract ArithmeticTree ArithmeticTree
-                   | Divide ArithmeticTree ArithmeticTree
-                   deriving Eq
+data ArithmeticTree = Number (NonNegative Int)
+                    | Add ArithmeticTree ArithmeticTree
+                    | Multiply ArithmeticTree ArithmeticTree
+                    | Negate ArithmeticTree
+                    | Subtract ArithmeticTree ArithmeticTree
+                    | Divide ArithmeticTree ArithmeticTree
+                    deriving Eq
 
 data BooleanTree = BooleanConstant Bool
                  | Comparison ArithmeticTree Relation ArithmeticTree
@@ -79,7 +75,7 @@ instance Show ArithmeticTree where
    showsPrec p (Negate e) rest | p < 1 = "- " <> showsPrec 1 e rest
    showsPrec p (Multiply l r) rest | p < 2 = showsPrec 1 l (" * " <> showsPrec 2 r rest)
    showsPrec p (Divide l r) rest | p < 2 = showsPrec 1 l (" / " <> showsPrec 2 r rest)
-   showsPrec _ (Number (Nat n)) rest = shows n rest
+   showsPrec _ (Number (NonNegative n)) rest = shows n rest
    showsPrec p e rest = "(" <> showsPrec 0 e (")" <> rest)
 
 instance Show BooleanTree where
@@ -98,7 +94,7 @@ instance Show Relation where
    show (Relation rel) = rel
 
 instance Arithmetic.ArithmeticDomain ArithmeticTree where
-   number = Number . Nat
+   number = Number . NonNegative
    add = Add
    multiply = Multiply
    negate = Negate
@@ -123,24 +119,34 @@ instance Conditionals.ConditionalDomain BooleanTree (ConditionalTree ArithmeticT
    ifThenElse = If
 
 instance Arbitrary ArithmeticTree where
-   arbitrary = sized uniform
+   arbitrary = sized tree
+     where tree n | n < 1 = Number <$> arbitrary
+                  | otherwise = oneof [Number <$> arbitrary,
+                                       Negate <$> tree (n - 1),
+                                       liftA2 Add branch branch,
+                                       liftA2 Multiply branch branch,
+                                       liftA2 Subtract branch branch,
+                                       liftA2 Divide branch branch]
+             where branch = tree (n `div` 2)
+
 instance Arbitrary BooleanTree where
-   arbitrary = sized uniform
+   arbitrary = sized tree
+     where tree n | n < 1 = BooleanConstant <$> arbitrary
+                  | otherwise = oneof [BooleanConstant <$> resize (n - 1) arbitrary,
+                                       Not <$> tree (n - 1),
+                                       liftA3 Comparison arbitrary' (elements relations) arbitrary',
+                                       liftA2 And branch branch,
+                                       liftA2 Or branch branch]
+             where branch = tree (n `div` 2)
+                   relations = Relation <$> ["<", ">", "==", "<=", ">="]
+                   arbitrary' = resize (n `div` 2) arbitrary
+
 instance Arbitrary (ConditionalTree ArithmeticTree) where
-   arbitrary = sized uniform
-
-instance Enumerable ArithmeticTree where
-   enumerate = share (choice $ pay <$> [c1 (Number . (Nat . fromIntegral . nat :: Nat Integer -> Nat Int)), 
-                                        c2 Add, c2 Multiply, c1 Negate, c2 Subtract, c2 Divide])
-
-instance Enumerable BooleanTree where
-   enumerate = share $ choice $ pay <$> [c1 BooleanConstant, c3 Comparison, c2 And, c2 Or]
-
-instance Enumerable a => Enumerable (ConditionalTree a) where
-   enumerate = share (pay $ c3 $ \test true false-> If test (Unconditional true) (Unconditional false))
-
-instance Enumerable Relation where
-   enumerate = share (choice $ pay . pure . Relation <$> ["<", "<=", "==", ">=", ">"])
+   arbitrary = sized tree
+     where tree n = oneof [--Unconditional <$> resize (n - 1) arbitrary,
+                           liftA3 If (resize (n `div` 3) arbitrary)
+                                     (Unconditional <$> resize(n `div` 3) arbitrary)
+                                     (Unconditional <$> resize(n `div` 3) arbitrary)]
 
 uniqueParse :: (Ord s, TextualMonoid s, Show r, Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g) =>
                Grammar g Parser s -> (forall f. g f -> f r) -> s -> Either String r
