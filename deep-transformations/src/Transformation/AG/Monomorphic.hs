@@ -33,6 +33,7 @@ instance Semigroup a => Semigroup (Atts a) where
    Atts i1 s1 <> Atts i2 s2 = Atts (i1 <> i2) (s1 <> s2)
 
 instance Monoid a => Monoid (Atts a) where
+   mappend = (<>)
    mempty = Atts mempty mempty
 
 -- | A node's 'Semantics' maps its inherited attribute to its synthesized attribute.
