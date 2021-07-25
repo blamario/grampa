@@ -29,6 +29,7 @@ import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
+import Text.Parser.Input.Position (fromEnd)
 
 import qualified Rank2
 
@@ -89,7 +90,7 @@ instance Applicative (Parser g s) where
 
 
 instance FactorialMonoid s => Alternative (Parser g s) where
-   empty = Parser (\s-> ResultList mempty $ FailureInfo (Factorial.length s) [Expected "empty"])
+   empty = Parser (\s-> ResultList mempty $ FailureInfo (fromEnd $ Factorial.length s) [Expected "empty"])
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
 
@@ -110,7 +111,7 @@ instance Factorial.FactorialMonoid s => Monad (Parser g s) where
 #if MIN_VERSION_base(4,13,0)
 instance FactorialMonoid s => MonadFail (Parser g s) where
 #endif
-   fail msg = Parser (\s-> ResultList mempty $ FailureInfo (Factorial.length s) [Expected msg])
+   fail msg = Parser (\s-> ResultList mempty $ FailureInfo (fromEnd $ Factorial.length s) [Expected msg])
 
 instance FactorialMonoid s => MonadPlus (Parser g s) where
    mzero = empty
@@ -145,15 +146,15 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Pars
    anyToken = Parser p
       where p s = case Factorial.splitPrimePrefix s
                   of Just (first, rest) -> ResultList (Leaf $ ResultInfo rest first) noFailure
-                     _ -> ResultList mempty (FailureInfo (Factorial.length s) [Expected "anyToken"])
+                     _ -> ResultList mempty (FailureInfo (fromEnd $ Factorial.length s) [Expected "anyToken"])
    satisfy predicate = Parser p
       where p s = case Factorial.splitPrimePrefix s
                   of Just (first, rest) | predicate first -> ResultList (Leaf $ ResultInfo rest first) noFailure
-                     _ -> ResultList mempty (FailureInfo (Factorial.length s) [Expected "satisfy"])
+                     _ -> ResultList mempty (FailureInfo (fromEnd $ Factorial.length s) [Expected "satisfy"])
    notSatisfy predicate = Parser p
       where p s = case Factorial.splitPrimePrefix s
                   of Just (first, _) 
-                        | predicate first -> ResultList mempty (FailureInfo (Factorial.length s) [Expected "notSatisfy"])
+                        | predicate first -> ResultList mempty (FailureInfo (fromEnd $ Factorial.length s) [Expected "notSatisfy"])
                      _ -> ResultList (Leaf $ ResultInfo s ()) noFailure
    scan s0 f = Parser (p s0)
       where p s i = ResultList (Leaf $ ResultInfo suffix prefix) noFailure
@@ -162,18 +163,18 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Pars
       where p s
               | (prefix, suffix) <- Factorial.splitAt n s,
                 Factorial.length prefix == n = ResultList (Leaf $ ResultInfo suffix prefix) noFailure
-              | otherwise = ResultList mempty (FailureInfo (Factorial.length s) [Expected $ "take " ++ show n])
+              | otherwise = ResultList mempty (FailureInfo (fromEnd $ Factorial.length s) [Expected $ "take " ++ show n])
    takeWhile predicate = Parser p
       where p s = ResultList (Leaf $ ResultInfo suffix prefix) noFailure
               where (prefix, suffix) = Factorial.span predicate s
    takeWhile1 predicate = Parser p
       where p s | (prefix, suffix) <- Factorial.span predicate s = 
                if Null.null prefix
-               then ResultList mempty (FailureInfo (Factorial.length s) [Expected "takeWhile1"])
+               then ResultList mempty (FailureInfo (fromEnd $ Factorial.length s) [Expected "takeWhile1"])
                else ResultList (Leaf $ ResultInfo suffix prefix) noFailure
    string s = Parser p where
       p s' | Just suffix <- Cancellative.stripPrefix s s' = ResultList (Leaf $ ResultInfo suffix s) noFailure
-           | otherwise = ResultList mempty (FailureInfo (Factorial.length s') [ExpectedInput s])
+           | otherwise = ResultList mempty (FailureInfo (fromEnd $ Factorial.length s') [ExpectedInput s])
 
 instance InputParsing (Parser g s)  => TraceableParsing (Parser g s) where
    traceInput description (Parser p) = Parser q
@@ -188,11 +189,11 @@ instance TextualMonoid s => InputCharParsing (Parser g s) where
                case Textual.splitCharacterPrefix s
                of Just (first, rest)
                      | predicate first -> ResultList (Leaf $ ResultInfo rest $ Factorial.primePrefix s) noFailure
-                  _ -> ResultList mempty (FailureInfo (Factorial.length s) [Expected "satisfyCharInput"])
+                  _ -> ResultList mempty (FailureInfo (fromEnd $ Factorial.length s) [Expected "satisfyCharInput"])
    notSatisfyChar predicate = Parser p
       where p s = case Textual.characterPrefix s
                   of Just first 
-                        | predicate first -> ResultList mempty (FailureInfo (Factorial.length s) [Expected "notSatisfyChar"])
+                        | predicate first -> ResultList mempty (FailureInfo (fromEnd $ Factorial.length s) [Expected "notSatisfyChar"])
                      _ -> ResultList (Leaf $ ResultInfo s ()) noFailure
    scanChars s0 f = Parser (p s0)
       where p s i = ResultList (Leaf $ ResultInfo suffix prefix) noFailure
@@ -203,29 +204,29 @@ instance TextualMonoid s => InputCharParsing (Parser g s) where
    takeCharsWhile1 predicate = Parser p
       where p s | (prefix, suffix) <- Textual.span_ False predicate s =
                if null prefix
-               then ResultList mempty (FailureInfo (Factorial.length s) [Expected "takeCharsWhile1"])
+               then ResultList mempty (FailureInfo (fromEnd $ Factorial.length s) [Expected "takeCharsWhile1"])
                else ResultList (Leaf $ ResultInfo suffix prefix) noFailure
 
 instance FactorialMonoid s => Parsing (Parser g s) where
    try (Parser p) = Parser q
       where q rest = rewindFailure (p rest)
                where rewindFailure (ResultList rl (FailureInfo _pos _msgs)) =
-                        ResultList rl (FailureInfo (Factorial.length rest) [])
+                        ResultList rl (FailureInfo (fromEnd $ Factorial.length rest) [])
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
                where replaceFailure (ResultList EmptyTree (FailureInfo pos msgs)) =
                         ResultList EmptyTree (FailureInfo pos $
-                                              if pos == Factorial.length rest then [Expected msg] else msgs)
+                                              if pos == fromEnd (Factorial.length rest) then [Expected msg] else msgs)
                      replaceFailure rl = rl
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t (ResultList EmptyTree _) = ResultList (Leaf $ ResultInfo t ()) noFailure
-            rewind t ResultList{} = ResultList mempty (FailureInfo (Factorial.length t) [Expected "notFollowedBy"])
+            rewind t ResultList{} = ResultList mempty (FailureInfo (fromEnd $ Factorial.length t) [Expected "notFollowedBy"])
    skipMany p = go
       where go = pure () <|> try p *> go
-   unexpected msg = Parser (\t-> ResultList mempty $ FailureInfo (Factorial.length t) [Expected msg])
+   unexpected msg = Parser (\t-> ResultList mempty $ FailureInfo (fromEnd $ Factorial.length t) [Expected msg])
    eof = Parser f
       where f s | null s = ResultList (Leaf $ ResultInfo s ()) noFailure
-                | otherwise = ResultList mempty (FailureInfo (Factorial.length s) [Expected "end of input"])
+                | otherwise = ResultList mempty (FailureInfo (fromEnd $ Factorial.length s) [Expected "end of input"])
 
 instance FactorialMonoid s => DeterministicParsing (Parser g s) where
    Parser p <<|> Parser q = Parser r where
@@ -254,7 +255,7 @@ instance TextualMonoid s => CharParsing (Parser g s) where
       where p s =
                case Textual.splitCharacterPrefix s
                of Just (first, rest) | predicate first -> ResultList (Leaf $ ResultInfo rest first) noFailure
-                  _ -> ResultList mempty (FailureInfo (Factorial.length s) [Expected "Char.satisfy"])
+                  _ -> ResultList mempty (FailureInfo (fromEnd $ Factorial.length s) [Expected "Char.satisfy"])
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 

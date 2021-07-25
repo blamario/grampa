@@ -30,6 +30,7 @@ import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
+import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..),
                           GrammarParsing(..), MultiParsing(..),
                           TailsParsing(parseTails), ParseResults, ParseFailure(..), Expected(..))
@@ -54,7 +55,7 @@ instance Functor (Result g s) where
 
 instance Filterable (Result g s) where
    mapMaybe f (Parsed a rest) =
-      maybe (NoParse $ FailureInfo (Factorial.length rest) [Expected "filter"]) (`Parsed` rest) (f a)
+      maybe (NoParse $ FailureInfo (fromEnd $ Factorial.length rest) [Expected "filter"]) (`Parsed` rest) (f a)
    mapMaybe _ (NoParse failure) = NoParse failure
    
 instance Functor (Parser g s) where

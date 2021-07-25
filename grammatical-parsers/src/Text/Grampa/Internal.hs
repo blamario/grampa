@@ -22,7 +22,7 @@ import Text.Grampa.Class (Ambiguous(..), Expected(..), ParseFailure(..), ParseRe
 
 import Prelude hiding (length, showList)
 
-data FailureInfo s = FailureInfo Int [Expected s] deriving (Eq, Show)
+data FailureInfo s = FailureInfo (Down Int) [Expected s] deriving (Eq, Show)
 
 data ResultsOfLength g s r = ResultsOfLength !Int ![(s, g (ResultList g s))] !(NonEmpty r)
 
@@ -57,8 +57,8 @@ noFailure = FailureInfo maxBound []
 
 instance Semigroup (FailureInfo s) where
    FailureInfo pos1 exp1 <> FailureInfo pos2 exp2 = FailureInfo pos' exp'
-      where (pos', exp') | pos1 < pos2 = (pos1, exp1)
-                         | pos1 > pos2 = (pos2, exp2)
+      where (pos', exp') | pos1 > pos2 = (pos1, exp1)
+                         | pos1 < pos2 = (pos2, exp2)
                          | otherwise = (pos1, exp1 <> exp2)
 
 instance Monoid (FailureInfo s) where
