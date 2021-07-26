@@ -6,7 +6,7 @@
 -- > $(Transformation.Deep.TH.deriveFunctor ''MyDataType)
 --
 
-{-# Language TemplateHaskell #-}
+{-# Language CPP, TemplateHaskell #-}
 -- Adapted from https://wiki.haskell.org/A_practical_Template_Haskell_Tutorial
 
 module Transformation.Deep.TH (deriveAll, deriveFunctor, deriveTraversable)
@@ -95,11 +95,18 @@ reifyConstructors ty = do
       NewtypeD _ nm tyVars kind c _ -> return (nm, tyVars, kind, [c])
       _ -> fail "deriveApply: tyCon may not be a type synonym."
 
+#if MIN_VERSION_template_haskell(2,17,0)
+   let (KindedTV tyVar _ (AppT (AppT ArrowT StarT) StarT) :
+        KindedTV tyVar' _ (AppT (AppT ArrowT StarT) StarT) : _) = reverse tyVars
+       apply t (PlainTV name _)    = appT t (varT name)
+       apply t (KindedTV name _ _) = appT t (varT name)
+#else
    let (KindedTV tyVar  (AppT (AppT ArrowT StarT) StarT) :
         KindedTV tyVar' (AppT (AppT ArrowT StarT) StarT) : _) = reverse tyVars
-       instanceType           = foldl apply (conT tyConName) (reverse $ drop 2 $ reverse tyVars)
        apply t (PlainTV name)    = appT t (varT name)
        apply t (KindedTV name _) = appT t (varT name)
+#endif
+       instanceType           = foldl apply (conT tyConName) (reverse $ drop 2 $ reverse tyVars)
 
    putQ (Deriving tyConName tyVar' tyVar)
    return (instanceType, cs)

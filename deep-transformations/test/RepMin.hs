@@ -35,7 +35,7 @@ instance Rank2.Apply (Tree a f') where
    Leaf f <*> ~(Leaf x) = Leaf (Rank2.apply f x)
 
 instance Rank2.Applicative (Tree a f') where
-   pure = Leaf
+   pure x = Leaf x
 
 instance Rank2.Apply (Root a f') where
    Root f <*> ~(Root x) = Root (Rank2.apply f x)
