@@ -22,7 +22,7 @@ copyright:           (c) 2019 Mario Blažević
 category:            Control, Generics
 build-type:          Custom
 cabal-version:       >=1.10
-tested-with:         GHC==9.0.1, GHC==8.10.4, GHC==8.8.4, GHC==8.6.5, GHC==8.4.4, GHC==8.2.2
+tested-with:         GHC==9.0.1, GHC==8.10.4, GHC==8.8.4, GHC==8.6.5, GHC==8.4.4
 extra-source-files:  README.md
 source-repository head
   type:              git
