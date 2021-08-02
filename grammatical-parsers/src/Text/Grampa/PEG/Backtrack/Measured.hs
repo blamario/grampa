@@ -32,13 +32,13 @@ import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
-                          MultiParsing(..), ParseResults, ParseFailure(..), Expected(..))
-import Text.Grampa.Internal (FailureInfo(..), TraceableParsing(..))
+                          MultiParsing(..), ParseResults, ParseFailure(..), Expected(..), Pos)
+import Text.Grampa.Internal (TraceableParsing(..))
 
 data Result (g :: (* -> *) -> *) s v = Parsed{parsedLength :: !Int,
                                               parsedResult :: !v,
                                               parsedSuffix :: !s}
-                                     | NoParse (FailureInfo s)
+                                     | NoParse (ParseFailure Pos s)
 
 -- | Parser type for Parsing Expression Grammars that uses a backtracking algorithm, fast for grammars in LL(1) class
 -- but with potentially exponential performance for longer ambiguous prefixes.
@@ -54,7 +54,7 @@ instance Functor (Result g s) where
 
 instance Factorial.FactorialMonoid s => Filterable (Result g s) where
    mapMaybe f (Parsed l a rest) =
-      maybe (NoParse $ FailureInfo (fromEnd $ Factorial.length rest) [Expected "filter"]) (\b-> Parsed l b rest) (f a)
+      maybe (NoParse $ ParseFailure (fromEnd $ Factorial.length rest) [Expected "filter"]) (\b-> Parsed l b rest) (f a)
    mapMaybe _ (NoParse failure) = NoParse failure
    
 instance Functor (Parser g s) where
@@ -72,7 +72,7 @@ instance Applicative (Parser g s) where
    {-# INLINABLE (<*>) #-}
 
 instance FactorialMonoid s => Alternative (Parser g s) where
-   empty = Parser (\rest-> NoParse $ FailureInfo (fromEnd $ Factorial.length rest) [Expected "empty"])
+   empty = Parser (\rest-> NoParse $ ParseFailure (fromEnd $ Factorial.length rest) [Expected "empty"])
    (<|>) = alt
 
 -- | A named and unconstrained version of the '<|>' operator
@@ -102,7 +102,7 @@ instance Factorial.FactorialMonoid s => Monad (Parser g s) where
 #if MIN_VERSION_base(4,13,0)
 instance FactorialMonoid s => MonadFail (Parser g s) where
 #endif
-   fail msg = Parser (\rest-> NoParse $ FailureInfo (fromEnd $ Factorial.length rest) [Expected msg])
+   fail msg = Parser (\rest-> NoParse $ ParseFailure (fromEnd $ Factorial.length rest) [Expected msg])
 
 instance FactorialMonoid s => MonadPlus (Parser g s) where
    mzero = empty
@@ -118,22 +118,22 @@ instance Monoid x => Monoid (Parser g s x) where
 instance FactorialMonoid s => Parsing (Parser g s) where
    try (Parser p) = Parser q
       where q rest = rewindFailure (p rest)
-               where rewindFailure (NoParse (FailureInfo _pos _msgs)) =
-                        NoParse (FailureInfo (fromEnd $ Factorial.length rest) [])
+               where rewindFailure (NoParse (ParseFailure _pos _msgs)) =
+                        NoParse (ParseFailure (fromEnd $ Factorial.length rest) [])
                      rewindFailure parsed = parsed
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
-               where replaceFailure (NoParse (FailureInfo pos msgs)) =
-                        NoParse (FailureInfo pos
+               where replaceFailure (NoParse (ParseFailure pos msgs)) =
+                        NoParse (ParseFailure pos
                                  $ if pos == fromEnd (Factorial.length rest) then [Expected msg] else msgs)
                      replaceFailure parsed = parsed
    eof = Parser p
       where p rest
                | Null.null rest = Parsed 0 () rest
-               | otherwise = NoParse (FailureInfo (fromEnd $ Factorial.length rest) [Expected "end of input"])
-   unexpected msg = Parser (\t-> NoParse $ FailureInfo (fromEnd $ Factorial.length t) [Expected msg])
+               | otherwise = NoParse (ParseFailure (fromEnd $ Factorial.length rest) [Expected "end of input"])
+   unexpected msg = Parser (\t-> NoParse $ ParseFailure (fromEnd $ Factorial.length t) [Expected msg])
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
-      where rewind t Parsed{} = NoParse (FailureInfo (fromEnd $ Factorial.length t) [Expected "notFollowedBy"])
+      where rewind t Parsed{} = NoParse (ParseFailure (fromEnd $ Factorial.length t) [Expected "notFollowedBy"])
             rewind t NoParse{} = Parsed 0 () t
 
 -- | Every PEG parser is deterministic all the time.
@@ -153,7 +153,7 @@ instance (Show s, Textual.TextualMonoid s) => CharParsing (Parser g s) where
       where p rest =
                case Textual.splitCharacterPrefix rest
                of Just (first, suffix) | predicate first -> Parsed 1 first suffix
-                  _ -> NoParse (FailureInfo (fromEnd $ Factorial.length rest) [Expected "Char.satisfy"])
+                  _ -> NoParse (ParseFailure (fromEnd $ Factorial.length rest) [Expected "Char.satisfy"])
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
@@ -164,16 +164,16 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Pars
    anyToken = Parser p
       where p rest = case Factorial.splitPrimePrefix rest
                      of Just (first, suffix) -> Parsed 1 first suffix
-                        _ -> NoParse (FailureInfo (fromEnd $ Factorial.length rest) [Expected "anyToken"])
+                        _ -> NoParse (ParseFailure (fromEnd $ Factorial.length rest) [Expected "anyToken"])
    satisfy predicate = Parser p
       where p rest =
                case Factorial.splitPrimePrefix rest
                of Just (first, suffix) | predicate first -> Parsed 1 first suffix
-                  _ -> NoParse (FailureInfo (fromEnd $ Factorial.length rest) [Expected "satisfy"])
+                  _ -> NoParse (ParseFailure (fromEnd $ Factorial.length rest) [Expected "satisfy"])
    notSatisfy predicate = Parser p
       where p s = case Factorial.splitPrimePrefix s
                   of Just (first, _) 
-                        | predicate first -> NoParse (FailureInfo (fromEnd $ Factorial.length s) [Expected "notSatisfy"])
+                        | predicate first -> NoParse (ParseFailure (fromEnd $ Factorial.length s) [Expected "notSatisfy"])
                      _ -> Parsed 0 () s
    scan s0 f = Parser (p s0)
       where p s rest = Parsed (Factorial.length prefix) prefix suffix
@@ -181,18 +181,18 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Pars
    take n = Parser p
       where p rest
               | (prefix, suffix) <- Factorial.splitAt n rest, Factorial.length prefix == n = Parsed n prefix suffix
-              | otherwise = NoParse (FailureInfo (fromEnd $ Factorial.length rest) [Expected $ "take " ++ show n])
+              | otherwise = NoParse (ParseFailure (fromEnd $ Factorial.length rest) [Expected $ "take " ++ show n])
    takeWhile predicate = Parser p
       where p rest | (prefix, suffix) <- Factorial.span predicate rest =
                Parsed (Factorial.length prefix) prefix suffix
    takeWhile1 predicate = Parser p
       where p rest | (prefix, suffix) <- Factorial.span predicate rest =
                         if Null.null prefix
-                        then NoParse (FailureInfo (fromEnd $ Factorial.length rest) [Expected "takeWhile1"])
+                        then NoParse (ParseFailure (fromEnd $ Factorial.length rest) [Expected "takeWhile1"])
                         else Parsed (Factorial.length prefix) prefix suffix
    string s = Parser p where
       p s' | Just suffix <- Cancellative.stripPrefix s s' = Parsed l s suffix
-           | otherwise = NoParse (FailureInfo (fromEnd $ Factorial.length s') [ExpectedInput s])
+           | otherwise = NoParse (ParseFailure (fromEnd $ Factorial.length s') [ExpectedInput s])
       l = Factorial.length s
    {-# INLINABLE string #-}
 
@@ -214,11 +214,11 @@ instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
       where p rest =
                case Textual.splitCharacterPrefix rest
                of Just (first, suffix) | predicate first -> Parsed 1 (Factorial.primePrefix rest) suffix
-                  _ -> NoParse (FailureInfo (fromEnd $ Factorial.length rest) [Expected "satisfyChar"])
+                  _ -> NoParse (ParseFailure (fromEnd $ Factorial.length rest) [Expected "satisfyChar"])
    notSatisfyChar predicate = Parser p
       where p s = case Textual.characterPrefix s
                   of Just first | predicate first 
-                                  -> NoParse (FailureInfo (fromEnd $ Factorial.length s) [Expected "notSatisfyChar"])
+                                  -> NoParse (ParseFailure (fromEnd $ Factorial.length s) [Expected "notSatisfyChar"])
                      _ -> Parsed 0 () s
    scanChars s0 f = Parser (p s0)
       where p s rest = Parsed (Factorial.length prefix) prefix suffix
@@ -229,7 +229,7 @@ instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    takeCharsWhile1 predicate = Parser p
       where p rest | (prefix, suffix) <- Textual.span_ False predicate rest =
                      if Null.null prefix
-                     then NoParse (FailureInfo (fromEnd $ Factorial.length rest) [Expected "takeCharsWhile1"])
+                     then NoParse (ParseFailure (fromEnd $ Factorial.length rest) [Expected "takeCharsWhile1"])
                      else Parsed (Factorial.length prefix) prefix suffix
 
 -- | Backtracking PEG parser
@@ -247,5 +247,5 @@ instance (Cancellative.LeftReductive s, Factorial.FactorialMonoid s) => MultiPar
                                       (Rank2.fmap (<* eof) g)
 
 fromResult :: (Eq s, FactorialMonoid s) => s -> Result g s r -> ParseResults s (s, r)
-fromResult s (NoParse (FailureInfo pos msgs)) = Left (ParseFailure (fromIntegral $ pos - 1) (nub msgs))
+fromResult s (NoParse (ParseFailure pos msgs)) = Left (ParseFailure (fromIntegral $ pos - 1) (nub msgs))
 fromResult _ (Parsed _ prefix suffix) = Right (suffix, prefix)

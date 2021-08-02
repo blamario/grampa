@@ -38,8 +38,8 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           AmbiguousParsing(..), ConsumedInputParsing(..), DeterministicParsing(..),
-                          TailsParsing(parseTails, parseAllTails))
-import Text.Grampa.Internal (ResultList(..), FailureInfo(..), FallibleResults(..),
+                          TailsParsing(parseTails, parseAllTails), ParseFailure(..), Pos)
+import Text.Grampa.Internal (ResultList(..), FallibleResults(..),
                              AmbiguousAlternative(ambiguousOr), AmbiguityDecidable(..), AmbiguityWitness(..),
                              TraceableParsing(..))
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
@@ -812,16 +812,17 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                                              Rank2.liftA2 (combineFailures $ failureOf t) deps marginal)
                                   then t' else t)
                      where combine :: Const Bool x -> GrammarFunctor (p g s) x -> Const Bool x
-                           combineFailures :: FailureInfo s -> Const Bool x -> GrammarFunctor (p g s) x -> Const Bool x
+                           combineFailures :: ParseFailure Pos s -> Const Bool x -> GrammarFunctor (p g s) x
+                                           -> Const Bool x
                            combine (Const False) _ = Const False
                            combine (Const True) results = Const (hasSuccess results)
                            combineFailures _ (Const False) _ = Const False
-                           combineFailures (FailureInfo pos expected) (Const True) rl =
+                           combineFailures (ParseFailure pos expected) (Const True) rl =
                               Const (pos > pos' || pos == pos' && any (`notElem` expected) expected')
-                              where FailureInfo pos' expected' = failureOf rl
+                              where ParseFailure pos' expected' = failureOf rl
                   choiceWhile (Const (Just DynamicDependencies)) t t'
                      | getAny (Rank2.foldMap (Any . hasSuccess) marginal) = t'
-                     | FailureInfo _ [] <- failureOf t = t'
+                     | ParseFailure _ [] <- failureOf t = t'
                      | otherwise = t
 
          -- Adds another round of indirect parsing results to the total results accumulated so far.

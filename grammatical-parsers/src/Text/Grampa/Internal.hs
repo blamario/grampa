@@ -1,6 +1,7 @@
-{-# LANGUAGE ConstrainedClassMethods, FlexibleContexts, FlexibleInstances, GADTs, RankNTypes, TypeOperators #-}
+{-# LANGUAGE ConstrainedClassMethods, FlexibleContexts, FlexibleInstances, GADTs,
+             RankNTypes, TypeOperators #-}
 
-module Text.Grampa.Internal (BinTree(..), FailureInfo(..), ResultList(..), ResultsOfLength(..), FallibleResults(..),
+module Text.Grampa.Internal (BinTree(..), ResultList(..), ResultsOfLength(..), FallibleResults(..),
                              AmbiguousAlternative(..), AmbiguityDecidable(..), AmbiguityWitness(..),
                              TraceableParsing(..),
                              fromResultList, noFailure) where
@@ -18,15 +19,13 @@ import Witherable (Filterable(mapMaybe))
 
 import Data.Monoid.Factorial (FactorialMonoid, length)
 
-import Text.Grampa.Class (Ambiguous(..), Expected(..), ParseFailure(..), ParseResults, InputParsing(..))
+import Text.Grampa.Class (Ambiguous(..), Expected(..), ParseFailure(..), ParseResults, InputParsing(..), Pos)
 
 import Prelude hiding (length, showList)
 
-data FailureInfo s = FailureInfo (Down Int) [Expected s] deriving (Eq, Show)
-
 data ResultsOfLength g s r = ResultsOfLength !Int ![(s, g (ResultList g s))] !(NonEmpty r)
 
-data ResultList g s r = ResultList ![ResultsOfLength g s r] !(FailureInfo s)
+data ResultList g s r = ResultList ![ResultsOfLength g s r] !(ParseFailure Pos s)
 
 data BinTree a = Fork !(BinTree a) !(BinTree a)
                | Leaf !a
@@ -46,24 +45,14 @@ instance AmbiguityDecidable (Ambiguous a) where
    ambiguityWitness = Just (AmbiguityWitness Refl)
 
 fromResultList :: (Eq s, FactorialMonoid s) => s -> ResultList g s r -> ParseResults s [(s, r)]
-fromResultList s (ResultList [] (FailureInfo pos msgs)) = Left (ParseFailure (fromIntegral $ pos - 1) (nub msgs))
+fromResultList s (ResultList [] (ParseFailure pos msgs)) = Left (ParseFailure (fromIntegral $ pos - 1) (nub msgs))
 fromResultList _ (ResultList rl _failure) = Right (foldMap f rl)
    where f (ResultsOfLength _ ((s, _):_) r) = (,) s <$> toList r
          f (ResultsOfLength _ [] r) = (,) mempty <$> toList r
 {-# INLINABLE fromResultList #-}
 
-noFailure :: FailureInfo s
-noFailure = FailureInfo maxBound []
-
-instance Semigroup (FailureInfo s) where
-   FailureInfo pos1 exp1 <> FailureInfo pos2 exp2 = FailureInfo pos' exp'
-      where (pos', exp') | pos1 > pos2 = (pos1, exp1)
-                         | pos1 < pos2 = (pos2, exp2)
-                         | otherwise = (pos1, exp1 <> exp2)
-
-instance Monoid (FailureInfo s) where
-   mempty = FailureInfo maxBound []
-   mappend = (<>)
+noFailure :: ParseFailure Pos s
+noFailure = ParseFailure maxBound []
 
 instance (Show s, Show r) => Show (ResultList g s r) where
    show (ResultList l f) = "ResultList (" ++ shows l (") (" ++ shows f ")")
@@ -158,8 +147,8 @@ instance Monoid (BinTree a) where
 
 class FallibleResults f where
    hasSuccess   :: f s a -> Bool
-   failureOf    :: f s a -> FailureInfo s
-   failWith     :: FailureInfo s -> f s a
+   failureOf    :: f s a -> ParseFailure Pos s
+   failWith     :: ParseFailure Pos s -> f s a
 
 instance FallibleResults (ResultList g) where
    hasSuccess (ResultList [] _) = False

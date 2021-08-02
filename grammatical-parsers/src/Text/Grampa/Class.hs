@@ -21,7 +21,7 @@ import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 import Data.Semigroup (Semigroup((<>)))
-import Data.Ord (Down)
+import Data.Ord (Down(Down))
 import Text.Parser.Combinators (Parsing((<?>)))
 import Text.Parser.Token (TokenParsing)
 import Text.Parser.Deterministic (DeterministicParsing(..))
@@ -39,12 +39,22 @@ type ParseResults s = Either (ParseFailure Pos s)
 -- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset.
 data ParseFailure pos s = ParseFailure pos [Expected s] deriving (Eq, Functor, Show)
 
+-- | A position in the input is represented as the length of its remainder.
+type Pos = Down Int
+
 data Expected s = Expected String -- ^ a readable description of the expected input
                 | ExpectedInput s -- ^ a literal piece of expected input
                 deriving (Functor, Eq, Ord, Read, Show)
 
--- | Opaque type representing a position in the input.
-newtype Pos = Pos (Down Int) deriving (Eq, Ord, Num, Position, Show)
+instance Ord pos => Semigroup (ParseFailure pos s) where
+   ParseFailure pos1 exp1 <> ParseFailure pos2 exp2 = ParseFailure pos' exp'
+      where (pos', exp') | pos1 > pos2 = (pos1, exp1)
+                         | pos1 < pos2 = (pos2, exp2)
+                         | otherwise = (pos1, exp1 <> exp2)
+
+instance Monoid (ParseFailure Pos s) where
+   mempty = ParseFailure (Down maxBound) []
+   mappend = (<>)
 
 -- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of
 -- alternative results.

@@ -89,9 +89,9 @@ some input.
 -- >>> parseComplete grammar "1+2*3"
 -- Arithmetic{
 --   sum=Compose (Right [7]),
---   product=Compose (Left (ParseFailure (Pos (Down 4)) [Expected "end of input"])),
---   factor=Compose (Left (ParseFailure (Pos (Down 4)) [Expected "end of input"])),
---   number=Compose (Left (ParseFailure (Pos (Down 4)) [Expected "end of input"]))}
+--   product=Compose (Left (ParseFailure (Down 4) [Expected "end of input"])),
+--   factor=Compose (Left (ParseFailure (Down 4) [Expected "end of input"])),
+--   number=Compose (Left (ParseFailure (Down 4) [Expected "end of input"]))}
 -- >>> parsePrefix grammar "1+2*3 apples"
 -- Arithmetic{
 --   sum=Compose (Compose (Right [("+2*3 apples",1),("*3 apples",3),(" apples",7)])),
