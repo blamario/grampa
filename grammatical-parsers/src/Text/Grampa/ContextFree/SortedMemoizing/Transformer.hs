@@ -174,7 +174,7 @@ instance (Applicative m, Eq s, LeftReductive s, FactorialMonoid s) => GrammarPar
                rs' = sync <$> rs
                -- in left-recursive grammars the stored input remainder may be wrong, so revert to the complete input
                sync (ResultsOfLengthT (ROL 0 _remainder r)) = ResultsOfLengthT (ROL 0 input r)
-               sync rs = rs
+               sync rols = rols
       p _ = ResultList mempty (FailureInfo 0 [Expected "NonTerminal at endOfInput"])
    {-# INLINE nonTerminal #-}
 
@@ -239,10 +239,10 @@ instance (Applicative m, LeftReductive s, FactorialMonoid s) => InputParsing (Pa
 
 instance InputParsing (ParserT m g s)  => TraceableParsing (ParserT m g s) where
    traceInput description (Parser p) = Parser q
-      where q rest@((s, _):_) = case traceWith "Parsing " (p rest)
-                                of rl@(ResultList [] _) -> traceWith "Failed " rl
-                                   rl -> traceWith "Parsed " rl
-               where traceWith prefix = trace (prefix <> description s)
+      where q rest = case traceWith "Parsing " (p rest)
+                     of rl@(ResultList [] _) -> traceWith "Failed " rl
+                        rl -> traceWith "Parsed " rl
+               where traceWith prefix = trace (prefix <> case rest of ((s, _):_) -> description s; [] -> "EOF")
 
 instance (Applicative m, Show s, TextualMonoid s) => InputCharParsing (ParserT m g s) where
    satisfyCharInput predicate = Parser p
