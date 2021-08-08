@@ -37,8 +37,9 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          AmbiguousParsing(..), ConsumedInputParsing(..), DeterministicParsing(..),
-                          TailsParsing(parseTails, parseAllTails), ParseFailure(..), Pos)
+                          AmbiguousParsing(..), CommittedParsing(..), ConsumedInputParsing(..),
+                          DeterministicParsing(..),
+                          TailsParsing(parseTails, parseAllTails), ParseResults(..), ParseFailure(..), Pos)
 import Text.Grampa.Internal (ResultList(..), FallibleResults(..),
                              AmbiguousAlternative(ambiguousOr), AmbiguityDecidable(..), AmbiguityWitness(..),
                              TraceableParsing(..))
@@ -519,6 +520,36 @@ instance (InputParsing (Fixed p g s), DeterministicParsing (p g s)) => Determini
       where d0 = () <$ direct0 p <<|> notFollowedBy (void $ direct p)
             d1 = direct1 p *> mcp
             mcp = skipAll (complete p)
+
+instance (CommittedParsing (p g s), CommittedResults (p g s) ~ ParseResults s) => CommittedParsing (Fixed p g s) where
+   type CommittedResults (Fixed p g s) = ParseResults s
+   commit (PositiveDirectParser p) = PositiveDirectParser (commit p)
+   commit p@DirectParser{} = DirectParser{
+      complete = commit (complete p),
+      direct0= commit (direct0 p),
+      direct1= commit (direct1 p)}
+   commit p@Parser{} = Parser{
+      complete= commit (complete p),
+      direct= commit (direct p),
+      direct0= commit (direct0 p),
+      direct1= commit (direct1 p),
+      indirect= commit (indirect p),
+      isAmbiguous= Nothing,
+      cyclicDescendants= cyclicDescendants p}
+   admit :: Fixed p g s (CommittedResults (Fixed p g s) a) -> Fixed p g s a
+   admit (PositiveDirectParser p) = PositiveDirectParser (admit p)
+   admit p@DirectParser{} = DirectParser{
+      complete = admit (complete p),
+      direct0= admit (direct0 p),
+      direct1= admit (direct1 p)}
+   admit p@Parser{} = Parser{
+      complete= admit (complete p),
+      direct= admit (direct p),
+      direct0= admit (direct0 p),
+      direct1= admit (direct1 p),
+      indirect= admit (indirect p),
+      isAmbiguous= Nothing,
+      cyclicDescendants= cyclicDescendants p}
 
 instance (LookAheadParsing (p g s), InputParsing (Fixed p g s)) => LookAheadParsing (Fixed p g s) where
    lookAhead p@PositiveDirectParser{} = DirectParser{

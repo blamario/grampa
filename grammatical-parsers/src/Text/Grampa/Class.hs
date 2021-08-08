@@ -4,7 +4,7 @@
              UndecidableInstances #-}
 module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
                           AmbiguousParsing(..), DeterministicParsing(..), InputParsing(..), InputCharParsing(..),
-                          ConsumedInputParsing(..), LexicalParsing(..), TailsParsing(..),
+                          CommittedParsing(..), ConsumedInputParsing(..), LexicalParsing(..), TailsParsing(..),
                           ParseResults, ParseFailure(..), Expected(..), Pos,
                           Ambiguous(..), completeParser) where
 
@@ -147,6 +147,14 @@ class Alternative m => AmbiguousParsing m where
    -- | Collect all alternative parses of the same length into a 'NonEmpty' list of results.
    ambiguous :: m a -> m (Ambiguous a)
 
+-- | Parsers that can temporarily package and delay failure, in a way dual to Parsec's @try@ combinator.
+class Alternative m => CommittedParsing m where
+   type CommittedResults m :: * -> *
+   -- | Commits the argument parser to success.
+   commit :: m a -> m (CommittedResults m a)
+   -- | Admits a possible defeat of the argument parser.
+   admit :: m (CommittedResults m a) -> m a
+  
 -- | If a grammar is 'Lexical', its parsers can instantiate the 'TokenParsing' class.
 class (DeterministicParsing m, InputCharParsing m, TokenParsing m) => LexicalParsing m where
    -- | Always succeeds, consuming all white space and comments

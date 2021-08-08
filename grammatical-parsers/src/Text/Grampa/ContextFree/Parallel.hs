@@ -33,7 +33,8 @@ import Text.Parser.Input.Position (fromEnd)
 
 import qualified Rank2
 
-import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
+import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
+                          InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), Expected(..), Pos)
 import Text.Grampa.Internal (BinTree(..), noFailure, TraceableParsing(..))
 
@@ -244,6 +245,19 @@ instance FactorialMonoid s => DeterministicParsing (Parser g s) where
                of ResultList EmptyTree _failure -> ResultList (Leaf $ ResultInfo rest ()) mempty
                   ResultList rl _failure -> foldMap continue rl
          where continue (ResultInfo rest' _) = q rest'
+
+instance FactorialMonoid s => CommittedParsing (Parser g s) where
+   type CommittedResults (Parser g s) = ParseResults s
+   commit (Parser p) = Parser q
+      where q rest = case p rest
+                     of ResultList EmptyTree failure -> ResultList (Leaf $ ResultInfo rest $ Left failure) mempty
+                        ResultList rl failure -> ResultList (fmap Right <$> rl) failure
+   admit (Parser p) = Parser q
+      where q rest = case p rest
+                     of ResultList EmptyTree failure -> ResultList EmptyTree failure
+                        ResultList rl failure -> foldMap expose rl <> ResultList EmptyTree failure
+            expose (ResultInfo _ (Left failure)) = ResultList EmptyTree failure
+            expose (ResultInfo rest (Right r)) = ResultList (Leaf $ ResultInfo rest r) mempty
 
 instance FactorialMonoid s => LookAheadParsing (Parser g s) where
    lookAhead (Parser p) = Parser (\input-> rewind input (p input))

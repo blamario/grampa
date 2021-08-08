@@ -31,7 +31,8 @@ import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Input.Position (fromEnd)
-import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
+import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
+                          InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), Expected(..), Pos)
 import Text.Grampa.Internal (TraceableParsing(..))
 
@@ -136,6 +137,20 @@ instance FactorialMonoid s => Parsing (Parser g s) where
             q input success failure = p input success' failure'
                where success' _ _ = failure (ParseFailure (fromEnd $ Factorial.length input) [Expected "notFollowedBy"])
                      failure' _ = success () input
+
+instance FactorialMonoid s => CommittedParsing (Parser g s) where
+   type CommittedResults (Parser g s) = ParseResults s
+   commit :: forall a. Parser g s a -> Parser g s (ParseResults s a)
+   commit (Parser p) = Parser q
+      where q :: forall x. s -> (ParseResults s a -> s -> x) -> (ParseFailure Pos s -> x) -> x
+            q input success failure = p input (success . Right) failure'
+               where failure' f = success (Left f) input
+   admit :: forall a. Parser g s (ParseResults s a) -> Parser g s a
+   admit (Parser p) = Parser q
+      where q :: forall x. s -> (a -> s -> x) -> (ParseFailure Pos s -> x) -> x
+            q input success failure = p input success' failure
+               where success' (Left f) _rest = failure f
+                     success' (Right a) rest = success a rest
 
 -- | Every PEG parser is deterministic all the time.
 instance FactorialMonoid s => DeterministicParsing (Parser g s) where

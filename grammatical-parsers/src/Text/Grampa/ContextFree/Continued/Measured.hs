@@ -31,7 +31,8 @@ import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
 import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Input.Position (fromEnd)
-import Text.Grampa.Class (DeterministicParsing(..), InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
+import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
+                          InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
                           MultiParsing(..), ParseResults, ParseFailure(..), Expected(..), Pos)
 import Text.Grampa.Internal (TraceableParsing(..))
 
@@ -145,6 +146,21 @@ instance Factorial.FactorialMonoid s => DeterministicParsing (Parser g s) where
                failure' f1 = q rest success (\f2 -> failure (f1 <> f2))
    takeSome p = (:) <$> p <*> takeMany p
    takeMany p = takeSome p <<|> pure []
+
+instance FactorialMonoid s => CommittedParsing (Parser g s) where
+   type CommittedResults (Parser g s) = ParseResults s
+   commit :: forall a. Parser g s a -> Parser g s (ParseResults s a)
+   commit (Parser p) = Parser q
+      where q :: forall x. s -> (ParseResults s a -> Int -> s -> (ParseFailure Pos s -> x) -> x)
+              -> (ParseFailure Pos s -> x) -> x
+            q input success failure = p input (success . Right) failure'
+               where failure' f = success (Left f) 0 input failure
+   admit :: forall a. Parser g s (ParseResults s a) -> Parser g s a
+   admit (Parser p) = Parser q
+      where q :: forall x. s -> (a -> Int -> s -> (ParseFailure Pos s -> x) -> x) -> (ParseFailure Pos s -> x) -> x
+            q input success failure = p input success' failure
+               where success' (Left f) _len _rest = const (failure f)
+                     success' (Right a) len rest = success a len rest
 
 instance Factorial.FactorialMonoid s => LookAheadParsing (Parser g s) where
    lookAhead :: forall a. Parser g s a -> Parser g s a

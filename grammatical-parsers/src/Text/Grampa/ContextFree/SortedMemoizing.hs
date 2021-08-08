@@ -10,9 +10,10 @@ import Control.Monad (Monad(..), MonadPlus(..))
 #if MIN_VERSION_base(4,13,0)
 import Control.Monad (MonadFail(fail))
 #endif
+import Data.Either (partitionEithers)
 import Data.Functor.Compose (Compose(..))
 import Data.List (genericLength)
-import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.List.NonEmpty (NonEmpty((:|)), nonEmpty, toList)
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid, splitPrimePrefix)
@@ -33,7 +34,7 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 import qualified Rank2
 
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          AmbiguousParsing(..), Ambiguous(Ambiguous),
+                          AmbiguousParsing(..), Ambiguous(Ambiguous), CommittedParsing(..),
                           ConsumedInputParsing(..), DeterministicParsing(..),
                           TailsParsing(parseTails, parseAllTails), ParseResults, ParseFailure(..), Expected(..))
 import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), fromResultList, TraceableParsing(..))
@@ -293,6 +294,21 @@ instance AmbiguousParsing (Parser g s) where
       where q rest | ResultList rs failure <- p rest = ResultList (groupByLength <$> rs) failure
             groupByLength (ResultsOfLength l rest rs) = ResultsOfLength l rest (Ambiguous rs :| [])
 
+instance CommittedParsing (Parser g s) where
+   type CommittedResults (Parser g s) = ParseResults s
+   commit (Parser p) = Parser q
+      where q rest = case p rest
+                     of ResultList [] failure -> ResultList [ResultsOfLength 0 rest (Left failure:|[])] mempty
+                        ResultList rl failure -> ResultList (fmap Right <$> rl) failure
+   admit (Parser p) = Parser q
+      where q rest = case p rest
+                     of ResultList [] failure -> ResultList [] failure
+                        ResultList rl failure -> foldMap expose rl <> ResultList [] failure
+            expose (ResultsOfLength len t rs) = case nonEmpty successes of
+               Nothing -> ResultList [] (mconcat failures)
+               Just successes' -> ResultList [ResultsOfLength len t successes'] (mconcat failures)
+               where (failures, successes) = partitionEithers (toList rs)
+        
 -- | Turns a context-free parser into a backtracking PEG parser that consumes the longest possible prefix of the list
 -- of input tails, opposite of 'peg'
 longest :: Parser g s a -> Backtrack.Parser g [(s, g (ResultList g s))] a

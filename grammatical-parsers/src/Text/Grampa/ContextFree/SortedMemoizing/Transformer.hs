@@ -11,6 +11,7 @@ import Control.Monad (MonadFail(fail))
 #endif
 import qualified Control.Monad.Trans.Class as Trans (lift)
 import Control.Monad.Trans.State.Strict (StateT, evalStateT)
+import Data.Either (partitionEithers)
 import Data.Function (on)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Identity (Identity(..))
@@ -36,7 +37,7 @@ import Text.Parser.Input.Position (fromEnd)
 import qualified Rank2
 
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          ConsumedInputParsing(..), DeterministicParsing(..),
+                          ConsumedInputParsing(..), CommittedParsing(..), DeterministicParsing(..),
                           AmbiguousParsing(..), Ambiguous(Ambiguous),
                           TailsParsing(..), ParseResults, ParseFailure(..), Expected(..), Pos)
 import Text.Grampa.Internal (FallibleResults(..), AmbiguousAlternative(..), TraceableParsing(..))
@@ -322,6 +323,22 @@ instance (Applicative m, MonoidNull s) => DeterministicParsing (ParserT m g s) w
                           ResultList rl _failure -> foldMap continue rl
          where continue (ResultsOfLengthT (ROL len' rest' results)) =
                   foldMap (\r-> q (len + len') (effects <* r) rest') results
+
+instance (Applicative m, Traversable m) => CommittedParsing (ParserT m g s) where
+   type CommittedResults (ParserT m g s) = ParseResults s
+   commit (Parser p) = Parser q
+      where q rest = case p rest
+                     of ResultList [] failure -> ResultList [ResultsOfLengthT
+                                                             $ ROL 0 rest (pure (Left failure) :| [])] mempty
+                        ResultList rl failure -> ResultList (mapResults (fmap Right) <$> rl) failure
+   admit (Parser p) = Parser q
+      where q rest = case p rest
+                     of ResultList [] failure -> ResultList [] failure
+                        ResultList rl failure -> foldMap expose rl <> ResultList [] failure
+            expose (ResultsOfLengthT (ROL len t rs)) = case nonEmpty successes of
+               Nothing -> ResultList [] (mconcat failures)
+               Just successes' -> ResultList [ResultsOfLengthT $ ROL len t successes'] (mconcat failures)
+               where (failures, successes) = partitionEithers (sequenceA <$> toList rs)
 
 instance (Applicative m, MonoidNull s) => LookAheadParsing (ParserT m g s) where
    lookAhead (Parser p) = Parser (\input-> rewind input (p input))
