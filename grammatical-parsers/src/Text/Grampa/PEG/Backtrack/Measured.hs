@@ -260,5 +260,5 @@ instance (Cancellative.LeftReductive s, Factorial.FactorialMonoid s) => MultiPar
                                       (Rank2.fmap (<* eof) g)
 
 fromResult :: (Eq s, FactorialMonoid s) => s -> Result g s r -> ParseResults s (s, r)
-fromResult s (NoParse (ParseFailure pos msgs)) = Left (ParseFailure (fromIntegral $ pos - 1) (nub msgs))
+fromResult s (NoParse (ParseFailure pos msgs)) = Left (ParseFailure pos (nub msgs))
 fromResult _ (Parsed _ prefix suffix) = Right (suffix, prefix)

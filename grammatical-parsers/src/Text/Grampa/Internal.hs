@@ -45,7 +45,7 @@ instance AmbiguityDecidable (Ambiguous a) where
    ambiguityWitness = Just (AmbiguityWitness Refl)
 
 fromResultList :: (Eq s, FactorialMonoid s) => s -> ResultList g s r -> ParseResults s [(s, r)]
-fromResultList s (ResultList [] (ParseFailure pos msgs)) = Left (ParseFailure (fromIntegral $ pos - 1) (nub msgs))
+fromResultList s (ResultList [] (ParseFailure pos msgs)) = Left (ParseFailure (pos - 1) (nub msgs))
 fromResultList _ (ResultList rl _failure) = Right (foldMap f rl)
    where f (ResultsOfLength _ ((s, _):_) r) = (,) s <$> toList r
          f (ResultsOfLength _ [] r) = (,) mempty <$> toList r

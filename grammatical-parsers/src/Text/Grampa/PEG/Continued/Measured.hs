@@ -282,4 +282,4 @@ instance (LeftReductive s, FactorialMonoid s) => MultiParsing (Parser g s) where
                                       (Rank2.fmap (<* eof) g)
 
 fromFailure :: (Eq s, FactorialMonoid s) => s -> ParseFailure Pos s -> ParseFailure Pos s
-fromFailure s (ParseFailure pos msgs) = ParseFailure (fromIntegral $ pos - 1) (nub msgs)
+fromFailure s (ParseFailure pos msgs) = ParseFailure pos (nub msgs)
