@@ -849,7 +849,7 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                            combine (Const True) results = Const (hasSuccess results)
                            combineFailures _ (Const False) _ = Const False
                            combineFailures (ParseFailure pos expected) (Const True) rl =
-                              Const (pos > pos' || pos == pos' && any (`notElem` expected) expected')
+                              Const (pos < pos' || pos == pos' && any (`notElem` expected) expected')
                               where ParseFailure pos' expected' = failureOf rl
                   choiceWhile (Const (Just DynamicDependencies)) t t'
                      | getAny (Rank2.foldMap (Any . hasSuccess) marginal) = t'
