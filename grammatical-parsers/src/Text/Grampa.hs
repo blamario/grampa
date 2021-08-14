@@ -5,12 +5,13 @@ module Text.Grampa (
    -- * Parsing methods
    failureDescription, simply,
    -- * Types
-   Grammar, GrammarBuilder, ParseResults, ParseFailure(..), Expected(..), Ambiguous(..), Position, Pos,
+   Grammar, GrammarBuilder, ParseResults, ParseFailure(..), Expected(..), Ambiguous(..), Pos,
    -- * Parser combinators and primitives
-   DeterministicParsing(..), AmbiguousParsing(..),
+   DeterministicParsing(..), AmbiguousParsing(..), CommittedParsing(..),
    InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
    MultiParsing(..), GrammarParsing(..),
    TokenParsing(..), LexicalParsing(..),
+   Position(..),
    module Text.Parser.Char,
    module Text.Parser.Combinators,
    module Text.Parser.LookAhead,
@@ -32,7 +33,8 @@ import Text.Grampa.Combinators (concatMany, concatSome)
 import qualified Rank2
 import Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
                           InputParsing(..), InputCharParsing(..),
-                          ConsumedInputParsing(..), DeterministicParsing(..), LexicalParsing(..),
+                          ConsumedInputParsing(..), LexicalParsing(..),
+                          CommittedParsing(..), DeterministicParsing(..),
                           AmbiguousParsing(..), Ambiguous(..),
                           ParseResults, ParseFailure(..), Expected(..), Pos)
 

@@ -147,7 +147,21 @@ class Alternative m => AmbiguousParsing m where
    -- | Collect all alternative parses of the same length into a 'NonEmpty' list of results.
    ambiguous :: m a -> m (Ambiguous a)
 
--- | Parsers that can temporarily package and delay failure, in a way dual to Parsec's @try@ combinator.
+-- | Parsers that can temporarily package and delay failure, in a way dual to Parsec's @try@ combinator. Where Parsec
+-- would require something like
+--
+-- > alternatives  =  try intro1 *> expected1
+-- >              <|> try intro2 *> expected2
+-- >              <|> fallback
+--
+-- you can instead say
+--
+-- > alternatives = admit  $  intro1 *> commit expected1
+-- >                      <|> intro2 *> commit expected2
+-- >                      <|> commit fallback
+--
+-- A parsing failure inside an @intro@ parser leaves the other alternatives open, a failure inside an @expected@
+-- parser bubbles up and out of the whole @admit@ block.
 class Alternative m => CommittedParsing m where
    type CommittedResults m :: * -> *
    -- | Commits the argument parser to success.
