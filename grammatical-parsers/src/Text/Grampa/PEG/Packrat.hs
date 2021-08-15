@@ -10,10 +10,11 @@ import Control.Monad (MonadFail(fail))
 
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
-import Data.List (genericLength, nub)
+import Data.List (nub)
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Factorial(FactorialMonoid)
 import Data.Monoid.Textual(TextualMonoid)
+import Data.Ord (Down(Down))
 import Data.Semigroup (Semigroup(..))
 import Data.Semigroup.Cancellative (LeftReductive(isPrefixOf))
 import Data.String (fromString)
@@ -70,7 +71,7 @@ instance Applicative (Parser g s) where
                   NoParse failure -> NoParse failure
 
 instance Alternative (Parser g s) where
-   empty = Parser (\rest-> NoParse $ ParseFailure (genericLength rest) [Expected "empty"])
+   empty = Parser (\rest-> NoParse $ ParseFailure (Down $ length rest) [Expected "empty"])
    Parser p <|> Parser q = Parser r where
       r rest = case p rest
                of x@Parsed{} -> x
@@ -90,7 +91,7 @@ instance Monad (Parser g s) where
 #if MIN_VERSION_base(4,13,0)
 instance MonadFail (Parser g s) where
 #endif
-   fail msg = Parser (\rest-> NoParse $ ParseFailure (genericLength rest) [Expected msg])
+   fail msg = Parser (\rest-> NoParse $ ParseFailure (Down $ length rest) [Expected msg])
 
 instance MonadPlus (Parser g s) where
    mzero = empty
@@ -106,20 +107,20 @@ instance Monoid x => Monoid (Parser g s x) where
 instance FactorialMonoid s => Parsing (Parser g s) where
    try (Parser p) = Parser q
       where q rest = rewindFailure (p rest)
-               where rewindFailure (NoParse (ParseFailure _pos _msgs)) = NoParse (ParseFailure (genericLength rest) [])
+               where rewindFailure (NoParse (ParseFailure _pos _msgs)) = NoParse (ParseFailure (Down $ length rest) [])
                      rewindFailure parsed = parsed
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
                where replaceFailure (NoParse (ParseFailure pos msgs)) =
-                        NoParse (ParseFailure pos $ if pos == genericLength rest then [Expected msg] else msgs)
+                        NoParse (ParseFailure pos $ if pos == Down (length rest) then [Expected msg] else msgs)
                      replaceFailure parsed = parsed
    eof = Parser p
       where p rest@((s, _) : _)
-               | not (Null.null s) = NoParse (ParseFailure (genericLength rest) [Expected "end of input"])
+               | not (Null.null s) = NoParse (ParseFailure (Down $ length rest) [Expected "end of input"])
             p rest = Parsed () rest
-   unexpected msg = Parser (\t-> NoParse $ ParseFailure (genericLength t) [Expected msg])
+   unexpected msg = Parser (\t-> NoParse $ ParseFailure (Down $ length t) [Expected msg])
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
-      where rewind t Parsed{} = NoParse (ParseFailure (genericLength t) [Expected "notFollowedBy"])
+      where rewind t Parsed{} = NoParse (ParseFailure (Down $ length t) [Expected "notFollowedBy"])
             rewind t NoParse{} = Parsed () t
 
 instance FactorialMonoid s => CommittedParsing (Parser g s) where
@@ -151,7 +152,7 @@ instance (Show s, Textual.TextualMonoid s) => CharParsing (Parser g s) where
       where p rest@((s, _):t) =
                case Textual.characterPrefix s
                of Just first | predicate first -> Parsed first t
-                  _ -> NoParse (ParseFailure (genericLength rest) [Expected "Char.satisfy"])
+                  _ -> NoParse (ParseFailure (Down $ length rest) [Expected "Char.satisfy"])
             p [] = NoParse (ParseFailure 0 [Expected "Char.satisfy"])
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
@@ -176,18 +177,18 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    anyToken = Parser p
       where p rest@((s, _):t) = case Factorial.splitPrimePrefix s
                                 of Just (first, _) -> Parsed first t
-                                   _ -> NoParse (ParseFailure (genericLength rest) [Expected "anyToken"])
+                                   _ -> NoParse (ParseFailure (Down $ length rest) [Expected "anyToken"])
             p [] = NoParse (ParseFailure 0 [Expected "anyToken"])
    satisfy predicate = Parser p
       where p rest@((s, _):t) =
                case Factorial.splitPrimePrefix s
                of Just (first, _) | predicate first -> Parsed first t
-                  _ -> NoParse (ParseFailure (genericLength rest) [Expected "satisfy"])
+                  _ -> NoParse (ParseFailure (Down $ length rest) [Expected "satisfy"])
             p [] = NoParse (ParseFailure 0 [Expected "satisfy"])
    notSatisfy predicate = Parser p
       where p rest@((s, _):_)
                | Just (first, _) <- Factorial.splitPrimePrefix s, 
-                 predicate first = NoParse (ParseFailure (genericLength rest) [Expected "notSatisfy"])
+                 predicate first = NoParse (ParseFailure (Down $ length rest) [Expected "notSatisfy"])
             p rest = Parsed () rest
    scan s0 f = Parser (p s0)
       where p s ((i, _):t) = Parsed prefix (drop (Factorial.length prefix - 1) t)
@@ -201,16 +202,16 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
       where p rest@((s, _) : _)
                | x <- Factorial.take n s, Factorial.length x == n = Parsed x (drop n rest)
             p [] | n == 0 = Parsed mempty []
-            p rest = NoParse (ParseFailure (genericLength rest) [Expected $ "take " ++ show n])
+            p rest = NoParse (ParseFailure (Down $ length rest) [Expected $ "take " ++ show n])
    takeWhile1 predicate = Parser p
       where p rest@((s, _) : _)
                | x <- Factorial.takeWhile predicate s, not (Null.null x) =
                     Parsed x (Factorial.drop (Factorial.length x) rest)
-            p rest = NoParse (ParseFailure (genericLength rest) [Expected "takeWhile1"])
+            p rest = NoParse (ParseFailure (Down $ length rest) [Expected "takeWhile1"])
    string s = Parser p where
       p rest@((s', _) : _)
          | s `isPrefixOf` s' = Parsed s (Factorial.drop (Factorial.length s) rest)
-      p rest = NoParse (ParseFailure (genericLength rest) [ExpectedInput s])
+      p rest = NoParse (ParseFailure (Down $ length rest) [ExpectedInput s])
 
 instance (InputParsing (Parser g s), Monoid s)  => TraceableParsing (Parser g s) where
    traceInput description (Parser p) = Parser q
@@ -226,12 +227,12 @@ instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
       where p rest@((s, _):t) =
                case Textual.characterPrefix s
                of Just first | predicate first -> Parsed (Factorial.primePrefix s) t
-                  _ -> NoParse (ParseFailure (genericLength rest) [Expected "satisfyCharInput"])
+                  _ -> NoParse (ParseFailure (Down $ length rest) [Expected "satisfyCharInput"])
             p [] = NoParse (ParseFailure 0 [Expected "satisfyCharInput"])
    notSatisfyChar predicate = Parser p
       where p rest@((s, _):_)
                | Just first <- Textual.characterPrefix s, 
-                 predicate first = NoParse (ParseFailure (genericLength rest) [Expected "notSatisfyChar"])
+                 predicate first = NoParse (ParseFailure (Down $ length rest) [Expected "notSatisfyChar"])
             p rest = Parsed () rest
    scanChars s0 f = Parser (p s0)
       where p s ((i, _):t) = Parsed prefix (drop (Factorial.length prefix - 1) t)
@@ -246,7 +247,7 @@ instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
       where p rest@((s, _) : _)
                | x <- Textual.takeWhile_ False predicate s, not (Null.null x) =
                     Parsed x (drop (Factorial.length x) rest)
-            p rest = NoParse (ParseFailure (genericLength rest) [Expected "takeCharsWhile1"])
+            p rest = NoParse (ParseFailure (Down $ length rest) [Expected "takeCharsWhile1"])
 
 -- | Packrat parser
 --
