@@ -2,18 +2,24 @@
 -- rank-2 field types.
 {-# LANGUAGE FlexibleContexts, KindSignatures, OverloadedStrings, RankNTypes, ScopedTypeVariables #-}
 module Text.Grampa (
-   -- * Parsing methods
+   -- * Applying parsers
    failureDescription, simply,
    -- * Types
    Grammar, GrammarBuilder, ParseResults, ParseFailure(..), Expected(..), Ambiguous(..), Position,
-   -- * Parser combinators and primitives
+   -- * Classes and combinators
+   -- ** Parsing classes
    DeterministicParsing(..), AmbiguousParsing(..),
-   InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
+   LexicalParsing(..),
+   -- ** Grammars
    MultiParsing(..), GrammarParsing(..),
-   TokenParsing(..), LexicalParsing(..),
+   -- ** From the [input-parsers](http://hackage.haskell.org/package/input-parsers) library
+   InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
+   -- ** From the [parsers](http://hackage.haskell.org/package/parsers) library
    module Text.Parser.Char,
    module Text.Parser.Combinators,
    module Text.Parser.LookAhead,
+   TokenParsing(..),
+   -- ** Other combinators
    module Text.Grampa.Combinators)
 where
 
@@ -47,7 +53,9 @@ type GrammarBuilder (g  :: (* -> *) -> *)
    = g (p g' s) -> g (p g' s)
 
 -- | Apply the given parsing function (typically `parseComplete` or `parsePrefix`) to the given grammar-agnostic
--- parser and its input.
+-- parser and its input. A typical invocation might be
+--
+-- > getCompose $ simply parsePrefix myParser myInput
 simply :: (Rank2.Only r (p (Rank2.Only r) s) -> s -> Rank2.Only r f) -> p (Rank2.Only r) s r -> s -> f r
 simply parseGrammar p input = Rank2.fromOnly (parseGrammar (Rank2.Only p) input)
 
