@@ -5,7 +5,7 @@
 module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
                           AmbiguousParsing(..), DeterministicParsing(..), InputParsing(..), InputCharParsing(..),
                           CommittedParsing(..), ConsumedInputParsing(..), LexicalParsing(..), TailsParsing(..),
-                          ParseResults, ParseFailure(..), Expected(..), Pos,
+                          ParseResults, ParseFailure(..), FailureDescription(..), Pos,
                           Ambiguous(..), completeParser) where
 
 import Control.Applicative (Alternative(empty), liftA2)
@@ -37,23 +37,28 @@ import Prelude hiding (takeWhile)
 type ParseResults s = Either (ParseFailure Pos s)
 
 -- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset.
-data ParseFailure pos s = ParseFailure pos [Expected s] deriving (Eq, Functor, Show)
+data ParseFailure pos s =
+   ParseFailure pos
+                [FailureDescription s]  -- ^ expected input alternatives
+                [FailureDescription s]  -- ^ erroneous input descriptions
+   deriving (Eq, Functor, Show)
 
 -- | A position in the input is represented as the length of its remainder.
 type Pos = Down Int
 
-data Expected s = Expected String -- ^ a readable description of the expected input
-                | ExpectedInput s -- ^ a literal piece of expected input
-                deriving (Functor, Eq, Ord, Read, Show)
+-- | An expected or erroneous input can be described using 'String' or using the input type
+data FailureDescription s = StaticDescription String   -- ^ a readable description of the expected input
+                          | LiteralDescription s       -- ^ a literal piece of expected input
+                            deriving (Functor, Eq, Ord, Read, Show)
 
 instance Ord pos => Semigroup (ParseFailure pos s) where
-   ParseFailure pos1 exp1 <> ParseFailure pos2 exp2 = ParseFailure pos' exp'
-      where (pos', exp') | pos1 > pos2 = (pos1, exp1)
-                         | pos1 < pos2 = (pos2, exp2)
-                         | otherwise = (pos1, exp1 <> exp2)
+   ParseFailure pos1 exp1 err1 <> ParseFailure pos2 exp2 err2 = ParseFailure pos' exp' err'
+      where (pos', exp', err') | pos1 > pos2 = (pos1, exp1, err1)
+                               | pos1 < pos2 = (pos2, exp2, err2)
+                               | otherwise = (pos1, exp1 <> exp2, err1 <> err2)
 
 instance Monoid (ParseFailure Pos s) where
-   mempty = ParseFailure (Down maxBound) []
+   mempty = ParseFailure (Down maxBound) [] []
    mappend = (<>)
 
 -- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of
@@ -93,7 +98,7 @@ completeParser :: MonoidNull s => Compose (ParseResults s) (Compose [] ((,) s)) 
 completeParser (Compose (Left failure)) = Compose (Left failure)
 completeParser (Compose (Right (Compose results))) =
    case filter (Null.null . fst) results
-   of [] -> Compose (Left $ ParseFailure 0 [Expected "complete parse"])
+   of [] -> Compose (Left $ ParseFailure 0 [StaticDescription "a complete parse"] [])
       completeResults -> Compose (Right $ snd <$> completeResults)
 
 -- | Choose one of the instances of this class to parse with.

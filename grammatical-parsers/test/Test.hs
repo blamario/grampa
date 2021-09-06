@@ -142,9 +142,9 @@ tests = testGroup "Grampa" [
                testProperty "name list" $
                  start (parseComplete nameListGrammar "foo, bar") == Compose (Right ["foo bar"]),
                testProperty "filtered" $
-                 start (parseComplete gf "") === Compose (Left (ParseFailure 0 [ExpectedInput "1"])),
+                 start (parseComplete gf "") === Compose (Left (ParseFailure 0 [LiteralDescription "1"] [])),
                testProperty "monadic" $
-                 start (parseComplete gm "") === Compose (Left (ParseFailure 0 [Expected "empty"])),
+                 start (parseComplete gm "") === Compose (Left (ParseFailure 0 [] [StaticDescription "empty"])),
                testProperty "null monadic" $
                  start (parseComplete gn "23") === Compose (Right ["23"])
               ],
@@ -184,7 +184,7 @@ tests = testGroup "Grampa" [
                                                      :| [Test.Ambiguous.Xy2
                                                          (pure $ Test.Ambiguous.Xy1 "x" "") "y"]))]))],
            testGroup "primitives"
-             [testProperty "anyToken mempty" $ simpleParse anyToken "" == Left (ParseFailure 0 [Expected "anyToken"]),
+             [testProperty "anyToken mempty" $ simpleParse anyToken "" == Left (expected 0 "anyToken"),
               testProperty "anyToken list" $
                 \(x::Word8) xs-> simpleParse anyToken (x:xs) == Right [(xs, [x])],
               testProperty "satisfy success" $ \bools->
@@ -194,11 +194,11 @@ tests = testGroup "Grampa" [
               testProperty "string success" $ \(xs::[Word8]) ys->
                    simpleParse (string xs) (xs <> ys) == Right [(ys, xs)],
               testProperty "string" $ \(xs::[Word8]) ys-> not (xs `isPrefixOf` ys)
-                ==> simpleParse (string xs) ys === Left (ParseFailure (fromIntegral $ length ys) [ExpectedInput xs]),
+                ==> simpleParse (string xs) ys
+                    === Left (ParseFailure (fromIntegral $ length ys) [LiteralDescription xs] []),
               testProperty "eof mempty" $ simpleParse eof "" === Right [("", ())],
               testProperty "eof failure" $ \s->
-                   s /= "" ==> simpleParse eof s
-                               === Left (ParseFailure (fromIntegral $ length s) [Expected "end of input"])],
+                   s /= "" ==> simpleParse eof s === Left (expected (fromIntegral $ length s) "end of input")],
            testGroup "lookAhead"
              [testProperty "lookAhead" lookAheadP,
               testProperty "lookAhead p *> p" lookAheadConsumeP,
@@ -274,7 +274,7 @@ instance (Show s, MonoidNull s, Monoid r) => Monoid (DescribedParser s r) where
    DescribedParser d1 p1 `mappend` DescribedParser d2 p2 = DescribedParser (d1 ++ " <> " ++ d2) (mappend p1 p2)
 
 instance EqProp (ParseFailure Pos s) where
-   ParseFailure pos1 msg1 =-= ParseFailure pos2 msg2 = property (pos1 == pos2)
+   ParseFailure pos1 expected1 erroneous1 =-= ParseFailure pos2 expected2 erroneous2 = property (pos1 == pos2)
 
 instance (Ord r, Show r, EqProp r, Eq s, EqProp s, Show s, FactorialMonoid s, LeftReductive s, Arbitrary s) =>
          EqProp (Parser (Rank2.Only r) s r) where
@@ -372,6 +372,9 @@ binary :: String
        -> Gen (DescribedParser s a)
 binary nm op = liftA2 (\(DescribedParser d1 p1) (DescribedParser d2 p2)-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
 
+expected :: Pos -> String -> ParseFailure Pos s
+expected pos msg = ParseFailure pos [StaticDescription msg] []
+
 --instance {-# OVERLAPS #-} (Ord s, Arbitrary s) => Arbitrary (s -> Bool) where
 --   arbitrary = elements [(<=), const False]
 
@@ -382,3 +385,5 @@ instance EqProp Word64 where
    a =-= b = property (a == b)
 
 results = either (const []) id
+
+

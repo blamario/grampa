@@ -4,7 +4,7 @@
 module Text.Grampa.Internal (BinTree(..), ResultList(..), ResultsOfLength(..), FallibleResults(..),
                              AmbiguousAlternative(..), AmbiguityDecidable(..), AmbiguityWitness(..),
                              TraceableParsing(..),
-                             fromResultList, noFailure) where
+                             fromResultList, noFailure, expected, erroneous) where
 
 import Control.Applicative (Applicative(..), Alternative(..))
 import Data.Foldable (toList)
@@ -19,7 +19,7 @@ import Witherable (Filterable(mapMaybe))
 
 import Data.Monoid.Factorial (FactorialMonoid, length)
 
-import Text.Grampa.Class (Ambiguous(..), Expected(..), ParseFailure(..), ParseResults, InputParsing(..), Pos)
+import Text.Grampa.Class (Ambiguous(..), FailureDescription(..), ParseFailure(..), ParseResults, InputParsing(..), Pos)
 
 import Prelude hiding (length, showList)
 
@@ -45,14 +45,21 @@ instance AmbiguityDecidable (Ambiguous a) where
    ambiguityWitness = Just (AmbiguityWitness Refl)
 
 fromResultList :: (Eq s, FactorialMonoid s) => s -> ResultList g s r -> ParseResults s [(s, r)]
-fromResultList s (ResultList [] (ParseFailure pos msgs)) = Left (ParseFailure (pos - 1) (nub msgs))
+fromResultList s (ResultList [] (ParseFailure pos expected erroneous)) =
+   Left (ParseFailure (pos - 1) (nub expected) (nub erroneous))
 fromResultList _ (ResultList rl _failure) = Right (foldMap f rl)
    where f (ResultsOfLength _ ((s, _):_) r) = (,) s <$> toList r
          f (ResultsOfLength _ [] r) = (,) mempty <$> toList r
 {-# INLINABLE fromResultList #-}
 
 noFailure :: ParseFailure Pos s
-noFailure = ParseFailure maxBound []
+noFailure = ParseFailure maxBound [] []
+
+expected :: Pos -> String -> ParseFailure Pos s
+expected pos msg = ParseFailure pos [StaticDescription msg] []
+
+erroneous :: Pos -> String -> ParseFailure Pos s
+erroneous pos msg = ParseFailure pos [] [StaticDescription msg]
 
 instance (Show s, Show r) => Show (ResultList g s r) where
    show (ResultList l f) = "ResultList (" ++ shows l (") (" ++ shows f ")")
