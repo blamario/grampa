@@ -25,6 +25,8 @@ where
 
 import Data.List (intersperse, nub, sort)
 import Data.Monoid ((<>))
+import Data.Monoid.Factorial (drop)
+import Data.Monoid.Null (null)
 import Data.Monoid.Textual (TextualMonoid)
 import Data.String (IsString(fromString))
 import Text.Parser.Char (CharParsing(char, notChar, anyChar))
@@ -42,6 +44,8 @@ import Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
                           CommittedParsing(..), DeterministicParsing(..),
                           AmbiguousParsing(..), Ambiguous(..),
                           ParseResults, ParseFailure(..), FailureDescription(..), Pos)
+
+import Prelude hiding (drop, null)
 
 -- | A type synonym for a fixed grammar record type @g@ with a given parser type @p@ on input streams of type @s@
 type Grammar (g  :: (* -> *) -> *) p s = g (p g s)
@@ -66,14 +70,18 @@ simply parseGrammar p input = Rank2.fromOnly (parseGrammar (Rank2.Only p) input)
 failureDescription :: forall s pos. (Ord s, TextualMonoid s, Position pos) => s -> ParseFailure pos s -> Int -> s
 failureDescription input (ParseFailure pos expected erroneous) contextLineCount =
    Position.context input pos contextLineCount
-   <> "expected " <> oxfordComma (fromExpected <$> nub (sort expected))
-   where oxfordComma :: [s] -> s
-         oxfordComma [] = ""
-         oxfordComma [x] = x
-         oxfordComma [x, y] = x <> " or " <> y
-         oxfordComma (x:y:rest) = mconcat (intersperse ", " (x : y : onLast ("or " <>) rest))
+   <> mconcat
+      (intersperse ", " $ filter (not . null)
+       [onNonEmpty ("expected " <>) $ oxfordComma " or " (fromDescription <$> nub (sort expected)),
+        oxfordComma " and " (fromDescription <$> nub (sort erroneous))])
+   where oxfordComma :: s -> [s] -> s
+         oxfordComma _ [] = ""
+         oxfordComma _ [x] = x
+         oxfordComma conjunction [x, y] = x <> conjunction <> y
+         oxfordComma conjunction (x:y:rest) = mconcat (intersperse ", " (x : y : onLast (drop 1 conjunction <>) rest))
+         onNonEmpty f x = if null x then x else f x
          onLast _ [] = []
          onLast f [x] = [f x]
          onLast f (x:xs) = x : onLast f xs
-         fromExpected (StaticDescription s) = fromString s
-         fromExpected (LiteralDescription s) = "string \"" <> s <> "\""
+         fromDescription (StaticDescription s) = fromString s
+         fromDescription (LiteralDescription s) = "string \"" <> s <> "\""
