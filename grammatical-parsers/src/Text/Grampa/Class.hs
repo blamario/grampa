@@ -38,9 +38,10 @@ type ParseResults s = Either (ParseFailure Pos s)
 
 -- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset.
 data ParseFailure pos s =
-   ParseFailure pos
-                [FailureDescription s]  -- ^ expected input alternatives
-                [FailureDescription s]  -- ^ erroneous input descriptions
+   ParseFailure {failurePosition :: pos,
+                 expectedAlternatives :: [FailureDescription s],  -- ^ expected input alternatives
+                 errorAlternatives ::    [FailureDescription s]   -- ^ erroneous input descriptions
+                }
    deriving (Eq, Functor, Show)
 
 -- | A position in the input is represented as the length of its remainder.
