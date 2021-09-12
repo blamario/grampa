@@ -53,7 +53,7 @@ fromResultList _ (ResultList rl _failure) = Right (foldMap f rl)
 {-# INLINABLE fromResultList #-}
 
 noFailure :: ParseFailure Pos s
-noFailure = ParseFailure maxBound [] []
+noFailure = ParseFailure (Down maxBound) [] []
 
 expected :: Pos -> String -> ParseFailure Pos s
 expected pos msg = ParseFailure pos [StaticDescription msg] []
