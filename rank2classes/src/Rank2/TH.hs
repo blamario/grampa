@@ -421,7 +421,7 @@ genFoldMapField funcName fieldType fieldAccess wrap = do
 
 genTraverseClause :: Con -> Q ([Type], Clause)
 genTraverseClause (NormalC name []) =
-   (,) [] <$> clause [wildP, wildP] (normalB [| pure $(conE name) |]) []
+   (,) [] <$> clause [wildP, conP name []] (normalB [| pure $(conE name) |]) []
 genTraverseClause (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
