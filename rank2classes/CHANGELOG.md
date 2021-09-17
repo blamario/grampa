@@ -1,3 +1,9 @@
+Version 1.4.3
+---------------
+* Fixed links to standard rank-1 classes in Haddock documentation
+* Fixed issue #23 with the `traverse` template generated for sum types with a fieldless constructor
+* Incremented upper dependency bounds
+
 Version 1.4.2
 ---------------
 * Fixed compatibility with GHC 9 - PR by Felix Yan
