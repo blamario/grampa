@@ -162,7 +162,7 @@ instance (Show s, Textual.TextualMonoid s) => CharParsing (Parser g s) where
 instance (Eq s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) where
    type ParserGrammar (Parser g s) = g
    type GrammarFunctor (Parser g s) = Result g s
-   parsingResult = fromResult
+   parsingResult = const fromResult
    nonTerminal f = Parser p where
       p ((_, d) : _) = f d
       p _ = NoParse (expected 0 "NonTerminal at endOfInput")
@@ -260,8 +260,8 @@ instance (LeftReductive s, FactorialMonoid s) => MultiParsing (Parser g s) where
    type ResultFunctor (Parser g s) = ParseResults s
    type GrammarConstraint (Parser g s) g' = (g ~ g', Rank2.Functor g)
    {-# NOINLINE parsePrefix #-}
-   parsePrefix g input = Rank2.fmap (Compose . fromResult input) (snd $ head $ parseGrammarTails g input)
-   parseComplete g input = Rank2.fmap ((snd <$>) . fromResult input)
+   parsePrefix g input = Rank2.fmap (Compose . fromResult) (snd $ head $ parseGrammarTails g input)
+   parseComplete g input = Rank2.fmap ((snd <$>) . fromResult)
                                       (snd $ head $ reparseTails close $ parseGrammarTails g input)
       where close = Rank2.fmap (<* eof) g
 
@@ -276,8 +276,8 @@ reparseTails _ [] = []
 reparseTails final parsed@((s, _):_) = (s, gd):parsed
    where gd = Rank2.fmap (`applyParser` parsed) final
 
-fromResult :: (Eq s, FactorialMonoid s) => s -> Result g s r -> ParseResults s (s, r)
-fromResult s (NoParse (ParseFailure pos positive negative)) =
+fromResult :: (Eq s, Monoid s) => Result g s r -> ParseResults s (s, r)
+fromResult (NoParse (ParseFailure pos positive negative)) =
    Left (ParseFailure (pos - 1) (nub positive) (nub negative))
-fromResult _ (Parsed prefix []) = Right (mempty, prefix)
-fromResult _ (Parsed prefix ((s, _):_)) = Right (s, prefix)
+fromResult (Parsed prefix []) = Right (mempty, prefix)
+fromResult (Parsed prefix ((s, _):_)) = Right (s, prefix)
