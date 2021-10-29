@@ -128,9 +128,9 @@ instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
    Parser p <?> msg  = Parser q
       where q :: forall x. s -> (a -> s -> (ParseFailure Pos s -> x) -> x) -> (ParseFailure Pos s -> x) -> x
             q input success failure = p input success (failure . replaceFailure)
-               where replaceFailure (ParseFailure pos msgs _) =
+               where replaceFailure (ParseFailure pos msgs erroneous) =
                         ParseFailure pos (if pos == fromEnd (Factorial.length input) then [StaticDescription msg]
-                                          else msgs) []
+                                          else msgs) erroneous
 
    eof = Parser p
       where p rest success failure
@@ -284,9 +284,9 @@ instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
 instance (Cancellative.LeftReductive s, Factorial.FactorialMonoid s) => MultiParsing (Parser g s) where
    type ResultFunctor (Parser g s) = ParseResults s
    -- | Returns an input prefix parse paired with the remaining input suffix.
-   parsePrefix g input = Rank2.fmap (Compose . (\p-> applyParser p input (\a rest _-> Right (rest, a)) (Left . fromFailure input))) g
-   parseComplete g input = Rank2.fmap (\p-> applyParser p input (const . const . Right) (Left . fromFailure input))
+   parsePrefix g input = Rank2.fmap (Compose . (\p-> applyParser p input (\a rest _-> Right (rest, a)) (Left . fromFailure))) g
+   parseComplete g input = Rank2.fmap (\p-> applyParser p input (const . const . Right) (Left . fromFailure))
                                       (Rank2.fmap (<* eof) g)
 
-fromFailure :: (Eq s, FactorialMonoid s) => s -> ParseFailure Pos s -> ParseFailure Pos s
-fromFailure s (ParseFailure pos positive negative) = ParseFailure pos (nub positive) (nub negative)
+fromFailure :: (Eq s, FactorialMonoid s) => ParseFailure Pos s -> ParseFailure Pos s
+fromFailure (ParseFailure pos positive negative) = ParseFailure pos (nub positive) (nub negative)

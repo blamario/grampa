@@ -242,9 +242,9 @@ instance MonoidNull s => Parsing (Parser g s) where
                where rewindFailure (ResultList rl _) = ResultList rl (ParseFailure (Down $ length rest) [] [])
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
-               where replaceFailure (ResultList [] (ParseFailure pos msgs _)) =
+               where replaceFailure (ResultList [] (ParseFailure pos msgs erroneous')) =
                         ResultList [] (ParseFailure pos (if pos == Down (length rest) then [StaticDescription msg]
-                                                         else msgs) [])
+                                                         else msgs) erroneous')
                      replaceFailure rl = rl
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t (ResultList [] _) = ResultList [ResultsOfLength 0 t (():|[])] mempty

@@ -39,7 +39,7 @@ import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           AmbiguousParsing(..), CommittedParsing(..), ConsumedInputParsing(..),
                           DeterministicParsing(..),
-                          TailsParsing(parseTails, parseAllTails), ParseResults(..), ParseFailure(..), Pos)
+                          TailsParsing(parseTails, parseAllTails), ParseResults, ParseFailure(..), Pos)
 import Text.Grampa.Internal (ResultList(..), FallibleResults(..),
                              AmbiguousAlternative(ambiguousOr), AmbiguityDecidable(..), AmbiguityWitness(..),
                              TraceableParsing(..))

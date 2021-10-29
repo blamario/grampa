@@ -137,7 +137,7 @@ instance Monoid x => Monoid (Parser g s x) where
 instance (Eq s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) where
    type ParserGrammar (Parser g s) = g
    type GrammarFunctor (Parser g s) = ResultList g s
-   parsingResult s = Compose . fromResultList s
+   parsingResult _ = Compose . fromResultList
    nonTerminal f = Parser p where
       p ((_, d) : _) = f d
       p _ = ResultList mempty (expected 0 "NonTerminal at endOfInput")
@@ -157,10 +157,10 @@ instance (LeftReductive s, FactorialMonoid s) => MultiParsing (Parser g s) where
    type GrammarConstraint (Parser g s) g' = (g ~ g', Rank2.Functor g)
    type ResultFunctor (Parser g s) = Compose (ParseResults s) []
    -- | Returns the list of all possible input prefix parses paired with the remaining input suffix.
-   parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input) (snd $ head $ parseGrammarTails g input)
+   parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList) (snd $ head $ parseGrammarTails g input)
    -- parseComplete :: (Rank2.Functor g, Eq s, FactorialMonoid s) =>
    --                  g (Parser g s) -> s -> g (Compose (ParseResults s) [])
-   parseComplete g input = Rank2.fmap ((snd <$>) . Compose . fromResultList input)
+   parseComplete g input = Rank2.fmap ((snd <$>) . Compose . fromResultList)
                               (snd $ head $ reparseTails close $ parseGrammarTails g input)
       where close = Rank2.fmap (<* eof) g
 
@@ -266,10 +266,11 @@ instance MonoidNull s => Parsing (Parser g s) where
                where rewindFailure (ResultList rl _) = ResultList rl (ParseFailure (Down $ length rest) [] [])
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
-               where replaceFailure (ResultList EmptyTree (ParseFailure pos msgs _)) =
+               where replaceFailure (ResultList EmptyTree (ParseFailure pos msgs erroneous')) =
                         ResultList EmptyTree (ParseFailure pos
-                                                 (if pos == Down (length rest) then [StaticDescription msg] else msgs)
-                                                 [])
+                                                 (if pos == Down (length rest) then [StaticDescription msg]
+                                                  else msgs)
+                                                 erroneous')
                      replaceFailure rl = rl
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t (ResultList EmptyTree _) = ResultList (Leaf $ ResultInfo 0 t ()) mempty
@@ -315,10 +316,10 @@ instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-fromResultList :: (Eq s, FactorialMonoid s) => s -> ResultList g s r -> ParseResults s [(s, r)]
-fromResultList s (ResultList EmptyTree (ParseFailure pos positive negative)) =
+fromResultList :: (Eq s, FactorialMonoid s) => ResultList g s r -> ParseResults s [(s, r)]
+fromResultList (ResultList EmptyTree (ParseFailure pos positive negative)) =
    Left (ParseFailure (pos - 1) (nub positive) (nub negative))
-fromResultList _ (ResultList rl _failure) = Right (f <$> toList rl)
+fromResultList (ResultList rl _failure) = Right (f <$> toList rl)
    where f (ResultInfo _ ((s, _):_) r) = (s, r)
          f (ResultInfo _ [] r) = (mempty, r)
 

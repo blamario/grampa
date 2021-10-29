@@ -111,9 +111,10 @@ instance FactorialMonoid s => Parsing (Parser g s) where
                      rewindFailure parsed = parsed
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
-               where replaceFailure (NoParse (ParseFailure pos msgs _)) =
-                        NoParse (ParseFailure pos (if pos == Down (length rest) then [StaticDescription msg]
-                                                   else msgs) [])
+               where replaceFailure (NoParse (ParseFailure pos msgs erroneous)) =
+                        NoParse (ParseFailure pos
+                                              (if pos == Down (length rest) then [StaticDescription msg] else msgs)
+                                              erroneous)
                      replaceFailure parsed = parsed
    eof = Parser p
       where p rest@((s, _) : _)

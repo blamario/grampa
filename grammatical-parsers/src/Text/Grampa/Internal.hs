@@ -17,7 +17,7 @@ import Data.Semigroup (Semigroup((<>)))
 import Data.Type.Equality ((:~:)(Refl))
 import Witherable (Filterable(mapMaybe))
 
-import Data.Monoid.Factorial (FactorialMonoid, length)
+import Data.Monoid.Factorial (FactorialMonoid)
 
 import Text.Grampa.Class (Ambiguous(..), FailureDescription(..), ParseFailure(..), ParseResults, InputParsing(..), Pos)
 
@@ -45,8 +45,8 @@ instance AmbiguityDecidable (Ambiguous a) where
    ambiguityWitness = Just (AmbiguityWitness Refl)
 
 fromResultList :: (Eq s, FactorialMonoid s) => s -> ResultList g s r -> ParseResults s [(s, r)]
-fromResultList s (ResultList [] (ParseFailure pos expected erroneous)) =
-   Left (ParseFailure (pos - 1) (nub expected) (nub erroneous))
+fromResultList _ (ResultList [] (ParseFailure pos expected' erroneous')) =
+   Left (ParseFailure (pos - 1) (nub expected') (nub erroneous'))
 fromResultList _ (ResultList rl _failure) = Right (foldMap f rl)
    where f (ResultsOfLength _ ((s, _):_) r) = (,) s <$> toList r
          f (ResultsOfLength _ [] r) = (,) mempty <$> toList r
@@ -93,7 +93,7 @@ instance Alternative (ResultList g s) where
    (<|>) = (<>)
 
 instance Filterable (ResultList g s) where
-   mapMaybe f (ResultList l failure) = ResultList (mapMaybe maybeROL l) failure
+   mapMaybe f (ResultList rols failure) = ResultList (mapMaybe maybeROL rols) failure
       where maybeROL (ResultsOfLength l t rs) = ResultsOfLength l t <$> nonEmpty (mapMaybe f $ toList rs)
    {-# INLINE mapMaybe #-}
 

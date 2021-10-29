@@ -8,7 +8,7 @@ module Text.Grampa (
    Grammar, GrammarBuilder, ParseResults, ParseFailure(..), FailureDescription(..), Ambiguous(..), Pos,
    -- * Classes
    -- ** Parsing
-   DeterministicParsing(..), AmbiguousParsing(..), CommittedParsing(..),
+   DeterministicParsing(..), AmbiguousParsing(..), CommittedParsing(..), TraceableParsing(..),
    LexicalParsing(..),
    -- ** Grammars
    MultiParsing(..), GrammarParsing(..),
@@ -44,6 +44,7 @@ import Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
                           CommittedParsing(..), DeterministicParsing(..),
                           AmbiguousParsing(..), Ambiguous(..),
                           ParseResults, ParseFailure(..), FailureDescription(..), Pos)
+import Text.Grampa.Internal (TraceableParsing(..))
 
 import Prelude hiding (drop, null)
 

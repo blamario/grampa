@@ -124,9 +124,9 @@ instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
    Parser p <?> msg  = Parser q
       where q :: forall x. s -> (a -> Int -> s -> (ParseFailure Pos s -> x) -> x) -> (ParseFailure Pos s -> x) -> x
             q input success failure = p input success (failure . replaceFailure)
-               where replaceFailure (ParseFailure pos msgs _) =
+               where replaceFailure (ParseFailure pos msgs erroneous') =
                         ParseFailure pos (if pos == fromEnd (Factorial.length input) then [StaticDescription msg]
-                                          else msgs) []
+                                          else msgs) erroneous'
    eof = Parser p
       where p rest success failure
                | Null.null rest = success () 0 rest failure
@@ -296,12 +296,12 @@ instance (Cancellative.LeftReductive s, Factorial.FactorialMonoid s) => MultiPar
    -- | Returns an input prefix parse paired with the remaining input suffix.
    parsePrefix g input = Rank2.fmap (Compose . (\p-> applyParser p input
                                                                  (\a _ rest _-> Right (rest, a))
-                                                                 (Left . fromFailure input))) 
+                                                                 (Left . fromFailure))) 
                                     g
    parseComplete g input = Rank2.fmap (\p-> applyParser p input
                                                         (const . const . const . Right)
-                                                        (Left . fromFailure input))
+                                                        (Left . fromFailure))
                                       (Rank2.fmap (<* eof) g)
 
-fromFailure :: (Eq s, FactorialMonoid s) => s -> ParseFailure Pos s -> ParseFailure Pos s
-fromFailure s (ParseFailure pos expected erroneous) = ParseFailure pos (nub expected) (nub erroneous)
+fromFailure :: (Eq s, FactorialMonoid s) => ParseFailure Pos s -> ParseFailure Pos s
+fromFailure (ParseFailure pos expected' erroneous') = ParseFailure pos (nub expected') (nub erroneous')

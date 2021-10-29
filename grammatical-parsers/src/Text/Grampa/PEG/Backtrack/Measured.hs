@@ -123,11 +123,10 @@ instance FactorialMonoid s => Parsing (Parser g s) where
                      rewindFailure parsed = parsed
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
-               where replaceFailure (NoParse (ParseFailure pos msgs _)) =
+               where replaceFailure (NoParse (ParseFailure pos msgs erroneous)) =
                         NoParse (ParseFailure pos
-                                    (if pos == fromEnd (Factorial.length rest) then [StaticDescription msg]
-                                     else msgs)
-                                    [])
+                                    (if pos == fromEnd (Factorial.length rest) then [StaticDescription msg] else msgs)
+                                    erroneous)
                      replaceFailure parsed = parsed
    eof = Parser p
       where p rest
@@ -258,10 +257,10 @@ instance (Cancellative.LeftReductive s, Factorial.FactorialMonoid s) => MultiPar
    type ResultFunctor (Parser g s) = ParseResults s
    {-# NOINLINE parsePrefix #-}
    -- | Returns an input prefix parse paired with the remaining input suffix.
-   parsePrefix g input = Rank2.fmap (Compose . fromResult input . (`applyParser` input)) g
-   parseComplete g input = Rank2.fmap ((snd <$>) . fromResult input . (`applyParser` input))
+   parsePrefix g input = Rank2.fmap (Compose . fromResult . (`applyParser` input)) g
+   parseComplete g input = Rank2.fmap ((snd <$>) . fromResult . (`applyParser` input))
                                       (Rank2.fmap (<* eof) g)
 
-fromResult :: (Eq s, FactorialMonoid s) => s -> Result g s r -> ParseResults s (s, r)
-fromResult s (NoParse (ParseFailure pos positive negative)) = Left (ParseFailure pos (nub positive) (nub negative))
-fromResult _ (Parsed _ prefix suffix) = Right (suffix, prefix)
+fromResult :: (Eq s, FactorialMonoid s) => Result g s r -> ParseResults s (s, r)
+fromResult (NoParse (ParseFailure pos positive negative)) = Left (ParseFailure pos (nub positive) (nub negative))
+fromResult (Parsed _ prefix suffix) = Right (suffix, prefix)

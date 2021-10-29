@@ -127,9 +127,9 @@ instance FactorialMonoid s => Parsing (Parser g s) where
    Parser p <?> msg  = Parser q
       where q :: forall x. s -> (a -> s -> x) -> (ParseFailure Pos s -> x) -> x
             q input success failure = p input success (failure . replaceFailure)
-               where replaceFailure (ParseFailure pos msgs _) =
+               where replaceFailure (ParseFailure pos msgs erroneous) =
                         ParseFailure pos (if pos == fromEnd (Factorial.length input) then [StaticDescription msg]
-                                          else msgs) []
+                                          else msgs) erroneous
    eof = Parser p
       where p rest success failure
                | Null.null rest = success () rest
@@ -149,7 +149,7 @@ instance FactorialMonoid s => CommittedParsing (Parser g s) where
    commit :: forall a. Parser g s a -> Parser g s (ParseResults s a)
    commit (Parser p) = Parser q
       where q :: forall x. s -> (ParseResults s a -> s -> x) -> (ParseFailure Pos s -> x) -> x
-            q input success failure = p input (success . Right) failure'
+            q input success _failure = p input (success . Right) failure'
                where failure' f = success (Left f) input
    admit :: forall a. Parser g s (ParseResults s a) -> Parser g s a
    admit (Parser p) = Parser q
@@ -279,9 +279,9 @@ instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
 instance (LeftReductive s, FactorialMonoid s) => MultiParsing (Parser g s) where
    type ResultFunctor (Parser g s) = ParseResults s
    -- | Returns an input prefix parse paired with the remaining input suffix.
-   parsePrefix g input = Rank2.fmap (Compose . (\p-> applyParser p input (flip $ curry Right) (Left . fromFailure input))) g
-   parseComplete g input = Rank2.fmap (\p-> applyParser p input (const . Right) (Left . fromFailure input))
+   parsePrefix g input = Rank2.fmap (Compose . (\p-> applyParser p input (flip $ curry Right) (Left . fromFailure))) g
+   parseComplete g input = Rank2.fmap (\p-> applyParser p input (const . Right) (Left . fromFailure))
                                       (Rank2.fmap (<* eof) g)
 
-fromFailure :: (Eq s, FactorialMonoid s) => s -> ParseFailure Pos s -> ParseFailure Pos s
-fromFailure s (ParseFailure pos positive negative) = ParseFailure pos (nub positive) (nub negative)
+fromFailure :: (Eq s, FactorialMonoid s) => ParseFailure Pos s -> ParseFailure Pos s
+fromFailure (ParseFailure pos positive negative) = ParseFailure pos (nub positive) (nub negative)

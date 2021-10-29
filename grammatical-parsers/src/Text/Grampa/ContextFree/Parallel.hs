@@ -134,7 +134,7 @@ instance Monoid x => Monoid (Parser g s x) where
 instance (Cancellative.LeftReductive s, FactorialMonoid s) => MultiParsing (Parser g s) where
    type ResultFunctor (Parser g s) = Compose (ParseResults s) []
    -- | Returns the list of all possible input prefix parses paired with the remaining input suffix.
-   parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input . (`applyParser` input)) g
+   parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList . (`applyParser` input)) g
    -- | Returns the list of all possible parses of complete input.
    parseComplete :: (Rank2.Functor g', Eq s, FactorialMonoid s) =>
                     g' (Parser g s) -> s -> g' (Compose (ParseResults s) [])
@@ -215,11 +215,11 @@ instance FactorialMonoid s => Parsing (Parser g s) where
                         ResultList rl (ParseFailure (fromEnd $ Factorial.length rest) [] [])
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
-               where replaceFailure (ResultList EmptyTree (ParseFailure pos expected _erroneous)) =
+               where replaceFailure (ResultList EmptyTree (ParseFailure pos msgs erroneous)) =
                         ResultList EmptyTree (ParseFailure pos
                                                            (if pos == fromEnd (Factorial.length rest)
-                                                            then [StaticDescription msg] else expected)
-                                                           [])
+                                                            then [StaticDescription msg] else msgs)
+                                                           erroneous)
                      replaceFailure rl = rl
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t (ResultList EmptyTree _) = ResultList (Leaf $ ResultInfo t ()) noFailure
@@ -276,8 +276,8 @@ instance TextualMonoid s => CharParsing (Parser g s) where
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-fromResultList :: (Eq s, FactorialMonoid s) => s -> ResultList s r -> ParseResults s [(s, r)]
-fromResultList s (ResultList EmptyTree (ParseFailure pos expected erroneous)) =
-   Left (ParseFailure pos (nub expected) (nub erroneous))
-fromResultList _ (ResultList rl _failure) = Right (f <$> toList rl)
+fromResultList :: (Eq s, FactorialMonoid s) => ResultList s r -> ParseResults s [(s, r)]
+fromResultList (ResultList EmptyTree (ParseFailure pos expected' erroneous')) =
+   Left (ParseFailure pos (nub expected') (nub erroneous'))
+fromResultList (ResultList rl _failure) = Right (f <$> toList rl)
    where f (ResultInfo s r) = (s, r)

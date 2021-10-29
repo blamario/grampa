@@ -26,7 +26,6 @@ import Text.Parser.Combinators (Parsing((<?>)))
 import Text.Parser.Token (TokenParsing)
 import Text.Parser.Deterministic (DeterministicParsing(..))
 import Text.Parser.Input (ConsumedInputParsing(..), InputParsing(..), InputCharParsing(..))
-import Text.Parser.Input.Position (Position)
 import qualified Text.Parser.Char
 import Data.Kind (Constraint)
 
