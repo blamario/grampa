@@ -10,12 +10,10 @@ import Control.Monad (MonadFail(fail))
 
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
-import Data.List (nub)
 import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Factorial(FactorialMonoid)
 import Data.Monoid.Textual(TextualMonoid)
-import Data.Ord (Down(Down))
 import Data.String (fromString)
 import Debug.Trace (trace)
 import Witherable (Filterable(mapMaybe))
@@ -245,5 +243,5 @@ instance (Cancellative.LeftReductive s, Factorial.FactorialMonoid s) => MultiPar
                                       (Rank2.fmap (<* eof) g)
 
 fromResult :: (Eq s, FactorialMonoid s) => Result g s r -> ParseResults s (s, r)
-fromResult (NoParse (ParseFailure pos positive negative)) = Left (ParseFailure pos (nub positive) (nub negative))
+fromResult (NoParse failure) = Left failure
 fromResult (Parsed prefix suffix) = Right (suffix, prefix)

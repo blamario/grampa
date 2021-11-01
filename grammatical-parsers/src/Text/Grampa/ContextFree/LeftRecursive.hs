@@ -669,7 +669,7 @@ longest p@Parser{} = Parser{complete= Memoizing.longest (complete p),
                             cyclicDescendants= cyclicDescendants p}
 
 -- | Turns a backtracking PEG parser of the list of input tails into a context-free parser, opposite of 'longest'
-peg :: Fixed Backtrack.Parser g [(s, g (ResultList g s))] a -> Fixed Memoizing.Parser g s a
+peg :: Ord s => Fixed Backtrack.Parser g [(s, g (ResultList g s))] a -> Fixed Memoizing.Parser g s a
 peg (PositiveDirectParser p) = PositiveDirectParser (Memoizing.peg p)
 peg p@DirectParser{} = DirectParser{complete= Memoizing.peg (complete p),
                                         direct0=  Memoizing.peg (direct0 p),
@@ -683,7 +683,7 @@ peg p@Parser{} = Parser{complete= Memoizing.peg (complete p),
                         cyclicDescendants= cyclicDescendants p}
 
 -- | Turns a backtracking PEG parser into a context-free parser
-terminalPEG :: Monoid s => Fixed Backtrack.Parser g s a -> Fixed Memoizing.Parser g s a
+terminalPEG :: (Monoid s, Ord s) => Fixed Backtrack.Parser g s a -> Fixed Memoizing.Parser g s a
 terminalPEG (PositiveDirectParser p) = PositiveDirectParser (Memoizing.terminalPEG p)
 terminalPEG p@DirectParser{} = DirectParser{complete= Memoizing.terminalPEG (complete p),
                                             direct0=  Memoizing.terminalPEG (direct0 p),

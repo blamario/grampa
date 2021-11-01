@@ -38,8 +38,7 @@ import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing
                           ConsumedInputParsing(..), DeterministicParsing(..),
                           TailsParsing(parseTails, parseAllTails), ParseResults, ParseFailure(..),
                           FailureDescription(..))
-import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), TraceableParsing(..),
-                             expected, erroneous, fromResultList)
+import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), TraceableParsing(..), expected, erroneous)
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
@@ -52,7 +51,7 @@ instance Functor (Parser g i) where
    fmap f (Parser p) = Parser (fmap f . p)
    {-# INLINE fmap #-}
 
-instance Applicative (Parser g i) where
+instance Ord s => Applicative (Parser g s) where
    pure a = Parser (\rest-> ResultList [ResultsOfLength 0 rest (a:|[])] mempty)
    Parser p <*> Parser q = Parser r where
       r rest = case p rest
@@ -63,17 +62,17 @@ instance Applicative (Parser g i) where
    {-# INLINABLE pure #-}
    {-# INLINABLE (<*>) #-}
 
-instance Alternative (Parser g i) where
+instance Ord s => Alternative (Parser g s) where
    empty = Parser (\rest-> ResultList mempty $ ParseFailure (Down $ length rest) [] [])
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
    {-# INLINE (<|>) #-}
    {-# INLINABLE empty #-}
 
-instance Filterable (Parser g i) where
+instance Filterable (Parser g s) where
   mapMaybe f (Parser p) = Parser (mapMaybe f . p)
 
-instance Monad (Parser g i) where
+instance Ord s => Monad (Parser g s) where
    return = pure
    (>>) = (*>)
    Parser p >>= f = Parser q where
@@ -84,28 +83,28 @@ instance Monad (Parser g i) where
       adjust l (ResultsOfLength l' rest' rs) = ResultsOfLength (l+l') rest' rs
 
 #if MIN_VERSION_base(4,13,0)
-instance MonadFail (Parser g s) where
+instance Ord s => MonadFail (Parser g s) where
 #endif
    fail msg = Parser p
       where p rest = ResultList mempty (erroneous (Down $ length rest) msg)
 
-instance MonadPlus (Parser g s) where
+instance Ord s => MonadPlus (Parser g s) where
    mzero = empty
    mplus = (<|>)
 
-instance Semigroup x => Semigroup (Parser g s x) where
+instance (Semigroup x, Ord s) => Semigroup (Parser g s x) where
    (<>) = liftA2 (<>)
 
-instance Monoid x => Monoid (Parser g s x) where
+instance (Monoid x, Ord s) => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
 -- | Memoizing parser guarantees O(n²) performance for grammars with unambiguous productions. Can be wrapped with
 -- 'Text.Grampa.ContextFree.LeftRecursive.Fixed' to provide left recursion support.
-instance (Eq s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) where
+instance (Ord s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) where
    type ParserGrammar (Parser g s) = g
    type GrammarFunctor (Parser g s) = ResultList g s
-   parsingResult s = Compose . fromResultList s
+   parsingResult _ = Compose . fromResultList
    nonTerminal :: (Rank2.Functor g, ParserInput (Parser g s) ~ s) => (g (ResultList g s) -> ResultList g s a) -> Parser g s a
    nonTerminal f = Parser p where
       p input@((_, d) : _) = ResultList rs' failure
@@ -117,7 +116,7 @@ instance (Eq s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g 
       p _ = ResultList mempty (expected 0 "NonTerminal at endOfInput")
    {-# INLINE nonTerminal #-}
 
-instance (Eq s, LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s) where
+instance (Ord s, LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s) where
    parseTails = applyParser
 
 -- | Memoizing parser guarantees O(n²) performance for grammars with unambiguous productions. Can be wrapped with
@@ -127,16 +126,23 @@ instance (Eq s, LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s)
 -- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>
 --                  g (Memoizing.'Parser' g s) -> s -> g ('Compose' ('ParseResults' s) [])
 -- @
-instance (LeftReductive s, FactorialMonoid s) => MultiParsing (Parser g s) where
+instance (LeftReductive s, FactorialMonoid s, Ord s) => MultiParsing (Parser g s) where
    type GrammarConstraint (Parser g s) g' = (g ~ g', Rank2.Functor g)
    type ResultFunctor (Parser g s) = Compose (ParseResults s) []
    -- | Returns the list of all possible input prefix parses paired with the remaining input suffix.
-   parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList input) (snd $ head $ parseGrammarTails g input)
+   parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList) (snd $ head $ parseGrammarTails g input)
    -- parseComplete :: (ParserInput (Parser g s) ~ s, Rank2.Functor g, Eq s, FactorialMonoid s) =>
    --                  g (Parser g s) -> s -> g (Compose (ParseResults s) [])
-   parseComplete g input = Rank2.fmap ((snd <$>) . Compose . fromResultList input)
+   parseComplete g input = Rank2.fmap ((snd <$>) . Compose . fromResultList)
                               (snd $ head $ parseAllTails close $ parseGrammarTails g input)
       where close = Rank2.fmap (<* eof) g
+
+fromResultList :: FactorialMonoid s => ResultList g s r -> ParseResults s [(s, r)]
+fromResultList (ResultList [] (ParseFailure pos expected' erroneous')) =
+   Left (ParseFailure (pos - 1) expected' erroneous')
+fromResultList (ResultList rl _failure) = Right (foldMap f rl)
+   where f (ResultsOfLength _ ((s, _):_) r) = (,) s <$> toList r
+         f (ResultsOfLength _ [] r) = (,) mempty <$> toList r
 
 parseGrammarTails :: (Rank2.Functor g, FactorialMonoid s) => g (Parser g s) -> s -> [(s, g (ResultList g s))]
 parseGrammarTails g input = foldr parseTail [] (Factorial.tails input)
@@ -144,7 +150,7 @@ parseGrammarTails g input = foldr parseTail [] (Factorial.tails input)
             where parsed = (s,d):parsedTail
                   d      = Rank2.fmap (($ parsed) . applyParser) g
 
-instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
+instance (LeftReductive s, FactorialMonoid s, Ord s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
    getInput = Parser p
       where p rest@((s, _):_) = ResultList [ResultsOfLength 0 rest (s:|[])] mempty
@@ -201,7 +207,7 @@ instance InputParsing (Parser g s)  => TraceableParsing (Parser g s) where
                where traceWith prefix = trace (prefix <> description s)
             q [] = p []
 
-instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
+instance (Ord s, Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p
       where p rest@((s, _):t) =
                case Textual.characterPrefix s
@@ -229,14 +235,14 @@ instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
                  predicate first = ResultList mempty (expected (Down $ length rest) "notSatisfyChar")
             p rest = ResultList [ResultsOfLength 0 rest (():|[])] mempty
 
-instance (LeftReductive s, FactorialMonoid s) => ConsumedInputParsing (Parser g s) where
+instance (LeftReductive s, FactorialMonoid s, Ord s) => ConsumedInputParsing (Parser g s) where
    match (Parser p) = Parser q
       where q [] = addConsumed mempty (p [])
             q rest@((s, _) : _) = addConsumed s (p rest)
             addConsumed input (ResultList rl failure) = ResultList (add1 <$> rl) failure
                where add1 (ResultsOfLength l t rs) = ResultsOfLength l t ((,) (Factorial.take l input) <$> rs)
 
-instance MonoidNull s => Parsing (Parser g s) where
+instance (MonoidNull s, Ord s) => Parsing (Parser g s) where
    try (Parser p) = Parser q
       where q rest = rewindFailure (p rest)
                where rewindFailure (ResultList rl _) = ResultList rl (ParseFailure (Down $ length rest) [] [])
@@ -258,7 +264,7 @@ instance MonoidNull s => Parsing (Parser g s) where
                | otherwise = ResultList mempty (expected (Down $ length rest) "end of input")
             f [] = ResultList [ResultsOfLength 0 [] (():|[])] mempty
 
-instance MonoidNull s => DeterministicParsing (Parser g s) where
+instance (MonoidNull s, Ord s) => DeterministicParsing (Parser g s) where
    Parser p <<|> Parser q = Parser r where
       r rest = case p rest
                of rl@(ResultList [] _failure) -> rl <> q rest
@@ -275,13 +281,13 @@ instance MonoidNull s => DeterministicParsing (Parser g s) where
                        ResultList rl _failure -> foldMap continue rl
          where continue (ResultsOfLength len' rest' _) = q (len + len') rest'
 
-instance MonoidNull s => LookAheadParsing (Parser g s) where
+instance (MonoidNull s, Ord s) => LookAheadParsing (Parser g s) where
    lookAhead (Parser p) = Parser (\input-> rewind input (p input))
       where rewind _ rl@(ResultList [] _) = rl
             rewind t (ResultList rl failure) = ResultList [ResultsOfLength 0 t $ foldr1 (<>) (results <$> rl)] failure
             results (ResultsOfLength _ _ r) = r
 
-instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
+instance (Ord s, Show s, TextualMonoid s) => CharParsing (Parser g s) where
    satisfy predicate = Parser p
       where p rest@((s, _):t) =
                case Textual.characterPrefix s
@@ -291,12 +297,12 @@ instance (Show s, TextualMonoid s) => CharParsing (Parser g s) where
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance AmbiguousParsing (Parser g s) where
+instance Ord s => AmbiguousParsing (Parser g s) where
    ambiguous (Parser p) = Parser q
       where q rest | ResultList rs failure <- p rest = ResultList (groupByLength <$> rs) failure
             groupByLength (ResultsOfLength l rest rs) = ResultsOfLength l rest (Ambiguous rs :| [])
 
-instance CommittedParsing (Parser g s) where
+instance Ord s => CommittedParsing (Parser g s) where
    type CommittedResults (Parser g s) = ParseResults s
    commit (Parser p) = Parser q
       where q rest = case p rest
@@ -324,7 +330,7 @@ longest p = Backtrack.Parser q where
    message (LiteralDescription s) = LiteralDescription [(s, error "longest")]
 
 -- | Turns a backtracking PEG parser of the list of input tails into a context-free parser, opposite of 'longest'
-peg :: Backtrack.Parser g [(s, g (ResultList g s))] a -> Parser g s a
+peg :: Ord s => Backtrack.Parser g [(s, g (ResultList g s))] a -> Parser g s a
 peg p = Parser q where
    q rest = case Backtrack.applyParser p rest
             of Backtrack.Parsed l result suffix -> ResultList [ResultsOfLength l suffix (result:|[])] mempty
@@ -332,7 +338,7 @@ peg p = Parser q where
                  -> ResultList mempty (ParseFailure pos ((fst . head <$>) <$> positive) ((fst . head <$>) <$> negative))
 
 -- | Turns a backtracking PEG parser into a context-free parser
-terminalPEG :: Monoid s => Backtrack.Parser g s a -> Parser g s a
+terminalPEG :: Monoid s => Ord s => Backtrack.Parser g s a -> Parser g s a
 terminalPEG p = Parser q where
    q [] = case Backtrack.applyParser p mempty
             of Backtrack.Parsed l result _ -> ResultList [ResultsOfLength l [] (result:|[])] mempty

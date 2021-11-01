@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP, FlexibleContexts, InstanceSigs, GeneralizedNewtypeDeriving,
              RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
-module Text.Grampa.ContextFree.Parallel (ResultList(..), Parser, fromResultList)
+module Text.Grampa.ContextFree.Parallel (ResultList(..), Parser)
 where
 
 import Control.Applicative
@@ -11,7 +11,6 @@ import Control.Monad (MonadFail(fail))
 import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
-import Data.List (nub)
 import Data.Semigroup (Semigroup(..))
 import qualified Data.Semigroup.Cancellative as Cancellative
 import Data.Monoid (Monoid(mappend, mempty))
@@ -72,17 +71,17 @@ instance Filterable (ResultList s) where
 instance Functor (ResultList s) where
    fmap f (ResultList l failure) = ResultList ((f <$>) <$> l) failure
 
-instance Semigroup (ResultList s r) where
+instance Ord s => Semigroup (ResultList s r) where
    ResultList rl1 f1 <> ResultList rl2 f2 = ResultList (rl1 <> rl2) (f1 <> f2)
 
-instance Monoid (ResultList s r) where
+instance Ord s => Monoid (ResultList s r) where
    mempty = ResultList mempty noFailure
    mappend = (<>)
 
 instance Functor (Parser g s) where
    fmap f (Parser p) = Parser (fmap f . p)
 
-instance Applicative (Parser g s) where
+instance Ord s => Applicative (Parser g s) where
    pure a = Parser (\rest-> ResultList (Leaf $ ResultInfo rest a) noFailure)
    Parser p <*> Parser q = Parser r where
       r rest = case p rest
@@ -90,7 +89,7 @@ instance Applicative (Parser g s) where
       continue (ResultInfo rest' f) = f <$> q rest'
 
 
-instance FactorialMonoid s => Alternative (Parser g s) where
+instance (FactorialMonoid s, Ord s) => Alternative (Parser g s) where
    empty = Parser (\s-> ResultList mempty $ ParseFailure (fromEnd $ Factorial.length s) [] [])
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
@@ -99,9 +98,9 @@ instance FactorialMonoid s => Filterable (Parser g s) where
    mapMaybe f (Parser p) = Parser (mapMaybe f . p)
 
 #if MIN_VERSION_base(4,13,0)
-instance Monad (Parser g s) where
+instance Ord s => Monad (Parser g s) where
 #else
-instance Factorial.FactorialMonoid s => Monad (Parser g s) where
+instance (Factorial.FactorialMonoid s, Ord s) => Monad (Parser g s) where
 #endif
    return = pure
    Parser p >>= f = Parser q where
@@ -110,18 +109,18 @@ instance Factorial.FactorialMonoid s => Monad (Parser g s) where
       continue (ResultInfo rest' a) = applyParser (f a) rest'
 
 #if MIN_VERSION_base(4,13,0)
-instance FactorialMonoid s => MonadFail (Parser g s) where
+instance (FactorialMonoid s, Ord s) => MonadFail (Parser g s) where
 #endif
    fail msg = Parser (\s-> ResultList mempty $ ParseFailure (fromEnd $ Factorial.length s) [] [StaticDescription msg])
 
-instance FactorialMonoid s => MonadPlus (Parser g s) where
+instance (FactorialMonoid s, Ord s) => MonadPlus (Parser g s) where
    mzero = empty
    mplus = (<|>)
 
-instance Semigroup x => Semigroup (Parser g s x) where
+instance (Ord s, Semigroup x) => Semigroup (Parser g s x) where
    (<>) = liftA2 (<>)
 
-instance Monoid x => Monoid (Parser g s x) where
+instance (Monoid x, Ord s) => Monoid (Parser g s x) where
    mempty = pure mempty
    mappend = liftA2 mappend
 
@@ -131,7 +130,7 @@ instance Monoid x => Monoid (Parser g s x) where
 -- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, Eq s, 'FactorialMonoid' s) =>
 --                  g (Parallel.'Parser' g s) -> s -> g ('Compose' ('ParseResults' s) [])
 -- @
-instance (Cancellative.LeftReductive s, FactorialMonoid s) => MultiParsing (Parser g s) where
+instance (Cancellative.LeftReductive s, FactorialMonoid s, Ord s) => MultiParsing (Parser g s) where
    type ResultFunctor (Parser g s) = Compose (ParseResults s) []
    -- | Returns the list of all possible input prefix parses paired with the remaining input suffix.
    parsePrefix g input = Rank2.fmap (Compose . Compose . fromResultList . (`applyParser` input)) g
@@ -140,7 +139,7 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => MultiParsing (Pars
                     g' (Parser g s) -> s -> g' (Compose (ParseResults s) [])
    parseComplete g input = Rank2.fmap ((snd <$>) . getCompose) (parsePrefix (Rank2.fmap (<* eof) g) input)
 
-instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
+instance (Cancellative.LeftReductive s, FactorialMonoid s, Ord s) => InputParsing (Parser g s) where
    type ParserInput (Parser g s) = s
    getInput = Parser p
       where p s = ResultList (Leaf $ ResultInfo s s) noFailure
@@ -184,7 +183,7 @@ instance InputParsing (Parser g s)  => TraceableParsing (Parser g s) where
                      rl -> traceWith "Parsed " rl
                where traceWith prefix = trace (prefix <> description s)
 
-instance TextualMonoid s => InputCharParsing (Parser g s) where
+instance (Ord s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p
       where p s =
                case Textual.splitCharacterPrefix s
@@ -208,7 +207,7 @@ instance TextualMonoid s => InputCharParsing (Parser g s) where
                then ResultList mempty (expected (fromEnd $ Factorial.length s) "takeCharsWhile1")
                else ResultList (Leaf $ ResultInfo suffix prefix) noFailure
 
-instance FactorialMonoid s => Parsing (Parser g s) where
+instance (FactorialMonoid s, Ord s) => Parsing (Parser g s) where
    try (Parser p) = Parser q
       where q rest = rewindFailure (p rest)
                where rewindFailure (ResultList rl _) =
@@ -232,7 +231,7 @@ instance FactorialMonoid s => Parsing (Parser g s) where
       where f s | null s = ResultList (Leaf $ ResultInfo s ()) noFailure
                 | otherwise = ResultList mempty (expected (fromEnd $ Factorial.length s) "end of input")
 
-instance FactorialMonoid s => DeterministicParsing (Parser g s) where
+instance (FactorialMonoid s, Ord s) => DeterministicParsing (Parser g s) where
    Parser p <<|> Parser q = Parser r where
       r rest = case p rest
                of rl@(ResultList EmptyTree _failure) -> rl <> q rest
@@ -249,7 +248,7 @@ instance FactorialMonoid s => DeterministicParsing (Parser g s) where
                   ResultList rl _failure -> foldMap continue rl
          where continue (ResultInfo rest' _) = q rest'
 
-instance FactorialMonoid s => CommittedParsing (Parser g s) where
+instance (FactorialMonoid s, Ord s) => CommittedParsing (Parser g s) where
    type CommittedResults (Parser g s) = ParseResults s
    commit (Parser p) = Parser q
       where q rest = case p rest
@@ -262,12 +261,12 @@ instance FactorialMonoid s => CommittedParsing (Parser g s) where
             expose (ResultInfo _ (Left failure)) = ResultList EmptyTree failure
             expose (ResultInfo rest (Right r)) = ResultList (Leaf $ ResultInfo rest r) mempty
 
-instance FactorialMonoid s => LookAheadParsing (Parser g s) where
+instance (FactorialMonoid s, Ord s) => LookAheadParsing (Parser g s) where
    lookAhead (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t (ResultList rl failure) = ResultList (rewindInput t <$> rl) failure
             rewindInput t (ResultInfo _ r) = ResultInfo t r
 
-instance TextualMonoid s => CharParsing (Parser g s) where
+instance (TextualMonoid s, Ord s) => CharParsing (Parser g s) where
    satisfy predicate = Parser p
       where p s =
                case Textual.splitCharacterPrefix s
@@ -277,7 +276,6 @@ instance TextualMonoid s => CharParsing (Parser g s) where
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
 fromResultList :: (Eq s, FactorialMonoid s) => ResultList s r -> ParseResults s [(s, r)]
-fromResultList (ResultList EmptyTree (ParseFailure pos expected' erroneous')) =
-   Left (ParseFailure pos (nub expected') (nub erroneous'))
+fromResultList (ResultList EmptyTree failure) = Left failure
 fromResultList (ResultList rl _failure) = Right (f <$> toList rl)
    where f (ResultInfo s r) = (s, r)

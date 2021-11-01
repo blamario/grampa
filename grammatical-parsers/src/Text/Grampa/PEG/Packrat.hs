@@ -10,7 +10,6 @@ import Control.Monad (MonadFail(fail))
 
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
-import Data.List (nub)
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Factorial(FactorialMonoid)
 import Data.Monoid.Textual(TextualMonoid)
@@ -278,7 +277,6 @@ reparseTails final parsed@((s, _):_) = (s, gd):parsed
    where gd = Rank2.fmap (`applyParser` parsed) final
 
 fromResult :: (Eq s, Monoid s) => Result g s r -> ParseResults s (s, r)
-fromResult (NoParse (ParseFailure pos positive negative)) =
-   Left (ParseFailure (pos - 1) (nub positive) (nub negative))
+fromResult (NoParse (ParseFailure pos positive negative)) = Left (ParseFailure (pos - 1) positive negative)
 fromResult (Parsed prefix []) = Right (mempty, prefix)
 fromResult (Parsed prefix ((s, _):_)) = Right (s, prefix)

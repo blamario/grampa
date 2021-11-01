@@ -51,13 +51,19 @@ data FailureDescription s = StaticDescription String   -- ^ a readable descripti
                           | LiteralDescription s       -- ^ a literal piece of expected input
                             deriving (Functor, Eq, Ord, Read, Show)
 
-instance Ord pos => Semigroup (ParseFailure pos s) where
+instance (Ord pos, Ord s) => Semigroup (ParseFailure pos s) where
    ParseFailure pos1 exp1 err1 <> ParseFailure pos2 exp2 err2 = ParseFailure pos' exp' err'
       where (pos', exp', err') | pos1 > pos2 = (pos1, exp1, err1)
                                | pos1 < pos2 = (pos2, exp2, err2)
-                               | otherwise = (pos1, exp1 <> exp2, err1 <> err2)
+                               | otherwise = (pos1, merge exp1 exp2, merge err1 err2)
+            merge [] xs = xs
+            merge xs [] = xs
+            merge xs@(x:xs') ys@(y:ys')
+               | x < y = x : merge xs' ys
+               | x > y = y : merge xs ys'
+               | otherwise = x : merge xs' ys'
 
-instance Monoid (ParseFailure Pos s) where
+instance Ord s => Monoid (ParseFailure Pos s) where
    mempty = ParseFailure (Down maxBound) [] []
    mappend = (<>)
 

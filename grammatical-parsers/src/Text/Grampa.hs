@@ -23,7 +23,7 @@ module Text.Grampa (
    module Text.Grampa.Combinators)
 where
 
-import Data.List (intersperse, nub, sort)
+import Data.List (intersperse)
 import Data.Monoid ((<>))
 import Data.Monoid.Factorial (drop)
 import Data.Monoid.Null (null)
@@ -72,9 +72,9 @@ failureDescription :: forall s pos. (Ord s, TextualMonoid s, Position pos) => s 
 failureDescription input (ParseFailure pos expected erroneous) contextLineCount =
    Position.context input pos contextLineCount
    <> mconcat
-      (intersperse ", " $ filter (not . null)
-       [onNonEmpty ("expected " <>) $ oxfordComma " or " (fromDescription <$> nub (sort expected)),
-        oxfordComma " and " (fromDescription <$> nub (sort erroneous))])
+      (intersperse ", but " $ filter (not . null)
+       [onNonEmpty ("expected " <>) $ oxfordComma " or " (fromDescription <$> expected),
+        oxfordComma " and " (fromDescription <$> erroneous)])
    where oxfordComma :: s -> [s] -> s
          oxfordComma _ [] = ""
          oxfordComma _ [x] = x
