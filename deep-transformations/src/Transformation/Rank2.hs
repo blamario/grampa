@@ -15,6 +15,7 @@ import qualified Transformation.Full as Full
 -- | Transform (naturally) the containing functor of every node in the given tree.
 (<$>) :: Deep.Functor (Map p q) g => (forall a. p a -> q a) -> g p p -> g q q
 (<$>) f = (Deep.<$>) (Map f)
+infixl 4 <$>
 
 -- | Fold the containing functor of every node in the given tree.
 foldMap :: (Deep.Foldable (Fold p m) g, Monoid m) => (forall a. p a -> m) -> g p p -> m

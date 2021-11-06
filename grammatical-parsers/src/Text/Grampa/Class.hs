@@ -1,10 +1,11 @@
 {-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, DeriveDataTypeable, DeriveFunctor,
-             FlexibleContexts, FlexibleInstances, OverloadedStrings, RankNTypes, ScopedTypeVariables, TypeApplications,
-             TypeFamilies, TypeSynonymInstances, UndecidableInstances #-}
+             FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, OverloadedStrings,
+             RankNTypes, ScopedTypeVariables, TypeApplications, TypeFamilies, TypeSynonymInstances,
+             UndecidableInstances #-}
 module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
                           AmbiguousParsing(..), DeterministicParsing(..), InputParsing(..), InputCharParsing(..),
-                          ConsumedInputParsing(..), LexicalParsing(..), TailsParsing(..),
-                          ParseResults, ParseFailure(..), Expected(..),
+                          CommittedParsing(..), ConsumedInputParsing(..), LexicalParsing(..), TailsParsing(..),
+                          ParseResults, ParseFailure(..), FailureDescription(..), Pos,
                           Ambiguous(..), completeParser) where
 
 import Control.Applicative (Alternative(empty), liftA2)
@@ -20,6 +21,7 @@ import Data.Monoid.Null (MonoidNull)
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Monoid.Textual (TextualMonoid)
 import Data.Semigroup (Semigroup((<>)))
+import Data.Ord (Down(Down))
 import Text.Parser.Combinators (Parsing((<?>)))
 import Text.Parser.Token (TokenParsing)
 import Text.Parser.Deterministic (DeterministicParsing(..))
@@ -31,14 +33,39 @@ import qualified Rank2
 
 import Prelude hiding (takeWhile)
 
-type ParseResults s = Either (ParseFailure s)
+type ParseResults s = Either (ParseFailure Pos s)
 
 -- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset.
-data ParseFailure s = ParseFailure Int [Expected s] deriving (Eq, Functor, Show)
+data ParseFailure pos s =
+   ParseFailure {failurePosition :: pos,
+                 expectedAlternatives :: [FailureDescription s],  -- ^ expected input alternatives
+                 errorAlternatives ::    [FailureDescription s]   -- ^ erroneous input descriptions
+                }
+   deriving (Eq, Functor, Show)
 
-data Expected s = Expected String -- ^ a readable description of the expected input
-                | ExpectedInput s -- ^ a literal piece of expected input
-                deriving (Functor, Eq, Ord, Read, Show)
+-- | A position in the input is represented as the length of its remainder.
+type Pos = Down Int
+
+-- | An expected or erroneous input can be described using 'String' or using the input type
+data FailureDescription s = StaticDescription String   -- ^ a readable description of the expected input
+                          | LiteralDescription s       -- ^ a literal piece of expected input
+                            deriving (Functor, Eq, Ord, Read, Show)
+
+instance (Ord pos, Ord s) => Semigroup (ParseFailure pos s) where
+   ParseFailure pos1 exp1 err1 <> ParseFailure pos2 exp2 err2 = ParseFailure pos' exp' err'
+      where (pos', exp', err') | pos1 > pos2 = (pos1, exp1, err1)
+                               | pos1 < pos2 = (pos2, exp2, err2)
+                               | otherwise = (pos1, merge exp1 exp2, merge err1 err2)
+            merge [] xs = xs
+            merge xs [] = xs
+            merge xs@(x:xs') ys@(y:ys')
+               | x < y = x : merge xs' ys
+               | x > y = y : merge xs ys'
+               | otherwise = x : merge xs' ys'
+
+instance Ord s => Monoid (ParseFailure Pos s) where
+   mempty = ParseFailure (Down maxBound) [] []
+   mappend = (<>)
 
 -- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of
 -- alternative results.
@@ -77,7 +104,7 @@ completeParser :: MonoidNull s => Compose (ParseResults s) (Compose [] ((,) s)) 
 completeParser (Compose (Left failure)) = Compose (Left failure)
 completeParser (Compose (Right (Compose results))) =
    case filter (Null.null . fst) results
-   of [] -> Compose (Left $ ParseFailure 0 [Expected "complete parse"])
+   of [] -> Compose (Left $ ParseFailure 0 [StaticDescription "a complete parse"] [])
       completeResults -> Compose (Right $ snd <$> completeResults)
 
 -- | Choose one of the instances of this class to parse with.
@@ -131,6 +158,28 @@ class Alternative m => AmbiguousParsing m where
    -- | Collect all alternative parses of the same length into a 'NonEmpty' list of results.
    ambiguous :: m a -> m (Ambiguous a)
 
+-- | Parsers that can temporarily package and delay failure, in a way dual to Parsec's @try@ combinator. Where Parsec
+-- would require something like
+--
+-- > alternatives  =  try intro1 *> expected1
+-- >              <|> try intro2 *> expected2
+-- >              <|> fallback
+--
+-- you can instead say
+--
+-- > alternatives = admit  $  intro1 *> commit expected1
+-- >                      <|> intro2 *> commit expected2
+-- >                      <|> commit fallback
+--
+-- A parsing failure inside an @intro@ parser leaves the other alternatives open, a failure inside an @expected@
+-- parser bubbles up and out of the whole @admit@ block.
+class Alternative m => CommittedParsing m where
+   type CommittedResults m :: * -> *
+   -- | Commits the argument parser to success.
+   commit :: m a -> m (CommittedResults m a)
+   -- | Admits a possible defeat of the argument parser.
+   admit :: m (CommittedResults m a) -> m a
+  
 -- | If a grammar is 'Lexical', its parsers can instantiate the 'TokenParsing' class.
 class (DeterministicParsing m, InputCharParsing m, TokenParsing m) => LexicalParsing m where
    -- | Always succeeds, consuming all white space and comments

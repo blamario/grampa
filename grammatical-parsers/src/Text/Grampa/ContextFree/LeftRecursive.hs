@@ -37,9 +37,10 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 
 import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          AmbiguousParsing(..), ConsumedInputParsing(..), DeterministicParsing(..),
-                          TailsParsing(parseTails, parseAllTails))
-import Text.Grampa.Internal (ResultList(..), FailureInfo(..), FallibleResults(..),
+                          AmbiguousParsing(..), CommittedParsing(..), ConsumedInputParsing(..),
+                          DeterministicParsing(..),
+                          TailsParsing(parseTails, parseAllTails), ParseResults, ParseFailure(..), Pos)
+import Text.Grampa.Internal (ResultList(..), FallibleResults(..),
                              AmbiguousAlternative(ambiguousOr), AmbiguityDecidable(..), AmbiguityWitness(..),
                              TraceableParsing(..))
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
@@ -520,6 +521,36 @@ instance (InputParsing (Fixed p g s), DeterministicParsing (p g s)) => Determini
             d1 = direct1 p *> mcp
             mcp = skipAll (complete p)
 
+instance (CommittedParsing (p g s), CommittedResults (p g s) ~ ParseResults s) => CommittedParsing (Fixed p g s) where
+   type CommittedResults (Fixed p g s) = ParseResults s
+   commit (PositiveDirectParser p) = PositiveDirectParser (commit p)
+   commit p@DirectParser{} = DirectParser{
+      complete = commit (complete p),
+      direct0= commit (direct0 p),
+      direct1= commit (direct1 p)}
+   commit p@Parser{} = Parser{
+      complete= commit (complete p),
+      direct= commit (direct p),
+      direct0= commit (direct0 p),
+      direct1= commit (direct1 p),
+      indirect= commit (indirect p),
+      isAmbiguous= Nothing,
+      cyclicDescendants= cyclicDescendants p}
+   admit :: Fixed p g s (CommittedResults (Fixed p g s) a) -> Fixed p g s a
+   admit (PositiveDirectParser p) = PositiveDirectParser (admit p)
+   admit p@DirectParser{} = DirectParser{
+      complete = admit (complete p),
+      direct0= admit (direct0 p),
+      direct1= admit (direct1 p)}
+   admit p@Parser{} = Parser{
+      complete= admit (complete p),
+      direct= admit (direct p),
+      direct0= admit (direct0 p),
+      direct1= admit (direct1 p),
+      indirect= admit (indirect p),
+      isAmbiguous= Nothing,
+      cyclicDescendants= cyclicDescendants p}
+
 instance (LookAheadParsing (p g s), InputParsing (Fixed p g s)) => LookAheadParsing (Fixed p g s) where
    lookAhead p@PositiveDirectParser{} = DirectParser{
       complete= lookAhead (complete p),
@@ -638,7 +669,7 @@ longest p@Parser{} = Parser{complete= Memoizing.longest (complete p),
                             cyclicDescendants= cyclicDescendants p}
 
 -- | Turns a backtracking PEG parser of the list of input tails into a context-free parser, opposite of 'longest'
-peg :: Fixed Backtrack.Parser g [(s, g (ResultList g s))] a -> Fixed Memoizing.Parser g s a
+peg :: Ord s => Fixed Backtrack.Parser g [(s, g (ResultList g s))] a -> Fixed Memoizing.Parser g s a
 peg (PositiveDirectParser p) = PositiveDirectParser (Memoizing.peg p)
 peg p@DirectParser{} = DirectParser{complete= Memoizing.peg (complete p),
                                         direct0=  Memoizing.peg (direct0 p),
@@ -652,7 +683,7 @@ peg p@Parser{} = Parser{complete= Memoizing.peg (complete p),
                         cyclicDescendants= cyclicDescendants p}
 
 -- | Turns a backtracking PEG parser into a context-free parser
-terminalPEG :: Monoid s => Fixed Backtrack.Parser g s a -> Fixed Memoizing.Parser g s a
+terminalPEG :: (Monoid s, Ord s) => Fixed Backtrack.Parser g s a -> Fixed Memoizing.Parser g s a
 terminalPEG (PositiveDirectParser p) = PositiveDirectParser (Memoizing.terminalPEG p)
 terminalPEG p@DirectParser{} = DirectParser{complete= Memoizing.terminalPEG (complete p),
                                             direct0=  Memoizing.terminalPEG (direct0 p),
@@ -812,17 +843,20 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                                              Rank2.liftA2 (combineFailures $ failureOf t) deps marginal)
                                   then t' else t)
                      where combine :: Const Bool x -> GrammarFunctor (p g s) x -> Const Bool x
-                           combineFailures :: FailureInfo s -> Const Bool x -> GrammarFunctor (p g s) x -> Const Bool x
+                           combineFailures :: ParseFailure Pos s -> Const Bool x -> GrammarFunctor (p g s) x
+                                           -> Const Bool x
                            combine (Const False) _ = Const False
                            combine (Const True) results = Const (hasSuccess results)
                            combineFailures _ (Const False) _ = Const False
-                           combineFailures (FailureInfo pos expected) (Const True) rl =
-                              Const (pos > pos' || pos == pos' && any (`notElem` expected) expected')
-                              where FailureInfo pos' expected' = failureOf rl
+                           combineFailures (ParseFailure pos expected erroneous) (Const True) rl =
+                              Const (pos < pos'
+                                     || pos == pos' && (any (`notElem` expected) expected'
+                                                        || any (`notElem` erroneous) erroneous'))
+                              where ParseFailure pos' expected' erroneous' = failureOf rl
                   choiceWhile (Const (Just DynamicDependencies)) t t'
                      | getAny (Rank2.foldMap (Any . hasSuccess) marginal) = t'
                      | hasSuccess t = t
-                     | FailureInfo _ [] <- failureOf t = t'
+                     | ParseFailure _ [] [] <- failureOf t = t'
                      | otherwise = t
 
          -- Adds another round of indirect parsing results to the total results accumulated so far.

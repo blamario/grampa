@@ -12,7 +12,7 @@ import Text.Grampa.Internal (AmbiguityDecidable)
 type ParserT m = Fixed (Transformer.ParserT m)
 
 -- | Lift a parse-free computation into the parser.
-lift :: Applicative m => m a -> ParserT m g s a
+lift :: (Applicative m, Ord s) => m a -> ParserT m g s a
 lift = liftPure . Transformer.lift
 
 -- | Transform the computation carried by the parser using the monadic bind ('>>=').

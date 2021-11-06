@@ -101,15 +101,15 @@ main = defaultMain tests
 
 type Parser = Parallel.Parser
 
-simpleParse :: (Eq s, FactorialMonoid s, LeftReductive s) =>
+simpleParse :: (Ord s, FactorialMonoid s, LeftReductive s) =>
                Parallel.Parser (Rank2.Only r) s r -> s -> ParseResults s [(s, r)]
 simpleParse p input = getCompose . getCompose $ simply parsePrefix p input
 
-memoizingParse :: (Eq s, FactorialMonoid s, LeftReductive s) =>
+memoizingParse :: (Ord s, FactorialMonoid s, LeftReductive s) =>
                   Memoizing.Parser (Rank2.Only r) s r -> s -> ParseResults s [(s, r)]
 memoizingParse p input = getCompose . getCompose $ simply parsePrefix p input
 
-leftRecursiveParse :: (Eq s, FactorialMonoid s, LeftReductive s) =>
+leftRecursiveParse :: (Ord s, FactorialMonoid s, LeftReductive s) =>
                       LeftRecursive.Parser (Rank2.Only r) s r -> s -> ParseResults s [(s, r)]
 leftRecursiveParse p input = getCompose . getCompose $ simply parsePrefix p input
 
@@ -142,9 +142,9 @@ tests = testGroup "Grampa" [
                testProperty "name list" $
                  start (parseComplete nameListGrammar "foo, bar") == Compose (Right ["foo bar"]),
                testProperty "filtered" $
-                 start (parseComplete gf "") === Compose (Left (ParseFailure 0 [ExpectedInput "1"])),
+                 start (parseComplete gf "") === Compose (Left (ParseFailure 0 [LiteralDescription "1"] [])),
                testProperty "monadic" $
-                 start (parseComplete gm "") === Compose (Left (ParseFailure 0 [Expected "empty"])),
+                 start (parseComplete gm "") === Compose (Left (ParseFailure 0 [] [StaticDescription "empty"])),
                testProperty "null monadic" $
                  start (parseComplete gn "23") === Compose (Right ["23"])
               ],
@@ -184,7 +184,7 @@ tests = testGroup "Grampa" [
                                                      :| [Test.Ambiguous.Xy2
                                                          (pure $ Test.Ambiguous.Xy1 "x" "") "y"]))]))],
            testGroup "primitives"
-             [testProperty "anyToken mempty" $ simpleParse anyToken "" == Left (ParseFailure 0 [Expected "anyToken"]),
+             [testProperty "anyToken mempty" $ simpleParse anyToken "" == Left (expected 0 "anyToken"),
               testProperty "anyToken list" $
                 \(x::Word8) xs-> simpleParse anyToken (x:xs) == Right [(xs, [x])],
               testProperty "satisfy success" $ \bools->
@@ -194,10 +194,11 @@ tests = testGroup "Grampa" [
               testProperty "string success" $ \(xs::[Word8]) ys->
                    simpleParse (string xs) (xs <> ys) == Right [(ys, xs)],
               testProperty "string" $ \(xs::[Word8]) ys-> not (xs `isPrefixOf` ys)
-                ==> simpleParse (string xs) ys == Left (ParseFailure 0 [ExpectedInput xs]),
-              testProperty "eof mempty" $ simpleParse eof "" == Right [("", ())],
+                ==> simpleParse (string xs) ys
+                    === Left (ParseFailure (fromIntegral $ length ys) [LiteralDescription xs] []),
+              testProperty "eof mempty" $ simpleParse eof "" === Right [("", ())],
               testProperty "eof failure" $ \s->
-                   s /= "" ==> simpleParse eof s == Left (ParseFailure 0 [Expected "end of input"])],
+                   s /= "" ==> simpleParse eof s === Left (expected (fromIntegral $ length s) "end of input")],
            testGroup "lookAhead"
              [testProperty "lookAhead" lookAheadP,
               testProperty "lookAhead p *> p" lookAheadConsumeP,
@@ -265,42 +266,42 @@ data DescribedParser s r = DescribedParser String (forall g. (Typeable g, Rank2.
 instance Show (DescribedParser s r) where
    show (DescribedParser d _) = d
 
-instance (Show s, MonoidNull s, Semigroup r) => Semigroup (DescribedParser s r) where
+instance (MonoidNull s, Ord s, Show s, Semigroup r) => Semigroup (DescribedParser s r) where
    DescribedParser d1 p1 <> DescribedParser d2 p2 = DescribedParser (d1 ++ " <> " ++ d2) (p1 <> p2)
 
-instance (Show s, MonoidNull s, Monoid r) => Monoid (DescribedParser s r) where
+instance (MonoidNull s, Ord s, Show s, Monoid r) => Monoid (DescribedParser s r) where
    mempty = DescribedParser "mempty" mempty
    DescribedParser d1 p1 `mappend` DescribedParser d2 p2 = DescribedParser (d1 ++ " <> " ++ d2) (mappend p1 p2)
 
-instance EqProp (ParseFailure s) where
-   ParseFailure pos1 msg1 =-= ParseFailure pos2 msg2 = property (pos1 == pos2)
+instance EqProp (ParseFailure Pos s) where
+   ParseFailure pos1 expected1 erroneous1 =-= ParseFailure pos2 expected2 erroneous2 = property (pos1 == pos2)
 
-instance (Ord r, Show r, EqProp r, Eq s, EqProp s, Show s, FactorialMonoid s, LeftReductive s, Arbitrary s) =>
+instance (EqProp r, Ord r, Show r, Arbitrary s, EqProp s, FactorialMonoid s, LeftReductive s, Ord s, Show s) =>
          EqProp (Parser (Rank2.Only r) s r) where
    p1 =-= p2 = forAll arbitrary (\s-> (nub <$> simpleParse p1 s) =-= (nub <$> simpleParse p2 s))
 
-instance (Eq s, FactorialMonoid s, LeftReductive s, Show s, EqProp s, Arbitrary s, Ord r, Show r, EqProp r, Typeable r) =>
-         EqProp (DescribedParser s r) where
+instance (Arbitrary s, EqProp s, FactorialMonoid s, LeftReductive s, Ord s, Show s,
+          EqProp r, Ord r, Show r, Typeable r) => EqProp (DescribedParser s r) where
    DescribedParser _ p1 =-= DescribedParser _ p2 = forAll arbitrary $ \s->
       simpleParse p1 s =-= simpleParse p2 s
 
 instance Monoid s => Functor (DescribedParser s) where
    fmap f (DescribedParser d p) = DescribedParser ("fmap ? " ++ d) (fmap f p)
 
-instance (Show s, Monoid s) => Applicative (DescribedParser s) where
+instance (Monoid s, Ord s, Show s) => Applicative (DescribedParser s) where
    pure x = DescribedParser "pure ?" (pure x)
    DescribedParser d1 p1 <*> DescribedParser d2 p2 = DescribedParser (d1 ++ " <*> " ++ d2) (p1 <*> p2)
 
-instance (Show s, FactorialMonoid s) => Monad (DescribedParser s) where
+instance (FactorialMonoid s, Ord s, Show s) => Monad (DescribedParser s) where
    return x = DescribedParser "return ?" (return x)
    DescribedParser d1 p1 >>= f = DescribedParser (d1 ++ " >>= ?") (p1 >>= \x-> let DescribedParser _ p = f x in p)
    DescribedParser d1 p1 >> DescribedParser d2 p2 = DescribedParser (d1 ++ " >> " ++ d2) (p1 >> p2)
 
-instance (Show s, FactorialMonoid s) => Alternative (DescribedParser s) where
+instance (FactorialMonoid s, Ord s, Show s) => Alternative (DescribedParser s) where
    empty = DescribedParser "empty" empty
    DescribedParser d1 p1 <|> DescribedParser d2 p2 = DescribedParser (d1 ++ " <|> " ++ d2) (p1 <|> p2)
 
-instance (Show s, FactorialMonoid s) => MonadPlus (DescribedParser s) where
+instance (FactorialMonoid s, Ord s, Show s) => MonadPlus (DescribedParser s) where
    mzero = DescribedParser "mzero" mzero
    DescribedParser d1 p1 `mplus` DescribedParser d2 p2 = DescribedParser (d1 ++ " `mplus` " ++ d2) (mplus p1 p2)
 
@@ -335,7 +336,8 @@ instance forall s r. (Ord s, Semigroup s, FactorialMonoid s, LeftReductive s, Sh
                         DescribedParser ("notFollowedBy " <> d) (notFollowedBy p))
                       <$> sized (\n-> resize (max (n - 1) 0) arbitrary)]
 
-instance forall s r. (Show s, Semigroup s, FactorialMonoid s, Typeable s) => Arbitrary (DescribedParser s [Bool]) where
+instance forall s r. (Ord s, Show s, Semigroup s, FactorialMonoid s, Typeable s) =>
+   Arbitrary (DescribedParser s [Bool]) where
    arbitrary = sized tree
      where tree 0 = elements [DescribedParser "empty" empty,
                               DescribedParser "mempty" mempty]
@@ -349,7 +351,7 @@ instance forall s r. (Show s, Semigroup s, FactorialMonoid s, Typeable s) => Arb
                            binary " <|> " (<|>) branch branch]
              where branch = tree (n `div` 2)
 
-instance forall s r. (Show s, Semigroup s, FactorialMonoid s, Typeable s) =>
+instance forall s r. (Ord s, Show s, Semigroup s, FactorialMonoid s, Typeable s) =>
          Arbitrary (DescribedParser s ([Bool] -> [Bool])) where
    arbitrary = sized tree
      where tree 0 = oneof [pure (DescribedParser "empty" empty),
@@ -371,6 +373,9 @@ binary :: String
        -> Gen (DescribedParser s a)
 binary nm op = liftA2 (\(DescribedParser d1 p1) (DescribedParser d2 p2)-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
 
+expected :: Pos -> String -> ParseFailure Pos s
+expected pos msg = ParseFailure pos [StaticDescription msg] []
+
 --instance {-# OVERLAPS #-} (Ord s, Arbitrary s) => Arbitrary (s -> Bool) where
 --   arbitrary = elements [(<=), const False]
 
@@ -381,3 +386,5 @@ instance EqProp Word64 where
    a =-= b = property (a == b)
 
 results = either (const []) id
+
+

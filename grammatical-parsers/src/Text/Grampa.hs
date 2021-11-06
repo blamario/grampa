@@ -5,26 +5,28 @@ module Text.Grampa (
    -- * Applying parsers
    failureDescription, simply,
    -- * Types
-   Grammar, GrammarBuilder, ParseResults, ParseFailure(..), Expected(..), Ambiguous(..), Position,
-   -- * Classes and combinators
-   -- ** Parsing classes
-   DeterministicParsing(..), AmbiguousParsing(..),
+   Grammar, GrammarBuilder, ParseResults, ParseFailure(..), FailureDescription(..), Ambiguous(..), Pos,
+   -- * Classes
+   -- ** Parsing
+   DeterministicParsing(..), AmbiguousParsing(..), CommittedParsing(..), TraceableParsing(..),
    LexicalParsing(..),
    -- ** Grammars
    MultiParsing(..), GrammarParsing(..),
    -- ** From the [input-parsers](http://hackage.haskell.org/package/input-parsers) library
-   InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
+   InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..), Position(..),
    -- ** From the [parsers](http://hackage.haskell.org/package/parsers) library
    module Text.Parser.Char,
    module Text.Parser.Combinators,
    module Text.Parser.LookAhead,
    TokenParsing(..),
-   -- ** Other combinators
+   -- * Other combinators
    module Text.Grampa.Combinators)
 where
 
-import Data.List (intersperse, nub, sort)
+import Data.List (intersperse)
 import Data.Monoid ((<>))
+import Data.Monoid.Factorial (drop)
+import Data.Monoid.Null (null)
 import Data.Monoid.Textual (TextualMonoid)
 import Data.String (IsString(fromString))
 import Text.Parser.Char (CharParsing(char, notChar, anyChar))
@@ -38,8 +40,13 @@ import Text.Grampa.Combinators (concatMany, concatSome)
 import qualified Rank2
 import Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
                           InputParsing(..), InputCharParsing(..),
-                          ConsumedInputParsing(..), DeterministicParsing(..), LexicalParsing(..),
-                          AmbiguousParsing(..), Ambiguous(..), ParseResults, ParseFailure(..), Expected(..))
+                          ConsumedInputParsing(..), LexicalParsing(..),
+                          CommittedParsing(..), DeterministicParsing(..),
+                          AmbiguousParsing(..), Ambiguous(..),
+                          ParseResults, ParseFailure(..), FailureDescription(..), Pos)
+import Text.Grampa.Internal (TraceableParsing(..))
+
+import Prelude hiding (drop, null)
 
 -- | A type synonym for a fixed grammar record type @g@ with a given parser type @p@ on input streams of type @s@
 type Grammar (g  :: (* -> *) -> *) p s = g (p g s)
@@ -61,17 +68,21 @@ simply parseGrammar p input = Rank2.fromOnly (parseGrammar (Rank2.Only p) input)
 
 -- | Given the textual parse input, the parse failure on the input, and the number of lines preceding the failure to
 -- show, produce a human-readable failure description.
-failureDescription :: forall s. (Ord s, TextualMonoid s) => s -> ParseFailure s -> Int -> s
-failureDescription input (ParseFailure pos expected) contextLineCount =
-   Position.context input (Position.fromStart pos) contextLineCount
-   <> "expected " <> oxfordComma (fromExpected <$> nub (sort expected))
-   where oxfordComma :: [s] -> s
-         oxfordComma [] = ""
-         oxfordComma [x] = x
-         oxfordComma [x, y] = x <> " or " <> y
-         oxfordComma (x:y:rest) = mconcat (intersperse ", " (x : y : onLast ("or " <>) rest))
+failureDescription :: forall s pos. (Ord s, TextualMonoid s, Position pos) => s -> ParseFailure pos s -> Int -> s
+failureDescription input (ParseFailure pos expected erroneous) contextLineCount =
+   Position.context input pos contextLineCount
+   <> mconcat
+      (intersperse ", but " $ filter (not . null)
+       [onNonEmpty ("expected " <>) $ oxfordComma " or " (fromDescription <$> expected),
+        oxfordComma " and " (fromDescription <$> erroneous)])
+   where oxfordComma :: s -> [s] -> s
+         oxfordComma _ [] = ""
+         oxfordComma _ [x] = x
+         oxfordComma conjunction [x, y] = x <> conjunction <> y
+         oxfordComma conjunction (x:y:rest) = mconcat (intersperse ", " (x : y : onLast (drop 1 conjunction <>) rest))
+         onNonEmpty f x = if null x then x else f x
          onLast _ [] = []
          onLast f [x] = [f x]
          onLast f (x:xs) = x : onLast f xs
-         fromExpected (Expected s) = fromString s
-         fromExpected (ExpectedInput s) = "string \"" <> s <> "\""
+         fromDescription (StaticDescription s) = fromString s
+         fromDescription (LiteralDescription s) = "string \"" <> s <> "\""
