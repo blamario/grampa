@@ -1,5 +1,5 @@
 name:                rank2classes
-version:             1.4.3
+version:             1.4.4
 synopsis:            standard type constructor class hierarchy, only with methods of rank 2 types
 description:
   A mirror image of the standard type constructor class hierarchy rooted in 'Functor', except with methods of rank 2
@@ -43,7 +43,7 @@ library
                        distributive < 0.7
 
   if flag(use-template-haskell)
-    build-depends: template-haskell >= 2.11 && < 2.18
+    build-depends: template-haskell >= 2.11 && < 2.19
     exposed-modules: Rank2.TH
 
 test-suite doctests

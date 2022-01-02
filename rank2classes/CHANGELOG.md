@@ -1,3 +1,9 @@
+Version 1.4.4
+---------------
+* Tested with GHC 9.2.1, incremented the upper `template-haskell` dependency bound
+* Generalized the TH generation to handle PolyRec types
+* Incremented the lower bound of rank2classes' `base` dependency, thanks to phadej
+
 Version 1.4.3
 ---------------
 * Fixed links to standard rank-1 classes in Haddock documentation
