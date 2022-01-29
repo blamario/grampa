@@ -1,11 +1,11 @@
 {-# LANGUAGE TypeFamilies #-}
 
-module Text.Grampa.Combinators (moptional, concatMany, concatSome,
+module Text.Grampa.Combinators (moptional, concatMany, concatSome, someNonEmpty,
                                 flag, count, upto,
                                 delimiter, operator, keyword) where
 
 import Control.Applicative(Applicative(..), Alternative(..))
-import Data.List.NonEmpty (fromList)
+import Data.List.NonEmpty (NonEmpty((:|)), fromList)
 import Data.Monoid (Monoid, (<>))
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Semigroup (Semigroup(sconcat))
@@ -24,7 +24,11 @@ concatMany p = mconcat <$> many p
 
 -- | One or more argument occurrences like 'some', with concatenated monoidal results.
 concatSome :: (Alternative p, Semigroup a) => p a -> p a
-concatSome p = sconcat . fromList <$> some p
+concatSome p = sconcat <$> someNonEmpty p
+
+-- | One or more argument occurrences like 'some', returned in a 'NonEmpty' list.
+someNonEmpty :: Alternative p => p a -> p (NonEmpty a)
+someNonEmpty p = (:|) <$> p <*> many p
 
 -- | Returns 'True' if the argument parser succeeds and 'False' otherwise.
 flag :: Alternative p => p a -> p Bool
