@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, InstanceSigs, RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE CPP, FlexibleContexts, InstanceSigs, RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
 -- | Continuation-passing parser for context-free grammars
 module Text.Grampa.ContextFree.Continued (Parser(..), Result(..), alt) where
 
@@ -115,7 +115,7 @@ instance Semigroup x => Semigroup (Parser g s x) where
 
 instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
-   mappend = liftA2 mappend
+   mappend = (<>)
 
 instance (Factorial.FactorialMonoid s, Ord s) => Parsing (Parser g s) where
    try :: forall a. Parser g s a -> Parser g s a

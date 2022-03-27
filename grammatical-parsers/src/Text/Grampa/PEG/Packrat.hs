@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE CPP, FlexibleContexts, TypeFamilies, UndecidableInstances #-}
 -- | Packrat parser
 module Text.Grampa.PEG.Packrat (Parser(..), Result(..)) where
 
@@ -101,7 +101,7 @@ instance Semigroup x => Semigroup (Parser g s x) where
 
 instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
-   mappend = liftA2 mappend
+   mappend = (<>)
 
 instance FactorialMonoid s => Parsing (Parser g s) where
    try (Parser p) = Parser q

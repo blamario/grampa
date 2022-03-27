@@ -271,7 +271,7 @@ instance (MonoidNull s, Ord s, Show s, Semigroup r) => Semigroup (DescribedParse
 
 instance (MonoidNull s, Ord s, Show s, Monoid r) => Monoid (DescribedParser s r) where
    mempty = DescribedParser "mempty" mempty
-   DescribedParser d1 p1 `mappend` DescribedParser d2 p2 = DescribedParser (d1 ++ " <> " ++ d2) (mappend p1 p2)
+   mappend = (<>)
 
 instance EqProp (ParseFailure Pos s) where
    ParseFailure pos1 expected1 erroneous1 =-= ParseFailure pos2 expected2 erroneous2 = property (pos1 == pos2)
@@ -291,11 +291,11 @@ instance Monoid s => Functor (DescribedParser s) where
 instance (Monoid s, Ord s, Show s) => Applicative (DescribedParser s) where
    pure x = DescribedParser "pure ?" (pure x)
    DescribedParser d1 p1 <*> DescribedParser d2 p2 = DescribedParser (d1 ++ " <*> " ++ d2) (p1 <*> p2)
+   DescribedParser d1 p1  *> DescribedParser d2 p2 = DescribedParser (d1 ++ " *> " ++ d2) (p1 *> p2)
 
 instance (FactorialMonoid s, Ord s, Show s) => Monad (DescribedParser s) where
-   return x = DescribedParser "return ?" (return x)
+   return = pure
    DescribedParser d1 p1 >>= f = DescribedParser (d1 ++ " >>= ?") (p1 >>= \x-> let DescribedParser _ p = f x in p)
-   DescribedParser d1 p1 >> DescribedParser d2 p2 = DescribedParser (d1 ++ " >> " ++ d2) (p1 >> p2)
 
 instance (FactorialMonoid s, Ord s, Show s) => Alternative (DescribedParser s) where
    empty = DescribedParser "empty" empty

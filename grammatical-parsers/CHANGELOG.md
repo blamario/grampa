@@ -1,3 +1,8 @@
+Version 0.5.3
+---------------
+
+* Updated code to compile with GHC 9.2.2
+
 Version 0.5.2
 ---------------
 * Switched from the deprecated `witherable-class` package to `witherable`

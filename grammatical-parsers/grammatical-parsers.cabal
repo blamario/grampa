@@ -1,5 +1,5 @@
 name:                grammatical-parsers
-version:             0.5.2
+version:             0.5.3
 synopsis:            parsers that combine into grammars
 description:
   /Gram/matical-/pa/rsers, or Grampa for short, is a library of parser types whose values are meant to be assigned
@@ -50,7 +50,7 @@ library
                        monoid-subclasses >=1.0 && <1.2,
                        parsers < 0.13,
                        input-parsers < 0.3,
-                       attoparsec >= 0.13 && < 0.14,
+                       attoparsec >= 0.13 && < 0.15,
                        witherable == 0.4.*,
                        rank2classes >= 1.0.2 && < 1.5
 

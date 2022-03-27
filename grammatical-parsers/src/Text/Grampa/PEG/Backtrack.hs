@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE CPP, FlexibleContexts, TypeFamilies, UndecidableInstances #-}
 -- | Backtracking parser for Parsing Expression Grammars
 module Text.Grampa.PEG.Backtrack (Parser(..), Result(..), alt) where
 
@@ -104,7 +104,7 @@ instance Semigroup x => Semigroup (Parser g s x) where
 
 instance Monoid x => Monoid (Parser g s x) where
    mempty = pure mempty
-   mappend = liftA2 mappend
+   mappend = (<>)
 
 instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
    try (Parser p) = Parser q

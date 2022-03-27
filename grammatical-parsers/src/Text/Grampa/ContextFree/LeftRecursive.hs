@@ -96,7 +96,7 @@ instance (Rank2.Apply g, Rank2.Distributive g) => Semigroup (Union g) where
 
 instance (Rank2.Apply g, Rank2.Distributive g) => Monoid (Union g) where
    mempty = Union (Rank2.cotraverse (Const . getConst) (Const False))
-   mappend (Union g1) (Union g2) = Union (Rank2.liftA2 union g1 g2)
+   mappend = (<>)
 
 mapPrimitive :: forall p g s a b. AmbiguityDecidable b => (p g s a -> p g s b) -> Fixed p g s a -> Fixed p g s b
 mapPrimitive f p@PositiveDirectParser{} = PositiveDirectParser{complete= f (complete p)}
@@ -398,7 +398,7 @@ instance (Alternative (p g s), Semigroup x) => Semigroup (Fixed p g s x) where
 
 instance (Alternative (p g s), Monoid x) => Monoid (Fixed p g s x) where
    mempty = pure mempty
-   mappend = liftA2 mappend
+   mappend = (<>)
 
 primitive :: p g s a -> p g s a -> p g s a -> Fixed p g s a
 primitive d0 d1 d = DirectParser{complete= d,

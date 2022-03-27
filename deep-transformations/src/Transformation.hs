@@ -56,7 +56,7 @@ instance (Transformation t, Transformation u, Domain t ~ Codomain u) => Transfor
 instance (t `At` x, u `At` x, Domain t ~ Codomain u) => Compose t u `At` x where
    Compose t u $ x =  t $ (u $ x)
 
-instance Transformation (Rank2.Arrow p q x) where
+instance Transformation (Rank2.Arrow (p :: Type -> Type) q x) where
    type Domain (Rank2.Arrow p q x) = p
    type Codomain (Rank2.Arrow p q x) = q
 

@@ -1,4 +1,4 @@
-{-# Language FlexibleInstances, MultiParamTypeClasses, RankNTypes, StandaloneDeriving, 
+{-# Language FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, StandaloneDeriving,
              TypeFamilies, UndecidableInstances #-}
 
 -- | The RepMin example - replicate a binary tree with all leaves replaced by the minimal leaf value.
@@ -70,8 +70,8 @@ type instance AG.Atts (Synthesized RepMin) (Tree Int f' f) = SynRepMin
 type instance AG.Atts (Inherited RepMin) (Root Int f' f) = ()
 type instance AG.Atts (Synthesized RepMin) (Root Int f' f) = SynRepMin
 
-type instance AG.Atts (Inherited a) Int = ()
-type instance AG.Atts (Synthesized a) Int = Int
+type instance AG.Atts (Inherited RepMin) Int = ()
+type instance AG.Atts (Synthesized RepMin) Int = Int
 
 instance Transformation.At RepMin (Tree Int Sem Sem) where
   ($) = AG.applyDefault runIdentity

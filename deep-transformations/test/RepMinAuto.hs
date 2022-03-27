@@ -1,4 +1,4 @@
-{-# Language DataKinds, DeriveGeneric, DuplicateRecordFields, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
+{-# Language DataKinds, DeriveGeneric, DuplicateRecordFields, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
              StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
 
 -- | The RepMin example with automatic derivation of attributes.
