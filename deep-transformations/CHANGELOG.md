@@ -5,6 +5,7 @@
 * Changes necessary to compile with GHC 9.2.2
 * Excluded GHC 8.2.2 from `deep-transformations` and GitHub CI
 * Increased the `deep-transformations`' bottom bound of base dependency
+* Relaxed the bounds of the `generic-lens` dependency
 * Fixed `deep-transformations` compilation with GHC 9.0.1
 * Added an explicit implementation `mappend = (<>)`
 * Used haskell-ci to generate GitHub CI
