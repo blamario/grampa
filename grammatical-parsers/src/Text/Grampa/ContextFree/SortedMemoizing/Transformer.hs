@@ -140,7 +140,7 @@ instance (Applicative m, Semigroup x, Ord s) => Semigroup (ParserT m g s x) wher
 
 instance (Applicative m, Monoid x, Ord s) => Monoid (ParserT m g s x) where
    mempty = pure mempty
-   mappend = liftA2 mappend
+   mappend = (<>)
 
 -- | Memoizing parser that carries an applicative computation. Can be wrapped with
 -- 'Text.Grampa.ContextFree.LeftRecursive.Fixed' to provide left recursion support.

@@ -98,7 +98,7 @@ instance Semigroup a => Semigroup (Ambiguous a) where
 
 instance Monoid a => Monoid (Ambiguous a) where
    mempty = Ambiguous (mempty :| [])
-   Ambiguous xs `mappend` Ambiguous ys = Ambiguous (liftA2 mappend xs ys)
+   mappend = (<>)
 
 completeParser :: MonoidNull s => Compose (ParseResults s) (Compose [] ((,) s)) r -> Compose (ParseResults s) [] r
 completeParser (Compose (Left failure)) = Compose (Left failure)

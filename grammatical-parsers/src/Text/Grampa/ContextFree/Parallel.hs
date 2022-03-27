@@ -122,7 +122,7 @@ instance (Ord s, Semigroup x) => Semigroup (Parser g s x) where
 
 instance (Monoid x, Ord s) => Monoid (Parser g s x) where
    mempty = pure mempty
-   mappend = liftA2 mappend
+   mappend = (<>)
 
 -- | Parallel parser produces a list of all possible parses.
 --

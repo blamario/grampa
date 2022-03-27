@@ -97,7 +97,7 @@ instance (Semigroup x, Ord s) => Semigroup (Parser g s x) where
 
 instance (Monoid x, Ord s) => Monoid (Parser g s x) where
    mempty = pure mempty
-   mappend = liftA2 mappend
+   mappend = (<>)
 
 -- | Memoizing parser guarantees O(n²) performance for grammars with unambiguous productions. Can be wrapped with
 -- 'Text.Grampa.ContextFree.LeftRecursive.Fixed' to provide left recursion support.
