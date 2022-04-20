@@ -1,17 +1,17 @@
 -- | A collection of parsing algorithms with a common interface, operating on grammars represented as records with
 -- rank-2 field types.
-{-# LANGUAGE FlexibleContexts, KindSignatures, OverloadedStrings, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, KindSignatures, OverloadedStrings, RankNTypes, ScopedTypeVariables, TypeFamilies #-}
 module Text.Grampa (
    -- * Applying parsers
    failureDescription, simply,
    -- * Types
-   Grammar, GrammarBuilder, ParseResults, ParseFailure(..), FailureDescription(..), Ambiguous(..), Pos,
+   Grammar, GrammarBuilder, GrammarOverlay, ParseResults, ParseFailure(..), FailureDescription(..), Ambiguous(..), Pos,
    -- * Classes
    -- ** Parsing
    DeterministicParsing(..), AmbiguousParsing(..), CommittedParsing(..), TraceableParsing(..),
    LexicalParsing(..),
    -- ** Grammars
-   MultiParsing(..), GrammarParsing(..),
+   MultiParsing(..), GrammarParsing(..), overlay,
    -- ** From the [input-parsers](http://hackage.haskell.org/package/input-parsers) library
    InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..), Position(..),
    -- ** From the [parsers](http://hackage.haskell.org/package/parsers) library
@@ -24,7 +24,7 @@ module Text.Grampa (
 where
 
 import Data.List (intersperse)
-import Data.Monoid ((<>))
+import Data.Monoid ((<>), Endo (Endo, appEndo))
 import Data.Monoid.Factorial (drop)
 import Data.Monoid.Null (null)
 import Data.Monoid.Textual (TextualMonoid)
@@ -48,16 +48,29 @@ import Text.Grampa.Internal (TraceableParsing(..))
 
 import Prelude hiding (drop, null)
 
--- | A type synonym for a fixed grammar record type @g@ with a given parser type @p@ on input streams of type @s@
+-- | Fixed grammar record type @g@ with a given parser type @p@ on input streams of type @s@
 type Grammar (g  :: (* -> *) -> *) p s = g (p g s)
 
--- | A type synonym for an endomorphic function on a grammar record type @g@, whose parsers of type @p@ build grammars
--- of type @g'@, parsing input streams of type @s@
+-- | A @GrammarBuilder g g' p s@ is an endomorphic function on a grammar @g@, whose parsers of type @p@ build grammars
+-- of type @g'@, parsing input streams of type @s@. The first grammar @g@ may be a building block for the final
+-- grammar @g'@.
 type GrammarBuilder (g  :: (* -> *) -> *)
                     (g' :: (* -> *) -> *)
                     (p  :: ((* -> *) -> *) -> * -> * -> *)
                     (s  :: *)
    = g (p g' s) -> g (p g' s)
+
+-- | A grammar overlay is a function that takes a final grammar @self@ and the parent grammar @super@ and builds a new
+-- grammar from them. Use 'overlay' to apply a colection of overlays on top of a base grammar.
+type GrammarOverlay (g  :: (* -> *) -> *)
+                    (m  :: * -> *)
+   = g m -> g m -> g m
+
+-- | Layers a sequence of 'GrammarOverlay' on top of a base 'GrammarBuilder' to produce a new grammar.
+overlay :: (GrammarParsing m, g ~ ParserGrammar m, GrammarConstraint m g, Rank2.Distributive g, Foldable f)
+        => (g m -> g m) -> f (GrammarOverlay g m) -> g m
+overlay base layers = appEndo (foldMap (Endo . ($ self)) layers) (base self)
+   where self = selfReferring
 
 -- | Apply the given parsing function (typically `parseComplete` or `parsePrefix`) to the given grammar-agnostic
 -- parser and its input. A typical invocation might be
