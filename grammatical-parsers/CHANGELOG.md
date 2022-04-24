@@ -1,7 +1,17 @@
-Version 0.5.3
+Version 0.6
 ---------------
-
 * Updated code to compile with GHC 9.2.2
+* Added type `GrammarOverlay` and function `overlay`
+* Added the `someNonEmpty` combinator
+* Added the `CommittedParsing` class
+* The failure messages are now sorted
+* `<?>` preserves the erroneous messages
+* Fixed the `parsingResult` in Packrat
+* Fixed the use of `maxBound` on `Down` which flipped meaning in `base`
+* Turned `ParseFailure` into a record to work around an old Haddock bug
+* Unified the `FailureInfo` type with `ParseFailure`
+* Parameterized `ParseFailure` with a position type
+* Eliminated the `size-based` and `testing-feat` dependencies
 
 Version 0.5.2
 ---------------

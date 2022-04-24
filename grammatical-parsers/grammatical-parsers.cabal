@@ -1,5 +1,5 @@
 name:                grammatical-parsers
-version:             0.5.3
+version:             0.6
 synopsis:            parsers that combine into grammars
 description:
   /Gram/matical-/pa/rsers, or Grampa for short, is a library of parser types whose values are meant to be assigned
@@ -16,7 +16,7 @@ copyright:           (c) 2017 Mario Blažević
 category:            Text, Parsing
 build-type:          Custom
 cabal-version:       >=1.10
-tested-with:         GHC==9.0.1, GHC==8.10.4, GHC==8.8.4, GHC==8.6.5, GHC==8.4.4, GHC==8.2.2
+tested-with:         GHC==9.2.2, GHC==9.0.2, GHC==8.10.4, GHC==8.8.4, GHC==8.6.5, GHC==8.4.4, GHC==8.2.2
 extra-source-files:  README.md, CHANGELOG.md
 source-repository head
   type:              git
