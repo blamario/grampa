@@ -12,6 +12,7 @@ import Control.Applicative (Alternative(empty), liftA2)
 import Data.Char (isAlphaNum, isLetter, isSpace)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
+import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Data (Data)
 import Data.Typeable (Typeable)
@@ -110,8 +111,8 @@ completeParser (Compose (Right (Compose results))) =
 -- | Choose one of the instances of this class to parse with.
 class InputParsing m => MultiParsing m where
    -- | Some parser types produce a single result, others a list of results.
-   type ResultFunctor m :: * -> *
-   type GrammarConstraint m (g :: (* -> *) -> *) :: Constraint
+   type ResultFunctor m :: Type -> Type
+   type GrammarConstraint m (g :: (Type -> Type) -> Type) :: Constraint
    type GrammarConstraint m g = Rank2.Functor g
    -- | Given a rank-2 record of parsers and input, produce a record of parses of the complete input.
    parseComplete :: (ParserInput m ~ s, GrammarConstraint m g, Eq s, FactorialMonoid s) =>
@@ -124,9 +125,9 @@ class InputParsing m => MultiParsing m where
 -- | Parsers that belong to this class can memoize the parse results to avoid exponential performance complexity.
 class MultiParsing m => GrammarParsing m where
    -- | The record of grammar productions associated with the parser
-   type ParserGrammar m :: (* -> *) -> *
+   type ParserGrammar m :: (Type -> Type) -> Type
    -- | For internal use by 'notTerminal'
-   type GrammarFunctor m :: * -> *
+   type GrammarFunctor m :: Type -> Type
    -- | Converts the intermediate to final parsing result.
    parsingResult :: ParserInput m -> GrammarFunctor m a -> ResultFunctor m (ParserInput m, a)
    -- | Used to reference a grammar production, only necessary from outside the grammar itself
@@ -174,7 +175,7 @@ class Alternative m => AmbiguousParsing m where
 -- A parsing failure inside an @intro@ parser leaves the other alternatives open, a failure inside an @expected@
 -- parser bubbles up and out of the whole @admit@ block.
 class Alternative m => CommittedParsing m where
-   type CommittedResults m :: * -> *
+   type CommittedResults m :: Type -> Type
    -- | Commits the argument parser to success.
    commit :: m a -> m (CommittedResults m a)
    -- | Admits a possible defeat of the argument parser.

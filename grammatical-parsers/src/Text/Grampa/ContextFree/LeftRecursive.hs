@@ -16,6 +16,7 @@ import Control.Monad (MonadFail(fail))
 import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
 
 import Data.Functor.Compose (Compose(..))
+import Data.Kind (Type)
 import Data.Maybe (isJust)
 
 import Data.Semigroup (Semigroup(..))
@@ -50,7 +51,7 @@ import Prelude hiding (cycle, null, span, take, takeWhile)
 
 type Parser = Fixed Memoizing.Parser
 
-type ResultAppend p (g :: (* -> *) -> *) s =
+type ResultAppend p (g :: (Type -> Type) -> Type) s =
    GrammarFunctor (p g s) Rank2.~> GrammarFunctor (p g s) Rank2.~> GrammarFunctor (p g s)
 
 data Fixed p g s a =
@@ -63,14 +64,15 @@ data Fixed p g s a =
    | PositiveDirectParser {
       complete :: p g s a}
 
-data SeparatedParser p (g :: (* -> *) -> *) s a = FrontParser (p g s a)
-                                                | CycleParser {
-                                                     cycleParser  :: p g s a,
-                                                     backParser   :: p g s a,
-                                                     appendResultsArrow :: ResultAppend p g s a,
-                                                     dependencies :: Dependencies g}
-                                                | BackParser {
-                                                     backParser :: p g s a}
+data SeparatedParser p (g :: (Type -> Type) -> Type) s a =
+     FrontParser (p g s a)
+   | CycleParser {
+        cycleParser  :: p g s a,
+        backParser   :: p g s a,
+        appendResultsArrow :: ResultAppend p g s a,
+        dependencies :: Dependencies g}
+   | BackParser {
+        backParser :: p g s a}
 
 data ParserFlags g = ParserFlags {
    nullable :: Bool,
@@ -86,7 +88,7 @@ deriving instance Show (g (Const Bool)) => Show (Dependencies g)
 data ParserFunctor p g s a = ParserResultsFunctor {parserResults :: GrammarFunctor (p g s) a}
                            | ParserFlagsFunctor {parserFlags :: ParserFlags g}
 
-newtype Union (g :: (* -> *) -> *) = Union{getUnion :: g (Const Bool)}
+newtype Union (g :: (Type -> Type) -> Type) = Union{getUnion :: g (Const Bool)}
 
 --instance Rank2.Applicative g => Monoid (Union g) where
 --   mempty = Union (Rank2.pure $ Const False)
@@ -199,7 +201,7 @@ instance (GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) => GrammarParsin
    {-# INLINE nonTerminal #-}
    recursive = general
 
-bits :: forall (g :: (* -> *) -> *). (Rank2.Distributive g, Rank2.Traversable g) => g (Const (g (Const Bool)))
+bits :: forall (g :: (Type -> Type) -> Type). (Rank2.Distributive g, Rank2.Traversable g) => g (Const (g (Const Bool)))
 bits = start `seq` Rank2.fmap oneBit start
    where start = evalState (Rank2.traverse next (Rank2.distributeJoin Nothing)) 0
          oneBit :: Const Int a -> Const (g (Const Bool)) a
@@ -761,12 +763,12 @@ fixDescendants gf = go initial
             Const (ParserFlags n $ depUnion old new)
          initial = Rank2.liftA2 (\_ (Const n)-> Const (ParserFlags n deps)) gf nullabilities
          deps = StaticDependencies (const (Const False) Rank2.<$> gf)
-         StaticDependencies nullabilities = fixNullabilities gf
+         nullabilities = fixNullabilities gf
 {-# INLINABLE fixDescendants #-}
 
 fixNullabilities :: forall g. (Rank2.Apply g, Rank2.Traversable g)
-                    => g (Const (g (Const (ParserFlags g)) -> (ParserFlags g))) -> Dependencies g
-fixNullabilities gf = StaticDependencies (Const . nullable . getConst Rank2.<$> go initial)
+                    => g (Const (g (Const (ParserFlags g)) -> (ParserFlags g))) -> g (Const Bool)
+fixNullabilities gf = Const . nullable . getConst Rank2.<$> go initial
    where go :: g (Const (ParserFlags g)) -> g (Const (ParserFlags g))
          go cd
             | getAll (Rank2.foldMap (All . getConst) $ Rank2.liftA2 agree cd cd') = cd

@@ -10,6 +10,7 @@ import Control.Monad (MonadFail(fail))
 
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
+import Data.Kind (Type)
 import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Factorial(FactorialMonoid)
@@ -35,9 +36,10 @@ import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           ParseResults, ParseFailure(..), FailureDescription(..), Pos)
 import Text.Grampa.Internal (expected, TraceableParsing(..))
 
-data Result (g :: (* -> *) -> *) s v = Parsed{parsedPrefix :: !v,
-                                              parsedSuffix :: !s}
-                                     | NoParse (ParseFailure Pos s)
+data Result (g :: (Type -> Type) -> Type) s v =
+     Parsed{parsedPrefix :: !v,
+            parsedSuffix :: !s}
+   | NoParse (ParseFailure Pos s)
 
 -- | Parser type for Parsing Expression Grammars that uses a backtracking algorithm, fast for grammars in LL(1) class
 -- but with potentially exponential performance for longer ambiguous prefixes.

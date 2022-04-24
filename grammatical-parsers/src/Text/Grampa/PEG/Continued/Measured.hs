@@ -9,6 +9,7 @@ import Control.Monad (MonadFail(fail))
 #endif
 
 import Data.Functor.Compose (Compose(..))
+import Data.Kind (Type)
 import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Factorial(FactorialMonoid)
@@ -38,7 +39,7 @@ import Text.Grampa.PEG.Continued (Result(..))
 -- | Parser type for Parsing Expression Grammars that uses a continuation-passing algorithm and keeps track of the
 -- parsed prefix length, fast for grammars in LL(1) class but with potentially exponential performance for longer
 -- ambiguous prefixes.
-newtype Parser (g :: (* -> *) -> *) s r =
+newtype Parser (g :: (Type -> Type) -> Type) s r =
    Parser{applyParser :: forall x. s -> (r -> Int -> s -> x) -> (ParseFailure Pos s -> x) -> x}
    
 instance Functor (Parser g s) where

@@ -11,6 +11,7 @@ import Control.Monad (MonadFail(fail))
 import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
+import Data.Kind (Type)
 import Data.Semigroup (Semigroup(..))
 import qualified Data.Semigroup.Cancellative as Cancellative
 import Data.Monoid (Monoid(mappend, mempty))
@@ -41,7 +42,7 @@ import Prelude hiding (iterate, null, showList, span, takeWhile)
 
 -- | Parser type for context-free grammars using a parallel parsing algorithm with no result sharing nor left recursion
 -- support.
-newtype Parser (g :: (* -> *) -> *) s r = Parser{applyParser :: s -> ResultList s r}
+newtype Parser (g :: (Type -> Type) -> Type) s r = Parser{applyParser :: s -> ResultList s r}
 
 data ResultList s r = ResultList !(BinTree (ResultInfo s r)) {-# UNPACK #-} !(ParseFailure Pos s)
 data ResultInfo s r = ResultInfo !s !r

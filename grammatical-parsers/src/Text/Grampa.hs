@@ -24,6 +24,7 @@ module Text.Grampa (
 where
 
 import Data.List (intersperse)
+import Data.Kind (Type)
 import Data.Monoid ((<>), Endo (Endo, appEndo))
 import Data.Monoid.Factorial (drop)
 import Data.Monoid.Null (null)
@@ -49,21 +50,21 @@ import Text.Grampa.Internal (TraceableParsing(..))
 import Prelude hiding (drop, null)
 
 -- | Fixed grammar record type @g@ with a given parser type @p@ on input streams of type @s@
-type Grammar (g  :: (* -> *) -> *) p s = g (p g s)
+type Grammar (g  :: (Type -> Type) -> Type) p s = g (p g s)
 
 -- | A @GrammarBuilder g g' p s@ is an endomorphic function on a grammar @g@, whose parsers of type @p@ build grammars
 -- of type @g'@, parsing input streams of type @s@. The first grammar @g@ may be a building block for the final
 -- grammar @g'@.
-type GrammarBuilder (g  :: (* -> *) -> *)
-                    (g' :: (* -> *) -> *)
-                    (p  :: ((* -> *) -> *) -> * -> * -> *)
-                    (s  :: *)
+type GrammarBuilder (g  :: (Type -> Type) -> Type)
+                    (g' :: (Type -> Type) -> Type)
+                    (p  :: ((Type -> Type) -> Type) -> Type -> Type -> Type)
+                    (s  :: Type)
    = g (p g' s) -> g (p g' s)
 
 -- | A grammar overlay is a function that takes a final grammar @self@ and the parent grammar @super@ and builds a new
 -- grammar from them. Use 'overlay' to apply a colection of overlays on top of a base grammar.
-type GrammarOverlay (g  :: (* -> *) -> *)
-                    (m  :: * -> *)
+type GrammarOverlay (g  :: (Type -> Type) -> Type)
+                    (m  :: Type -> Type)
    = g m -> g m -> g m
 
 -- | Layers a sequence of 'GrammarOverlay' on top of a base 'GrammarBuilder' to produce a new grammar.
