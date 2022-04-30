@@ -2,6 +2,7 @@
              FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, OverloadedStrings,
              RankNTypes, ScopedTypeVariables, TypeApplications, TypeFamilies, TypeSynonymInstances,
              UndecidableInstances #-}
+-- | The core classes supported by all the parsers in this library.
 module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),
                           AmbiguousParsing(..), DeterministicParsing(..), InputParsing(..), InputCharParsing(..),
                           CommittedParsing(..), ConsumedInputParsing(..), LexicalParsing(..), TailsParsing(..),

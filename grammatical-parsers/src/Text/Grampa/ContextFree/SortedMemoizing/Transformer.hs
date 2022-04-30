@@ -1,5 +1,7 @@
 {-# LANGUAGE BangPatterns, CPP, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
+-- | A context-free memoizing parser that handles all alternatives in parallel
+-- and carries a monadic computation with each parsing result.
 module Text.Grampa.ContextFree.SortedMemoizing.Transformer (ResultListT(..), ParserT(..), (<<|>),
                                                             tbind, lift, tmap, longest, peg, terminalPEG)
 where

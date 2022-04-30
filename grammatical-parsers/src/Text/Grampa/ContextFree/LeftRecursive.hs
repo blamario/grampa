@@ -2,6 +2,7 @@
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies, TypeOperators,
              UndecidableInstances #-}
 {-# OPTIONS -fno-full-laziness #-}
+-- | A context-free memoizing parser that can handle left-recursive grammars.
 module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..),
                                               longest, peg, terminalPEG,
                                               liftPositive, liftPure, mapPrimitive,
@@ -49,28 +50,37 @@ import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
 import Prelude hiding (cycle, null, span, take, takeWhile)
 
+-- | A parser for left-recursive grammars
 type Parser = Fixed Memoizing.Parser
 
 type ResultAppend p (g :: (Type -> Type) -> Type) s =
    GrammarFunctor (p g s) Rank2.~> GrammarFunctor (p g s) Rank2.~> GrammarFunctor (p g s)
 
+-- | A transformer that adds left-recursive powers to a memoizing parser @p@ over grammar @g@
 data Fixed p g s a =
+   -- | a fully general parser
    Parser {
       complete, direct, direct0, direct1, indirect :: p g s a,
       isAmbiguous :: Maybe (AmbiguityWitness a),
       cyclicDescendants :: Rank2.Apply g => g (Const (ParserFlags g)) -> ParserFlags g}
+   -- | a parser that doesn't start with a 'nonTerminal'
    | DirectParser {
       complete, direct0, direct1 :: p g s a}
+   -- | a parser that doesn't start with a 'nonTerminal' and always consumes some input
    | PositiveDirectParser {
       complete :: p g s a}
 
+-- | A type of parsers analyzed for their left-recursion class
 data SeparatedParser p (g :: (Type -> Type) -> Type) s a =
-     FrontParser (p g s a)
+   -- | a parser that doesn't start with any 'nonTerminal' so it can run first
+   FrontParser (p g s a)
+   -- | a left-recursive parser that may add to the set of parse results every time it's run
    | CycleParser {
         cycleParser  :: p g s a,
         backParser   :: p g s a,
         appendResultsArrow :: ResultAppend p g s a,
         dependencies :: Dependencies g}
+   -- | a parser that depends on other non-terminals but is not left-recursive
    | BackParser {
         backParser :: p g s a}
 
@@ -707,6 +717,7 @@ parseRecursive :: forall p g s rl. (Rank2.Apply g, Rank2.Distributive g, Rank2.T
 parseRecursive = parseSeparated . separated
 {-# INLINE parseRecursive #-}
 
+-- | Analyze the grammar's production interdependencies and produce a 'SeparatedParser' from each production's parser.
 separated :: forall p g s. (Alternative (p g s), Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g,
                             AmbiguousAlternative (GrammarFunctor (p g s))) =>
              g (Fixed p g s) -> g (SeparatedParser p g s)
@@ -778,9 +789,7 @@ fixNullabilities gf = Const . nullable . getConst Rank2.<$> go initial
          initial = const (Const (ParserFlags True (StaticDependencies $ const (Const False) Rank2.<$> gf))) Rank2.<$> gf
 {-# INLINABLE fixNullabilities #-}
 
--- | Parse the given input using a context-free grammar separated into two parts: the first specifying all the
--- left-recursive productions, the second all others. The first function argument specifies the left-recursive
--- dependencies among the grammar productions.
+-- | Parse the given input using a context-free grammar 'separated' into left-recursive and other productions.
 parseSeparated :: forall p g rl s. (Rank2.Apply g, Rank2.Foldable g, Eq s, FactorialMonoid s, LeftReductive s,
                                     TailsParsing (p g s), GrammarConstraint (p g s) g,
                                     GrammarFunctor (p g s) ~ rl s, FallibleResults rl,

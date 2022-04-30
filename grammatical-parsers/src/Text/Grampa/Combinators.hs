@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeFamilies #-}
-
+-- | A collection of useful parsing combinators not found in dependent libraries.
 module Text.Grampa.Combinators (moptional, concatMany, concatSome, someNonEmpty,
                                 flag, count, upto,
                                 delimiter, operator, keyword) where

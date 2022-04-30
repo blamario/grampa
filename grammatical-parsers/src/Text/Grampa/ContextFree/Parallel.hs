@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP, FlexibleContexts, InstanceSigs, GeneralizedNewtypeDeriving,
              RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
+-- | A context-free, non-memoizing parser that handles all alternatives in parallel.
 module Text.Grampa.ContextFree.Parallel (ResultList(..), Parser)
 where
 
