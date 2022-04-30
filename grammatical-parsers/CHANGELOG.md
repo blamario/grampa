@@ -12,6 +12,7 @@ Version 0.6
 * Unified the `FailureInfo` type with `ParseFailure`
 * Parameterized `ParseFailure` with a position type
 * Eliminated the `size-based` and `testing-feat` dependencies
+* Hid the `Text.Grampa.ContextFree.Memoizing` module
 
 Version 0.5.2
 ---------------
