@@ -62,7 +62,7 @@ data Fixed p g s a =
    Parser {
       complete, direct, direct0, direct1, indirect :: p g s a,
       isAmbiguous :: Maybe (AmbiguityWitness a),
-      cyclicDescendants :: Rank2.Apply g => g (Const (ParserFlags g)) -> ParserFlags g}
+      cyclicDescendants :: g (Const (ParserFlags g)) -> ParserFlags g}
    -- | a parser that doesn't start with a 'nonTerminal'
    | DirectParser {
       complete, direct0, direct1 :: p g s a}
@@ -123,8 +123,7 @@ mapPrimitive f p@Parser{} = Parser{complete= f (complete p),
                                    direct0= f (direct0 p),
                                    direct1= f (direct1 p)}
 
-general, general' :: Alternative (p g s) => Fixed p g s a -> Fixed p g s a
-
+general, general' :: (Rank2.Apply g, Alternative (p g s)) => Fixed p g s a -> Fixed p g s a
 general p = Parser{
    complete= complete p,
    direct = direct p',
@@ -136,7 +135,6 @@ general p = Parser{
                    _ -> Nothing,
    cyclicDescendants= cyclicDescendants p'}
    where p' = general' p
-
 general' p@PositiveDirectParser{} = Parser{
    complete= complete p,
    direct = complete p,
@@ -166,7 +164,7 @@ type LeftRecParsing p g s f = (Eq s, LeftReductive s, FactorialMonoid s, Alterna
 -- 'parseComplete' :: ("Rank2".'Rank2.Apply' g, "Rank2".'Rank2.Traversable' g, 'FactorialMonoid' s) =>
 --                  g (LeftRecursive.'Parser' g s) -> s -> g ('Compose' ('ParseResults' s) [])
 -- @
-instance (GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) => MultiParsing (Fixed p g s) where
+instance (Rank2.Apply g, GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) => MultiParsing (Fixed p g s) where
    type GrammarConstraint (Fixed p g s) g' = (GrammarConstraint (p g s) g', g ~ g',
                                               Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
    type ResultFunctor (Fixed p g s) = ResultFunctor (p g s)
@@ -185,7 +183,7 @@ instance (GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) => MultiParsing 
    {-# INLINE parseComplete #-}
 
 -- | Parser transformer for left-recursive grammars.
-instance (GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) => GrammarParsing (Fixed p g s) where
+instance (Rank2.Apply g, GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) => GrammarParsing (Fixed p g s) where
    type ParserGrammar (Fixed p g s) = g
    type GrammarFunctor (Fixed p g s) = ParserFunctor p g s
    parsingResult :: s -> ParserFunctor p g s a -> ResultFunctor (p g s) (s, a)
@@ -234,7 +232,7 @@ instance Functor (p g s) => Functor (Fixed p g s) where
       isAmbiguous= Nothing}
    {-# INLINABLE fmap #-}
 
-instance Alternative (p g s) => Applicative (Fixed p g s) where
+instance (Rank2.Apply g, Alternative (p g s)) => Applicative (Fixed p g s) where
    pure a = DirectParser{complete= pure a,
                          direct0= pure a,
                          direct1= empty}
@@ -278,7 +276,7 @@ instance Alternative (p g s) => Applicative (Fixed p g s) where
    {-# INLINABLE pure #-}
    {-# INLINABLE (<*>) #-}
 
-instance Alternative (p g s) => Alternative (Fixed p g s) where
+instance (Rank2.Apply g, Alternative (p g s)) => Alternative (Fixed p g s) where
    empty = PositiveDirectParser{complete= empty}
    p@PositiveDirectParser{} <|> q@PositiveDirectParser{} = PositiveDirectParser{complete= complete p <|> complete q}
    p@PositiveDirectParser{} <|> q@DirectParser{} = DirectParser{
@@ -366,7 +364,7 @@ depUnion :: Rank2.Apply g => Dependencies g -> Dependencies g -> Dependencies g
 depUnion (StaticDependencies d1) (StaticDependencies d2) = StaticDependencies (Rank2.liftA2 union d1 d2)
 depUnion _ _ = DynamicDependencies
 
-instance (Alternative (p g s), Monad (p g s)) => Monad (Fixed p g s) where
+instance (Rank2.Apply g, Alternative (p g s), Monad (p g s)) => Monad (Fixed p g s) where
    return = pure
    (>>) = (*>)
    PositiveDirectParser p >>= cont = PositiveDirectParser (p >>= complete . cont)
@@ -397,18 +395,18 @@ instance (Alternative (p g s), Monad (p g s)) => Monad (Fixed p g s) where
             p'@Parser{} = general' p
 
 #if MIN_VERSION_base(4,13,0)
-instance (Alternative (p g s), MonadFail (p g s)) => MonadFail (Fixed p g s) where
+instance (Rank2.Apply g, Alternative (p g s), MonadFail (p g s)) => MonadFail (Fixed p g s) where
 #endif
    fail msg = PositiveDirectParser{complete= fail msg}
 
-instance MonadPlus (p g s) => MonadPlus (Fixed p g s) where
+instance (Rank2.Apply g, MonadPlus (p g s)) => MonadPlus (Fixed p g s) where
    mzero = empty
    mplus = (<|>)
 
-instance (Alternative (p g s), Semigroup x) => Semigroup (Fixed p g s x) where
+instance (Rank2.Apply g, Alternative (p g s), Semigroup x) => Semigroup (Fixed p g s x) where
    (<>) = liftA2 (<>)
 
-instance (Alternative (p g s), Monoid x) => Monoid (Fixed p g s x) where
+instance (Rank2.Apply g, Alternative (p g s), Monoid x) => Monoid (Fixed p g s x) where
    mempty = pure mempty
    mappend = (<>)
 
@@ -430,7 +428,7 @@ liftPure p = DirectParser{complete= p,
                           direct1= empty}
 {-# INLINE liftPure #-}
 
-instance (Parsing (p g s), InputParsing (Fixed p g s)) => Parsing (Fixed p g s) where
+instance (Rank2.Apply g, Parsing (p g s), InputParsing (Fixed p g s)) => Parsing (Fixed p g s) where
    eof = primitive eof empty eof
    try (PositiveDirectParser p) = PositiveDirectParser (try p)
    try p@DirectParser{} = DirectParser{
@@ -472,7 +470,8 @@ instance (Parsing (p g s), InputParsing (Fixed p g s)) => Parsing (Fixed p g s) 
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
    unexpected msg = liftPositive (unexpected msg)
 
-instance (InputParsing (Fixed p g s), DeterministicParsing (p g s)) => DeterministicParsing (Fixed p g s) where
+instance (Rank2.Apply g, InputParsing (Fixed p g s), DeterministicParsing (p g s)) =>
+         DeterministicParsing (Fixed p g s) where
    p@DirectParser{} <<|> q@PositiveDirectParser{} = DirectParser{
       complete= complete p <<|> complete q,
       direct0 = direct0 p,
@@ -533,7 +532,8 @@ instance (InputParsing (Fixed p g s), DeterministicParsing (p g s)) => Determini
             d1 = direct1 p *> mcp
             mcp = skipAll (complete p)
 
-instance (CommittedParsing (p g s), CommittedResults (p g s) ~ ParseResults s) => CommittedParsing (Fixed p g s) where
+instance (Rank2.Apply g, CommittedParsing (p g s), CommittedResults (p g s) ~ ParseResults s) =>
+         CommittedParsing (Fixed p g s) where
    type CommittedResults (Fixed p g s) = ParseResults s
    commit (PositiveDirectParser p) = PositiveDirectParser (commit p)
    commit p@DirectParser{} = DirectParser{
@@ -563,7 +563,7 @@ instance (CommittedParsing (p g s), CommittedResults (p g s) ~ ParseResults s) =
       isAmbiguous= Nothing,
       cyclicDescendants= cyclicDescendants p}
 
-instance (LookAheadParsing (p g s), InputParsing (Fixed p g s)) => LookAheadParsing (Fixed p g s) where
+instance (Rank2.Apply g, LookAheadParsing (p g s), InputParsing (Fixed p g s)) => LookAheadParsing (Fixed p g s) where
    lookAhead p@PositiveDirectParser{} = DirectParser{
       complete= lookAhead (complete p),
       direct0= lookAhead (complete p),
@@ -581,7 +581,7 @@ instance (LookAheadParsing (p g s), InputParsing (Fixed p g s)) => LookAheadPars
       indirect= lookAhead (indirect p),
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
 
-instance (LeftReductive s, FactorialMonoid s, InputParsing (p g s), ParserInput (p g s) ~ s) =>
+instance (Rank2.Apply g, LeftReductive s, FactorialMonoid s, InputParsing (p g s), ParserInput (p g s) ~ s) =>
          InputParsing (Fixed p g s) where
    type ParserInput (Fixed p g s) = s
    getInput = primitive getInput empty getInput
@@ -602,7 +602,8 @@ instance (LeftReductive s, FactorialMonoid s, InputParsing (p g s), ParserInput 
 
    {-# INLINABLE string #-}
 
-instance (LeftReductive s, FactorialMonoid s, Show s, TraceableParsing (p g s), ParserInput (p g s) ~ s) =>
+instance (Rank2.Apply g, LeftReductive s, FactorialMonoid s, Show s,
+          TraceableParsing (p g s), ParserInput (p g s) ~ s) =>
          TraceableParsing (Fixed p g s) where
    traceInput description p@PositiveDirectParser{} = p{
       complete= traceInput (\s-> "direct+ " <> description s) (complete p)}
@@ -618,7 +619,7 @@ instance (LeftReductive s, FactorialMonoid s, Show s, TraceableParsing (p g s), 
       indirect= traceBy "indirect" (indirect p)}
       where traceBy mode = traceInput (\s-> "(" <> mode <> ") " <> description s)
 
-instance (LeftReductive s, FactorialMonoid s,
+instance (Rank2.Apply g, LeftReductive s, FactorialMonoid s,
           ConsumedInputParsing (p g s), ParserInput (p g s) ~ s) => ConsumedInputParsing (Fixed p g s) where
    match (PositiveDirectParser p) = PositiveDirectParser (match p)
    match p@DirectParser{} = DirectParser{
@@ -634,7 +635,7 @@ instance (LeftReductive s, FactorialMonoid s,
       isAmbiguous= Nothing,
       cyclicDescendants= cyclicDescendants p}
 
-instance (Show s, TextualMonoid s, InputCharParsing (p g s), ParserInput (p g s) ~ s) =>
+instance (Rank2.Apply g, Show s, TextualMonoid s, InputCharParsing (p g s), ParserInput (p g s) ~ s) =>
          InputCharParsing (Fixed p g s) where
    satisfyCharInput predicate = liftPositive (satisfyCharInput predicate)
    notSatisfyChar predicate = primitive (notSatisfyChar predicate) empty (notSatisfyChar predicate)
@@ -645,13 +646,13 @@ instance (Show s, TextualMonoid s, InputCharParsing (p g s), ParserInput (p g s)
                                         (takeCharsWhile1 predicate) (takeCharsWhile predicate)
    takeCharsWhile1 predicate = liftPositive (takeCharsWhile1 predicate)
 
-instance (CharParsing (p g s), InputCharParsing (Fixed p g s), TextualMonoid s,
+instance (Rank2.Apply g, CharParsing (p g s), InputCharParsing (Fixed p g s), TextualMonoid s,
           s ~ ParserInput (Fixed p g s), Show s) => CharParsing (Fixed p g s) where
    satisfy predicate = liftPositive (Char.satisfy predicate)
    string s = Textual.toString (error "unexpected non-character") <$> string (fromString s)
    text t = (fromString . Textual.toString (error "unexpected non-character")) <$> string (Textual.fromText t)
 
-instance AmbiguousParsing (p g s) => AmbiguousParsing (Fixed p g s) where
+instance (AmbiguousParsing (p g s), Rank2.Apply g) => AmbiguousParsing (Fixed p g s) where
    ambiguous (PositiveDirectParser p) = PositiveDirectParser (ambiguous p)
    ambiguous p@DirectParser{} = DirectParser{complete= ambiguous (complete p),
                                              direct0=  ambiguous (direct0 p),

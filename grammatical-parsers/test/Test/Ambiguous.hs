@@ -22,6 +22,8 @@ data Test p = Test{
    amb :: p (Ambiguous Amb)
    }
 
+$(Rank2.TH.deriveAll ''Test)
+
 grammar :: Test (Parser Test String) -> Test (Parser Test String)
 grammar Test{..} = Test{
    amb = ambiguous (Xy1 <$> string "x" <*> moptional (string "y")
@@ -29,5 +31,3 @@ grammar Test{..} = Test{
                     <|> Xyz <$> amb <*> string "z"
                     <|> Xyzw <$> amb <*> string "w")
    }
-
-$(Rank2.TH.deriveAll ''Test)

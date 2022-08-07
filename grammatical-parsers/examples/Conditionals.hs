@@ -29,10 +29,10 @@ instance (Show (f t), Show (f e)) => Show (Conditionals t e f) where
                            (", test= " ++ showsPrec prec (test a)
                             (", term= " ++ showsPrec prec (term a) ("}" ++ rest)))
 
+$(Rank2.TH.deriveAll ''Conditionals)
+
 instance TokenParsing (Parser (Conditionals t e) String)
 instance LexicalParsing (Parser (Conditionals t e) String)
-
-$(Rank2.TH.deriveAll ''Conditionals)
 
 conditionals :: (ConditionalDomain t e, LexicalParsing (Parser g String))
              => GrammarBuilder (Conditionals t e) g Parser String

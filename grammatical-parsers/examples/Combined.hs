@@ -8,6 +8,7 @@ import Control.Applicative
 import qualified Data.Bool
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Rank2
 import qualified Rank2.TH
 import Text.Grampa (TokenParsing, LexicalParsing, GrammarBuilder)
 import Text.Grampa.ContextFree.LeftRecursive (Parser)
@@ -119,10 +120,10 @@ instance (Show (f Domain), Show (f String)) => Show (Expression f) where
                            (", conditionalGrammar=" ++ showsPrec prec (conditionalGrammar g)
                            (", lambdaGrammar=" ++ showsPrec prec (lambdaGrammar g) ("}" ++ rest))))))
 
+$(Rank2.TH.deriveAll ''Expression)
+
 instance TokenParsing (Parser Expression String)
 instance LexicalParsing (Parser Expression String)
-
-$(Rank2.TH.deriveAll ''Expression)
 
 {-
 instance Rank2.Functor Expression where
@@ -191,7 +192,7 @@ instance Rank2.Traversable Expression where
                   <*> Rank2.traverse f (lambdaGrammar g)
 -}
 
-expression :: (LexicalParsing (Parser g String)) => GrammarBuilder Expression g Parser String
+expression :: (Rank2.Apply g, LexicalParsing (Parser g String)) => GrammarBuilder Expression g Parser String
 expression Expression{..} =
    let combinedExpr = Arithmetic.expr arithmeticGrammar
                       <|> Boolean.expr booleanGrammar

@@ -8,6 +8,7 @@ import Data.Map (Map, insert, (!))
 import Data.Monoid ((<>))
 import Text.Parser.Token (symbol, whiteSpace)
 
+import qualified Rank2
 import qualified Rank2.TH
 
 import Text.Grampa
@@ -95,7 +96,8 @@ instance (Show (f e), Show (f String)) => Show (Lambda e f) where
 
 $(Rank2.TH.deriveAll ''Lambda)
 
-lambdaCalculus :: (LexicalParsing (Parser g String), LambdaDomain e) => GrammarBuilder (Lambda e) g Parser String
+lambdaCalculus :: (Rank2.Apply g, LexicalParsing (Parser g String), LambdaDomain e) =>
+                  GrammarBuilder (Lambda e) g Parser String
 lambdaCalculus Lambda{..} = Lambda{
    expr= abstraction,
    abstraction= lambda <$> (symbol "\\" *> varName <* symbol "->") <*> abstraction

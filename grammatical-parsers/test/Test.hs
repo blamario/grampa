@@ -49,10 +49,10 @@ data Recursive f = Recursive{start :: f String,
                              next :: f String}
 deriving instance (Show (f String), Show (f [String])) => Show (Recursive f)
 
+$(Rank2.TH.deriveAll ''Recursive)
+
 instance TokenParsing (LeftRecursive.Parser Recursive String)
 instance LexicalParsing (LeftRecursive.Parser Recursive String)
-
-$(Rank2.TH.deriveAll ''Recursive)
 
 recursiveManyGrammar Recursive{..} = Recursive{
    start= optional (string "[") *> (concat <$> rec) <* optional next,

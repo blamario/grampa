@@ -18,6 +18,7 @@ import Data.Char (isDigit)
 import Data.Functor.Classes (Show1, showsPrec1)
 import Text.Grampa
 import Text.Grampa.ContextFree.LeftRecursive (Parser)
+import qualified Rank2
 import qualified Rank2.TH
 ~~~
 
@@ -26,7 +27,7 @@ of writing the parser definitions as top-level bindings, you can and should grou
 like this:
 
 ~~~ {.haskell}
-arithmetic :: GrammarBuilder Arithmetic g Parser String
+arithmetic :: Rank2.Apply g => GrammarBuilder Arithmetic g Parser String
 arithmetic Arithmetic{..} = Arithmetic{
    sum= product
          <|> string "-" *> (negate <$> product)
