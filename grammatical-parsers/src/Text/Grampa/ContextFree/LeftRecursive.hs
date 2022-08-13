@@ -1,7 +1,6 @@
 {-# LANGUAGE ConstraintKinds, CPP, FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies, TypeOperators,
              UndecidableInstances #-}
-{-# OPTIONS -fno-full-laziness #-}
 -- | A context-free memoizing parser that can handle left-recursive grammars.
 module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..),
                                               longest, peg, terminalPEG,
