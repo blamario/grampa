@@ -232,14 +232,15 @@ instance (LeftReductive s, FactorialMonoid s, Ord s) => InputParsing (Parser g s
          | otherwise = failure (ParseFailure (fromEnd $ Factorial.length s') [LiteralDescription s] [])
    {-# INLINABLE string #-}
 
-instance InputParsing (Parser g s)  => TraceableParsing (Parser g s) where
+instance (InputParsing (Parser g s), FactorialMonoid s)  => TraceableParsing (Parser g s) where
    traceInput :: forall a. (s -> String) -> Parser g s a -> Parser g s a
    traceInput description (Parser p) = Parser q
       where q :: forall x. s -> (a -> s -> x) -> (ParseFailure Pos s -> x) -> x
             q rest success failure = traceWith "Parsing " (p rest success' failure')
                where traceWith prefix = trace (prefix <> description rest)
                      failure' f = traceWith "Failed " (failure f)
-                     success' r suffix = traceWith "Parsed " (success r suffix)
+                     success' r suffix = trace ("Parsed " <> description prefix) (success r suffix)
+                        where prefix = Factorial.take (Factorial.length rest - Factorial.length prefix) rest
 
 instance (Ord s, Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p

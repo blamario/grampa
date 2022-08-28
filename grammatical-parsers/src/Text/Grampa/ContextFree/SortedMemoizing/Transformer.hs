@@ -17,6 +17,7 @@ import Data.Either (partitionEithers)
 import Data.Function (on)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Identity (Identity(..))
+import Data.List (intercalate)
 import Data.List.NonEmpty (NonEmpty((:|)), groupBy, nonEmpty, fromList, toList)
 import Data.Monoid.Null (MonoidNull(null))
 import Data.Monoid.Factorial (FactorialMonoid, splitPrimePrefix)
@@ -239,12 +240,15 @@ instance (Applicative m, LeftReductive s, FactorialMonoid s, Ord s) => InputPars
             p rest = singleResult 0 rest ()
    {-# INLINABLE string #-}
 
-instance InputParsing (ParserT m g s) => TraceableParsing (ParserT m g s) where
+instance (InputParsing (ParserT m g s), FactorialMonoid s) => TraceableParsing (ParserT m g s) where
    traceInput description (Parser p) = Parser q
-      where q rest = case traceWith "Parsing " (p rest)
-                     of rl@(ResultList [] _) -> traceWith "Failed " rl
-                        rl -> traceWith "Parsed " rl
-               where traceWith prefix = trace (prefix <> case rest of ((s, _):_) -> description s; [] -> "EOF")
+      where q rest@((s, _):_) = case trace ("Parsing " <> description s) (p rest) of
+               rl@(ResultList [] _) -> trace ("Failed " <> descriptionWith id) rl
+               rl@(ResultList rs _) -> trace ("Parsed [" <> intercalate ", " (describeResult <$> rs) <> "]") rl
+               where describeResult (ResultsOfLengthT (ROL len _ _)) = descriptionWith (Factorial.take len)
+                     descriptionWith f = case rest of
+                        ((s, _):_) -> description (f s)
+                        [] -> "EOF"
 
 instance (Applicative m, Ord s, Show s, TextualMonoid s) => InputCharParsing (ParserT m g s) where
    satisfyCharInput predicate = Parser p

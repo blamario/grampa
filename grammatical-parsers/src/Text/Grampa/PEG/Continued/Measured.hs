@@ -225,14 +225,15 @@ instance (LeftReductive s, FactorialMonoid s, Ord s) => ConsumedInputParsing (Pa
             q rest success failure = p rest success' failure
                where success' r !len suffix = success (Factorial.take len rest, r) len suffix
 
-instance InputParsing (Parser g s)  => TraceableParsing (Parser g s) where
+instance (InputParsing (Parser g s), FactorialMonoid s)  => TraceableParsing (Parser g s) where
    traceInput :: forall a. (s -> String) -> Parser g s a -> Parser g s a
    traceInput description (Parser p) = Parser q
       where q :: forall x. s -> (a -> Int -> s -> x) -> (ParseFailure Pos s -> x) -> x
             q rest success failure = traceWith "Parsing " (p rest success' failure')
                where traceWith prefix = trace (prefix <> description rest)
                      failure' f = traceWith "Failed " (failure f)
-                     success' r !len suffix = traceWith "Parsed " (success r len suffix)
+                     success' r !len suffix =
+                        trace ("Parsed " <> description (Factorial.take len rest)) (success r len suffix)
 
 instance (Ord s, Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p

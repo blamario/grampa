@@ -13,6 +13,7 @@ import Control.Monad (MonadFail(fail))
 #endif
 import Data.Either (partitionEithers)
 import Data.Functor.Compose (Compose(..))
+import Data.List (intercalate)
 import Data.List.NonEmpty (NonEmpty((:|)), nonEmpty, toList)
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Null (MonoidNull(null))
@@ -200,13 +201,15 @@ instance (LeftReductive s, FactorialMonoid s, Ord s) => InputParsing (Parser g s
             p rest = ResultList [ResultsOfLength 0 rest (():|[])] mempty
    {-# INLINABLE string #-}
 
-instance InputParsing (Parser g s)  => TraceableParsing (Parser g s) where
+instance (InputParsing (Parser g s), FactorialMonoid s) => TraceableParsing (Parser g s) where
    traceInput description (Parser p) = Parser q
-      where q rest@((s, _):_) = case traceWith "Parsing " (p rest)
-                                of rl@(ResultList [] _) -> traceWith "Failed " rl
-                                   rl -> traceWith "Parsed " rl
-               where traceWith prefix = trace (prefix <> description s)
-            q [] = p []
+      where q rest@((s, _):_) = case trace ("Parsing " <> description s) (p rest) of
+               rl@(ResultList [] _) -> trace ("Failed " <> descriptionWith id) rl
+               rl@(ResultList rs _) -> trace ("Parsed [" <> intercalate ", " (describeResult <$> rs) <> "]") rl
+               where describeResult (ResultsOfLength len _ _) = descriptionWith (Factorial.take len)
+                     descriptionWith f = case rest of
+                        ((s, _):_) -> description (f s)
+                        [] -> "EOF"
 
 instance (Ord s, Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p

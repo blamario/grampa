@@ -201,10 +201,12 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Pars
            | otherwise = NoParse (ParseFailure (fromEnd $ Factorial.length s') [LiteralDescription s] [])
    {-# INLINABLE string #-}
 
-instance InputParsing (Parser g s)  => TraceableParsing (Parser g s) where
+instance (InputParsing (Parser g s), FactorialMonoid s)  => TraceableParsing (Parser g s) where
    traceInput description (Parser p) = Parser q
       where q s = case traceWith "Parsing " (p s)
-                  of r@Parsed{} -> traceWith "Parsed " r
+                  of r@Parsed{}
+                        | let prefix = Factorial.take (Factorial.length s - Factorial.length (parsedSuffix r)) s
+                          -> trace ("Parsed " <> description prefix) r
                      r@NoParse{} -> traceWith "Failed " r
                where traceWith prefix = trace (prefix <> description s)
 

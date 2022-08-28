@@ -214,10 +214,12 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
          | s `isPrefixOf` s' = Parsed s (Factorial.drop (Factorial.length s) rest)
       p rest = NoParse (ParseFailure (Down $ length rest) [LiteralDescription s] [])
 
-instance (InputParsing (Parser g s), Monoid s)  => TraceableParsing (Parser g s) where
+instance (InputParsing (Parser g s), FactorialMonoid s)  => TraceableParsing (Parser g s) where
    traceInput description (Parser p) = Parser q
       where q rest = case traceWith "Parsing " (p rest)
-                  of r@Parsed{} -> traceWith "Parsed " r
+                  of r@Parsed{}
+                        | let prefix = Factorial.take (Factorial.length rest - Factorial.length (parsedSuffix r)) rest
+                          -> traceWith "Parsed " r
                      r@NoParse{} -> traceWith "Failed " r
                where traceWith prefix = trace (prefix <> description (case rest
                                                                       of ((s, _):_) -> s

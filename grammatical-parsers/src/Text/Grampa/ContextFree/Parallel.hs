@@ -13,6 +13,7 @@ import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
 import Data.Functor.Compose (Compose(..))
 import Data.Kind (Type)
+import Data.List (intercalate)
 import Data.Semigroup (Semigroup(..))
 import qualified Data.Semigroup.Cancellative as Cancellative
 import Data.Monoid (Monoid(mappend, mempty))
@@ -178,12 +179,14 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s, Ord s) => InputParsin
       p s' | Just suffix <- Cancellative.stripPrefix s s' = ResultList (Leaf $ ResultInfo suffix s) noFailure
            | otherwise = ResultList mempty (ParseFailure (fromEnd $ Factorial.length s') [LiteralDescription s] [])
 
-instance InputParsing (Parser g s)  => TraceableParsing (Parser g s) where
+instance (FactorialMonoid s, InputParsing (Parser g s))  => TraceableParsing (Parser g s) where
    traceInput description (Parser p) = Parser q
-      where q s = case traceWith "Parsing " (p s)
-                  of rl@(ResultList EmptyTree _) -> traceWith "Failed " rl
-                     rl -> traceWith "Parsed " rl
-               where traceWith prefix = trace (prefix <> description s)
+      where q s = case trace ("Parsing " <> description s) (p s)
+                  of rl@(ResultList EmptyTree _) -> trace ("Failed " <> description s) rl
+                     rl@(ResultList rs _) ->
+                        trace ("Parsed [" <> intercalate ", " (describeResult <$> toList rs) <> "]") rl
+               where describeResult (ResultInfo s' _) =
+                        description (Factorial.take (Factorial.length s - Factorial.length s') s)
 
 instance (Ord s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p

@@ -218,10 +218,10 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => ConsumedInputParsi
                      of Parsed l prefix suffix -> Parsed l (Factorial.take l rest, prefix) suffix
                         NoParse failure -> NoParse failure
 
-instance InputParsing (Parser g s)  => TraceableParsing (Parser g s) where
+instance (InputParsing (Parser g s), FactorialMonoid s)  => TraceableParsing (Parser g s) where
    traceInput description (Parser p) = Parser q
       where q s = case traceWith "Parsing " (p s)
-                  of r@Parsed{} -> traceWith "Parsed " r
+                  of r@Parsed{} -> trace ("Parsed " <> description (Factorial.take (parsedLength r) s)) r
                      r@NoParse{} -> traceWith "Failed " r
                where traceWith prefix = trace (prefix <> description s)
 
