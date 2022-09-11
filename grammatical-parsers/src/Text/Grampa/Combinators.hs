@@ -1,11 +1,11 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies, TypeOperators #-}
 -- | A collection of useful parsing combinators not found in dependent libraries.
 module Text.Grampa.Combinators (moptional, concatMany, concatSome, someNonEmpty,
                                 flag, count, upto,
                                 delimiter, operator, keyword) where
 
-import Control.Applicative(Applicative(..), Alternative(..))
-import Data.List.NonEmpty (NonEmpty((:|)), fromList)
+import Control.Applicative(Alternative(..))
+import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Monoid (Monoid, (<>))
 import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Semigroup (Semigroup(sconcat))

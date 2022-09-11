@@ -1,6 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes, ConstraintKinds, DefaultSignatures, DeriveDataTypeable, DeriveFunctor,
              FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, OverloadedStrings,
-             RankNTypes, ScopedTypeVariables, TypeApplications, TypeFamilies, TypeSynonymInstances,
+             RankNTypes, ScopedTypeVariables, TypeApplications, TypeFamilies, TypeOperators, TypeSynonymInstances,
              UndecidableInstances #-}
 -- | The core classes supported by all the parsers in this library.
 module Text.Grampa.Class (MultiParsing(..), GrammarParsing(..),

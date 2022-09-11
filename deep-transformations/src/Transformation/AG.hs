@@ -8,13 +8,14 @@
 
 module Transformation.AG where
 
+import Data.Kind (Type)
 import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Rank2
 import qualified Transformation
 
 -- | Type family that maps a node type to the type of its attributes, indexed per type constructor.
-type family Atts (f :: * -> *) a
+type family Atts (f :: Type -> Type) a
 
 -- | Type constructor wrapping the inherited attributes for the given transformation.
 newtype Inherited t a = Inherited{inh :: Atts (Inherited t) a}

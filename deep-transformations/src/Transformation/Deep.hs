@@ -1,5 +1,5 @@
 {-# Language DeriveDataTypeable, FlexibleInstances, KindSignatures, MultiParamTypeClasses, RankNTypes,
-             StandaloneDeriving, TypeFamilies, UndecidableInstances #-}
+             StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | Type classes 'Functor', 'Foldable', and 'Traversable' that correspond to the standard type classes of the same
 -- name, but applying the given transformation to every descendant of the given tree node. The corresponding classes
@@ -13,8 +13,9 @@ import Data.Data (Data, Typeable)
 import Data.Functor.Compose (Compose)
 import Data.Functor.Const (Const)
 import qualified Data.Functor as Rank1
-import qualified Rank2
 import qualified Data.Functor
+import Data.Kind (Type)
+import qualified Rank2
 import           Transformation (Transformation, Domain, Codomain)
 import qualified Transformation.Full as Full
 
@@ -34,12 +35,14 @@ class (Transformation t, Rank2.Traversable (g (Domain t))) => Traversable t g wh
    traverse :: Codomain t ~ Compose m f => t -> g (Domain t) (Domain t) -> m (g f f)
 
 -- | Like 'Data.Functor.Product.Product' for data types with two type constructor parameters
-data Product g h (d :: * -> *) (s :: * -> *) = Pair{fst :: s (g d d),
-                                                    snd :: s (h d d)}
+data Product g h (d :: Type -> Type) (s :: Type -> Type) =
+   Pair{fst :: s (g d d),
+        snd :: s (h d d)}
 
 -- | Like 'Data.Functor.Sum.Sum' for data types with two type constructor parameters
-data Sum g h (d :: * -> *) (s :: * -> *) = InL (s (g d d))
-                                         | InR (s (h d d))
+data Sum g h (d :: Type -> Type) (s :: Type -> Type) =
+   InL (s (g d d))
+   | InR (s (h d d))
 
 instance Rank2.Functor (Product g h p) where
    f <$> ~(Pair left right) = Pair (f left) (f right)

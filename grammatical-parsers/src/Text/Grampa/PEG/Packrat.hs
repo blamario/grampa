@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, FlexibleContexts, TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE CPP, FlexibleContexts, TypeFamilies, TypeOperators, UndecidableInstances #-}
 -- | Packrat parser
 module Text.Grampa.PEG.Packrat (Parser(..), Result(..)) where
 
@@ -216,14 +216,16 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
 
 instance (InputParsing (Parser g s), FactorialMonoid s)  => TraceableParsing (Parser g s) where
    traceInput description (Parser p) = Parser q
-      where q rest = case traceWith "Parsing " (p rest)
+      where q rest
+              | let input = case rest
+                            of ((s, _):_) -> s
+                               [] -> mempty
+                    traceWith prefix = trace (prefix <> description input)
+              = case traceWith "Parsing " (p rest)
                   of r@Parsed{}
-                        | let prefix = Factorial.take (Factorial.length rest - Factorial.length (parsedSuffix r)) rest
-                          -> traceWith "Parsed " r
+                        | let prefix = Factorial.take (Factorial.length input - Factorial.length (parsedSuffix r)) input
+                        -> trace ("Parsed " <> description prefix) r
                      r@NoParse{} -> traceWith "Failed " r
-               where traceWith prefix = trace (prefix <> description (case rest
-                                                                      of ((s, _):_) -> s
-                                                                         [] -> mempty))
 
 instance (Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p

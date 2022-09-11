@@ -32,6 +32,7 @@ import Data.Monoid (Monoid(..))
 import Data.Functor.Const (Const(..))
 import Data.Functor.Product (Product(Pair))
 import Data.Functor.Sum (Sum(InL, InR))
+import Data.Kind (Type)
 import Data.Proxy (Proxy(..))
 import qualified GHC.Generics as Generics
 
@@ -123,7 +124,7 @@ class DistributiveTraversable g => Distributive g where
    cotraverse f = (fmap (f . Rank1.getCompose)) . distribute
 
 -- | A weaker 'Distributive' that requires 'Rank1.Traversable' to use, not just a 'Rank1.Functor'.
-class Functor g => DistributiveTraversable (g :: (k -> *) -> *) where
+class Functor g => DistributiveTraversable (g :: (k -> Type) -> Type) where
    collectTraversable :: Rank1.Traversable f1 => (a -> g f2) -> f1 a -> g (Rank1.Compose f1 f2)   
    distributeTraversable :: Rank1.Traversable f1 => f1 (g f2) -> g (Rank1.Compose f1 f2)
    cotraverseTraversable :: Rank1.Traversable f1 => (forall x. f1 (f2 x) -> f x) -> f1 (g f2) -> g f
@@ -194,7 +195,7 @@ instance Semigroup (g (f a)) => Semigroup (Flip g a f) where
 
 instance Monoid (g (f a)) => Monoid (Flip g a f) where
    mempty = Flip mempty
-   Flip x `mappend` Flip y = Flip (x `mappend` y)
+   mappend = (<>)
 
 instance Rank1.Functor g => Rank2.Functor (Flip g a) where
    f <$> Flip g = Flip (f Rank1.<$> g)

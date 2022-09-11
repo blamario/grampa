@@ -19,8 +19,11 @@ import Control.Applicative (liftA2, liftA3)
 import Control.Monad (replicateM)
 import Data.Distributive (cotraverse)
 import Data.Monoid ((<>))
-import Language.Haskell.TH
-import Language.Haskell.TH.Syntax (BangType, VarBangType, getQ, putQ)
+import qualified Language.Haskell.TH as TH
+import Language.Haskell.TH (Q, TypeQ, Name, TyVarBndr(KindedTV, PlainTV), Clause, Dec(..), Con(..), Type(..), Exp(..),
+                            Inline(Inlinable, Inline), RuleMatch(FunLike), Phases(AllPhases),
+                            appE, conE, conP, instanceD, varE, varP, normalB, pragInlD, recConE, wildP)
+import Language.Haskell.TH.Syntax (BangType, VarBangType, Info(TyConI), getQ, putQ, newName)
 
 import qualified Rank2
 
@@ -35,14 +38,14 @@ deriveFunctor :: Name -> Q [Dec]
 deriveFunctor ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Functor ty
    (constraints, dec) <- genFmap cs
-   sequence [instanceD (cxt $ map pure constraints) instanceType
+   sequence [instanceD (TH.cxt $ map pure constraints) instanceType
              [pure dec, pragInlD '(Rank2.<$>) Inline FunLike AllPhases]]
 
 deriveApply :: Name -> Q [Dec]
 deriveApply ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Apply ty
    (constraints, dec) <- genAp cs
-   sequence [instanceD (cxt $ map pure constraints) instanceType
+   sequence [instanceD (TH.cxt $ map pure constraints) instanceType
              [pure dec, genLiftA2 cs, genLiftA3 cs,
               pragInlD '(Rank2.<*>) Inlinable FunLike AllPhases,
               pragInlD 'Rank2.liftA2 Inlinable FunLike AllPhases]]
@@ -52,7 +55,7 @@ unsafeDeriveApply :: Name -> Q [Dec]
 unsafeDeriveApply ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Apply ty
    (constraints, dec) <- genApUnsafely cs
-   sequence [instanceD (cxt $ map pure constraints) instanceType
+   sequence [instanceD (TH.cxt $ map pure constraints) instanceType
              [pure dec, genLiftA2Unsafely cs, genLiftA3Unsafely cs,
               pragInlD '(Rank2.<*>) Inlinable FunLike AllPhases,
               pragInlD 'Rank2.liftA2 Inlinable FunLike AllPhases]]
@@ -61,39 +64,39 @@ deriveApplicative :: Name -> Q [Dec]
 deriveApplicative ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Applicative ty
    (constraints, dec) <- genPure cs
-   sequence [instanceD (cxt $ map pure constraints) instanceType
+   sequence [instanceD (TH.cxt $ map pure constraints) instanceType
              [pure dec, pragInlD 'Rank2.pure Inline FunLike AllPhases]]
 
 deriveFoldable :: Name -> Q [Dec]
 deriveFoldable ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Foldable ty
    (constraints, dec) <- genFoldMap cs
-   sequence [instanceD (cxt $ map pure constraints) instanceType
+   sequence [instanceD (TH.cxt $ map pure constraints) instanceType
              [pure dec, pragInlD 'Rank2.foldMap Inlinable FunLike AllPhases]]
 
 deriveTraversable :: Name -> Q [Dec]
 deriveTraversable ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Traversable ty
    (constraints, dec) <- genTraverse cs
-   sequence [instanceD (cxt $ map pure constraints) instanceType
+   sequence [instanceD (TH.cxt $ map pure constraints) instanceType
              [pure dec, pragInlD 'Rank2.traverse Inlinable FunLike AllPhases]]
 
 deriveDistributive :: Name -> Q [Dec]
 deriveDistributive ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Distributive ty
    (constraints, dec) <- genCotraverse cs
-   sequence [instanceD (cxt $ map pure constraints) instanceType
+   sequence [instanceD (TH.cxt $ map pure constraints) instanceType
              [pure dec, pragInlD 'Rank2.cotraverse Inline FunLike AllPhases]]
 
 deriveDistributiveTraversable :: Name -> Q [Dec]
 deriveDistributiveTraversable ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.DistributiveTraversable ty
    (constraints, dec) <- genCotraverseTraversable cs
-   sequence [instanceD (cxt $ map pure constraints) instanceType [pure dec]]
+   sequence [instanceD (TH.cxt $ map pure constraints) instanceType [pure dec]]
 
 reifyConstructors :: Name -> Name -> Q (TypeQ, [Con])
 reifyConstructors cls ty = do
-   (TyConI tyCon) <- reify ty
+   (TyConI tyCon) <- TH.reify ty
    (tyConName, tyVars, _kind, cs) <- case tyCon of
       DataD _ nm tyVars kind cs _   -> return (nm, tyVars, kind, cs)
       NewtypeD _ nm tyVars kind c _ -> return (nm, tyVars, kind, [c])
@@ -101,14 +104,14 @@ reifyConstructors cls ty = do
  
 #if MIN_VERSION_template_haskell(2,17,0)
    let (KindedTV tyVar () (AppT (AppT ArrowT _) StarT)) = last tyVars
-       instanceType           = conT cls `appT` foldl apply (conT tyConName) (init tyVars)
-       apply t (PlainTV name _)    = appT t (varT name)
-       apply t (KindedTV name _ _) = appT t (varT name)
+       instanceType           = TH.conT cls `TH.appT` foldl apply (TH.conT tyConName) (init tyVars)
+       apply t (PlainTV name _)    = TH.appT t (TH.varT name)
+       apply t (KindedTV name _ _) = TH.appT t (TH.varT name)
 #else
    let (KindedTV tyVar (AppT (AppT ArrowT _) StarT)) = last tyVars
-       instanceType           = conT cls `appT` foldl apply (conT tyConName) (init tyVars)
-       apply t (PlainTV name)    = appT t (varT name)
-       apply t (KindedTV name _) = appT t (varT name)
+       instanceType           = TH.conT cls `TH.appT` foldl apply (TH.conT tyConName) (init tyVars)
+       apply t (PlainTV name)    = TH.appT t (TH.varT name)
+       apply t (KindedTV name _) = TH.appT t (TH.varT name)
 #endif
  
    putQ (Deriving tyConName tyVar)
@@ -123,20 +126,20 @@ genAp [con] = do (constraints, clause) <- genApClause False con
                  return (constraints, FunD '(Rank2.<*>) [clause])
 
 genLiftA2 :: [Con] -> Q Dec
-genLiftA2 [con] = funD 'Rank2.liftA2 [genLiftA2Clause False con]
+genLiftA2 [con] = TH.funD 'Rank2.liftA2 [genLiftA2Clause False con]
 
 genLiftA3 :: [Con] -> Q Dec
-genLiftA3 [con] = funD 'Rank2.liftA3 [genLiftA3Clause False con]
+genLiftA3 [con] = TH.funD 'Rank2.liftA3 [genLiftA3Clause False con]
 
 genApUnsafely :: [Con] -> Q ([Type], Dec)
 genApUnsafely cons = do (constraints, clauses) <- unzip <$> mapM (genApClause True) cons
                         return (concat constraints, FunD '(Rank2.<*>) clauses)
 
 genLiftA2Unsafely :: [Con] -> Q Dec
-genLiftA2Unsafely cons = funD 'Rank2.liftA2 (genLiftA2Clause True <$> cons)
+genLiftA2Unsafely cons = TH.funD 'Rank2.liftA2 (genLiftA2Clause True <$> cons)
 
 genLiftA3Unsafely :: [Con] -> Q Dec
-genLiftA3Unsafely cons = funD 'Rank2.liftA3 (genLiftA3Clause True <$> cons)
+genLiftA3Unsafely cons = TH.funD 'Rank2.liftA3 (genLiftA3Clause True <$> cons)
 
 genPure :: [Con] -> Q ([Type], Dec)
 genPure cs = do (constraints, clauses) <- unzip <$> mapM genPureClause cs
@@ -165,11 +168,11 @@ genFmapClause (NormalC name fieldTypes) = do
    let pats = [varP f, conP name (map varP fieldNames)]
        constraintsAndFields = zipWith newField fieldNames fieldTypes
        newFields = map (snd <$>) constraintsAndFields
-       body = normalB $ appsE $ conE name : newFields
+       body = normalB $ TH.appsE $ conE name : newFields
        newField :: Name -> BangType -> Q ([Type], Exp)
        newField x (_, fieldType) = genFmapField (varE f) fieldType (varE x) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause pats body []
+   (,) constraints <$> TH.clause pats body []
 genFmapClause (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
@@ -180,7 +183,7 @@ genFmapClause (RecC name fields) = do
           ((,) fieldName <$>)
           <$> genFmapField (varE f) fieldType (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP f, x `asP` recP name []] body []
+   (,) constraints <$> TH.clause [varP f, x `TH.asP` TH.recP name []] body []
 genFmapClause (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
@@ -209,10 +212,10 @@ genLiftA2Clause unsafely (NormalC name fieldTypes) = do
    y <- newName "y"
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
    let pats = [varP f, conP name (map varP fieldNames1), varP y]
-       body = normalB $ appsE $ conE name : zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
+       body = normalB $ TH.appsE $ conE name : zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
        newField :: (Name, Name) -> BangType -> Q Exp
        newField (x, y) (_, fieldType) = genLiftA2Field unsafely (varE f) fieldType (varE x) (varE y) id
-   clause pats body [valD (conP name $ map varP fieldNames2) (normalB $ varE y) []]
+   TH.clause pats body [TH.valD (conP name $ map varP fieldNames2) (normalB $ varE y) []]
 genLiftA2Clause unsafely (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
@@ -220,9 +223,9 @@ genLiftA2Clause unsafely (RecC name fields) = do
    let body = normalB $ recConE name $ map newNamedField fields
        newNamedField :: VarBangType -> Q (Name, Exp)
        newNamedField (fieldName, _, fieldType) =
-          fieldExp fieldName (genLiftA2Field unsafely (varE f) fieldType (getFieldOf x) (getFieldOf y) id)
+          TH.fieldExp fieldName (genLiftA2Field unsafely (varE f) fieldType (getFieldOf x) (getFieldOf y) id)
           where getFieldOf = appE (varE fieldName) . varE
-   clause [varP f, x `asP` recP name [], varP y] body []
+   TH.clause [varP f, x `TH.asP` TH.recP name [], varP y] body []
 genLiftA2Clause unsafely (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
@@ -255,11 +258,11 @@ genLiftA3Clause unsafely (NormalC name fieldTypes) = do
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
    fieldNames3 <- replicateM (length fieldTypes) (newName "z")
    let pats = [varP f, conP name (map varP fieldNames1), varP y, varP z]
-       body = normalB $ appsE $ conE name : zipWith newField (zip3 fieldNames1 fieldNames2 fieldNames3) fieldTypes
+       body = normalB $ TH.appsE $ conE name : zipWith newField (zip3 fieldNames1 fieldNames2 fieldNames3) fieldTypes
        newField :: (Name, Name, Name) -> BangType -> Q Exp
        newField (x, y, z) (_, fieldType) = genLiftA3Field unsafely (varE f) fieldType (varE x) (varE y) (varE z) id
-   clause pats body [valD (conP name $ map varP fieldNames2) (normalB $ varE y) [],
-                     valD (conP name $ map varP fieldNames3) (normalB $ varE z) []]
+   TH.clause pats body [TH.valD (conP name $ map varP fieldNames2) (normalB $ varE y) [],
+                        TH.valD (conP name $ map varP fieldNames3) (normalB $ varE z) []]
 genLiftA3Clause unsafely (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
@@ -268,9 +271,10 @@ genLiftA3Clause unsafely (RecC name fields) = do
    let body = normalB $ recConE name $ map newNamedField fields
        newNamedField :: VarBangType -> Q (Name, Exp)
        newNamedField (fieldName, _, fieldType) =
-          fieldExp fieldName (genLiftA3Field unsafely (varE f) fieldType (getFieldOf x) (getFieldOf y) (getFieldOf z) id)
+          TH.fieldExp fieldName
+             (genLiftA3Field unsafely (varE f) fieldType (getFieldOf x) (getFieldOf y) (getFieldOf z) id)
           where getFieldOf = appE (varE fieldName) . varE
-   clause [varP f, x `asP` recP name [], varP y, varP z] body []
+   TH.clause [varP f, x `TH.asP` TH.recP name [], varP y, varP z] body []
 genLiftA3Clause unsafely (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
@@ -305,11 +309,11 @@ genApClause unsafely (NormalC name fieldTypes) = do
    let pats = [conP name (map varP fieldNames1), varP rhsName]
        constraintsAndFields = zipWith newField (zip fieldNames1 fieldNames2) fieldTypes
        newFields = map (snd <$>) constraintsAndFields
-       body = normalB $ appsE $ conE name : newFields
+       body = normalB $ TH.appsE $ conE name : newFields
        newField :: (Name, Name) -> BangType -> Q ([Type], Exp)
        newField (x, y) (_, fieldType) = genApField unsafely fieldType (varE x) (varE y) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause pats body [valD (conP name $ map varP fieldNames2) (normalB $ varE rhsName) []]
+   (,) constraints <$> TH.clause pats body [TH.valD (conP name $ map varP fieldNames2) (normalB $ varE rhsName) []]
 genApClause unsafely (RecC name fields) = do
    x <- newName "x"
    y <- newName "y"
@@ -320,7 +324,7 @@ genApClause unsafely (RecC name fields) = do
           ((,) fieldName <$>) <$> genApField unsafely fieldType (getFieldOf x) (getFieldOf y) id
           where getFieldOf = appE (varE fieldName) . varE
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [x `asP` recP name [], varP y] body []
+   (,) constraints <$> TH.clause [x `TH.asP` TH.recP name [], varP y] body []
 genApClause unsafely (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
@@ -347,12 +351,12 @@ genApField unsafely fieldType field1Access field2Access wrap = do
 genPureClause :: Con -> Q ([Type], Clause)
 genPureClause (NormalC name fieldTypes) = do
    argName <- newName "f"
-   let body = normalB $ appsE $ conE name : ((snd <$>) <$> constraintsAndFields)
+   let body = normalB $ TH.appsE $ conE name : ((snd <$>) <$> constraintsAndFields)
        constraintsAndFields = map newField fieldTypes
        newField :: BangType -> Q ([Type], Exp)
        newField (_, fieldType) = genPureField fieldType (varE argName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP argName] body []
+   (,) constraints <$> TH.clause [varP argName] body []
 genPureClause (RecC name fields) = do
    argName <- newName "f"
    let body = normalB $ recConE name $ (snd <$>) <$> constraintsAndFields
@@ -360,7 +364,7 @@ genPureClause (RecC name fields) = do
        newNamedField :: VarBangType -> Q ([Type], (Name, Exp))
        newNamedField (fieldName, _, fieldType) = ((,) fieldName <$>) <$> genPureField fieldType (varE argName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP argName] body []
+   (,) constraints <$> TH.clause [varP argName] body []
 
 genPureField :: Type -> Q Exp -> (Q Exp -> Q Exp) -> Q ([Type], Exp)
 genPureField fieldType pureValue wrap = do
@@ -385,7 +389,7 @@ genFoldMapClause (NormalC name fieldTypes) = do
        newField :: Name -> BangType -> Q ([Type], Exp)
        newField x (_, fieldType) = genFoldMapField f fieldType (varE x) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause pats (normalB body) []
+   (,) constraints <$> TH.clause pats (normalB body) []
 genFoldMapClause (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
@@ -396,7 +400,7 @@ genFoldMapClause (RecC name fields) = do
        newField :: VarBangType -> Q ([Type], Exp)
        newField (fieldName, _, fieldType) = genFoldMapField f fieldType (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP f, x `asP` recP name []] (normalB body) []
+   (,) constraints <$> TH.clause [varP f, x `TH.asP` TH.recP name []] (normalB body) []
 genFoldMapClause (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
@@ -421,7 +425,7 @@ genFoldMapField funcName fieldType fieldAccess wrap = do
 
 genTraverseClause :: Con -> Q ([Type], Clause)
 genTraverseClause (NormalC name []) =
-   (,) [] <$> clause [wildP, conP name []] (normalB [| pure $(conE name) |]) []
+   (,) [] <$> TH.clause [wildP, conP name []] (normalB [| pure $(conE name) |]) []
 genTraverseClause (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
@@ -434,7 +438,7 @@ genTraverseClause (NormalC name fieldTypes) = do
        newField :: Name -> BangType -> Q ([Type], Exp)
        newField x (_, fieldType) = genTraverseField (varE f) fieldType (varE x) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause pats body []
+   (,) constraints <$> TH.clause pats body []
 genTraverseClause (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
@@ -445,7 +449,7 @@ genTraverseClause (RecC name fields) = do
        newField :: VarBangType -> Q ([Type], Exp)
        newField (fieldName, _, fieldType) = genTraverseField (varE f) fieldType (appE (varE fieldName) (varE x)) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP f, x `asP` recP name []] body []
+   (,) constraints <$> TH.clause [varP f, x `TH.asP` TH.recP name []] body []
 genTraverseClause (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
@@ -480,7 +484,7 @@ genCotraverseClause (RecC name fields) = do
           ((,) fieldName <$>) <$> (genCotraverseField ''Rank2.Distributive (varE 'Rank2.cotraverse) (varE withName)
                                    fieldType [| $(varE fieldName) <$> $(varE argName) |] id)
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP withName, varP argName] body []
+   (,) constraints <$> TH.clause [varP withName, varP argName] body []
 
 genCotraverseTraversableClause :: Con -> Q ([Type], Clause)
 genCotraverseTraversableClause (NormalC name []) = genCotraverseTraversableClause (RecC name [])
@@ -495,7 +499,7 @@ genCotraverseTraversableClause (RecC name fields) = do
                                    (varE 'Rank2.cotraverseTraversable) (varE withName) fieldType
                                    [| $(varE fieldName) <$> $(varE argName) |] id)
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
-   (,) constraints <$> clause [varP withName, varP argName] body []
+   (,) constraints <$> TH.clause [varP withName, varP argName] body []
 
 genCotraverseField :: Name -> Q Exp -> Q Exp -> Type -> Q Exp -> (Q Exp -> Q Exp) -> Q ([Type], Exp)
 genCotraverseField className method fun fieldType fieldAccess wrap = do

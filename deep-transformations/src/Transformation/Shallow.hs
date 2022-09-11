@@ -1,5 +1,5 @@
 {-# Language DeriveDataTypeable, FlexibleInstances, KindSignatures, MultiParamTypeClasses, RankNTypes,
-             StandaloneDeriving, TypeFamilies, UndecidableInstances #-}
+             StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | Type classes 'Functor', 'Foldable', and 'Traversable' that correspond to the standard type classes of the same
 -- name. The [rank2classes](https://hackage.haskell.org/package/rank2classes) package provides the equivalent set

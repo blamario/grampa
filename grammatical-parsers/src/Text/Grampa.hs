@@ -1,6 +1,7 @@
 -- | A collection of parsing algorithms with a common interface, operating on grammars represented as records with
 -- rank-2 field types.
-{-# LANGUAGE FlexibleContexts, KindSignatures, OverloadedStrings, RankNTypes, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts, KindSignatures, OverloadedStrings, RankNTypes, ScopedTypeVariables,
+             TypeFamilies, TypeOperators #-}
 module Text.Grampa (
    -- * Applying parsers
    failureDescription, simply,

@@ -23,7 +23,6 @@ where
 
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Const (Const(..))
-import Data.Functor.Identity (Identity(..))
 import Data.Kind (Type)
 import Data.Generics.Product.Subtype (Subtype(upcast))
 import Data.Proxy (Proxy(..))
@@ -144,7 +143,7 @@ instance (Functor m, Functor f) => Functor (Traversed m f) where
 -- * Generic transformations
 
 -- | Internal transformation for passing down the inherited attributes.
-newtype PassDown (t :: Type) (f :: * -> *) a = PassDown a
+newtype PassDown (t :: Type) (f :: Type -> Type) a = PassDown a
 -- | Internal transformation for accumulating the 'Folded' attributes.
 data Accumulator (t :: Type) (name :: Symbol) (a :: Type) = Accumulator
 -- | Internal transformation for replicating the 'Mapped' attributes.

@@ -1,4 +1,4 @@
-{-# Language MultiParamTypeClasses, RankNTypes, TypeFamilies #-}
+{-# Language MultiParamTypeClasses, RankNTypes, TypeFamilies, TypeOperators #-}
 
 module Transformation.Deep where
 

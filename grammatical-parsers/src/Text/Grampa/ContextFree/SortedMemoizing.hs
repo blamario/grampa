@@ -1,5 +1,5 @@
 {-# LANGUAGE BangPatterns, CPP, FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
-             RankNTypes, ScopedTypeVariables, TypeFamilies, UndecidableInstances #-}
+             RankNTypes, ScopedTypeVariables, TypeFamilies, TypeOperators, UndecidableInstances #-}
 -- | A context-free memoizing parser that handles all alternatives in parallel.
 module Text.Grampa.ContextFree.SortedMemoizing 
        (ParseFailure(..), ResultList(..), Parser(..),
@@ -207,9 +207,8 @@ instance (InputParsing (Parser g s), FactorialMonoid s) => TraceableParsing (Par
                rl@(ResultList [] _) -> trace ("Failed " <> descriptionWith id) rl
                rl@(ResultList rs _) -> trace ("Parsed [" <> intercalate ", " (describeResult <$> rs) <> "]") rl
                where describeResult (ResultsOfLength len _ _) = descriptionWith (Factorial.take len)
-                     descriptionWith f = case rest of
-                        ((s, _):_) -> description (f s)
-                        [] -> "EOF"
+                     descriptionWith f = description (f s)
+            q [] = p []
 
 instance (Ord s, Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
    satisfyCharInput predicate = Parser p
