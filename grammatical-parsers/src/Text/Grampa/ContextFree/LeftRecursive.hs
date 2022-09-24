@@ -71,7 +71,7 @@ data Fixed p g s a =
 
 -- | A type of parsers analyzed for their left-recursion class
 data SeparatedParser p (g :: (Type -> Type) -> Type) s a =
-   -- | a parser that doesn't start with any 'nonTerminal' so it can run first
+   -- | a parser that no left-recursive nonterminal depends on
    FrontParser (p g s a)
    -- | a left-recursive parser that may add to the set of parse results every time it's run
    | CycleParser {
@@ -79,7 +79,7 @@ data SeparatedParser p (g :: (Type -> Type) -> Type) s a =
         backParser   :: p g s a,
         appendResultsArrow :: ResultAppend p g s a,
         dependencies :: Dependencies g}
-   -- | a parser that depends on other non-terminals but is not left-recursive
+   -- | a parser that doesn't start with any 'nonTerminal' so it can run first
    | BackParser {
         backParser :: p g s a}
 
