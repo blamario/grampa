@@ -154,10 +154,12 @@ liftA2Traverse2 :: (Apply g, DistributiveTraversable g, Rank1.Traversable f) =>
 liftA2Traverse2 f x y = liftA2 (\x' y' -> f x' (Rank1.getCompose y')) x (distributeTraversable y)
 
 -- | Like 'liftA2', but traverses over both its arguments
-liftA2TraverseBoth :: (Apply g, DistributiveTraversable g, Rank1.Traversable f1, Rank1.Traversable f2) =>
+liftA2TraverseBoth :: forall f1 f2 g t u v.
+                      (Apply g, DistributiveTraversable g, Rank1.Traversable f1, Rank1.Traversable f2) =>
                       (forall a. f1 (t a) -> f2 (u a) -> v a) -> f1 (g t) -> f2 (g u) -> g v
 liftA2TraverseBoth f x y = liftA2 applyCompose (distributeTraversable x) (distributeTraversable y)
-   where applyCompose x' y' = f (Rank1.getCompose x') (Rank1.getCompose y')
+   where applyCompose :: forall a. Rank1.Compose f1 t a -> Rank1.Compose f2 u a -> v a
+         applyCompose x' y' = f (Rank1.getCompose x') (Rank1.getCompose y')
 
 {-# DEPRECATED distributeWith "Use cotraverse instead." #-}
 -- | Synonym for 'cotraverse'
