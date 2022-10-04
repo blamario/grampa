@@ -180,6 +180,22 @@ instance (Applicative m, Ord s, LeftReductive s, FactorialMonoid s) => GrammarPa
                sync rols = rols
       p _ = ResultList mempty (expected 0 "NonTerminal at endOfInput")
    {-# INLINE nonTerminal #-}
+   chainRecursive assign (Parser base) (Parser recurse) = Parser q
+      where q [] = base []
+            q ((s, d):t) = case base ((s, assign mempty d) : t)
+                           of r@(ResultList [] _) -> r
+                              r -> iter r r
+               where iter marginal total = case recurse ((s, assign marginal d) : t)
+                                           of ResultList [] _ -> total
+                                              r -> iter r (total <> r)
+   chainLongestRecursive assign (Parser base) (Parser recurse) = Parser q
+      where q [] = base []
+            q ((s, d):t) = case base ((s, assign mempty d) : t)
+                           of r@(ResultList [] _) -> r
+                              r -> iter r
+               where iter r = case recurse ((s, assign r d) : t)
+                              of ResultList [] _ -> r
+                                 r' -> iter r'
 
 instance (Applicative m, Ord s, LeftReductive s, FactorialMonoid s, Rank2.Functor g) =>
          TailsParsing (ParserT m g s) where

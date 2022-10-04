@@ -143,6 +143,22 @@ instance (Ord s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g
       p ((_, d) : _) = f d
       p _ = ResultList mempty (expected 0 "NonTerminal at endOfInput")
    {-# INLINE nonTerminal #-}
+   chainRecursive assign (Parser base) (Parser recurse) = Parser q
+      where q [] = base []
+            q ((s, d):t) = case base ((s, assign mempty d) : t)
+                           of r@(ResultList EmptyTree _) -> r
+                              r -> iter r r
+               where iter marginal total = case recurse ((s, assign marginal d) : t)
+                                           of ResultList EmptyTree _ -> total
+                                              r -> iter r (total <> r)
+   chainLongestRecursive assign (Parser base) (Parser recurse) = Parser q
+      where q [] = base []
+            q ((s, d):t) = case base ((s, assign mempty d) : t)
+                           of r@(ResultList EmptyTree _) -> r
+                              r -> iter r
+               where iter r = case recurse ((s, assign r d) : t)
+                              of ResultList EmptyTree _ -> r
+                                 r' -> iter r'
 
 instance (Ord s, LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s) where
    parseTails = applyParser

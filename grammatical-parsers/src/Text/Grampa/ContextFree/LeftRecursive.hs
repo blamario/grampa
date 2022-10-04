@@ -207,6 +207,29 @@ instance (Rank2.Apply g, GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) =
             adjust _ flags@(Const (ParserFlags _ DynamicDependencies)) = flags
    {-# INLINE nonTerminal #-}
    recursive = general
+   chainRecursive = chainWith chainRecursive
+   chainLongestRecursive = chainWith chainLongestRecursive
+
+chainWith :: (Rank2.Apply g, GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f)
+          => ((forall f. f a -> g f -> g f) -> p g s a -> p g s a -> p g s a)
+          -> ((forall f. f a -> g f -> g f) -> Fixed p g s a -> Fixed p g s a -> Fixed p g s a)
+chainWith f assign = chain
+  where chain base recurse@Parser{} = Parser{
+           complete= f assign (complete base) (complete recurse),
+           direct= f assign (direct base) (complete recurse),
+           direct0= f assign (direct0 base) (complete recurse),
+           direct1= f assign (direct1 base) (complete recurse),
+           indirect= f assign (indirect base) (complete recurse),
+           isAmbiguous= isAmbiguous base <|> isAmbiguous recurse,
+           cyclicDescendants= \deps-> let ParserFlags pn pd = cyclicDescendants base deps
+                                          ParserFlags qn qd = cyclicDescendants recurse deps
+                                          qd' = case qd
+                                                of DynamicDependencies -> DynamicDependencies
+                                                   StaticDependencies g -> StaticDependencies (clearOwnDep g)
+                                      in ParserFlags (pn && qn) (depUnion pd qd')}
+           where recurseDescendants g = cyclicDescendants recurse g
+                 clearOwnDep = assign (Const False)
+        chain base recurse = recurse <|> base
 
 bits :: forall (g :: (Type -> Type) -> Type). (Rank2.Distributive g, Rank2.Traversable g) => g (Const (g (Const Bool)))
 bits = start `seq` Rank2.fmap oneBit start
@@ -758,7 +781,7 @@ separated g = Rank2.liftA4 reseparate circulars cycleFollowers descendants g
 {-# INLINABLE separated #-}
 
 fixDescendants :: forall g. (Rank2.Apply g, Rank2.Traversable g)
-                     => g (Const (g (Const (ParserFlags g)) -> (ParserFlags g))) -> g (Const (ParserFlags g))
+               => g (Const (g (Const (ParserFlags g)) -> (ParserFlags g))) -> g (Const (ParserFlags g))
 fixDescendants gf = go initial
    where go :: g (Const (ParserFlags g)) -> g (Const (ParserFlags g))
          go cd

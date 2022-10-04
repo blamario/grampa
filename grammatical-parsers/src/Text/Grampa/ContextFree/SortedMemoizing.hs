@@ -112,11 +112,27 @@ instance (Ord s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g
       p input@((_, d) : _) = ResultList rs' failure
          where ResultList rs failure = f d
                rs' = sync <$> rs
-               -- in left-recursive grammars the stored input remainder may be wrong, so revert to the complete input
+               -- in left-recursive grammars the stored input remainder may be wrong, so revert to the current input
                sync (ResultsOfLength 0 _remainder r) = ResultsOfLength 0 input r
                sync rol = rol
       p _ = ResultList mempty (expected 0 "NonTerminal at endOfInput")
    {-# INLINE nonTerminal #-}
+   chainRecursive assign (Parser base) (Parser recurse) = Parser q
+      where q [] = base []
+            q ((s, d):t) = case base ((s, assign mempty d) : t)
+                           of r@(ResultList [] _) -> r
+                              r -> iter r r
+               where iter marginal total = case recurse ((s, assign marginal d) : t)
+                                           of ResultList [] _ -> total
+                                              r -> iter r (total <> r)
+   chainLongestRecursive assign (Parser base) (Parser recurse) = Parser q
+      where q [] = base []
+            q ((s, d):t) = case base ((s, assign mempty d) : t)
+                           of r@(ResultList [] _) -> r
+                              r -> iter r
+               where iter r = case recurse ((s, assign r d) : t)
+                              of ResultList [] _ -> r
+                                 r' -> iter r'
 
 instance (Ord s, LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s) where
    parseTails = applyParser

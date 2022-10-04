@@ -139,6 +139,34 @@ class MultiParsing m => GrammarParsing m where
    fixGrammar :: (g ~ ParserGrammar m, GrammarConstraint m g, Rank2.Distributive g) => (g m -> g m) -> g m
    -- | Mark a parser that relies on primitive recursion to prevent an infinite loop in 'fixGrammar'.
    recursive :: m a -> m a
+   -- | Convert a left-recursive parser to a non-left-recursive one. For example, you can replace the left-recursive
+   -- production
+   --
+   -- > foo = BinOp <$> foo <*> bar <|> baz
+   --
+   -- in the field @foo@ of grammar @g@ with
+   --
+   -- > foo = chainRecursive (\x g-> g{foo = x}) baz (BinOp <$> foo <*> bar)
+   --
+   -- This method works on individual parsers left-recursive on themselves, not on grammars with mutually
+   -- left-recursive productions. Use "Text.Grampa.ContextFree.LeftRecursive" for the latter.
+   chainRecursive :: (g ~ ParserGrammar m, GrammarConstraint m g)
+                  => (forall f. f a -> g f -> g f) -- ^ setter for the parsed results of each iteration
+                  -> m a -- ^ the non-recursive base case
+                  -> m a -- ^ the recursive case to iterate
+                  -> m a
+   -- | Line 'chainRecursive' but produces only the longest possible parse. The modified example
+   --
+   -- > foo = chainLongestRecursive (\x g-> g{foo = x}) baz (BinOp <$> foo <*> bar)
+   --
+   -- would be equivalent to the left-recursive production with biased choice
+   --
+   -- > foo = BinOp <$> foo <*> bar <<|> baz
+   chainLongestRecursive :: (g ~ ParserGrammar m, GrammarConstraint m g)
+                         => (forall f. f a -> g f -> g f) -- ^ setter for the parsed results of each iteration
+                         -> m a -- ^ the non-recursive base case
+                         -> m a -- ^ the recursive case to iterate
+                         -> m a
 
    selfReferring = Rank2.cotraverse nonTerminal id
    {-# INLINE selfReferring #-}

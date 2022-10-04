@@ -166,6 +166,16 @@ instance (Eq s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g 
    nonTerminal f = Parser p where
       p ((_, d) : _) = f d
       p _ = NoParse (expected 0 "NonTerminal at endOfInput")
+   chainRecursive = chainLongestRecursive
+   chainLongestRecursive assign (Parser base) (Parser recurse) = Parser q
+      where q [] = base []
+            q ((s, d):t) = case base initialInput
+                           of r@NoParse{} -> r
+                              r -> iter r
+               where iter r = case recurse ((s, assign r d) : t)
+                              of NoParse{} -> r
+                                 r'@Parsed{} -> iter r'
+                     initialInput = (s, assign (NoParse $ ParseFailure (Down maxBound) [] []) d) : t
 
 instance (Eq s, LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s) where
    parseTails = applyParser
