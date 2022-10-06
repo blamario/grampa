@@ -8,16 +8,18 @@
 {-# LANGUAGE DefaultSignatures, InstanceSigs, KindSignatures, PolyKinds, Rank2Types #-}
 {-# LANGUAGE ScopedTypeVariables, StandaloneDeriving, TypeOperators, UndecidableInstances #-}
 {-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE TypeApplications #-}
 module Rank2 (
 -- * Rank 2 classes
    Functor(..), Apply(..), Applicative(..),
-   Foldable(..), Traversable(..), Distributive(..), DistributiveTraversable(..), distributeJoin,
+   Foldable(..), Traversable(..), Distributive(..), DistributiveTraversable(..), Logistic(..), distributeJoin,
 -- * Rank 2 data types
    Compose(..), Empty(..), Only(..), Flip(..), Identity(..), Product(..), Sum(..), Arrow(..), type (~>),
 -- * Method synonyms and helper functions
    ($), fst, snd, ap, fmap, liftA4, liftA5,
    fmapTraverse, liftA2Traverse1, liftA2Traverse2, liftA2TraverseBoth,
-   distributeWith, distributeWithTraversable)
+   distributeWith, distributeWithTraversable,
+   setters)
 where
 
 import qualified Control.Applicative as Rank1
@@ -25,6 +27,8 @@ import qualified Control.Monad as Rank1
 import qualified Data.Foldable as Rank1
 import qualified Data.Traversable as Rank1
 import qualified Data.Functor.Compose as Rank1
+import qualified Data.Functor.Contravariant as Rank1
+import qualified Data.Functor.Logistic as Rank1
 import qualified Data.Distributive as Rank1
 import Data.Coerce (coerce)
 import Data.Semigroup (Semigroup(..))
@@ -70,7 +74,6 @@ class (Functor g, Foldable g) => Traversable g where
    sequence :: Rank1.Applicative m => g (Rank1.Compose m p) -> m (g p)
    traverse f = sequence . fmap (Rank1.Compose . f)
    sequence = traverse Rank1.getCompose
-
 -- | Wrapper for functions that map the argument constructor type
 newtype Arrow p q a = Arrow{apply :: p a -> q a}
 
@@ -114,14 +117,14 @@ class Apply g => Applicative g where
 -- | Equivalent of 'Rank1.Distributive' for rank 2 data types
 class DistributiveTraversable g => Distributive g where
    {-# MINIMAL cotraverse|distribute #-}
-   collect :: Rank1.Functor f1 => (a -> g f2) -> f1 a -> g (Rank1.Compose f1 f2)
-   distribute :: Rank1.Functor f1 => f1 (g f2) -> g (Rank1.Compose f1 f2)
+   collect :: Rank1.Functor p => (a -> g q) -> p a -> g (Rank1.Compose p q)
+   distribute :: Rank1.Functor p => p (g q) -> g (Rank1.Compose p q)
    -- | Dual of 'traverse', equivalent of 'Rank1.cotraverse' for rank 2 data types 
    cotraverse :: Rank1.Functor m => (forall a. m (p a) -> q a) -> m (g p) -> g q
 
    collect f = distribute . Rank1.fmap f
    distribute = cotraverse Rank1.Compose
-   cotraverse f = (fmap (f . Rank1.getCompose)) . distribute
+   cotraverse f = fmap (f . Rank1.getCompose) . distribute
 
 -- | A weaker 'Distributive' that requires 'Rank1.Traversable' to use, not just a 'Rank1.Functor'.
 class Functor g => DistributiveTraversable (g :: (k -> Type) -> Type) where
@@ -135,6 +138,10 @@ class Functor g => DistributiveTraversable (g :: (k -> Type) -> Type) where
    default cotraverseTraversable :: (Rank1.Traversable m, Distributive g) => 
                                     (forall a. m (p a) -> q a) -> m (g p) -> g q
    cotraverseTraversable = cotraverse
+
+-- | Equivalent of 'Rank1.Logistic' for rank 2 data types
+class Functor g => Logistic g where
+   deliver :: Rank1.Contravariant p => p (g q -> g q) -> g (Rank1.Compose p (q ~> q))
 
 -- | A variant of 'distribute' convenient with 'Rank1.Monad' instances
 distributeJoin :: (Distributive g, Rank1.Monad f) => f (g f) -> g f
@@ -161,6 +168,10 @@ liftA2TraverseBoth :: forall f1 f2 g t u v.
 liftA2TraverseBoth f x y = liftA2 applyCompose (distributeTraversable x) (distributeTraversable y)
    where applyCompose :: forall a. Rank1.Compose f1 t a -> Rank1.Compose f2 u a -> v a
          applyCompose x' y' = f (Rank1.getCompose x') (Rank1.getCompose y')
+
+-- | Enumerate setters for each element
+setters :: Logistic g => g ((f ~> f) ~> Const (g f -> g f))
+setters = Arrow . (Const .) . Rank1.getOp . Rank1.getCompose <$> deliver (Rank1.Op id)
 
 {-# DEPRECATED distributeWith "Use cotraverse instead." #-}
 -- | Synonym for 'cotraverse'
@@ -501,3 +512,49 @@ instance Distributive f => Distributive (Generics.Rec1 f) where
    cotraverse w f = Generics.Rec1 (cotraverse w (Rank1.fmap Generics.unRec1 f))
 instance (Distributive f, Distributive g) => Distributive ((Generics.:*:) f g) where
    cotraverse w f = cotraverse w (Rank1.fmap (\(a Generics.:*: _) -> a) f) Generics.:*: cotraverse w (Rank1.fmap (\(_ Generics.:*: b) -> b) f)
+
+instance Logistic Empty where
+   deliver _ = Empty
+
+instance Logistic Proxy where
+   deliver _ = Proxy
+
+instance Logistic (Only x) where
+   deliver f = Only (Rank1.Compose (Rank1.contramap coerce f))
+
+instance Logistic g => Logistic (Identity g) where
+   deliver f = Identity (deliver (Rank1.contramap coerce f))
+
+instance (Logistic g, Rank1.Logistic p) => Logistic (Compose g p) where
+   deliver = Compose
+             . fmap (inRank1Compose (Rank1.fmap (Rank1.Compose . Rank1.contramap apply)
+                                     . Rank1.deliver
+                                     . Rank1.contramap (Arrow . inRank1Compose)))
+             . deliver
+             . Rank1.contramap inCompose
+
+inCompose :: (g (Rank1.Compose p q) -> g' (Rank1.Compose p' q')) -> Compose g p q -> Compose g' p' q'
+inCompose f = Compose . f . getCompose
+
+inRank1Compose :: (p (q a) -> p' (q' a')) -> Rank1.Compose p q a -> Rank1.Compose p' q' a'
+inRank1Compose f = Rank1.Compose . f . Rank1.getCompose
+
+instance (Logistic g, Logistic h) => Logistic (Product g h) where
+   deliver f = Pair (deliver (Rank1.contramap first f)) (deliver (Rank1.contramap second f))
+
+first :: (g p -> g' p) -> Product g h p -> Product g' h p
+first f (Pair g h) = Pair (f g) h
+
+second :: (h p -> h' p) -> Product g h p -> Product g h' p
+second f (Pair g h) = Pair g (f h)
+
+instance Logistic f => Logistic (Generics.M1 i c f) where
+   deliver f = Generics.M1 (deliver (Rank1.contramap (\f'-> Generics.M1 . f' . Generics.unM1) f))
+
+instance Logistic f => Logistic (Generics.Rec1 f) where
+   deliver f = Generics.Rec1 (deliver (Rank1.contramap (\f'-> Generics.Rec1 . f' . Generics.unRec1) f))
+
+instance (Logistic f, Logistic g) => Logistic ((Generics.:*:) f g) where
+   deliver f = deliver (Rank1.contramap (\f' (a Generics.:*: b) -> f' a Generics.:*: b) f)
+               Generics.:*:
+               deliver (Rank1.contramap (\f' (a Generics.:*: b) -> a Generics.:*: f' b) f)
