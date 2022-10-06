@@ -60,6 +60,7 @@ data Fixed p g s a =
    -- | a fully general parser
    Parser {
       complete, direct, direct0, direct1, indirect :: p g s a,
+      choices :: ChoiceTree (Fixed p g s a),
       isAmbiguous :: Maybe (AmbiguityWitness a),
       cyclicDescendants :: g (Const (ParserFlags g)) -> ParserFlags g}
    -- | a parser that doesn't start with a 'nonTerminal'
@@ -68,6 +69,23 @@ data Fixed p g s a =
    -- | a parser that doesn't start with a 'nonTerminal' and always consumes some input
    | PositiveDirectParser {
       complete :: p g s a}
+
+-- | Binary tree with two different choice nodes
+data ChoiceTree a =
+   Leaf a
+   | SymmetricChoice (ChoiceTree a) (ChoiceTree a)
+   | LeftBiasedChoice (ChoiceTree a) (ChoiceTree a)
+   deriving Show
+
+instance Functor ChoiceTree where
+  fmap f (Leaf a) = Leaf (f a)
+  fmap f (SymmetricChoice a b) = SymmetricChoice (fmap f a) (fmap f b)
+  fmap f (LeftBiasedChoice a b) = LeftBiasedChoice (fmap f a) (fmap f b)
+
+instance Foldable ChoiceTree where
+  foldMap f (Leaf a) = f a
+  foldMap f (SymmetricChoice a b) = foldMap f a <> foldMap f b
+  foldMap f (LeftBiasedChoice a b) = foldMap f a <> foldMap f b
 
 -- | A type of parsers analyzed for their left-recursion class
 data SeparatedParser p (g :: (Type -> Type) -> Type) s a =
@@ -109,18 +127,25 @@ instance (Rank2.Apply g, Rank2.Distributive g) => Monoid (Union g) where
    mempty = Union (Rank2.cotraverse (Const . getConst) (Const False))
    mappend = (<>)
 
+asLeaf :: Fixed p g s a -> Fixed p g s a
+asLeaf p@Parser{} = p'
+   where p' = p{choices= Leaf p'}
+asLeaf p = p
+
 mapPrimitive :: forall p g s a b. AmbiguityDecidable b => (p g s a -> p g s b) -> Fixed p g s a -> Fixed p g s b
 mapPrimitive f p@PositiveDirectParser{} = PositiveDirectParser{complete= f (complete p)}
 mapPrimitive f p@DirectParser{} = DirectParser{complete= f (complete p),
                                                direct0= f (direct0 p),
                                                direct1= f (direct1 p)}
-mapPrimitive f p@Parser{} = Parser{complete= f (complete p),
-                                   isAmbiguous= ambiguityWitness @b,
-                                   cyclicDescendants= cyclicDescendants p,
-                                   indirect= f (indirect p),
-                                   direct= f (direct p),
-                                   direct0= f (direct0 p),
-                                   direct1= f (direct1 p)}
+mapPrimitive f p@Parser{} = asLeaf Parser{
+   complete= f (complete p),
+   choices= undefined,
+   isAmbiguous= ambiguityWitness @b,
+   cyclicDescendants= cyclicDescendants p,
+   indirect= f (indirect p),
+   direct= f (direct p),
+   direct0= f (direct0 p),
+   direct1= f (direct1 p)}
 
 general, general' :: (Rank2.Apply g, Alternative (p g s)) => Fixed p g s a -> Fixed p g s a
 general p = Parser{
@@ -129,25 +154,28 @@ general p = Parser{
    direct0= direct0 p',
    direct1= direct1 p',
    indirect= indirect p',
+   choices= choices p',
    isAmbiguous= case p
                 of Parser{isAmbiguous= a} -> a
                    _ -> Nothing,
    cyclicDescendants= cyclicDescendants p'}
    where p' = general' p
-general' p@PositiveDirectParser{} = Parser{
+general' p@PositiveDirectParser{} = asLeaf Parser{
    complete= complete p,
    direct = complete p,
    direct0= empty,
    direct1= complete p,
    indirect= empty,
+   choices= undefined,
    isAmbiguous= Nothing,
    cyclicDescendants= \cd-> ParserFlags False (StaticDependencies $ const (Const False) Rank2.<$> cd)}
-general' p@DirectParser{} = Parser{
+general' p@DirectParser{} = asLeaf Parser{
    complete= complete p,
    direct = complete p,
    direct0= direct0 p,
    direct1= direct1 p,
    indirect= empty,
+   choices= undefined,
    isAmbiguous= Nothing,
    cyclicDescendants= \cd-> ParserFlags True (StaticDependencies $ const (Const False) Rank2.<$> cd)}
 general' p@Parser{} = p
@@ -189,12 +217,13 @@ instance (Rank2.Apply g, GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) =
    parsingResult s = parsingResult @(p g s) s . parserResults
    nonTerminal :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
                   (g (ParserFunctor p g s) -> ParserFunctor p g s a) -> Fixed p g s a
-   nonTerminal f = Parser{
+   nonTerminal f = asLeaf Parser{
       complete= ind,
       direct= empty,
       direct0= empty,
       direct1= empty,
       indirect= ind,
+      choices= undefined,
       isAmbiguous= Nothing,
       cyclicDescendants= parserFlags . f . Rank2.fmap (ParserFlagsFunctor . getConst) . addSelf}
       where ind = nonTerminal (parserResults . f . Rank2.fmap ParserResultsFunctor)
@@ -214,12 +243,13 @@ chainWith :: (Rank2.Apply g, GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s 
           => ((forall f. f a -> g f -> g f) -> p g s a -> p g s a -> p g s a)
           -> ((forall f. f a -> g f -> g f) -> Fixed p g s a -> Fixed p g s a -> Fixed p g s a)
 chainWith f assign = chain
-  where chain base recurse@Parser{} = Parser{
+  where chain base recurse@Parser{} = asLeaf Parser{
            complete= f assign (complete base) (complete recurse),
            direct= f assign (direct base) (complete recurse),
            direct0= f assign (direct0 base) (complete recurse),
            direct1= f assign (direct1 base) (complete recurse),
            indirect= f assign (indirect base) (complete recurse),
+           choices= undefined,
            isAmbiguous= isAmbiguous base <|> isAmbiguous recurse,
            cyclicDescendants= \deps-> let ParserFlags pn pd = cyclicDescendants base deps
                                           ParserFlags qn qd = cyclicDescendants recurse deps
@@ -251,6 +281,7 @@ instance Functor (p g s) => Functor (Fixed p g s) where
       direct0= fmap f (direct0 p),
       direct1= fmap f (direct1 p),
       indirect= fmap f (indirect p),
+      choices= fmap f <$> choices p,
       isAmbiguous= Nothing}
    {-# INLINABLE fmap #-}
 
@@ -266,12 +297,13 @@ instance (Rank2.Apply g, Alternative (p g s)) => Applicative (Fixed p g s) where
       complete= complete p <*> complete q,
       direct0= direct0 p <*> direct0 q,
       direct1= direct0 p <*> direct1 q <|> direct1 p <*> complete q}
-   p <*> q@Parser{} = Parser{
+   p <*> q@Parser{} = asLeaf Parser{
       complete= complete p' <*> complete q,
       direct= direct0 p' <*> direct q <|> direct1 p' <*> complete q,
       direct0= direct0 p' <*> direct0 q,
       direct1= direct0 p' <*> direct1 q <|> direct1 p' <*> complete q,
       indirect= direct0 p' <*> indirect q <|> indirect p' <*> complete q,
+      choices= undefined,
       isAmbiguous= Nothing,
       cyclicDescendants= \deps-> let
            pcd@(ParserFlags pn pd) = cyclicDescendants p' deps
@@ -280,12 +312,13 @@ instance (Rank2.Apply g, Alternative (p g s)) => Applicative (Fixed p g s) where
            then ParserFlags qn (depUnion pd qd)
            else pcd}
       where p'@Parser{} = general' p
-   p <*> q = Parser{
+   p <*> q = asLeaf Parser{
       complete= complete p' <*> complete q',
       direct= direct p' <*> complete q',
       direct0= direct0 p' <*> direct0 q',
       direct1= direct0 p' <*> direct1 q' <|> direct1 p' <*> complete q',
       indirect= indirect p' <*> complete q',
+      choices= undefined,
       isAmbiguous= Nothing,
       cyclicDescendants= \deps-> let
            pcd@(ParserFlags pn pd) = cyclicDescendants p' deps
@@ -318,6 +351,7 @@ instance (Rank2.Apply g, Alternative (p g s)) => Alternative (Fixed p g s) where
                     direct0= direct0 p' <|> direct0 q',
                     direct1= direct1 p' <|> direct1 q',
                     indirect= indirect p' <|> indirect q',
+                    choices= choices p `SymmetricChoice` choices q,
                     isAmbiguous= Nothing,
                     cyclicDescendants= \deps-> let
                          ParserFlags pn pd = cyclicDescendants p' deps
@@ -333,12 +367,13 @@ instance (Rank2.Apply g, Alternative (p g s)) => Alternative (Fixed p g s) where
       complete= many (complete p),
       direct0= pure [] <|> (:[]) <$> direct0 p,
       direct1= (:) <$> direct1 p <*> many (complete p)}
-   many p@Parser{} = Parser{
+   many p@Parser{} = asLeaf Parser{
       complete= mcp,
       direct= d0 <|> d1,
       direct0= d0,
       direct1= d1,
       indirect= (:) <$> indirect p <*> mcp,
+      choices= undefined,
       isAmbiguous= Nothing,
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
       where d0 = pure [] <|> (:[]) <$> direct0 p
@@ -349,12 +384,13 @@ instance (Rank2.Apply g, Alternative (p g s)) => Alternative (Fixed p g s) where
       complete= some (complete p),
       direct0= (:[]) <$> direct0 p,
       direct1= (:) <$> direct1 p <*> many (complete p)}
-   some p@Parser{} = Parser{
+   some p@Parser{} = asLeaf Parser{
       complete= some (complete p),
       direct= d0 <|> d1,
       direct0= d0,
       direct1= d1,
       indirect= (:) <$> indirect p <*> many (complete p),
+      choices= undefined,
       isAmbiguous= Nothing,
       cyclicDescendants= cyclicDescendants p}
       where d0 = (:[]) <$> direct0 p
@@ -375,6 +411,7 @@ instance Filterable (p g s) => Filterable (Fixed p g s) where
       direct0= mapMaybe f (direct0 p),
       direct1= mapMaybe f (direct1 p),
       indirect= mapMaybe f (indirect p),
+      choices= mapMaybe f <$> choices p,
       isAmbiguous= Nothing}
    {-# INLINABLE mapMaybe #-}
 
@@ -390,22 +427,24 @@ instance (Rank2.Apply g, Alternative (p g s), Monad (p g s)) => Monad (Fixed p g
    return = pure
    (>>) = (*>)
    PositiveDirectParser p >>= cont = PositiveDirectParser (p >>= complete . cont)
-   p@DirectParser{} >>= cont = Parser{
+   p@DirectParser{} >>= cont = asLeaf Parser{
       complete= complete p >>= complete . cont,
       direct= d0 <|> d1,
       direct0= d0,
       direct1= d1,
       indirect= direct0 p >>= indirect . general' . cont,
+      choices= undefined,
       isAmbiguous= Nothing,
       cyclicDescendants= const (ParserFlags True DynamicDependencies)}
       where d0 = direct0 p >>= direct0 . general' . cont
             d1 = (direct0 p >>= direct1 . general' . cont) <|> (direct1 p >>= complete . cont)
-   p >>= cont = Parser{
+   p >>= cont = asLeaf Parser{
       complete= complete p >>= complete . cont,
       direct= d0 <|> d1,
       direct0= d0,
       direct1= d1,
       indirect= (indirect p >>= complete . cont) <|> (direct0 p >>= indirect . general' . cont),
+      choices= undefined,
       isAmbiguous= Nothing,
       cyclicDescendants= \cd->
          let pcd@(ParserFlags pn _) = cyclicDescendants p' cd
@@ -457,7 +496,7 @@ instance (Rank2.Apply g, Parsing (p g s), InputParsing (Fixed p g s)) => Parsing
       complete= try (complete p),
       direct0= try (direct0 p),
       direct1= try (direct1 p)}
-   try p@Parser{} = p{
+   try p@Parser{} = asLeaf p{
       complete= try (complete p),
       direct= try (direct p),
       direct0= try (direct0 p),
@@ -468,7 +507,7 @@ instance (Rank2.Apply g, Parsing (p g s), InputParsing (Fixed p g s)) => Parsing
       complete= complete p <?> msg,
       direct0= direct0 p <?> msg,
       direct1= direct1 p <?> msg}
-   p@Parser{} <?> msg = p{
+   p@Parser{} <?> msg = asLeaf p{
       complete= complete p <?> msg,
       direct= direct p <?> msg,
       direct0= direct0 p <?> msg,
@@ -482,13 +521,14 @@ instance (Rank2.Apply g, Parsing (p g s), InputParsing (Fixed p g s)) => Parsing
       complete= notFollowedBy (complete p),
       direct0= notFollowedBy (complete p),
       direct1= empty}
-   notFollowedBy p@Parser{} = Parser{
+   notFollowedBy p@Parser{} = asLeaf Parser{
       complete= notFollowedBy (complete p),
       direct= notFollowedBy (direct p),
       direct0= notFollowedBy (direct p),
       direct1= empty,
-      isAmbiguous= Nothing,
       indirect= notFollowedBy (indirect p),
+      choices= undefined,
+      isAmbiguous= Nothing,
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
    unexpected msg = liftPositive (unexpected msg)
 
@@ -507,6 +547,7 @@ instance (Rank2.Apply g, InputParsing (Fixed p g s), DeterministicParsing (p g s
                      direct0= direct0 p' <<|> notFollowedBy (void $ complete p') *> direct0 q',
                      direct1= direct1 p' <<|> notFollowedBy (void $ complete p') *> direct1 q',
                      indirect= indirect p' <<|> notFollowedBy (void $ complete p') *> indirect q',
+                     choices= choices p `LeftBiasedChoice` choices q,
                      isAmbiguous= Nothing,
                      cyclicDescendants= \deps-> let
                            ParserFlags pn pd = cyclicDescendants p' deps
@@ -523,12 +564,13 @@ instance (Rank2.Apply g, InputParsing (Fixed p g s), DeterministicParsing (p g s
       complete = takeMany (complete p),
       direct0= (:[]) <$> direct0 p <<|> [] <$ notFollowedBy (void $ complete p),
       direct1= (:) <$> direct1 p <*> takeMany (complete p)}
-   takeMany p@Parser{} = Parser{
+   takeMany p@Parser{} = asLeaf Parser{
       complete= mcp,
       direct= d1 <<|> d0,
       direct0= d0,
       direct1= d1,
       indirect= (:) <$> indirect p <*> mcp,
+      choices= undefined,
       isAmbiguous= Nothing,
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
       where d0 = (:[]) <$> direct0 p <<|> [] <$ notFollowedBy (void $ direct p)
@@ -542,12 +584,13 @@ instance (Rank2.Apply g, InputParsing (Fixed p g s), DeterministicParsing (p g s
       complete = skipAll (complete p),
       direct0= void (direct0 p) <<|> notFollowedBy (void $ complete p),
       direct1= direct1 p *> skipAll (complete p)}
-   skipAll p@Parser{} = Parser{
+   skipAll p@Parser{} = asLeaf Parser{
       complete= mcp,
       direct= d1 <<|> d0,
       direct0= d0,
       direct1= d1,
       indirect= indirect p *> mcp,
+      choices= undefined,
       isAmbiguous= Nothing,
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
       where d0 = () <$ direct0 p <<|> notFollowedBy (void $ direct p)
@@ -562,12 +605,13 @@ instance (Rank2.Apply g, CommittedParsing (p g s), CommittedResults (p g s) ~ Pa
       complete = commit (complete p),
       direct0= commit (direct0 p),
       direct1= commit (direct1 p)}
-   commit p@Parser{} = Parser{
+   commit p@Parser{} = asLeaf Parser{
       complete= commit (complete p),
       direct= commit (direct p),
       direct0= commit (direct0 p),
       direct1= commit (direct1 p),
       indirect= commit (indirect p),
+      choices= undefined,
       isAmbiguous= Nothing,
       cyclicDescendants= cyclicDescendants p}
    admit :: Fixed p g s (CommittedResults (Fixed p g s) a) -> Fixed p g s a
@@ -576,12 +620,13 @@ instance (Rank2.Apply g, CommittedParsing (p g s), CommittedResults (p g s) ~ Pa
       complete = admit (complete p),
       direct0= admit (direct0 p),
       direct1= admit (direct1 p)}
-   admit p@Parser{} = Parser{
+   admit p@Parser{} = asLeaf Parser{
       complete= admit (complete p),
       direct= admit (direct p),
       direct0= admit (direct0 p),
       direct1= admit (direct1 p),
       indirect= admit (indirect p),
+      choices= undefined,
       isAmbiguous= Nothing,
       cyclicDescendants= cyclicDescendants p}
 
@@ -594,13 +639,14 @@ instance (Rank2.Apply g, LookAheadParsing (p g s), InputParsing (Fixed p g s)) =
       complete= lookAhead (complete p),
       direct0= lookAhead (complete p),
       direct1= empty}
-   lookAhead p@Parser{} = Parser{
+   lookAhead p@Parser{} = asLeaf Parser{
       complete= lookAhead (complete p),
       direct= lookAhead (direct p),
       direct0= lookAhead (direct p),
       direct1= empty,
       isAmbiguous= isAmbiguous p,
       indirect= lookAhead (indirect p),
+      choices= undefined,
       cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
 
 instance (Rank2.Apply g, LeftReductive s, FactorialMonoid s, InputParsing (p g s), ParserInput (p g s) ~ s) =>
@@ -633,7 +679,7 @@ instance (Rank2.Apply g, LeftReductive s, FactorialMonoid s, Show s,
       complete= traceInput (\s-> "direct " <> description s) (complete p),
       direct0= traceInput (\s-> "direct0 " <> description s) (direct0 p),
       direct1= traceInput (\s-> "direct1 " <> description s) (direct1 p)}
-   traceInput description p@Parser{} = p{
+   traceInput description p@Parser{} = asLeaf p{
       complete= traceBy "complete" (complete p),
       direct= traceBy "direct" (direct p),
       direct0= traceBy "direct0" (direct0 p),
@@ -648,12 +694,13 @@ instance (Rank2.Apply g, LeftReductive s, FactorialMonoid s,
       complete= match (complete p),
       direct0 = match (direct0 p),
       direct1 = match (direct1 p)}
-   match p@Parser{} = Parser{
+   match p@Parser{} = asLeaf Parser{
       complete= match (complete p),
       direct =  match (direct p),
       direct0 = match (direct0 p),
       direct1 = match (direct1 p),
       indirect= match (indirect p),
+      choices= undefined,
       isAmbiguous= Nothing,
       cyclicDescendants= cyclicDescendants p}
 
@@ -679,13 +726,15 @@ instance (AmbiguousParsing (p g s), Rank2.Apply g) => AmbiguousParsing (Fixed p 
    ambiguous p@DirectParser{} = DirectParser{complete= ambiguous (complete p),
                                              direct0=  ambiguous (direct0 p),
                                              direct1=  ambiguous (direct1 p)}
-   ambiguous p@Parser{} = Parser{complete= ambiguous (complete p),
-                                 direct=   ambiguous (direct p),
-                                 direct0=  ambiguous (direct0 p),
-                                 direct1=  ambiguous (direct1 p),
-                                 indirect= ambiguous (indirect p),
-                                 isAmbiguous= Just (AmbiguityWitness Refl),
-                                 cyclicDescendants= cyclicDescendants p}
+   ambiguous p@Parser{} = asLeaf Parser{
+      complete= ambiguous (complete p),
+      direct=   ambiguous (direct p),
+      direct0=  ambiguous (direct0 p),
+      direct1=  ambiguous (direct1 p),
+      indirect= ambiguous (indirect p),
+      choices= undefined,
+      isAmbiguous= Just (AmbiguityWitness Refl),
+      cyclicDescendants= cyclicDescendants p}
    {-# INLINABLE ambiguous #-}
 
 -- | Turns a context-free parser into a backtracking PEG parser that consumes the longest possible prefix of the list
@@ -695,13 +744,15 @@ longest (PositiveDirectParser p) = PositiveDirectParser (Memoizing.longest p)
 longest p@DirectParser{} = DirectParser{complete= Memoizing.longest (complete p),
                                         direct0=  Memoizing.longest (direct0 p),
                                         direct1=  Memoizing.longest (direct1 p)}
-longest p@Parser{} = Parser{complete= Memoizing.longest (complete p),
-                            direct=  Memoizing.longest (direct p),
-                            direct0=  Memoizing.longest (direct0 p),
-                            direct1=  Memoizing.longest (direct1 p),
-                            indirect=  Memoizing.longest (indirect p),
-                            isAmbiguous= Nothing,
-                            cyclicDescendants= cyclicDescendants p}
+longest p@Parser{} = asLeaf Parser{
+   complete= Memoizing.longest (complete p),
+   direct=  Memoizing.longest (direct p),
+   direct0=  Memoizing.longest (direct0 p),
+   direct1=  Memoizing.longest (direct1 p),
+   indirect=  Memoizing.longest (indirect p),
+   choices= undefined,
+   isAmbiguous= Nothing,
+   cyclicDescendants= cyclicDescendants p}
 
 -- | Turns a backtracking PEG parser of the list of input tails into a context-free parser, opposite of 'longest'
 peg :: Ord s => Fixed Backtrack.Parser g [(s, g (ResultList g s))] a -> Fixed Memoizing.Parser g s a
@@ -709,13 +760,15 @@ peg (PositiveDirectParser p) = PositiveDirectParser (Memoizing.peg p)
 peg p@DirectParser{} = DirectParser{complete= Memoizing.peg (complete p),
                                         direct0=  Memoizing.peg (direct0 p),
                                         direct1=  Memoizing.peg (direct1 p)}
-peg p@Parser{} = Parser{complete= Memoizing.peg (complete p),
-                        direct=  Memoizing.peg (direct p),
-                        direct0=  Memoizing.peg (direct0 p),
-                        direct1=  Memoizing.peg (direct1 p),
-                        indirect=  Memoizing.peg (indirect p),
-                        isAmbiguous= Nothing,
-                        cyclicDescendants= cyclicDescendants p}
+peg p@Parser{} = asLeaf Parser{
+   complete= Memoizing.peg (complete p),
+   direct=  Memoizing.peg (direct p),
+   direct0=  Memoizing.peg (direct0 p),
+   direct1=  Memoizing.peg (direct1 p),
+   indirect=  Memoizing.peg (indirect p),
+   choices= undefined,
+   isAmbiguous= Nothing,
+   cyclicDescendants= cyclicDescendants p}
 
 -- | Turns a backtracking PEG parser into a context-free parser
 terminalPEG :: (Monoid s, Ord s) => Fixed Backtrack.Parser g s a -> Fixed Memoizing.Parser g s a
@@ -723,13 +776,15 @@ terminalPEG (PositiveDirectParser p) = PositiveDirectParser (Memoizing.terminalP
 terminalPEG p@DirectParser{} = DirectParser{complete= Memoizing.terminalPEG (complete p),
                                             direct0=  Memoizing.terminalPEG (direct0 p),
                                             direct1=  Memoizing.terminalPEG (direct1 p)}
-terminalPEG p@Parser{} = Parser{complete= Memoizing.terminalPEG (complete p),
-                                direct=  Memoizing.terminalPEG (direct p),
-                                direct0=  Memoizing.terminalPEG (direct0 p),
-                                direct1=  Memoizing.terminalPEG (direct1 p),
-                                indirect=  Memoizing.terminalPEG (indirect p),
-                                isAmbiguous= Nothing,
-                                cyclicDescendants= cyclicDescendants p}
+terminalPEG p@Parser{} = asLeaf Parser{
+   complete= Memoizing.terminalPEG (complete p),
+   direct=  Memoizing.terminalPEG (direct p),
+   direct0=  Memoizing.terminalPEG (direct0 p),
+   direct1=  Memoizing.terminalPEG (direct1 p),
+   indirect=  Memoizing.terminalPEG (indirect p),
+   choices= undefined,
+   isAmbiguous= Nothing,
+   cyclicDescendants= cyclicDescendants p}
 
 parseRecursive :: forall p g s rl. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g,
                                     Eq s, FactorialMonoid s, LeftReductive s, Alternative (p g s),
