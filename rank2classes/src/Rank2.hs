@@ -19,7 +19,7 @@ module Rank2 (
    ($), fst, snd, ap, fmap, liftA4, liftA5,
    fmapTraverse, liftA2Traverse1, liftA2Traverse2, liftA2TraverseBoth,
    distributeWith, distributeWithTraversable,
-   setters)
+   getters, setters)
 where
 
 import qualified Control.Applicative as Rank1
@@ -168,6 +168,10 @@ liftA2TraverseBoth :: forall f1 f2 g t u v.
 liftA2TraverseBoth f x y = liftA2 applyCompose (distributeTraversable x) (distributeTraversable y)
    where applyCompose :: forall a. Rank1.Compose f1 t a -> Rank1.Compose f2 u a -> v a
          applyCompose x' y' = f (Rank1.getCompose x') (Rank1.getCompose y')
+
+-- | Enumerate getters for each element
+getters :: Distributive g => g (Rank1.Compose ((->) (g f)) f)
+getters = distribute id
 
 -- | Enumerate setters for each element
 setters :: Logistic g => g ((f ~> f) ~> Const (g f -> g f))
