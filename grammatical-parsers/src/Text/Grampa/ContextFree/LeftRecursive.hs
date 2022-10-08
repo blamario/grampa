@@ -1,10 +1,9 @@
 {-# LANGUAGE ConstraintKinds, CPP, FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies, TypeOperators,
              UndecidableInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 -- | A context-free memoizing parser that can handle left-recursive grammars.
 module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..),
-                                              longest, peg, terminalPEG,
+                                              autochain, longest, peg, terminalPEG,
                                               liftPositive, liftPure, mapPrimitive,
                                               parseSeparated, separated)
 where
@@ -48,7 +47,7 @@ import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), FallibleResult
                              ParserFlags (ParserFlags, nullable, dependsOn),
                              Dependencies (DynamicDependencies, StaticDependencies),
                              TraceableParsing(..))
-import Text.Grampa.Internal.Storable (Storable(reuse, store), Storable1(reuse1, store1), Storable11(store11))
+import Text.Grampa.Internal.Storable (Storable(reuse, store), Storable1(reuse1, store1), Storable11(reuse11, store11))
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
@@ -91,6 +90,11 @@ instance Foldable ChoiceTree where
   foldMap f (Leaf a) = f a
   foldMap f (SymmetricChoice a b) = foldMap f a <> foldMap f b
   foldMap f (LeftBiasedChoice a b) = foldMap f a <> foldMap f b
+
+collapseChoices :: (Alternative p,  DeterministicParsing p) => ChoiceTree (p a) -> p a
+collapseChoices (SymmetricChoice p q) = collapseChoices p <|> collapseChoices q
+collapseChoices (LeftBiasedChoice p q) = collapseChoices p <<|> collapseChoices q
+collapseChoices (Leaf p) = p
 
 -- | A type of parsers analyzed for their left-recursion class
 data SeparatedParser p (g :: (Type -> Type) -> Type) s a =
@@ -175,6 +179,7 @@ type LeftRecParsing p g s f = (Eq s, LeftReductive s, FactorialMonoid s, Alterna
                                TailsParsing (p g s), GrammarConstraint (p g s) g, ParserGrammar (p g s) ~ g,
                                Functor (ResultFunctor (p g s)), s ~ ParserInput (p g s), FallibleResults f,
                                Storable1 (GrammarFunctor (p g s)) (ParserFlags g),
+                               Storable1 (GrammarFunctor (p g s)) Bool,
                                AmbiguousAlternative (GrammarFunctor (p g s)))
 
 -- | Parser transformer for left-recursive grammars.
@@ -231,9 +236,9 @@ instance (Rank2.Apply g, GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) =
    chainRecursive = chainWith chainRecursive
    chainLongestRecursive = chainWith chainLongestRecursive
 
-chainWith :: (Rank2.Apply g, GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f)
-          => ((forall f. f a -> g f -> g f) -> p g s a -> p g s a -> p g s a)
-          -> ((forall f. f a -> g f -> g f) -> Fixed p g s a -> Fixed p g s a -> Fixed p g s a)
+chainWith :: (Rank2.Apply g, GrammarFunctor (p g s) ~ f, f ~ rl s, LeftRecParsing p g s rl)
+          => ((f a -> g f -> g f) -> p g s a -> p g s a -> p g s a)
+          -> ((f a -> g f -> g f) -> Fixed p g s a -> Fixed p g s a -> Fixed p g s a)
 chainWith f assign = chain
   where chain base recurse@Parser{} = asLeaf Parser{
            complete= f assign (complete base) (complete recurse),
@@ -250,7 +255,7 @@ chainWith f assign = chain
                                                    StaticDependencies g -> StaticDependencies (clearOwnDep g)
                                       in ParserFlags (pn && qn) (depUnion pd qd')}
            where recurseDescendants g = cyclicDescendants recurse g
-                 clearOwnDep = assign (Const False)
+                 clearOwnDep = Rank2.fmap reuse11 . assign (store11 $ Const False) . Rank2.fmap store11
         chain base recurse = recurse <|> base
 
 bits :: forall (g :: (Type -> Type) -> Type). (Rank2.Distributive g, Rank2.Traversable g) => g (Const (g (Const Bool)))
@@ -343,7 +348,7 @@ instance (Rank2.Apply g, Alternative (p g s)) => Alternative (Fixed p g s) where
                     direct0= direct0 p' <|> direct0 q',
                     direct1= direct1 p' <|> direct1 q',
                     indirect= indirect p' <|> indirect q',
-                    choices= choices p `SymmetricChoice` choices q,
+                    choices= choices p' `SymmetricChoice` choices q',
                     isAmbiguous= Nothing,
                     cyclicDescendants= \deps-> let
                          ParserFlags pn pd = cyclicDescendants p' deps
@@ -407,8 +412,15 @@ instance Filterable (p g s) => Filterable (Fixed p g s) where
       isAmbiguous= Nothing}
    {-# INLINABLE mapMaybe #-}
 
+complement :: Const Bool x -> Const Bool x
+complement (Const a) = Const (not a)
+
+intersection :: Const Bool x -> Const Bool x -> Const Bool x
+intersection (Const True) x = x
+intersection (Const False) _ = Const False
+
 union :: Const Bool x -> Const Bool x -> Const Bool x
-union (Const False) d = d
+union (Const False) x = x
 union (Const True) _ = Const True
 
 depUnion :: Rank2.Apply g => Dependencies g -> Dependencies g -> Dependencies g
@@ -539,7 +551,7 @@ instance (Rank2.Apply g, InputParsing (Fixed p g s), DeterministicParsing (p g s
                      direct0= direct0 p' <<|> notFollowedBy (void $ complete p') *> direct0 q',
                      direct1= direct1 p' <<|> notFollowedBy (void $ complete p') *> direct1 q',
                      indirect= indirect p' <<|> notFollowedBy (void $ complete p') *> indirect q',
-                     choices= choices p `LeftBiasedChoice` choices q,
+                     choices= choices p' `LeftBiasedChoice` choices q',
                      isAmbiguous= Nothing,
                      cyclicDescendants= \deps-> let
                            ParserFlags pn pd = cyclicDescendants p' deps
@@ -778,6 +790,66 @@ terminalPEG p@Parser{} = asLeaf Parser{
    isAmbiguous= Nothing,
    cyclicDescendants= cyclicDescendants p}
 
+-- | Automatically apply 'chainRecursive' and 'chainLongestRecursive' to left-recursive grammar productions where
+-- possible.
+autochain :: forall p g s f rl cb. (cb ~ Const (g (Const Bool)), f ~ GrammarFunctor (p g s), f ~ rl s,
+                                    LeftRecParsing p g s rl, DeterministicParsing (p g s),
+                                    Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g, Rank2.Logistic g)
+          => g (Fixed p g s) -> g (Fixed p g s)
+autochain g = Rank2.liftA4 optimize Rank2.getters Rank2.setters candidates g
+   where descendants :: g (Const (Dependencies g))
+         candidates :: g (Const Bool)
+         optimize :: forall a. (Compose ((->) (g cb)) cb a)
+                  -> (Rank2.Arrow (f Rank2.~> f) (Const (g f -> g f)) a)
+                  -> Const Bool a
+                  -> Fixed p g s a
+                  -> Fixed p g s a
+         descendants = transitiveDescendants g
+         optimize getter setter (Const True) p@Parser{choices= c} =
+            optimizeChoice (getCompose getter) (getConst . Rank2.apply setter . Rank2.Arrow . const) p c
+            where
+                  optimizeChoice :: (g cb -> cb a)
+                                 -> (f a -> g f -> g f)
+                                 -- > (forall f. (f a -> f a) -> g f -> g f)
+                                 -- > (forall f. Rank2.Arrow f f a -> Const (g f -> g f) a)
+                                 -> Fixed p g s a
+                                 -> ChoiceTree (Fixed p g s a)
+                                 -> Fixed p g s a
+                  splitSymmetric :: (g cb -> cb a) -> ChoiceTree (Fixed p g s a) -> ([Fixed p g s a], [Fixed p g s a])
+                  isLeftRecursive :: (g cb -> cb a) -> ChoiceTree (Fixed p g s a) -> Bool
+                  leftRecursiveParser :: (g cb -> cb a) -> Fixed p g s a -> Bool
+                  optimizeChoice get set fallback (Leaf p) = fallback
+                  optimizeChoice get set fallback (LeftBiasedChoice p q)
+                     | isLeftRecursive get q = fallback
+                     | not (isLeftRecursive get p) = fallback
+                     | LeftBiasedChoice p1 p2 <- p, not (isLeftRecursive get p2)
+                     = optimizeChoice get set fallback $ LeftBiasedChoice p1 (LeftBiasedChoice p2 q)
+                     | otherwise = chainLongestRecursive set (collapseChoices q) (collapseChoices p)
+                  optimizeChoice get set fallback c@SymmetricChoice{}
+                     | null base = fallback
+                     | null recursive = fallback
+                     | otherwise = chainRecursive set (foldr1 (<|>) base) (foldr1 (<|>) recursive)
+                     where (base, recursive) = splitSymmetric get c
+                  splitSymmetric get (SymmetricChoice p q) = splitSymmetric get p <> splitSymmetric get q
+                  splitSymmetric get c
+                     | isLeftRecursive get c = ([], [collapseChoices c])
+                     | otherwise = ([collapseChoices c], [])
+                  isLeftRecursive get = leftRecursiveParser get . collapseChoices
+                  leftRecursiveParser get Parser{cyclicDescendants= cds} =
+                     getAny $ Rank2.foldMap (Any . getConst)
+                     $ Rank2.liftA2 intersection (getConst $ get bits) (deps bits)
+                     where deps :: g cb -> g (Const Bool)
+                           deps = getDependencies . dependsOn . cds
+                                  . Rank2.fmap (Const . ParserFlags False . StaticDependencies . getConst)
+         optimize _ _ _ p = p
+         candidates = Rank2.liftA2 intersection (cyclicDependencies g) (complement Rank2.<$> cyclicDependencies g')
+         g' = Rank2.liftA2 noDirectLeftRecursion bits g
+         noDirectLeftRecursion (Const bit) p@Parser{cyclicDescendants= cd} = p{cyclicDescendants= excludeSelf . cd}
+            where excludeSelf (ParserFlags n DynamicDependencies) = ParserFlags n DynamicDependencies
+                  excludeSelf (ParserFlags n (StaticDependencies deps)) =
+                     ParserFlags n $ StaticDependencies $ Rank2.liftA2 intersection (complement Rank2.<$> bit) deps
+         noDirectLeftRecursion _ p = p
+
 parseRecursive :: forall p g s rl. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g,
                                     Eq s, FactorialMonoid s, LeftReductive s, Alternative (p g s),
                                     TailsParsing (p g s), GrammarConstraint (p g s) g,
@@ -794,11 +866,9 @@ separated :: forall p g s. (Alternative (p g s), Rank2.Apply g, Rank2.Distributi
 separated g = Rank2.liftA4 reseparate circulars cycleFollowers descendants g
    where descendants :: g (Const (Dependencies g))
          cycleFollowers, circulars :: g (Const Bool)
-         cyclicDescendantses :: g (Const (ParserFlags g))
          appendResults :: forall a. Maybe (AmbiguityWitness a)
                        -> GrammarFunctor (p g s) a -> GrammarFunctor (p g s) a -> GrammarFunctor (p g s) a
-         leftRecursive :: forall a. Const (g (Const Bool)) a -> Const (ParserFlags g) a -> Const Bool a
-         leftRecursiveDeps :: forall a. Const Bool a -> Const (ParserFlags g) a -> Const (g (Const Bool)) a
+         leftRecursiveDeps :: forall a. Const Bool a -> Const (Dependencies g) a -> Const (g (Const Bool)) a
          reseparate :: forall a. Const Bool a -> Const Bool a -> Const (Dependencies g) a -> Fixed p g s a
                     -> SeparatedParser p g s a
          reseparate (Const circular) (Const follower) (Const d@(StaticDependencies deps)) p
@@ -811,21 +881,34 @@ separated g = Rank2.liftA4 reseparate circulars cycleFollowers descendants g
               CycleParser (indirect p) (direct p) (Rank2.Arrow (Rank2.Arrow . appendResults (isAmbiguous p))) d
          appendResults (Just (AmbiguityWitness Refl)) = ambiguousOr
          appendResults Nothing = (<|>)
-         descendants = Rank2.fmap (Const . dependsOn . getConst) cyclicDescendantses
-         cyclicDescendantses = fixDescendants (Rank2.fmap (\p-> Const $ cyclicDescendants $ general p) g)
-         circulars = Rank2.liftA2 leftRecursive bits cyclicDescendantses
+         descendants = transitiveDescendants g
+         circulars = Rank2.liftA2 leftRecursive bits descendants
          cycleFollowers = getUnion (Rank2.foldMap (Union . getConst) $
-                                    Rank2.liftA2 leftRecursiveDeps circulars cyclicDescendantses)
-         leftRecursive (Const bit) (Const ParserFlags{dependsOn= StaticDependencies deps}) =
-            Const (getAny $ Rank2.foldMap (Any . getConst) $ Rank2.liftA2 intersection bit deps)
-         leftRecursive _ (Const ParserFlags{dependsOn= DynamicDependencies}) = Const True
-         leftRecursiveDeps (Const True) (Const ParserFlags{dependsOn= StaticDependencies deps}) = Const deps
-         leftRecursiveDeps (Const False) (Const ParserFlags{dependsOn= StaticDependencies deps}) =
+                                    Rank2.liftA2 leftRecursiveDeps circulars descendants)
+         leftRecursiveDeps (Const True) (Const (StaticDependencies deps)) = Const deps
+         leftRecursiveDeps (Const False) (Const (StaticDependencies deps)) =
             Const (Rank2.fmap (const $ Const False) deps)
-         leftRecursiveDeps _ (Const ParserFlags{dependsOn= DynamicDependencies}) =
-            Const (Rank2.fmap (const $ Const True) g)
-         intersection (Const a) (Const b) = Const (a && b)
+         leftRecursiveDeps _ (Const DynamicDependencies) = Const (Rank2.fmap (const $ Const True) g)
 {-# INLINABLE separated #-}
+
+getDependencies :: Rank2.Distributive g => Dependencies g -> g (Const Bool)
+getDependencies (StaticDependencies deps) = deps
+getDependencies DynamicDependencies = Rank2.cotraverse (const $ Const True) Nothing
+
+cyclicDependencies :: (Alternative (p g s), Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g)
+                   => g (Fixed p g s) -> g (Const Bool)
+cyclicDependencies = Rank2.liftA2 leftRecursive bits . transitiveDescendants
+
+leftRecursive :: forall g a. (Rank2.Apply g, Rank2.Foldable g)
+              => Const (g (Const Bool)) a -> Const (Dependencies g) a -> Const Bool a
+leftRecursive (Const bit) (Const (StaticDependencies deps)) =
+   Const (getAny $ Rank2.foldMap (Any . getConst) $ Rank2.liftA2 intersection bit deps)
+leftRecursive _ (Const DynamicDependencies) = Const True
+
+transitiveDescendants :: (Alternative (p g s), Rank2.Apply g, Rank2.Traversable g)
+                      => g (Fixed p g s) -> g (Const (Dependencies g))
+transitiveDescendants =
+   Rank2.fmap (Const . dependsOn . getConst) . fixDescendants . Rank2.fmap (Const . cyclicDescendants . general)
 
 fixDescendants :: forall g. (Rank2.Apply g, Rank2.Traversable g)
                => g (Const (g (Const (ParserFlags g)) -> (ParserFlags g))) -> g (Const (ParserFlags g))
