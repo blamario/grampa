@@ -3,12 +3,15 @@
 
 module Text.Grampa.Internal (BinTree(..), ResultList(..), ResultsOfLength(..), FallibleResults(..),
                              AmbiguousAlternative(..), AmbiguityDecidable(..), AmbiguityWitness(..),
+                             ParserFlags (ParserFlags, nullable, dependsOn),
+                             Dependencies (DynamicDependencies, StaticDependencies),
                              TraceableParsing(..),
                              noFailure, expected, erroneous) where
 
 import Control.Applicative (Applicative(..), Alternative(..))
 import Data.Foldable (toList)
 import Data.Functor.Classes (Show1(..))
+import Data.Functor.Const (Const)
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Ord (Down(Down))
@@ -28,6 +31,13 @@ data BinTree a = Fork !(BinTree a) !(BinTree a)
                | Leaf !a
                | EmptyTree
                deriving (Show)
+
+data ParserFlags g = ParserFlags {
+   nullable :: Bool,
+   dependsOn :: Dependencies g}
+
+data Dependencies g = DynamicDependencies
+                    | StaticDependencies (g (Const Bool))
 
 data AmbiguityWitness a where
    AmbiguityWitness :: (a :~: Ambiguous b) -> AmbiguityWitness a

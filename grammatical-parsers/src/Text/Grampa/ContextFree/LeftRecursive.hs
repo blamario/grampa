@@ -1,6 +1,7 @@
 {-# LANGUAGE ConstraintKinds, CPP, FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies, TypeOperators,
              UndecidableInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 -- | A context-free memoizing parser that can handle left-recursive grammars.
 module Text.Grampa.ContextFree.LeftRecursive (Fixed, Parser, SeparatedParser(..),
                                               longest, peg, terminalPEG,
@@ -40,10 +41,14 @@ import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           AmbiguousParsing(..), CommittedParsing(..), ConsumedInputParsing(..),
                           DeterministicParsing(..),
-                          TailsParsing(parseTails, parseAllTails), ParseResults, ParseFailure(..), Pos)
-import Text.Grampa.Internal (ResultList(..), FallibleResults(..),
+                          TailsParsing(parseTails, parseAllTails),
+                          ParseResults, ParseFailure(..), Pos)
+import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), FallibleResults(..),
                              AmbiguousAlternative(ambiguousOr), AmbiguityDecidable(..), AmbiguityWitness(..),
+                             ParserFlags (ParserFlags, nullable, dependsOn),
+                             Dependencies (DynamicDependencies, StaticDependencies),
                              TraceableParsing(..))
+import Text.Grampa.Internal.Storable (Storable(reuse, store), Storable1(reuse1, store1), Storable11(store11))
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
@@ -100,20 +105,6 @@ data SeparatedParser p (g :: (Type -> Type) -> Type) s a =
    -- | a parser that doesn't start with any 'nonTerminal' so it can run first
    | BackParser {
         backParser :: p g s a}
-
-data ParserFlags g = ParserFlags {
-   nullable :: Bool,
-   dependsOn :: Dependencies g}
-
-deriving instance Show (Dependencies g) => Show (ParserFlags g)
-
-data Dependencies g = DynamicDependencies
-                    | StaticDependencies (g (Const Bool))
-
-deriving instance Show (g (Const Bool)) => Show (Dependencies g)
-
-data ParserFunctor p g s a = ParserResultsFunctor {parserResults :: GrammarFunctor (p g s) a}
-                           | ParserFlagsFunctor {parserFlags :: ParserFlags g}
 
 newtype Union (g :: (Type -> Type) -> Type) = Union{getUnion :: g (Const Bool)}
 
@@ -183,6 +174,7 @@ general' p@Parser{} = p
 type LeftRecParsing p g s f = (Eq s, LeftReductive s, FactorialMonoid s, Alternative (p g s),
                                TailsParsing (p g s), GrammarConstraint (p g s) g, ParserGrammar (p g s) ~ g,
                                Functor (ResultFunctor (p g s)), s ~ ParserInput (p g s), FallibleResults f,
+                               Storable1 (GrammarFunctor (p g s)) (ParserFlags g),
                                AmbiguousAlternative (GrammarFunctor (p g s)))
 
 -- | Parser transformer for left-recursive grammars.
@@ -212,11 +204,11 @@ instance (Rank2.Apply g, GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) =
 -- | Parser transformer for left-recursive grammars.
 instance (Rank2.Apply g, GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) => GrammarParsing (Fixed p g s) where
    type ParserGrammar (Fixed p g s) = g
-   type GrammarFunctor (Fixed p g s) = ParserFunctor p g s
-   parsingResult :: s -> ParserFunctor p g s a -> ResultFunctor (p g s) (s, a)
-   parsingResult s = parsingResult @(p g s) s . parserResults
+   type GrammarFunctor (Fixed p g s) = GrammarFunctor (p g s)
+   parsingResult :: s -> GrammarFunctor (p g s) a -> ResultFunctor (p g s) (s, a)
+   parsingResult s = parsingResult @(p g s) s
    nonTerminal :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g) =>
-                  (g (ParserFunctor p g s) -> ParserFunctor p g s a) -> Fixed p g s a
+                  (g (GrammarFunctor (p g s)) -> GrammarFunctor (p g s) a) -> Fixed p g s a
    nonTerminal f = asLeaf Parser{
       complete= ind,
       direct= empty,
@@ -225,8 +217,8 @@ instance (Rank2.Apply g, GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) =
       indirect= ind,
       choices= undefined,
       isAmbiguous= Nothing,
-      cyclicDescendants= parserFlags . f . Rank2.fmap (ParserFlagsFunctor . getConst) . addSelf}
-      where ind = nonTerminal (parserResults . f . Rank2.fmap ParserResultsFunctor)
+      cyclicDescendants= reuse1 . f . Rank2.fmap store11 . addSelf}
+      where ind = nonTerminal f
             addSelf g = Rank2.liftA2 adjust bits g
             adjust :: forall b. Const (g (Const Bool)) b -> Const (ParserFlags g) b -> Const (ParserFlags g) b
             adjust (Const bit) (Const (ParserFlags n (StaticDependencies d))) =

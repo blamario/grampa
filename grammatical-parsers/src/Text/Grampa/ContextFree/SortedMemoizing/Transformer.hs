@@ -2,7 +2,9 @@
              RankNTypes, ScopedTypeVariables, TypeFamilies, TypeOperators, UndecidableInstances #-}
 -- | A context-free memoizing parser that handles all alternatives in parallel
 -- and carries a monadic computation with each parsing result.
-module Text.Grampa.ContextFree.SortedMemoizing.Transformer (ResultListT(..), ParserT(..), (<<|>),
+module Text.Grampa.ContextFree.SortedMemoizing.Transformer (ParserT(Parser, applyParser), ResultListT(ResultList),
+                                                            ResultsOfLengthT(ResultsOfLengthT, getResultsOfLength),
+                                                            ResultsOfLength(ROL),
                                                             tbind, lift, tmap, longest, peg, terminalPEG)
 where
 

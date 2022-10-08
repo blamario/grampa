@@ -37,7 +37,7 @@ library
                        Text.Grampa.ContextFree.SortedMemoizing.Transformer,
                        Text.Grampa.ContextFree.LeftRecursive,
                        Text.Grampa.ContextFree.LeftRecursive.Transformer
-  other-modules:       Text.Grampa.Class, Text.Grampa.Internal,
+  other-modules:       Text.Grampa.Class, Text.Grampa.Internal, Text.Grampa.Internal.Storable,
                        Text.Grampa.PEG.Backtrack.Measured,
                        Text.Grampa.PEG.Continued, Text.Grampa.PEG.Continued.Measured,
                        Text.Grampa.ContextFree.Memoizing,
