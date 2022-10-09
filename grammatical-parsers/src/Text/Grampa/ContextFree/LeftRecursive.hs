@@ -792,9 +792,10 @@ terminalPEG p@Parser{} = asLeaf Parser{
 
 -- | Automatically apply 'chainRecursive' and 'chainLongestRecursive' to left-recursive grammar productions where
 -- possible.
-autochain :: forall p g s f rl cb. (cb ~ Const (g (Const Bool)), f ~ GrammarFunctor (p g s), f ~ rl s,
-                                    LeftRecParsing p g s rl, DeterministicParsing (p g s),
-                                    Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g, Rank2.Logistic g)
+autochain :: forall p g s f rl (cb :: Type -> Type).
+             (cb ~ Const (g (Const Bool)), f ~ GrammarFunctor (p g s), f ~ rl s,
+              LeftRecParsing p g s rl, DeterministicParsing (p g s),
+              Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g, Rank2.Logistic g)
           => g (Fixed p g s) -> g (Fixed p g s)
 autochain g = Rank2.liftA4 optimize Rank2.getters Rank2.setters candidates g
    where candidates :: g (Const Bool)
