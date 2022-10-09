@@ -3,11 +3,12 @@
 -- monadic computation with each parsing result.
 module Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, SeparatedParser(..), AmbiguityDecidable,
                                                           lift, liftPositive, tbind, tmap,
-                                                          parseSeparated, separated)
+                                                          autochain, parseSeparated, separated)
 where
 
 import Text.Grampa.ContextFree.LeftRecursive (Fixed, SeparatedParser(..),
-                                              liftPositive, liftPure, mapPrimitive, parseSeparated, separated)
+                                              liftPositive, liftPure, mapPrimitive,
+                                              autochain, parseSeparated, separated)
 import qualified Text.Grampa.ContextFree.SortedMemoizing.Transformer as Transformer
 import Text.Grampa.Internal (AmbiguityDecidable)
 
