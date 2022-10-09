@@ -12,17 +12,21 @@
 -- Adapted from https://wiki.haskell.org/A_practical_Template_Haskell_Tutorial
 
 module Rank2.TH (deriveAll, deriveFunctor, deriveApply, unsafeDeriveApply, deriveApplicative,
-                 deriveFoldable, deriveTraversable, deriveDistributive, deriveDistributiveTraversable)
+                 deriveFoldable, deriveTraversable,
+                 deriveDistributive, deriveDistributiveTraversable, deriveLogistic)
 where
 
 import Control.Applicative (liftA2, liftA3)
 import Control.Monad (replicateM)
 import Data.Distributive (cotraverse)
+import Data.Functor.Compose (Compose (Compose))
+import Data.Functor.Contravariant (contramap)
+import Data.Functor.Logistic (deliver)
 import Data.Monoid ((<>))
 import qualified Language.Haskell.TH as TH
 import Language.Haskell.TH (Q, TypeQ, Name, TyVarBndr(KindedTV, PlainTV), Clause, Dec(..), Con(..), Type(..), Exp(..),
                             Inline(Inlinable, Inline), RuleMatch(FunLike), Phases(AllPhases),
-                            appE, conE, conP, instanceD, varE, varP, normalB, pragInlD, recConE, wildP)
+                            appE, conE, conP, instanceD, varE, varP, normalB, pragInlD, recConE, recUpdE, wildP)
 import Language.Haskell.TH.Syntax (BangType, VarBangType, Info(TyConI), getQ, putQ, newName)
 
 import qualified Rank2
@@ -31,7 +35,8 @@ data Deriving = Deriving { _derivingConstructor :: Name, _derivingVariable :: Na
 
 deriveAll :: Name -> Q [Dec]
 deriveAll ty = foldr f (pure []) [deriveFunctor, deriveApply, deriveApplicative,
-                                  deriveFoldable, deriveTraversable, deriveDistributive, deriveDistributiveTraversable]
+                                  deriveFoldable, deriveTraversable,
+                                  deriveDistributive, deriveDistributiveTraversable, deriveLogistic]
    where f derive rest = (<>) <$> derive ty <*> rest
 
 deriveFunctor :: Name -> Q [Dec]
@@ -93,6 +98,13 @@ deriveDistributiveTraversable ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.DistributiveTraversable ty
    (constraints, dec) <- genCotraverseTraversable cs
    sequence [instanceD (TH.cxt $ map pure constraints) instanceType [pure dec]]
+
+deriveLogistic :: Name -> Q [Dec]
+deriveLogistic ty = do
+   (instanceType, cs) <- reifyConstructors ''Rank2.Logistic ty
+   (constraints, dec) <- genDeliver cs
+   sequence [instanceD (TH.cxt $ map pure constraints) instanceType
+             [pure dec, pragInlD 'Rank2.deliver Inline FunLike AllPhases]]
 
 reifyConstructors :: Name -> Name -> Q (TypeQ, [Con])
 reifyConstructors cls ty = do
@@ -160,6 +172,10 @@ genCotraverse [con] = do (constraints, clause) <- genCotraverseClause con
 genCotraverseTraversable :: [Con] -> Q ([Type], Dec)
 genCotraverseTraversable [con] = do (constraints, clause) <- genCotraverseTraversableClause con
                                     return (constraints, FunD 'Rank2.cotraverseTraversable [clause])
+
+genDeliver :: [Con] -> Q ([Type], Dec)
+genDeliver [con] = do (constraints, clause) <- genDeliverClause con
+                      return (constraints, FunD 'Rank2.deliver [clause])
 
 genFmapClause :: Con -> Q ([Type], Clause)
 genFmapClause (NormalC name fieldTypes) = do
@@ -501,6 +517,23 @@ genCotraverseTraversableClause (RecC name fields) = do
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause [varP withName, varP argName] body []
 
+genDeliverClause :: Con -> Q ([Type], Clause)
+genDeliverClause (NormalC name []) = genDeliverClause (RecC name [])
+genDeliverClause (RecC name fields) = do
+   argName <- newName "f"
+   let constraintsAndFields = map newNamedField fields
+       body = normalB $ recConE name $ (snd <$>) <$> constraintsAndFields
+       newNamedField :: VarBangType -> Q ([Type], (Name, Exp))
+       newNamedField (fieldName, _, fieldType) =
+          ((,) fieldName <$>)
+          <$> (genDeliverField ''Rank2.Logistic [| contramap |] fieldType
+               [| \set g-> $(TH.recUpdE [|g|] [(,) fieldName <$> [| Rank2.apply set $ $(varE fieldName) g |]]) |]
+               [| \set g-> $(TH.recUpdE [|g|] [(,) fieldName <$> [| set $ $(varE fieldName) g |]]) |]
+               (varE argName)
+               id)
+   constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
+   (,) constraints <$> TH.clause [varP argName] body []
+
 genCotraverseField :: Name -> Q Exp -> Q Exp -> Type -> Q Exp -> (Q Exp -> Q Exp) -> Q ([Type], Exp)
 genCotraverseField className method fun fieldType fieldAccess wrap = do
    Just (Deriving _ typeVar) <- getQ
@@ -511,6 +544,18 @@ genCotraverseField className method fun fieldType fieldAccess wrap = do
                   genCotraverseField className method fun t2 fieldAccess (wrap . appE (varE 'cotraverse))
      SigT ty _kind -> genCotraverseField className method fun ty fieldAccess wrap
      ParensT ty -> genCotraverseField className method fun ty fieldAccess wrap
+
+genDeliverField :: Name -> Q Exp -> Type -> Q Exp -> Q Exp -> Q Exp -> (Q Exp -> Q Exp) -> Q ([Type], Exp)
+genDeliverField className fun fieldType fieldUpdate subRecordUpdate arg wrap = do
+   Just (Deriving _ typeVar) <- getQ
+   case fieldType of
+     AppT ty _ | ty == VarT typeVar -> (,) [] <$> appE [|Compose|] (wrap fun `appE` fieldUpdate `appE` arg)
+     AppT t1 t2 | t2 == VarT typeVar ->
+                  (,) (constrain className t1) <$> appE [| Rank2.deliver |] (wrap fun `appE` subRecordUpdate `appE` arg)
+     AppT t1 t2 | t1 /= VarT typeVar ->
+                  genDeliverField className fun t2 fieldUpdate subRecordUpdate arg (wrap . appE (varE 'deliver))
+     SigT ty _kind -> genDeliverField className fun ty fieldUpdate subRecordUpdate arg wrap
+     ParensT ty -> genDeliverField className fun ty fieldUpdate subRecordUpdate arg wrap
 
 constrain :: Name -> Type -> [Type]
 constrain _ ConT{} = []
