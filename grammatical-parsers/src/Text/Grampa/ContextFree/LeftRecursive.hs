@@ -13,7 +13,8 @@ import Control.Monad (Monad(..), MonadPlus(..), void)
 #if MIN_VERSION_base(4,13,0)
 import Control.Monad (MonadFail(fail))
 #endif
-import Control.Monad.Trans.State.Lazy (State, evalState, get, put)
+import Control.Monad.Trans.State.Lazy (State, evalState)
+import qualified Control.Monad.Trans.State.Lazy as State
 
 import Data.Functor.Compose (Compose(..))
 import Data.Kind (Type)
@@ -42,12 +43,12 @@ import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing
                           DeterministicParsing(..),
                           TailsParsing(parseTails, parseAllTails),
                           ParseResults, ParseFailure(..), Pos)
-import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), FallibleResults(..),
+import Text.Grampa.Internal (ResultList(..), FallibleResults(..),
                              AmbiguousAlternative(ambiguousOr), AmbiguityDecidable(..), AmbiguityWitness(..),
                              ParserFlags (ParserFlags, nullable, dependsOn),
                              Dependencies (DynamicDependencies, StaticDependencies),
                              TraceableParsing(..))
-import Text.Grampa.Internal.Storable (Storable(reuse, store), Storable1(reuse1, store1), Storable11(reuse11, store11))
+import Text.Grampa.Internal.Storable (Storable1(reuse1), Storable11(reuse11, store11))
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
@@ -254,9 +255,8 @@ chainWith f assign = chain
                                                 of DynamicDependencies -> DynamicDependencies
                                                    StaticDependencies g -> StaticDependencies (clearOwnDep g)
                                       in ParserFlags (pn && qn) (depUnion pd qd')}
-           where recurseDescendants g = cyclicDescendants recurse g
-                 clearOwnDep = Rank2.fmap reuse11 . assign (store11 $ Const False) . Rank2.fmap store11
         chain base recurse = recurse <|> base
+        clearOwnDep = Rank2.fmap reuse11 . assign (store11 $ Const False) . Rank2.fmap store11
 
 bits :: forall (g :: (Type -> Type) -> Type). (Rank2.Distributive g, Rank2.Traversable g) => g (Const (g (Const Bool)))
 bits = start `seq` Rank2.fmap oneBit start
@@ -264,7 +264,7 @@ bits = start `seq` Rank2.fmap oneBit start
          oneBit :: Const Int a -> Const (g (Const Bool)) a
          next :: f a -> State Int (Const Int a)
          oneBit (Const i) = Const (Rank2.fmap (Const . (i ==) . getConst) start)
-         next _ = do {i <- get; let {i' = succ i}; seq i' (put i'); return (Const i)}
+         next _ = do {i <- State.get; let {i' = succ i}; seq i' (State.put i'); return (Const i)}
 
 instance Functor (p g s) => Functor (Fixed p g s) where
    fmap f (PositiveDirectParser p) = PositiveDirectParser (fmap f p)
@@ -797,51 +797,48 @@ autochain :: forall p g s f rl cb. (cb ~ Const (g (Const Bool)), f ~ GrammarFunc
                                     Rank2.Apply g, Rank2.Traversable g, Rank2.Distributive g, Rank2.Logistic g)
           => g (Fixed p g s) -> g (Fixed p g s)
 autochain g = Rank2.liftA4 optimize Rank2.getters Rank2.setters candidates g
-   where descendants :: g (Const (Dependencies g))
-         candidates :: g (Const Bool)
+   where candidates :: g (Const Bool)
          optimize :: forall a. (Compose ((->) (g cb)) cb a)
                   -> (Rank2.Arrow (f Rank2.~> f) (Const (g f -> g f)) a)
                   -> Const Bool a
                   -> Fixed p g s a
                   -> Fixed p g s a
-         descendants = transitiveDescendants g
-         optimize getter setter (Const True) p@Parser{choices= c} =
-            optimizeChoice (getCompose getter) (getConst . Rank2.apply setter . Rank2.Arrow . const) p c
-            where
-                  optimizeChoice :: (g cb -> cb a)
-                                 -> (f a -> g f -> g f)
-                                 -- > (forall f. (f a -> f a) -> g f -> g f)
-                                 -- > (forall f. Rank2.Arrow f f a -> Const (g f -> g f) a)
-                                 -> Fixed p g s a
-                                 -> ChoiceTree (Fixed p g s a)
-                                 -> Fixed p g s a
-                  splitSymmetric :: (g cb -> cb a) -> ChoiceTree (Fixed p g s a) -> ([Fixed p g s a], [Fixed p g s a])
-                  isLeftRecursive :: (g cb -> cb a) -> ChoiceTree (Fixed p g s a) -> Bool
-                  leftRecursiveParser :: (g cb -> cb a) -> Fixed p g s a -> Bool
-                  optimizeChoice get set fallback (Leaf p) = fallback
-                  optimizeChoice get set fallback (LeftBiasedChoice p q)
-                     | isLeftRecursive get q = fallback
-                     | not (isLeftRecursive get p) = fallback
-                     | LeftBiasedChoice p1 p2 <- p, not (isLeftRecursive get p2)
-                     = optimizeChoice get set fallback $ LeftBiasedChoice p1 (LeftBiasedChoice p2 q)
-                     | otherwise = chainLongestRecursive set (collapseChoices q) (collapseChoices p)
-                  optimizeChoice get set fallback c@SymmetricChoice{}
-                     | null base = fallback
-                     | null recursive = fallback
-                     | otherwise = chainRecursive set (foldr1 (<|>) base) (foldr1 (<|>) recursive)
-                     where (base, recursive) = splitSymmetric get c
-                  splitSymmetric get (SymmetricChoice p q) = splitSymmetric get p <> splitSymmetric get q
-                  splitSymmetric get c
-                     | isLeftRecursive get c = ([], [collapseChoices c])
-                     | otherwise = ([collapseChoices c], [])
-                  isLeftRecursive get = leftRecursiveParser get . collapseChoices
-                  leftRecursiveParser get Parser{cyclicDescendants= cds} =
-                     getAny $ Rank2.foldMap (Any . getConst)
-                     $ Rank2.liftA2 intersection (getConst $ get bits) (deps bits)
-                     where deps :: g cb -> g (Const Bool)
-                           deps = getDependencies . dependsOn . cds
-                                  . Rank2.fmap (Const . ParserFlags False . StaticDependencies . getConst)
+         optimize getter setter (Const True) p@Parser{choices= cs} =
+            optimizeChoice (getCompose getter) (getConst . Rank2.apply setter . Rank2.Arrow . const) p cs
          optimize _ _ _ p = p
+         optimizeChoice :: (g cb -> cb a)
+                        -> (f a -> g f -> g f)
+                        -- > (forall f. (f a -> f a) -> g f -> g f)
+                        -- > (forall f. Rank2.Arrow f f a -> Const (g f -> g f) a)
+                        -> Fixed p g s a
+                        -> ChoiceTree (Fixed p g s a)
+                        -> Fixed p g s a
+         splitSymmetric :: (g cb -> cb a) -> ChoiceTree (Fixed p g s a) -> ([Fixed p g s a], [Fixed p g s a])
+         isLeftRecursive :: (g cb -> cb a) -> ChoiceTree (Fixed p g s a) -> Bool
+         leftRecursiveParser :: (g cb -> cb a) -> Fixed p g s a -> Bool
+         optimizeChoice _ _ fallback Leaf{} = fallback
+         optimizeChoice get set fallback (LeftBiasedChoice p q)
+            | isLeftRecursive get q = fallback
+            | not (isLeftRecursive get p) = fallback
+            | LeftBiasedChoice p1 p2 <- p, not (isLeftRecursive get p2)
+            = optimizeChoice get set fallback $ LeftBiasedChoice p1 (LeftBiasedChoice p2 q)
+            | otherwise = chainLongestRecursive set (collapseChoices q) (collapseChoices p)
+         optimizeChoice get set fallback c@SymmetricChoice{}
+            | null base = fallback
+            | null recursives = fallback
+            | otherwise = chainRecursive set (foldr1 (<|>) base) (foldr1 (<|>) recursives)
+            where (base, recursives) = splitSymmetric get c
+         splitSymmetric get (SymmetricChoice p q) = splitSymmetric get p <> splitSymmetric get q
+         splitSymmetric get c
+            | isLeftRecursive get c = ([], [collapseChoices c])
+            | otherwise = ([collapseChoices c], [])
+         isLeftRecursive get = leftRecursiveParser get . collapseChoices
+         leftRecursiveParser get Parser{cyclicDescendants= cds} =
+            getAny $ Rank2.foldMap (Any . getConst) $ Rank2.liftA2 intersection (getConst $ get bits) (deps bits)
+            where deps :: g cb -> g (Const Bool)
+                  deps = getDependencies . dependsOn . cds
+                         . Rank2.fmap (Const . ParserFlags False . StaticDependencies . getConst)
+         leftRecursiveParser _ _ = False
          candidates = Rank2.liftA2 intersection (cyclicDependencies g) (complement Rank2.<$> cyclicDependencies g')
          g' = Rank2.liftA2 noDirectLeftRecursion bits g
          noDirectLeftRecursion (Const bit) p@Parser{cyclicDescendants= cd} = p{cyclicDescendants= excludeSelf . cd}
