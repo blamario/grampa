@@ -23,9 +23,9 @@ import Text.Grampa.Class (Ambiguous(..), FailureDescription(..), ParseFailure(..
 
 import Prelude hiding (length, showList)
 
-data ResultsOfLength g s r = ResultsOfLength !Int ![(s, g (ResultList g s))] !(NonEmpty r)
+data ResultsOfLength g s r = ResultsOfLength !Int ![(s, g (ResultList g s))] {-# UNPACK #-} !(NonEmpty r)
 
-data ResultList g s r = ResultList ![ResultsOfLength g s r] !(ParseFailure Pos s)
+data ResultList g s r = ResultList ![ResultsOfLength g s r] (ParseFailure Pos s)
 
 data BinTree a = Fork !(BinTree a) !(BinTree a)
                | Leaf !a

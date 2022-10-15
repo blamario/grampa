@@ -39,7 +39,7 @@ import Text.Grampa.Internal (expected, TraceableParsing(..))
 data Result (g :: (Type -> Type) -> Type) s v =
      Parsed{parsedPrefix :: !v,
             parsedSuffix :: !s}
-   | NoParse (ParseFailure Pos s)
+   | NoParse {-# UNPACK #-} !(ParseFailure Pos s)
 
 -- | Parser type for context-free grammars that uses a continuation-passing algorithm, fast for grammars in LL(1)
 -- class but with potentially exponential performance for longer ambiguous prefixes.

@@ -54,11 +54,12 @@ data FailureDescription s = StaticDescription String   -- ^ a readable descripti
                             deriving (Functor, Eq, Ord, Read, Show)
 
 instance (Ord pos, Ord s) => Semigroup (ParseFailure pos s) where
-   f1@(ParseFailure pos1 exp1 err1) <> f2@(ParseFailure pos2 exp2 err2)
-      | pos1 > pos2 = f1
-      | pos1 < pos2 = f2
-      | otherwise = ParseFailure pos1 (merge exp1 exp2) (merge err1 err2)
-      where merge [] xs = xs
+   f1@(ParseFailure pos1 exp1 err1) <> f2@(ParseFailure pos2 exp2 err2) = ParseFailure pos' exp' err'
+      where ParseFailure pos' exp' err'
+              | pos1 > pos2 = f1
+              | pos1 < pos2 = f2
+              | otherwise = ParseFailure pos1 (merge exp1 exp2) (merge err1 err2)
+            merge [] xs = xs
             merge xs [] = xs
             merge xs@(x:xs') ys@(y:ys')
                | x < y = x : merge xs' ys

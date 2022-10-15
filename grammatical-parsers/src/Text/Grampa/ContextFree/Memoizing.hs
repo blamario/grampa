@@ -49,7 +49,7 @@ import Prelude hiding (iterate, length, null, showList, span, takeWhile)
 -- grammars.
 newtype Parser g s r = Parser{applyParser :: [(s, g (ResultList g s))] -> ResultList g s r}
 
-data ResultList g s r = ResultList !(BinTree (ResultInfo g s r)) {-# UNPACK #-} !(ParseFailure Pos s)
+data ResultList g s r = ResultList !(BinTree (ResultInfo g s r)) (ParseFailure Pos s)
 data ResultInfo g s r = ResultInfo !Int ![(s, g (ResultList g s))] !r
 
 instance (Show s, Show r) => Show (ResultList g s r) where

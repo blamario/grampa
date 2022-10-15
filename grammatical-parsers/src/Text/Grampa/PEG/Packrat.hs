@@ -39,7 +39,7 @@ import Text.Grampa.Internal (expected, TraceableParsing(..))
 
 data Result g s v = Parsed{parsedPrefix :: !v, 
                            parsedSuffix :: ![(s, g (Result g s))]}
-                  | NoParse (ParseFailure Pos s)
+                  | NoParse {-# UNPACK #-} !(ParseFailure Pos s)
 
 -- | Parser type for Parsing Expression Grammars that uses an improved packrat algorithm, with O(1) performance bounds
 -- but with worse constants and more memory consumption than the backtracking 'Text.Grampa.PEG.Backtrack.Parser'. The

@@ -56,7 +56,7 @@ newtype ParserT m g s r = Parser{applyParser :: [(s, g (ResultListT m g s))] -> 
 newtype ResultsOfLengthT m g s r = ResultsOfLengthT{getResultsOfLength :: ResultsOfLength m g s (m r)}
 data ResultsOfLength m g s a = ROL !Int ![(s, g (ResultListT m g s))] !(NonEmpty a)
 data ResultListT m g s r = ResultList{resultSuccesses :: ![ResultsOfLengthT m g s r],
-                                      resultFailures  :: !(ParseFailure Pos s)}
+                                      resultFailures  :: (ParseFailure Pos s)}
 
 singleResult :: (Applicative m, Ord s) => Int -> [(s, g (ResultListT m g s))] -> r -> ResultListT m g s r
 singleResult len rest a = ResultList [ResultsOfLengthT $ ROL len rest (pure a:|[])] mempty

@@ -46,7 +46,7 @@ import Prelude hiding (iterate, null, showList, span, takeWhile)
 -- support.
 newtype Parser (g :: (Type -> Type) -> Type) s r = Parser{applyParser :: s -> ResultList s r}
 
-data ResultList s r = ResultList !(BinTree (ResultInfo s r)) {-# UNPACK #-} !(ParseFailure Pos s)
+data ResultList s r = ResultList !(BinTree (ResultInfo s r)) (ParseFailure Pos s)
 data ResultInfo s r = ResultInfo !s !r
 
 instance (Show s, Show r) => Show (ResultList s r) where
