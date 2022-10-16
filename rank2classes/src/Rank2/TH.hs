@@ -526,10 +526,11 @@ genDeliverClause (RecC name fields) = do
        newNamedField :: VarBangType -> Q ([Type], (Name, Exp))
        newNamedField (fieldName, _, fieldType) =
           ((,) fieldName <$>)
-          <$> (genDeliverField ''Rank2.Logistic [| contramap |] fieldType
-               [| \set g-> $(TH.recUpdE [|g|] [(,) fieldName <$> [| Rank2.apply set $ $(varE fieldName) g |]]) |]
-               [| \set g-> $(TH.recUpdE [|g|] [(,) fieldName <$> [| set $ $(varE fieldName) g |]]) |]
+          <$> (genDeliverField ''Rank2.Logistic fieldType
+               (\wrap-> [| \set g-> $(TH.recUpdE [|g|] [(,) fieldName <$> appE (wrap [| Rank2.apply set |]) [| $(varE fieldName) g |]]) |])
+               (\wrap-> [| \set g-> $(TH.recUpdE [|g|] [(,) fieldName <$> appE (wrap [| set |]) [| $(varE fieldName) g |]]) |])
                (varE argName)
+               id
                id)
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause [varP argName] body []
@@ -545,17 +546,24 @@ genCotraverseField className method fun fieldType fieldAccess wrap = do
      SigT ty _kind -> genCotraverseField className method fun ty fieldAccess wrap
      ParensT ty -> genCotraverseField className method fun ty fieldAccess wrap
 
-genDeliverField :: Name -> Q Exp -> Type -> Q Exp -> Q Exp -> Q Exp -> (Q Exp -> Q Exp) -> Q ([Type], Exp)
-genDeliverField className fun fieldType fieldUpdate subRecordUpdate arg wrap = do
+genDeliverField :: Name
+                -> Type
+                -> ((Q Exp -> Q Exp) -> Q Exp)
+                -> ((Q Exp -> Q Exp) -> Q Exp)
+                -> Q Exp
+                -> (Q Exp -> Q Exp)
+                -> (Q Exp -> Q Exp)
+                -> Q ([Type], Exp)
+genDeliverField className fieldType fieldUpdate subRecordUpdate arg outer inner = do
    Just (Deriving _ typeVar) <- getQ
    case fieldType of
-     AppT ty _ | ty == VarT typeVar -> (,) [] <$> appE [|Compose|] (wrap fun `appE` fieldUpdate `appE` arg)
+     AppT ty _ | ty == VarT typeVar -> (,) [] <$> outer (appE [|Compose|] ([|contramap|] `appE` fieldUpdate inner `appE` arg))
      AppT t1 t2 | t2 == VarT typeVar ->
-                  (,) (constrain className t1) <$> appE [| Rank2.deliver |] (wrap fun `appE` subRecordUpdate `appE` arg)
+                  (,) (constrain className t1) <$> outer (appE [| Rank2.deliver |] ([|contramap|] `appE` subRecordUpdate inner `appE` arg))
      AppT t1 t2 | t1 /= VarT typeVar ->
-                  genDeliverField className fun t2 fieldUpdate subRecordUpdate arg (wrap . appE (varE 'deliver))
-     SigT ty _kind -> genDeliverField className fun ty fieldUpdate subRecordUpdate arg wrap
-     ParensT ty -> genDeliverField className fun ty fieldUpdate subRecordUpdate arg wrap
+                  genDeliverField className t2 fieldUpdate subRecordUpdate arg (outer . appE (varE 'pure)) (inner . appE (varE 'fmap))
+     SigT ty _kind -> genDeliverField className ty fieldUpdate subRecordUpdate arg outer inner
+     ParensT ty -> genDeliverField className ty fieldUpdate subRecordUpdate arg outer inner
 
 constrain :: Name -> Type -> [Type]
 constrain _ ConT{} = []

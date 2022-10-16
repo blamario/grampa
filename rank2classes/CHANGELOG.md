@@ -1,3 +1,10 @@
+Version 1.4.6
+---------------
+* Added the `Logistic` type class, `getters` and `setters`
+* Added `Rank2.TH.deriveLogistic`, included it in `deriveAll`
+* Compiling with GHC 9.4.2
+* Forward compatibility with `TypeFamilies`
+
 Version 1.4.4
 ---------------
 * Tested with GHC 9.2.1, incremented the upper `template-haskell` dependency bound
