@@ -129,6 +129,12 @@ instance Functor BinTree where
    fmap f (Leaf a) = Leaf (f a)
    fmap _ EmptyTree = EmptyTree
 
+instance Applicative BinTree where
+  pure = Leaf
+  EmptyTree <*> _ = EmptyTree
+  Leaf f <*> t = f <$> t
+  Fork f1 f2 <*> t = Fork (f1 <*> t) (f2 <*> t)
+
 instance Foldable BinTree where
    foldMap f (Fork left right) = foldMap f left `mappend` foldMap f right
    foldMap f (Leaf a) = f a

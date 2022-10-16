@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, FlexibleContexts, GeneralizedNewtypeDeriving, InstanceSigs,
+{-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, InstanceSigs, MultiParamTypeClasses,
              RankNTypes, ScopedTypeVariables, TypeFamilies, TypeOperators, UndecidableInstances #-}
 -- | A context-free parser with packrat-like memoization of parse results.
 module Text.Grampa.ContextFree.Memoizing
@@ -40,7 +40,10 @@ import qualified Rank2
 import Text.Grampa.Class (GrammarParsing(..), MultiParsing(..),
                           DeterministicParsing(..), InputParsing(..), InputCharParsing(..),
                           TailsParsing(parseTails), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (BinTree(..), TraceableParsing(..), expected, erroneous)
+import Text.Grampa.Internal (BinTree(..), AmbiguousAlternative (..), FallibleResults (..), TraceableParsing(..),
+                             Dependencies (..), ParserFlags (..),
+                             expected, erroneous)
+import Text.Grampa.Internal.Storable (Storable(..), Storable1(..))
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
 import Prelude hiding (iterate, length, null, showList, span, takeWhile)
@@ -50,7 +53,7 @@ import Prelude hiding (iterate, length, null, showList, span, takeWhile)
 newtype Parser g s r = Parser{applyParser :: [(s, g (ResultList g s))] -> ResultList g s r}
 
 data ResultList g s r = ResultList !(BinTree (ResultInfo g s r)) (ParseFailure Pos s)
-data ResultInfo g s r = ResultInfo !Int ![(s, g (ResultList g s))] !r
+data ResultInfo g s r = ResultInfo !Int ![(s, g (ResultList g s))] r
 
 instance (Show s, Show r) => Show (ResultList g s r) where
    show (ResultList l f) = "ResultList (" ++ shows l (") (" ++ shows f ")")
@@ -64,6 +67,10 @@ instance (Show s, Show r) => Show (ResultInfo g s r) where
 
 instance Functor (ResultInfo g s) where
    fmap f (ResultInfo l t r) = ResultInfo l t (f r)
+
+instance Ord s => Applicative (ResultInfo g s) where
+   pure = ResultInfo 0 mempty
+   ResultInfo l1 _ f <*> ResultInfo l2 t2 x = ResultInfo (l1 + l2) t2 (f x)
 
 instance Foldable (ResultInfo g s) where
    foldMap f (ResultInfo _ _ r) = f r
@@ -83,6 +90,41 @@ instance Ord s => Semigroup (ResultList g s r) where
 instance Ord s => Monoid (ResultList g s r) where
    mempty = ResultList mempty mempty
    mappend = (<>)
+
+instance FallibleResults (ResultList g) where
+   hasSuccess (ResultList EmptyTree _) = False
+   hasSuccess _ = True
+   failureOf (ResultList _ failure) = failure
+   failWith = ResultList EmptyTree
+
+instance Ord s => Applicative (ResultList g s) where
+   pure a = ResultList (Leaf $ pure a) mempty
+   ResultList rl1 f1 <*> ResultList rl2 f2 = ResultList ((<*>) <$> rl1 <*> rl2) (f1 <> f2)
+
+instance Ord s => Alternative (ResultList g s) where
+   empty = mempty
+   (<|>) = (<>)
+
+instance Ord s => AmbiguousAlternative (ResultList g s) where
+   ambiguousOr (ResultList rl1 f1) (ResultList rl2 f2) = ResultList (Fork rl1 rl2) (f1 <> f2)
+
+instance Storable1 (ResultList g s) Bool where
+   store1 bit = ResultList EmptyTree (ParseFailure (if bit then 1 else 0) [] [])
+   reuse1 (ResultList _ (ParseFailure pos _ _)) = pos /= 0
+
+instance (Rank2.Functor g, Monoid s, Ord s) => Storable1 (ResultList g s) (ParserFlags g) where
+   store1 a = ResultList (Leaf $ store a) mempty
+   reuse1 (ResultList (Leaf s) _) = reuse s
+
+instance (Rank2.Functor g, Monoid s) => Storable (ResultInfo g s r) (ParserFlags g) where
+   store (ParserFlags n d) = ResultInfo (if n then 1 else 0) (store d) (error "unused")
+   reuse (ResultInfo n d _) = ParserFlags (n /= 0) (reuse d)
+
+instance (Rank2.Functor g, Monoid s) => Storable [(s, g (ResultList g s))] (Dependencies g) where
+   store DynamicDependencies = []
+   store (StaticDependencies deps) = [(mempty, store deps)]
+   reuse [] = DynamicDependencies
+   reuse [(_, deps)] = StaticDependencies (reuse deps)
 
 instance Functor (Parser g i) where
    fmap f (Parser p) = Parser (fmap f . p)
