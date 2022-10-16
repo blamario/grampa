@@ -4,7 +4,7 @@
 -- 
 -- This will bring into scope the standard classes 'Functor', 'Applicative', 'Foldable', and 'Traversable', but with a
 -- @Rank2.@ prefix and a twist that their methods operate on a heterogenous collection. The same property is shared by
--- the two less standard classes 'Apply' and 'Distributive'.
+-- the less standard classes 'Apply', 'Distributive', and 'Logistic'.
 {-# LANGUAGE DefaultSignatures, InstanceSigs, KindSignatures, PolyKinds, Rank2Types #-}
 {-# LANGUAGE ScopedTypeVariables, StandaloneDeriving, TypeOperators, UndecidableInstances #-}
 {-# LANGUAGE EmptyCase #-}
