@@ -36,7 +36,7 @@ import qualified Rank2.TH
 import Text.Grampa hiding (symbol)
 import qualified Text.Grampa.ContextFree.Parallel as Parallel
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
-import qualified Text.Grampa.ContextFree.LeftRecursive as LeftRecursive
+import qualified Text.Grampa.ContextFree.SortedMemoizing.LeftRecursive as LeftRecursive
 
 import qualified Test.Ambiguous
 import qualified Test.Examples

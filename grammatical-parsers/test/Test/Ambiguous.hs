@@ -8,7 +8,7 @@ import Data.Semigroup ((<>))
 import qualified Rank2.TH
 import Text.Grampa
 import Text.Grampa.Combinators
-import Text.Grampa.ContextFree.LeftRecursive (Parser)
+import Text.Grampa.ContextFree.SortedMemoizing.LeftRecursive (Parser)
 
 import Debug.Trace
 

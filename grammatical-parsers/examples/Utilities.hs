@@ -6,7 +6,7 @@ import Data.Monoid ((<>))
 import Data.Monoid.Textual (TextualMonoid, toString)
 
 import Text.Grampa
-import Text.Grampa.ContextFree.LeftRecursive
+import Text.Grampa.ContextFree.Memoizing.LeftRecursive
 import qualified Rank2
 
 parseUnique :: (Ord s, TextualMonoid s, Rank2.Traversable g, Rank2.Distributive g, Rank2.Apply g) =>

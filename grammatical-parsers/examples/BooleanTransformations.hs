@@ -18,7 +18,7 @@ import Text.Grampa (TokenParsing(someSpace), LexicalParsing(lexicalComment, lexi
                     GrammarBuilder, ParseResults,
                     fixGrammar, parseComplete,
                     char, identifier, keyword, takeCharsWhile)
-import Text.Grampa.ContextFree.LeftRecursive.Transformer (ParserT, lift, tmap)
+import Text.Grampa.ContextFree.SortedMemoizing.Transformer.LeftRecursive (ParserT, lift, tmap)
 import qualified Boolean
 import Boolean(Boolean(..))
 

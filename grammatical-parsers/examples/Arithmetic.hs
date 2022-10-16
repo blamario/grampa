@@ -8,7 +8,7 @@ import Data.Monoid ((<>))
 import Text.Parser.Token (symbol)
 
 import Text.Grampa
-import Text.Grampa.ContextFree.LeftRecursive (Parser)
+import Text.Grampa.ContextFree.SortedMemoizing.LeftRecursive (Parser)
 import Utilities (infixJoin)
 
 import qualified Rank2

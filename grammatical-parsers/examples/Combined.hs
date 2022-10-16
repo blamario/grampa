@@ -11,7 +11,7 @@ import qualified Data.Map as Map
 import qualified Rank2
 import qualified Rank2.TH
 import Text.Grampa (TokenParsing, LexicalParsing, GrammarBuilder)
-import Text.Grampa.ContextFree.LeftRecursive (Parser)
+import Text.Grampa.ContextFree.SortedMemoizing.LeftRecursive (Parser)
 import qualified Arithmetic
 import qualified Boolean
 import qualified Comparisons

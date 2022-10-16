@@ -12,7 +12,7 @@ import qualified Rank2
 import qualified Rank2.TH
 
 import Text.Grampa
-import Text.Grampa.ContextFree.LeftRecursive (Parser)
+import Text.Grampa.ContextFree.SortedMemoizing.LeftRecursive (Parser)
 
 class LambdaDomain e where
    apply :: e -> e -> e

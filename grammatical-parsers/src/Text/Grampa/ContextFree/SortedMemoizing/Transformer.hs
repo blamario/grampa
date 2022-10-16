@@ -148,7 +148,7 @@ instance (Applicative m, Monoid x, Ord s) => Monoid (ParserT m g s x) where
    mappend = (<>)
 
 -- | Memoizing parser that carries an applicative computation. Can be wrapped with
--- 'Text.Grampa.ContextFree.LeftRecursive.Fixed' to provide left recursion support.
+-- 'Text.Grampa.ContextFree.SortedMemoizing.Transformer.LeftRecursive.Fixed' to provide left recursion support.
 --
 -- @
 -- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>
@@ -167,7 +167,7 @@ instance (Applicative m, LeftReductive s, FactorialMonoid s, Ord s) => MultiPars
       where close = Rank2.fmap (<* eof) g
 
 -- | Memoizing parser that carries an applicative computation. Can be wrapped with
--- 'Text.Grampa.ContextFree.LeftRecursive.Fixed' to provide left recursion support.
+-- 'Text.Grampa.ContextFree.SortedMemoizing.Transformer.LeftRecursive.Fixed' to provide left recursion support.
 instance (Applicative m, Ord s, LeftReductive s, FactorialMonoid s) => GrammarParsing (ParserT m g s) where
    type ParserGrammar (ParserT m g s) = g
    type GrammarFunctor (ParserT m g s) = ResultListT m g s

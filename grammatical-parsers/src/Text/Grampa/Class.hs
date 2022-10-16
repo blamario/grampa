@@ -150,7 +150,7 @@ class MultiParsing m => GrammarParsing m where
    -- > foo = chainRecursive (\x g-> g{foo = x}) baz (BinOp <$> foo <*> bar)
    --
    -- This method works on individual parsers left-recursive on themselves, not on grammars with mutually
-   -- left-recursive productions. Use "Text.Grampa.ContextFree.LeftRecursive" for the latter.
+   -- left-recursive productions. Use "Text.Grampa.ContextFree.Memoizing.LeftRecursive" for the latter.
    chainRecursive :: (g ~ ParserGrammar m, f ~ GrammarFunctor m, GrammarConstraint m g)
                   => (f a -> g f -> g f) -- ^ setter for the parsed results of each iteration
                   -> m a -- ^ the non-recursive base case

@@ -17,7 +17,7 @@ import Control.Applicative
 import Data.Char (isDigit)
 import Data.Functor.Classes (Show1, showsPrec1)
 import Text.Grampa
-import Text.Grampa.ContextFree.LeftRecursive (Parser)
+import Text.Grampa.ContextFree.Memoizing.LeftRecursive (Parser)
 import qualified Rank2
 import qualified Rank2.TH
 ~~~

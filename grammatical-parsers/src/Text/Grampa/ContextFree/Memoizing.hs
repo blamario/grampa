@@ -338,7 +338,7 @@ instance (MonoidNull s, Ord s) => Parsing (Parser g s) where
    eof = Parser f
       where f rest@((s, _):_)
                | null s = ResultList (Leaf $ ResultInfo 0 rest ()) mempty
-               | otherwise = ResultList mempty (expected (Down $ length rest) "endOfInput")
+               | otherwise = ResultList mempty (expected (Down $ length rest) "end of input")
             f [] = ResultList (Leaf $ ResultInfo 0 [] ()) mempty
 
 instance (MonoidNull s, Ord s) => DeterministicParsing (Parser g s) where

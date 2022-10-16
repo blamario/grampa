@@ -13,7 +13,7 @@ import Data.Word (Word8)
 
 import qualified Rank2
 import Text.Grampa
-import Text.Grampa.ContextFree.LeftRecursive (Parser)
+import Text.Grampa.ContextFree.SortedMemoizing.LeftRecursive (Parser)
 import qualified Arithmetic
 import qualified Comparisons
 import qualified Boolean

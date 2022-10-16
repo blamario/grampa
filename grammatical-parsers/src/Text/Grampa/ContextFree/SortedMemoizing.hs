@@ -102,7 +102,7 @@ instance (Monoid x, Ord s) => Monoid (Parser g s x) where
    mappend = (<>)
 
 -- | Memoizing parser guarantees O(n²) performance for grammars with unambiguous productions. Can be wrapped with
--- 'Text.Grampa.ContextFree.LeftRecursive.Fixed' to provide left recursion support.
+-- 'Text.Grampa.ContextFree.SortedMemoizing.LeftRecursive.Fixed' to provide left recursion support.
 instance (Ord s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g s) where
    type ParserGrammar (Parser g s) = g
    type GrammarFunctor (Parser g s) = ResultList g s
@@ -138,7 +138,7 @@ instance (Ord s, LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s
    parseTails = applyParser
 
 -- | Memoizing parser guarantees O(n²) performance for grammars with unambiguous productions. Can be wrapped with
--- 'Text.Grampa.ContextFree.LeftRecursive.Fixed' to provide left recursion support.
+-- 'Text.Grampa.ContextFree.SortedMemoizing.LeftRecursive.Fixed' to provide left recursion support.
 --
 -- @
 -- 'parseComplete' :: ("Rank2".'Rank2.Functor' g, 'FactorialMonoid' s) =>

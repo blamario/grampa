@@ -8,7 +8,7 @@ import Data.Monoid ((<>))
 import qualified Rank2.TH
 
 import Text.Grampa
-import Text.Grampa.ContextFree.LeftRecursive (Parser)
+import Text.Grampa.ContextFree.SortedMemoizing.LeftRecursive (Parser)
 
 class ConditionalDomain c e where
    ifThenElse :: c -> e -> e -> e

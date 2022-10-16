@@ -6,7 +6,7 @@ import Data.Functor.Compose (Compose(..))
 import Data.Map (Map)
 import qualified Rank2
 import Text.Grampa (TokenParsing, LexicalParsing, GrammarBuilder, ParseResults, fixGrammar, parseComplete)
-import Text.Grampa.ContextFree.LeftRecursive (Parser)
+import Text.Grampa.ContextFree.SortedMemoizing.LeftRecursive (Parser)
 import Arithmetic (Arithmetic, arithmetic)
 import qualified Arithmetic
 import qualified Boolean
