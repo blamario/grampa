@@ -245,7 +245,9 @@ instance (Rank2.Apply g, GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) =
    {-# INLINE nonTerminal #-}
    recursive = general
    chainRecursive = chainWith chainRecursive
+   {-# INLINABLE chainRecursive #-}
    chainLongestRecursive = chainWith chainLongestRecursive
+   {-# INLINABLE chainLongestRecursive #-}
 
 chainWith :: (Rank2.Apply g, GrammarFunctor (p g s) ~ f, f ~ rl s, LeftRecParsing p g s rl)
           => ((f a -> g f -> g f) -> p g s a -> p g s a -> p g s a)
@@ -267,6 +269,7 @@ chainWith f assign = chain
                                       in ParserFlags (pn && qn) (depUnion pd qd')}
         chain base recurse = recurse <|> base
         clearOwnDep = Rank2.fmap reuse11 . assign (store11 $ Const False) . Rank2.fmap store11
+{-# INLINE chainWith #-}
 
 bits :: forall (g :: (Type -> Type) -> Type). (Rank2.Distributive g, Rank2.Traversable g) => g (Const (g (Const Bool)))
 bits = start `seq` Rank2.fmap oneBit start
