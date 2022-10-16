@@ -2,9 +2,7 @@
              RankNTypes, ScopedTypeVariables, TypeFamilies, TypeOperators, UndecidableInstances #-}
 -- | A context-free parser with packrat-like memoization of parse results.
 module Text.Grampa.ContextFree.Memoizing
-       {-# DEPRECATED "Use Text.Grampa.ContextFree.SortedMemoizing instead" #-}
-       (ResultList(..), Parser(..), BinTree(..),
-        reparseTails, longest, peg, terminalPEG)
+       (ResultList(..), Parser(..), BinTree(..), reparseTails, longest, peg, terminalPEG)
 where
 
 import Control.Applicative

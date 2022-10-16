@@ -2,8 +2,8 @@
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies, TypeOperators,
              UndecidableInstances #-}
 -- | A context-free memoizing parser that can handle left-recursive grammars.
-module Text.Grampa.Internal.LeftRecursive (Fixed, SeparatedParser(..),
-                                           autochain, liftPositive, liftPure, mapPrimitive,
+module Text.Grampa.Internal.LeftRecursive (Fixed(..), SeparatedParser(..),
+                                           autochain, asLeaf, liftPositive, liftPure, mapPrimitive,
                                            parseSeparated, separated)
 where
 
@@ -805,15 +805,6 @@ autochain g = Rank2.liftA4 optimize Rank2.getters Rank2.setters candidates g
                   excludeSelf (ParserFlags n (StaticDependencies deps)) =
                      ParserFlags n $ StaticDependencies $ Rank2.liftA2 intersection (complement Rank2.<$> bit) deps
          noDirectLeftRecursion _ p = p
-
-parseRecursive :: forall p g s rl. (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g,
-                                    Eq s, FactorialMonoid s, LeftReductive s, Alternative (p g s),
-                                    TailsParsing (p g s), GrammarConstraint (p g s) g,
-                                    s ~ ParserInput (p g s), GrammarFunctor (p g s) ~ rl s, FallibleResults rl,
-                                    AmbiguousAlternative (GrammarFunctor (p g s))) =>
-                  g (Fixed p g s) -> s -> [(s, g (GrammarFunctor (p g s)))]
-parseRecursive = parseSeparated . separated
-{-# INLINE parseRecursive #-}
 
 -- | Analyze the grammar's production interdependencies and produce a 'SeparatedParser' from each production's parser.
 separated :: forall p g s. (Alternative (p g s), Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g,

@@ -1,15 +1,15 @@
 {-# Language GADTs #-}
--- | A context-free parser that can handle left-recursive grammars and carry a
--- monadic computation with each parsing result.
+-- | A context-free parser that can handle ambiguous left-recursive grammars and carry a monadic computation with each
+-- parsing result.
 module Text.Grampa.ContextFree.SortedMemoizing.Transformer.LeftRecursive (
    ParserT, SeparatedParser(..), AmbiguityDecidable,
    lift, liftPositive, tbind, tmap,
    autochain, parseSeparated, separated)
 where
 
-import Text.Grampa.ContextFree.Internal.LeftRecursive (Fixed, SeparatedParser(..),
-                                                       liftPositive, liftPure, mapPrimitive,
-                                                       autochain, parseSeparated, separated)
+import Text.Grampa.Internal.LeftRecursive (Fixed, SeparatedParser(..),
+                                           liftPositive, liftPure, mapPrimitive,
+                                           autochain, parseSeparated, separated)
 import qualified Text.Grampa.ContextFree.SortedMemoizing.Transformer as Transformer
 import Text.Grampa.Internal (AmbiguityDecidable)
 

@@ -1,7 +1,7 @@
 {-# LANGUAGE ConstraintKinds, CPP, FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, InstanceSigs,
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies, TypeOperators,
              UndecidableInstances #-}
--- | A context-free memoizing parser that can handle left-recursive grammars.
+-- | A context-free memoizing parser that can handle ambiguous left-recursive grammars.
 module Text.Grampa.ContextFree.SortedMemoizing.LeftRecursive (
    Fixed, Parser, SeparatedParser(..),
    autochain, liftPositive, liftPure, mapPrimitive,
@@ -9,8 +9,8 @@ module Text.Grampa.ContextFree.SortedMemoizing.LeftRecursive (
    parseSeparated, separated)
 where
 
-import Text.Grampa.Internal.LeftRecursive (Fixed, Parser, SeparatedParser(..),
-                                           autochain, liftPositive, liftPure, mapPrimitive,
+import Text.Grampa.Internal.LeftRecursive (Fixed(..), SeparatedParser(..),
+                                           autochain, asLeaf, liftPositive, liftPure, mapPrimitive,
                                            parseSeparated, separated)
 import Text.Grampa.ContextFree.SortedMemoizing (ResultList (..))
 import qualified Text.Grampa.ContextFree.SortedMemoizing as Memoizing
