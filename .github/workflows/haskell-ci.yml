@@ -27,16 +27,14 @@ jobs:
       matrix:
         include:
           - compiler: ghc-9.2.2
-            allow-failure: false
+            allow-failure: true
           - compiler: ghc-9.0.2
-            allow-failure: false
+            allow-failure: true
           - compiler: ghc-8.10.4
             allow-failure: false
           - compiler: ghc-8.8.4
             allow-failure: false
           - compiler: ghc-8.6.5
-            allow-failure: false
-          - compiler: ghc-8.4.4
             allow-failure: false
       fail-fast: false
     steps:
