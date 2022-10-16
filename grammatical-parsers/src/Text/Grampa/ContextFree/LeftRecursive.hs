@@ -195,16 +195,26 @@ instance (Rank2.Apply g, GrammarFunctor (p g s) ~ f s, LeftRecParsing p g s f) =
    type ResultFunctor (Fixed p g s) = ResultFunctor (p g s)
    -- parsePrefix :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, Eq s, FactorialMonoid s) =>
    --                g (Fixed p g s) -> s -> g (Compose (ResultFunctor (p g s)) ((,) s))
-   parsePrefix g input = Rank2.fmap (Compose . parsingResult @(p g s) input)
-                                    (snd $ head $ parseRecursive g input)
+   parsePrefix g input
+      | Just directs <- Rank2.traverse getDirect g' = parsePrefix directs input
+      | otherwise = Rank2.fmap (Compose . parsingResult @(p g s) input) (snd $ head $ parseSeparated g' input)
+      where g' = separated g
+            getDirect (FrontParser p) = Just p
+            getDirect (BackParser p) = Just p
+            getDirect CycleParser{} = Nothing
    {-# INLINE parsePrefix #-}
    -- parseComplete :: (Rank2.Apply g, Rank2.Distributive g, Rank2.Traversable g, Eq s, FactorialMonoid s) =>
    --                  g (Fixed p g s) -> s -> g (ResultFunctor (p g s))
-   parseComplete g = \input-> let close :: g (p g s)
-                                  close = Rank2.fmap (<* eof) selfReferring
-                              in Rank2.fmap ((snd <$>) . parsingResult @(p g s) input)
-                                            (snd $ head $ parseAllTails close $ parseSeparated g' input)
+   parseComplete g input
+      | Just directs <- Rank2.traverse getDirect g' = parseComplete directs input
+      | otherwise = Rank2.fmap ((snd <$>) . parsingResult @(p g s) input)
+                    $ snd $ head $ parseAllTails close $ parseSeparated g' input
       where g' = separated g
+            getDirect (FrontParser p) = Just p
+            getDirect (BackParser p) = Just p
+            getDirect CycleParser{} = Nothing
+            close :: g (p g s)
+            close = Rank2.fmap (<* eof) selfReferring
    {-# INLINE parseComplete #-}
 
 -- | Parser transformer for left-recursive grammars.
