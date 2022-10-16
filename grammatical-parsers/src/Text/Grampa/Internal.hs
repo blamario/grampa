@@ -1,5 +1,5 @@
 {-# LANGUAGE ConstrainedClassMethods, FlexibleContexts, FlexibleInstances, GADTs,
-             RankNTypes, TypeOperators #-}
+             RankNTypes, StandaloneDeriving, TypeOperators, UndecidableInstances #-}
 
 module Text.Grampa.Internal (BinTree(..), ResultList(..), ResultsOfLength(..), FallibleResults(..),
                              AmbiguousAlternative(..), AmbiguityDecidable(..), AmbiguityWitness(..),
@@ -38,6 +38,8 @@ data ParserFlags g = ParserFlags {
 
 data Dependencies g = DynamicDependencies
                     | StaticDependencies (g (Const Bool))
+
+deriving instance Show (g (Const Bool)) => Show (Dependencies g)
 
 data AmbiguityWitness a where
    AmbiguityWitness :: (a :~: Ambiguous b) -> AmbiguityWitness a
