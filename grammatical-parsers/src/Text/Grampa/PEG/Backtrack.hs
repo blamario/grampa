@@ -34,7 +34,7 @@ import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (erroneous, expected, TraceableParsing(..))
+import Text.Grampa.Internal (emptyFailure, erroneous, expected, TraceableParsing(..))
 
 data Result (g :: (Type -> Type) -> Type) s v =
      Parsed{parsedPrefix :: !v,
@@ -71,7 +71,7 @@ instance Applicative (Parser g s) where
    {-# INLINABLE (<*>) #-}
 
 instance Factorial.FactorialMonoid s => Alternative (Parser g s) where
-   empty = Parser (\rest-> NoParse $ ParseFailure (fromEnd $ Factorial.length rest) [] [])
+   empty = Parser (NoParse . emptyFailure . fromEnd . Factorial.length)
    (<|>) = alt
 
 -- | A named and unconstrained version of the '<|>' operator
@@ -111,7 +111,7 @@ instance Monoid x => Monoid (Parser g s x) where
 instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
    try (Parser p) = Parser q
       where q rest = rewindFailure (p rest)
-               where rewindFailure NoParse{} = NoParse (ParseFailure (fromEnd $ Factorial.length rest) [] [])
+               where rewindFailure NoParse{} = NoParse (emptyFailure $ fromEnd $ Factorial.length rest)
                      rewindFailure parsed = parsed
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)

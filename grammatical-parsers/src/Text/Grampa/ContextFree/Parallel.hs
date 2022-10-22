@@ -38,7 +38,7 @@ import qualified Rank2
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (BinTree(..), erroneous, expected, noFailure, TraceableParsing(..))
+import Text.Grampa.Internal (BinTree(..), emptyFailure, erroneous, expected, noFailure, TraceableParsing(..))
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
 
@@ -93,7 +93,7 @@ instance Ord s => Applicative (Parser g s) where
 
 
 instance (FactorialMonoid s, Ord s) => Alternative (Parser g s) where
-   empty = Parser (\s-> ResultList mempty $ ParseFailure (fromEnd $ Factorial.length s) [] [])
+   empty = Parser (ResultList mempty . emptyFailure . fromEnd . Factorial.length)
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
 
@@ -215,8 +215,7 @@ instance (Ord s, TextualMonoid s) => InputCharParsing (Parser g s) where
 instance (FactorialMonoid s, Ord s) => Parsing (Parser g s) where
    try (Parser p) = Parser q
       where q rest = rewindFailure (p rest)
-               where rewindFailure (ResultList rl _) =
-                        ResultList rl (ParseFailure (fromEnd $ Factorial.length rest) [] [])
+               where rewindFailure (ResultList rl _) = ResultList rl (emptyFailure $ fromEnd $ Factorial.length rest)
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
                where replaceFailure (ResultList EmptyTree (ParseFailure pos msgs erroneous)) =

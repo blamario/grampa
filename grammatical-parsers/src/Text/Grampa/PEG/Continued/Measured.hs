@@ -33,7 +33,7 @@ import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
                           MultiParsing(..), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (TraceableParsing(..), erroneous, expected)
+import Text.Grampa.Internal (TraceableParsing(..), emptyFailure, erroneous, expected)
 import Text.Grampa.PEG.Continued (Result(..))
 
 -- | Parser type for Parsing Expression Grammars that uses a continuation-passing algorithm and keeps track of the
@@ -55,7 +55,7 @@ instance Applicative (Parser g s) where
    {-# INLINABLE (<*>) #-}
 
 instance (FactorialMonoid s, Ord s) => Alternative (Parser g s) where
-   empty = Parser (\rest _ failure-> failure $ ParseFailure (fromEnd $ Factorial.length rest) [] [])
+   empty = Parser (\rest _ failure-> failure $ emptyFailure $ fromEnd $ Factorial.length rest)
    (<|>) = alt
 
 -- | A named and unconstrained version of the '<|>' operator
@@ -105,8 +105,7 @@ instance (FactorialMonoid s, Ord s) => Parsing (Parser g s) where
    try :: forall a. Parser g s a -> Parser g s a
    try (Parser p) = Parser q
       where q :: forall x. s -> (a -> Int -> s -> x) -> (ParseFailure Pos s -> x) -> x
-            q input success failure =
-               p input success (const $ failure $ ParseFailure (fromEnd $ Factorial.length input) [] [])
+            q input success failure = p input success (const $ failure $ emptyFailure $ fromEnd $ Factorial.length input)
    (<?>) :: forall a. Parser g s a -> String -> Parser g s a
    Parser p <?> msg  = Parser q
       where q :: forall x. s -> (a -> Int -> s -> x) -> (ParseFailure Pos s -> x) -> x

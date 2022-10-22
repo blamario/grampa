@@ -31,6 +31,7 @@ import Witherable (Filterable(mapMaybe))
 import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
+import Text.Parser.Input.Position (fromEnd)
 import Text.Parser.LookAhead (LookAheadParsing(..))
 
 import qualified Rank2
@@ -40,7 +41,7 @@ import Text.Grampa.Class (GrammarParsing(..), MultiParsing(..),
                           TailsParsing(parseTails), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
 import Text.Grampa.Internal (BinTree(..), AmbiguousAlternative (..), FallibleResults (..), TraceableParsing(..),
                              Dependencies (..), ParserFlags (..),
-                             expected, erroneous)
+                             emptyFailure, erroneous, expected)
 import Text.Grampa.Internal.Storable (Storable(..), Storable1(..))
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
@@ -140,7 +141,7 @@ instance Ord s => Applicative (Parser g s) where
    {-# INLINABLE (<*>) #-}
 
 instance Ord s => Alternative (Parser g s) where
-   empty = Parser (\rest-> ResultList mempty $ ParseFailure (Down $ length rest) [] [])
+   empty = Parser (ResultList mempty . emptyFailure . Down . length)
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
    {-# INLINABLE (<|>) #-}
@@ -320,7 +321,7 @@ instance (Ord s, Show s, TextualMonoid s) => InputCharParsing (Parser g s) where
 instance (MonoidNull s, Ord s) => Parsing (Parser g s) where
    try (Parser p) = Parser q
       where q rest = rewindFailure (p rest)
-               where rewindFailure (ResultList rl _) = ResultList rl (ParseFailure (Down $ length rest) [] [])
+               where rewindFailure (ResultList rl _) = ResultList rl (emptyFailure $ fromEnd $ length rest)
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
                where replaceFailure (ResultList EmptyTree (ParseFailure pos msgs erroneous')) =

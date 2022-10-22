@@ -36,6 +36,7 @@ import Debug.Trace (trace)
 import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
+import Text.Parser.Input.Position (fromEnd)
 import Text.Parser.LookAhead (LookAheadParsing(..))
 
 import qualified Rank2
@@ -44,7 +45,8 @@ import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing
                           ConsumedInputParsing(..), CommittedParsing(..), DeterministicParsing(..),
                           AmbiguousParsing(..), Ambiguous(Ambiguous),
                           TailsParsing(..), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (erroneous, expected, FallibleResults(..), AmbiguousAlternative(..), TraceableParsing(..))
+import Text.Grampa.Internal (emptyFailure, erroneous, expected,
+                             FallibleResults(..), AmbiguousAlternative(..), TraceableParsing(..))
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
@@ -77,7 +79,7 @@ instance (Applicative m, Ord s) => Applicative (ParserT m g s) where
    {-# INLINABLE (<*>) #-}
 
 instance (Applicative m, Ord s) => Alternative (ParserT m g s) where
-   empty = Parser (\rest-> ResultList mempty $ ParseFailure (Down $ length rest) [] [])
+   empty = Parser (ResultList mempty . emptyFailure . Down . length)
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
    {-# INLINE (<|>) #-}
@@ -307,7 +309,7 @@ instance (Applicative m, LeftReductive s, FactorialMonoid s, Ord s) => ConsumedI
 instance (Applicative m, MonoidNull s, Ord s) => Parsing (ParserT m g s) where
    try (Parser p) = Parser q
       where q rest = rewindFailure (p rest)
-               where rewindFailure (ResultList rl _) = ResultList rl (ParseFailure (Down $ length rest) [] [])
+               where rewindFailure (ResultList rl _) = ResultList rl (emptyFailure $ fromEnd $ length rest)
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
                where replaceFailure (ResultList [] (ParseFailure pos msgs erroneous)) =

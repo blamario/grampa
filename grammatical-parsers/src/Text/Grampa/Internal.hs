@@ -6,7 +6,7 @@ module Text.Grampa.Internal (BinTree(..), ResultList(..), ResultsOfLength(..), F
                              ParserFlags (ParserFlags, nullable, dependsOn),
                              Dependencies (DynamicDependencies, StaticDependencies),
                              TraceableParsing(..),
-                             noFailure, expected, erroneous) where
+                             emptyFailure, erroneous, expected, noFailure) where
 
 import Control.Applicative (Applicative(..), Alternative(..))
 import Data.Foldable (toList)
@@ -54,7 +54,10 @@ instance AmbiguityDecidable (Ambiguous a) where
    ambiguityWitness = Just (AmbiguityWitness Refl)
 
 noFailure :: ParseFailure Pos s
-noFailure = ParseFailure (Down maxBound) [] []
+noFailure = emptyFailure (Down maxBound)
+
+emptyFailure :: Pos -> ParseFailure Pos s
+emptyFailure pos = ParseFailure pos [] []
 
 expected :: Pos -> String -> ParseFailure Pos s
 expected pos msg = ParseFailure pos [StaticDescription msg] []

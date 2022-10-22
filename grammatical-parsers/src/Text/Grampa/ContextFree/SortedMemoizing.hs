@@ -31,6 +31,7 @@ import Witherable (Filterable(mapMaybe))
 import qualified Text.Parser.Char
 import Text.Parser.Char (CharParsing)
 import Text.Parser.Combinators (Parsing(..))
+import Text.Parser.Input.Position (fromEnd)
 import Text.Parser.LookAhead (LookAheadParsing(..))
 
 import qualified Rank2
@@ -40,7 +41,8 @@ import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing
                           ConsumedInputParsing(..), DeterministicParsing(..),
                           TailsParsing(parseTails, parseAllTails), ParseResults, ParseFailure(..),
                           FailureDescription(..))
-import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), TraceableParsing(..), expected, erroneous)
+import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), TraceableParsing(..),
+                             emptyFailure, expected, erroneous)
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
@@ -65,7 +67,7 @@ instance Ord s => Applicative (Parser g s) where
    {-# INLINABLE (<*>) #-}
 
 instance Ord s => Alternative (Parser g s) where
-   empty = Parser (\rest-> ResultList mempty $ ParseFailure (Down $ length rest) [] [])
+   empty = Parser (ResultList mempty . emptyFailure . Down . length)
    Parser p <|> Parser q = Parser r where
       r rest = p rest <> q rest
    {-# INLINE (<|>) #-}
@@ -264,7 +266,7 @@ instance (LeftReductive s, FactorialMonoid s, Ord s) => ConsumedInputParsing (Pa
 instance (MonoidNull s, Ord s) => Parsing (Parser g s) where
    try (Parser p) = Parser q
       where q rest = rewindFailure (p rest)
-               where rewindFailure (ResultList rl _) = ResultList rl (ParseFailure (Down $ length rest) [] [])
+               where rewindFailure (ResultList rl _) = ResultList rl (emptyFailure $ fromEnd $ length rest)
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
                where replaceFailure (ResultList [] (ParseFailure pos msgs erroneous')) =

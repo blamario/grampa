@@ -35,7 +35,7 @@ import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..),
                           GrammarParsing(..), MultiParsing(..),
                           TailsParsing(parseTails), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (erroneous, expected, TraceableParsing(..))
+import Text.Grampa.Internal (emptyFailure, erroneous, expected, TraceableParsing(..))
 
 data Result g s v = Parsed{parsedPrefix :: !v, 
                            parsedSuffix :: ![(s, g (Result g s))]}
@@ -70,7 +70,7 @@ instance Applicative (Parser g s) where
                   NoParse failure -> NoParse failure
 
 instance Alternative (Parser g s) where
-   empty = Parser (\rest-> NoParse $ ParseFailure (Down $ length rest) [] [])
+   empty = Parser (NoParse . emptyFailure . Down . length)
    Parser p <|> Parser q = Parser r where
       r rest = case p rest
                of x@Parsed{} -> x
@@ -106,7 +106,7 @@ instance Monoid x => Monoid (Parser g s x) where
 instance FactorialMonoid s => Parsing (Parser g s) where
    try (Parser p) = Parser q
       where q rest = rewindFailure (p rest)
-               where rewindFailure NoParse{} = NoParse (ParseFailure (Down $ length rest) [] [])
+               where rewindFailure NoParse{} = NoParse (emptyFailure $ fromEnd $ length rest)
                      rewindFailure parsed = parsed
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)

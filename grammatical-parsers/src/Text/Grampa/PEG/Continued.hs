@@ -34,11 +34,11 @@ import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (erroneous, expected, TraceableParsing(..))
+import Text.Grampa.Internal (emptyFailure, erroneous, expected, TraceableParsing(..))
 
 data Result (g :: (Type -> Type) -> Type) s v = Parsed{parsedPrefix :: !v,
-                                              parsedSuffix :: !s}
-                                     | NoParse (ParseFailure Pos s)
+                                                       parsedSuffix :: !s}
+                                              | NoParse (ParseFailure Pos s)
 
 -- | Parser type for Parsing Expression Grammars that uses a continuation-passing algorithm, fast for grammars in
 -- LL(1) class but with potentially exponential performance for longer ambiguous prefixes.
@@ -72,7 +72,7 @@ instance Applicative (Parser g s) where
    {-# INLINABLE (<*>) #-}
 
 instance (FactorialMonoid s, Ord s) => Alternative (Parser g s) where
-   empty = Parser (\rest _ failure-> failure $ ParseFailure (fromEnd $ Factorial.length rest) [] [])
+   empty = Parser (\rest _ failure-> failure $ emptyFailure $ fromEnd $ Factorial.length rest)
    (<|>) = alt
 
 -- | A named and unconstrained version of the '<|>' operator
@@ -120,8 +120,7 @@ instance (FactorialMonoid s, Ord s) => Parsing (Parser g s) where
    try :: forall a. Parser g s a -> Parser g s a
    try (Parser p) = Parser q
       where q :: forall x. s -> (a -> s -> x) -> (ParseFailure Pos s -> x) -> x
-            q input success failure = p input success (const $ failure
-                                                       $ ParseFailure (fromEnd $ Factorial.length input) [] [])
+            q input success failure = p input success (const $ failure $ emptyFailure $ fromEnd $ Factorial.length input)
    (<?>) :: forall a. Parser g s a -> String -> Parser g s a
    Parser p <?> msg  = Parser q
       where q :: forall x. s -> (a -> s -> x) -> (ParseFailure Pos s -> x) -> x
