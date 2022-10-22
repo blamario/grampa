@@ -34,7 +34,7 @@ import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (emptyFailure, erroneous, expected, TraceableParsing(..))
+import Text.Grampa.Internal (emptyFailure, erroneous, expected, expectedInput, TraceableParsing(..))
 
 data Result (g :: (Type -> Type) -> Type) s v =
      Parsed{parsedPrefix :: !v,
@@ -94,7 +94,7 @@ instance Monad (Parser g s) where
 
 #if MIN_VERSION_base(4,13,0)
 instance Factorial.FactorialMonoid s => MonadFail (Parser g s) where
-   fail msg = Parser (\rest-> NoParse $ ParseFailure (fromEnd $ Factorial.length rest) [] [StaticDescription msg])
+   fail msg = Parser (\rest-> NoParse $ erroneous (fromEnd $ Factorial.length rest) msg)
 #endif
 
 instance Factorial.FactorialMonoid s => MonadPlus (Parser g s) where
@@ -197,7 +197,7 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Pars
                         else Parsed prefix suffix
    string s = Parser p where
       p s' | Just suffix <- Cancellative.stripPrefix s s' = Parsed s suffix
-           | otherwise = NoParse (ParseFailure (fromEnd $ Factorial.length s') [LiteralDescription s] [])
+           | otherwise = NoParse (expectedInput (fromEnd $ Factorial.length s') s)
    {-# INLINABLE string #-}
 
 instance (InputParsing (Parser g s), FactorialMonoid s)  => TraceableParsing (Parser g s) where

@@ -33,7 +33,7 @@ import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
                           MultiParsing(..), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (TraceableParsing(..), emptyFailure, erroneous, expected)
+import Text.Grampa.Internal (TraceableParsing(..), emptyFailure, erroneous, expected, expectedInput)
 import Text.Grampa.PEG.Continued (Result(..))
 
 -- | Parser type for Parsing Expression Grammars that uses a continuation-passing algorithm and keeps track of the
@@ -214,7 +214,7 @@ instance (LeftReductive s, FactorialMonoid s, Ord s) => InputParsing (Parser g s
       p :: forall x. s -> (s -> Int -> s -> x) -> (ParseFailure Pos s -> x) -> x
       p s' success failure
          | Just suffix <- stripPrefix s s', !len <- Factorial.length s = success s len suffix
-         | otherwise = failure (ParseFailure (fromEnd $ Factorial.length s') [LiteralDescription s] [])
+         | otherwise = failure (expectedInput (fromEnd $ Factorial.length s') s)
    {-# INLINABLE string #-}
 
 instance (LeftReductive s, FactorialMonoid s, Ord s) => ConsumedInputParsing (Parser g s) where

@@ -42,7 +42,7 @@ import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing
                           TailsParsing(parseTails, parseAllTails), ParseResults, ParseFailure(..),
                           FailureDescription(..))
 import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), TraceableParsing(..),
-                             emptyFailure, expected, erroneous)
+                             emptyFailure, expected, expectedInput, erroneous)
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
@@ -210,7 +210,7 @@ instance (LeftReductive s, FactorialMonoid s, Ord s) => InputParsing (Parser g s
    string s = Parser p where
       p rest@((s', _) : _)
          | s `isPrefixOf` s' = ResultList [ResultsOfLength l (Factorial.drop l rest) (s:|[])] mempty
-      p rest = ResultList mempty (ParseFailure (Down $ length rest) [LiteralDescription s] [])
+      p rest = ResultList mempty (expectedInput (fromEnd $ length rest) s)
       l = Factorial.length s
    notSatisfy predicate = Parser p
       where p rest@((s, _):_)

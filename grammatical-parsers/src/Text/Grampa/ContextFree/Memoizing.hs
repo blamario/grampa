@@ -41,7 +41,7 @@ import Text.Grampa.Class (GrammarParsing(..), MultiParsing(..),
                           TailsParsing(parseTails), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
 import Text.Grampa.Internal (BinTree(..), AmbiguousAlternative (..), FallibleResults (..), TraceableParsing(..),
                              Dependencies (..), ParserFlags (..),
-                             emptyFailure, erroneous, expected)
+                             emptyFailure, erroneous, expected, expectedInput)
 import Text.Grampa.Internal.Storable (Storable(..), Storable1(..))
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
@@ -273,7 +273,7 @@ instance (LeftReductive s, FactorialMonoid s, Ord s) => InputParsing (Parser g s
    string s = Parser p where
       p rest@((s', _) : _)
          | s `isPrefixOf` s' = ResultList (Leaf $ ResultInfo l (Factorial.drop l rest) s) mempty
-      p rest = ResultList mempty (ParseFailure (Down $ length rest) [LiteralDescription s] [])
+      p rest = ResultList mempty (expectedInput (fromEnd $ length rest) s)
       l = Factorial.length s
    notSatisfy predicate = Parser p
       where p rest@((s, _):_)

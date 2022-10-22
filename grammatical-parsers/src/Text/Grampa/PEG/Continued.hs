@@ -34,7 +34,7 @@ import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (emptyFailure, erroneous, expected, TraceableParsing(..))
+import Text.Grampa.Internal (emptyFailure, erroneous, expected, expectedInput, TraceableParsing(..))
 
 data Result (g :: (Type -> Type) -> Type) s v = Parsed{parsedPrefix :: !v,
                                                        parsedSuffix :: !s}
@@ -55,8 +55,7 @@ instance Functor (Result g s) where
 
 instance Factorial.FactorialMonoid s => Filterable (Result g s) where
    mapMaybe f (Parsed a rest) =
-      maybe (NoParse $ ParseFailure (fromEnd $ Factorial.length rest) [StaticDescription "filter"] [])
-            (`Parsed` rest) (f a)
+      maybe (NoParse $ expected (fromEnd $ Factorial.length rest) "filter") (`Parsed` rest) (f a)
    mapMaybe _ (NoParse failure) = NoParse failure
    
 instance Functor (Parser g s) where
@@ -136,8 +135,7 @@ instance (FactorialMonoid s, Ord s) => Parsing (Parser g s) where
    notFollowedBy (Parser p) = Parser q
       where q :: forall x. s -> (() -> s -> x) -> (ParseFailure Pos s -> x) -> x
             q input success failure = p input success' failure'
-               where success' _ _ =
-                        failure (ParseFailure (fromEnd $ Factorial.length input) [StaticDescription "notFollowedBy"] [])
+               where success' _ _ = failure (expected (fromEnd $ Factorial.length input)  "notFollowedBy")
                      failure' _ = success () input
 
 instance (FactorialMonoid s, Ord s) => CommittedParsing (Parser g s) where
@@ -225,7 +223,7 @@ instance (LeftReductive s, FactorialMonoid s, Ord s) => InputParsing (Parser g s
       p :: forall x. s -> (s -> s -> x) -> (ParseFailure Pos s -> x) -> x
       p s' success failure
          | Just suffix <- stripPrefix s s' = success s suffix
-         | otherwise = failure (ParseFailure (fromEnd $ Factorial.length s') [LiteralDescription s] [])
+         | otherwise = failure (expectedInput (fromEnd $ Factorial.length s') s)
    {-# INLINABLE string #-}
 
 instance (InputParsing (Parser g s), FactorialMonoid s)  => TraceableParsing (Parser g s) where

@@ -45,7 +45,7 @@ import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing
                           ConsumedInputParsing(..), CommittedParsing(..), DeterministicParsing(..),
                           AmbiguousParsing(..), Ambiguous(Ambiguous),
                           TailsParsing(..), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (emptyFailure, erroneous, expected,
+import Text.Grampa.Internal (emptyFailure, erroneous, expected, expectedInput,
                              FallibleResults(..), AmbiguousAlternative(..), TraceableParsing(..))
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
@@ -112,7 +112,7 @@ instance (Monad m, Traversable m, Ord s) => Monad (ParserT m g s) where
 instance (Monad m, Traversable m, Ord s) => MonadFail (ParserT m g s) where
 #endif
    fail msg = Parser p
-      where p rest = ResultList mempty (ParseFailure (Down $ length rest) [] [StaticDescription msg])
+      where p rest = ResultList mempty (erroneous (Down $ length rest) msg)
 
 instance (Foldable m, Monad m, Traversable m, Ord s) => MonadPlus (ParserT m g s) where
    mzero = empty

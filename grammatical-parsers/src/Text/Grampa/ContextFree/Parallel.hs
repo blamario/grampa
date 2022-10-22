@@ -38,7 +38,8 @@ import qualified Rank2
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (BinTree(..), emptyFailure, erroneous, expected, noFailure, TraceableParsing(..))
+import Text.Grampa.Internal (BinTree(..), emptyFailure, erroneous, expected, expectedInput, noFailure,
+                             TraceableParsing(..))
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
 
@@ -177,7 +178,7 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s, Ord s) => InputParsin
                else ResultList (Leaf $ ResultInfo suffix prefix) noFailure
    string s = Parser p where
       p s' | Just suffix <- Cancellative.stripPrefix s s' = ResultList (Leaf $ ResultInfo suffix s) noFailure
-           | otherwise = ResultList mempty (ParseFailure (fromEnd $ Factorial.length s') [LiteralDescription s] [])
+           | otherwise = ResultList mempty (expectedInput (fromEnd $ Factorial.length s') s)
 
 instance (FactorialMonoid s, InputParsing (Parser g s))  => TraceableParsing (Parser g s) where
    traceInput description (Parser p) = Parser q

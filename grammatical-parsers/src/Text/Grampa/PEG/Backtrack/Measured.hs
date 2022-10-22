@@ -34,7 +34,7 @@ import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
                           MultiParsing(..), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (emptyFailure, erroneous, expected, TraceableParsing(..))
+import Text.Grampa.Internal (emptyFailure, erroneous, expected, expectedInput, TraceableParsing(..))
 
 data Result (g :: (Type -> Type) -> Type) s v =
      Parsed{parsedLength :: !Int,
@@ -206,7 +206,7 @@ instance (Cancellative.LeftReductive s, FactorialMonoid s) => InputParsing (Pars
                         else Parsed (Factorial.length prefix) prefix suffix
    string s = Parser p where
       p s' | Just suffix <- Cancellative.stripPrefix s s' = Parsed l s suffix
-           | otherwise = NoParse (ParseFailure (fromEnd $ Factorial.length s') [LiteralDescription s] [])
+           | otherwise = NoParse (expectedInput (fromEnd $ Factorial.length s') s)
       l = Factorial.length s
    {-# INLINABLE string #-}
 

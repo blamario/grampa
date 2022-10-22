@@ -35,7 +35,7 @@ import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..),
                           GrammarParsing(..), MultiParsing(..),
                           TailsParsing(parseTails), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (emptyFailure, erroneous, expected, TraceableParsing(..))
+import Text.Grampa.Internal (emptyFailure, erroneous, expected, expectedInput, noFailure, TraceableParsing(..))
 
 data Result g s v = Parsed{parsedPrefix :: !v, 
                            parsedSuffix :: ![(s, g (Result g s))]}
@@ -175,7 +175,7 @@ instance (Eq s, LeftReductive s, FactorialMonoid s) => GrammarParsing (Parser g 
                where iter r = case recurse ((s, assign r d) : t)
                               of NoParse{} -> r
                                  r'@Parsed{} -> iter r'
-                     initialInput = (s, assign (NoParse $ ParseFailure (Down maxBound) [] []) d) : t
+                     initialInput = (s, assign (NoParse noFailure) d) : t
 
 instance (Eq s, LeftReductive s, FactorialMonoid s) => TailsParsing (Parser g s) where
    parseTails = applyParser
@@ -222,7 +222,7 @@ instance (LeftReductive s, FactorialMonoid s) => InputParsing (Parser g s) where
    string s = Parser p where
       p rest@((s', _) : _)
          | s `isPrefixOf` s' = Parsed s (Factorial.drop (Factorial.length s) rest)
-      p rest = NoParse (ParseFailure (Down $ length rest) [LiteralDescription s] [])
+      p rest = NoParse (expectedInput (fromEnd $ length rest) s)
 
 instance (InputParsing (Parser g s), FactorialMonoid s)  => TraceableParsing (Parser g s) where
    traceInput description (Parser p) = Parser q
