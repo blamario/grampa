@@ -6,7 +6,7 @@ module Text.Grampa.Internal (BinTree(..), ResultList(..), ResultsOfLength(..), F
                              ParserFlags (ParserFlags, nullable, dependsOn),
                              Dependencies (DynamicDependencies, StaticDependencies),
                              TraceableParsing(..),
-                             emptyFailure, erroneous, expected, expectedInput, noFailure) where
+                             emptyFailure, erroneous, expected, expectedInput, replaceExpected, noFailure) where
 
 import Control.Applicative (Applicative(..), Alternative(..))
 import Data.Foldable (toList)
@@ -67,6 +67,11 @@ expectedInput pos s = ParseFailure pos [LiteralDescription s] []
 
 erroneous :: Pos -> String -> ParseFailure Pos s
 erroneous pos msg = ParseFailure pos [] [StaticDescription msg]
+
+replaceExpected :: Pos -> String -> ParseFailure Pos s -> ParseFailure Pos s
+replaceExpected pos msg f@(ParseFailure pos' msgs errs) = ParseFailure pos' msgs' errs
+   where msgs' | pos == pos' = [StaticDescription msg]
+               | otherwise = msgs
 
 instance (Show s, Show r) => Show (ResultList g s r) where
    show (ResultList l f) = "ResultList (" ++ shows l (") (" ++ shows f ")")

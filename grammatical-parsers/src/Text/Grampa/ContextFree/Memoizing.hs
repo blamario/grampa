@@ -41,7 +41,7 @@ import Text.Grampa.Class (GrammarParsing(..), MultiParsing(..),
                           TailsParsing(parseTails), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
 import Text.Grampa.Internal (BinTree(..), AmbiguousAlternative (..), FallibleResults (..), TraceableParsing(..),
                              Dependencies (..), ParserFlags (..),
-                             emptyFailure, erroneous, expected, expectedInput)
+                             emptyFailure, erroneous, expected, expectedInput, replaceExpected)
 import Text.Grampa.Internal.Storable (Storable(..), Storable1(..))
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
@@ -324,11 +324,8 @@ instance (MonoidNull s, Ord s) => Parsing (Parser g s) where
                where rewindFailure (ResultList rl _) = ResultList rl (emptyFailure $ fromEnd $ length rest)
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
-               where replaceFailure (ResultList EmptyTree (ParseFailure pos msgs erroneous')) =
-                        ResultList EmptyTree (ParseFailure pos
-                                                 (if pos == Down (length rest) then [StaticDescription msg]
-                                                  else msgs)
-                                                 erroneous')
+               where replaceFailure (ResultList EmptyTree f) =
+                        ResultList EmptyTree (replaceExpected (fromEnd $ length rest) msg f)
                      replaceFailure rl = rl
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t (ResultList EmptyTree _) = ResultList (Leaf $ ResultInfo 0 t ()) mempty

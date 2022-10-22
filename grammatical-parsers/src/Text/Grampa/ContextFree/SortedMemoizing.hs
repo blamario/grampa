@@ -42,7 +42,7 @@ import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing
                           TailsParsing(parseTails, parseAllTails), ParseResults, ParseFailure(..),
                           FailureDescription(..))
 import Text.Grampa.Internal (ResultList(..), ResultsOfLength(..), TraceableParsing(..),
-                             emptyFailure, expected, expectedInput, erroneous)
+                             emptyFailure, expected, expectedInput, replaceExpected, erroneous)
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
@@ -269,9 +269,7 @@ instance (MonoidNull s, Ord s) => Parsing (Parser g s) where
                where rewindFailure (ResultList rl _) = ResultList rl (emptyFailure $ fromEnd $ length rest)
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
-               where replaceFailure (ResultList [] (ParseFailure pos msgs erroneous')) =
-                        ResultList [] (ParseFailure pos (if pos == Down (length rest) then [StaticDescription msg]
-                                                         else msgs) erroneous')
+               where replaceFailure (ResultList [] f) = ResultList [] (replaceExpected (fromEnd $ length rest) msg f)
                      replaceFailure rl = rl
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t (ResultList [] _) = ResultList [ResultsOfLength 0 t (():|[])] mempty

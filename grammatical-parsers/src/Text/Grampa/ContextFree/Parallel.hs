@@ -37,8 +37,8 @@ import qualified Rank2
 
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (BinTree(..), emptyFailure, erroneous, expected, expectedInput, noFailure,
+                          ParseResults, ParseFailure(..), Pos)
+import Text.Grampa.Internal (BinTree(..), emptyFailure, erroneous, expected, expectedInput, replaceExpected, noFailure,
                              TraceableParsing(..))
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
@@ -219,11 +219,8 @@ instance (FactorialMonoid s, Ord s) => Parsing (Parser g s) where
                where rewindFailure (ResultList rl _) = ResultList rl (emptyFailure $ fromEnd $ Factorial.length rest)
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
-               where replaceFailure (ResultList EmptyTree (ParseFailure pos msgs erroneous)) =
-                        ResultList EmptyTree (ParseFailure pos
-                                                           (if pos == fromEnd (Factorial.length rest)
-                                                            then [StaticDescription msg] else msgs)
-                                                           erroneous)
+               where replaceFailure (ResultList EmptyTree f) =
+                        ResultList EmptyTree (replaceExpected (fromEnd $ Factorial.length rest) msg f)
                      replaceFailure rl = rl
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t (ResultList EmptyTree _) = ResultList (Leaf $ ResultInfo t ()) noFailure

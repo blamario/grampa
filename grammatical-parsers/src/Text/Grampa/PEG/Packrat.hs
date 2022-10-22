@@ -34,8 +34,9 @@ import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..),
                           GrammarParsing(..), MultiParsing(..),
-                          TailsParsing(parseTails), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (emptyFailure, erroneous, expected, expectedInput, noFailure, TraceableParsing(..))
+                          TailsParsing(parseTails), ParseResults, ParseFailure(..), Pos)
+import Text.Grampa.Internal (emptyFailure, erroneous, expected, expectedInput, replaceExpected, noFailure,
+                             TraceableParsing(..))
 
 data Result g s v = Parsed{parsedPrefix :: !v, 
                            parsedSuffix :: ![(s, g (Result g s))]}
@@ -110,10 +111,7 @@ instance FactorialMonoid s => Parsing (Parser g s) where
                      rewindFailure parsed = parsed
    Parser p <?> msg  = Parser q
       where q rest = replaceFailure (p rest)
-               where replaceFailure (NoParse (ParseFailure pos msgs erroneous)) =
-                        NoParse (ParseFailure pos
-                                              (if pos == Down (length rest) then [StaticDescription msg] else msgs)
-                                              erroneous)
+               where replaceFailure (NoParse f) = NoParse (replaceExpected (fromEnd $ Factorial.length rest) msg f)
                      replaceFailure parsed = parsed
    eof = Parser p
       where p rest@((s, _) : _)
