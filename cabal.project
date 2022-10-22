@@ -4,4 +4,4 @@ packages:
    deep-transformations/
    ../input-parsers/
 
-allow-newer: size-based:template-haskell
+allow-newer: size-based:template-haskell, data-functor-logistic:base

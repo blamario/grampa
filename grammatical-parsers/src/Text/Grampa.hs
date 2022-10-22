@@ -89,7 +89,7 @@ failureDescription input (ParseFailure pos expected erroneous) contextLineCount 
    <> mconcat
       (intersperse ", but " $ filter (not . null)
        [onNonEmpty ("expected " <>) $ oxfordComma " or " (fromDescription <$> expected),
-        oxfordComma " and " (fromDescription <$> erroneous)])
+        oxfordComma " and " (fromString <$> erroneous)])
    where oxfordComma :: s -> [s] -> s
          oxfordComma _ [] = ""
          oxfordComma _ [x] = x

@@ -392,7 +392,7 @@ longest :: ParserT Identity g s a -> Backtrack.Parser g [(s, g (ResultListT Iden
 longest p = Backtrack.Parser q where
    q rest = case applyParser p rest
             of ResultList [] (ParseFailure pos positive negative)
-                  -> Backtrack.NoParse (ParseFailure pos (map message positive) (map message negative))
+                  -> Backtrack.NoParse (ParseFailure pos (map message positive) negative)
                ResultList rs _ -> parsed (last rs)
    parsed (ResultsOfLengthT (ROL l s (Identity r:|_))) = Backtrack.Parsed l r s
    message (StaticDescription msg) = StaticDescription msg
@@ -404,7 +404,7 @@ peg p = Parser q where
    q rest = case Backtrack.applyParser p rest
             of Backtrack.Parsed l result suffix -> singleResult l suffix result
                Backtrack.NoParse (ParseFailure pos positive negative) ->
-                  ResultList mempty (ParseFailure pos ((fst . head <$>) <$> positive) ((fst . head <$>) <$> negative))
+                  ResultList mempty (ParseFailure pos ((fst . head <$>) <$> positive) negative)
 
 -- | Turns a backtracking PEG parser into a context-free parser
 terminalPEG :: (Applicative m, Monoid s, Ord s) => Backtrack.Parser g s a -> ParserT m g s a

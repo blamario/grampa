@@ -384,7 +384,7 @@ longest :: Parser g s a -> Backtrack.Parser g [(s, g (ResultList g s))] a
 longest p = Backtrack.Parser q where
    q rest = case applyParser p rest
             of ResultList EmptyTree (ParseFailure pos positive negative)
-                  -> Backtrack.NoParse (ParseFailure pos (map message positive) (map message negative))
+                  -> Backtrack.NoParse (ParseFailure pos (map message positive) negative)
                ResultList rs _ -> parsed (maximumBy (compare `on` resultLength) rs)
    resultLength (ResultInfo l _ _) = l
    parsed (ResultInfo l s r) = Backtrack.Parsed l r s
@@ -397,7 +397,7 @@ peg p = Parser q where
    q rest = case Backtrack.applyParser p rest
             of Backtrack.Parsed l result suffix -> ResultList (Leaf $ ResultInfo l suffix result) mempty
                Backtrack.NoParse (ParseFailure pos positive negative)
-                  -> ResultList mempty (ParseFailure pos (original <$> positive) (original <$> negative))
+                  -> ResultList mempty (ParseFailure pos (original <$> positive) negative)
       where original = (fst . head <$>)
 
 -- | Turns a backtracking PEG parser into a context-free parser

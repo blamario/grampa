@@ -41,7 +41,7 @@ type ParseResults s = Either (ParseFailure Pos s)
 data ParseFailure pos s =
    ParseFailure {failurePosition :: pos,
                  expectedAlternatives :: [FailureDescription s],  -- ^ expected input alternatives
-                 errorAlternatives ::    [FailureDescription s]   -- ^ erroneous input descriptions
+                 errorAlternatives ::    [String]                 -- ^ erroneous alternatives
                 }
    deriving (Eq, Functor, Show)
 

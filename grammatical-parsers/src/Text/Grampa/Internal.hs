@@ -66,7 +66,7 @@ expectedInput :: Pos -> s -> ParseFailure Pos s
 expectedInput pos s = ParseFailure pos [LiteralDescription s] []
 
 erroneous :: Pos -> String -> ParseFailure Pos s
-erroneous pos msg = ParseFailure pos [] [StaticDescription msg]
+erroneous pos msg = ParseFailure pos [] [msg]
 
 replaceExpected :: Pos -> String -> ParseFailure Pos s -> ParseFailure Pos s
 replaceExpected pos msg f@(ParseFailure pos' msgs errs) = ParseFailure pos' msgs' errs
