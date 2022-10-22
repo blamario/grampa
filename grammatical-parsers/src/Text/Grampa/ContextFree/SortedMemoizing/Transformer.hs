@@ -251,7 +251,7 @@ instance (Applicative m, LeftReductive s, FactorialMonoid s, Ord s) => InputPars
    string s = Parser p where
       p rest@((s', _) : _)
          | s `isPrefixOf` s' = singleResult l (drop l rest) s
-      p rest = ResultList mempty (ParseFailure (Down $ length rest) [LiteralDescription s] [])
+      p rest = ResultList mempty (expectedInput (fromEnd $ length rest) s)
       l = Factorial.length s
    notSatisfy predicate = Parser p
       where p rest@((s, _):_)
@@ -391,20 +391,19 @@ instance (Applicative m, Eq (m ()), Ord s) => AmbiguousParsing (ParserT m g s) w
 longest :: ParserT Identity g s a -> Backtrack.Parser g [(s, g (ResultListT Identity g s))] a
 longest p = Backtrack.Parser q where
    q rest = case applyParser p rest
-            of ResultList [] (ParseFailure pos positive negative)
-                  -> Backtrack.NoParse (ParseFailure pos (map message positive) negative)
+            of ResultList [] (ParseFailure pos (FailureDescription expected inputs) errors)
+                  -> Backtrack.NoParse (ParseFailure pos (FailureDescription expected $ map wrap inputs) errors)
                ResultList rs _ -> parsed (last rs)
    parsed (ResultsOfLengthT (ROL l s (Identity r:|_))) = Backtrack.Parsed l r s
-   message (StaticDescription msg) = StaticDescription msg
-   message (LiteralDescription s) = LiteralDescription [(s, error "longest")]
+   wrap s = [(s, error "longest")]
 
 -- | Turns a backtracking PEG parser of the list of input tails into a context-free parser, opposite of 'longest'
 peg :: (Applicative m, Ord s) => Backtrack.Parser g [(s, g (ResultListT m g s))] a -> ParserT m g s a
 peg p = Parser q where
    q rest = case Backtrack.applyParser p rest
             of Backtrack.Parsed l result suffix -> singleResult l suffix result
-               Backtrack.NoParse (ParseFailure pos positive negative) ->
-                  ResultList mempty (ParseFailure pos ((fst . head <$>) <$> positive) negative)
+               Backtrack.NoParse (ParseFailure pos (FailureDescription expected inputs) errors)
+                  -> ResultList mempty (ParseFailure pos (FailureDescription expected (fst . head <$> inputs)) errors)
 
 -- | Turns a backtracking PEG parser into a context-free parser
 terminalPEG :: (Applicative m, Monoid s, Ord s) => Backtrack.Parser g s a -> ParserT m g s a

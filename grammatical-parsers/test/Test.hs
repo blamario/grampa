@@ -142,9 +142,9 @@ tests = testGroup "Grampa" [
                testProperty "name list" $
                  start (parseComplete nameListGrammar "foo, bar") == Compose (Right ["foo bar"]),
                testProperty "filtered" $
-                 start (parseComplete gf "") === Compose (Left (ParseFailure 0 [LiteralDescription "1"] [])),
+                 start (parseComplete gf "") === Compose (Left (ParseFailure 0 (FailureDescription [] ["1"]) [])),
                testProperty "monadic" $
-                 start (parseComplete gm "") === Compose (Left (ParseFailure 0 [] [StaticDescription "empty"])),
+                 start (parseComplete gm "") === Compose (Left (ParseFailure 0 mempty ["empty"])),
                testProperty "null monadic" $
                  start (parseComplete gn "23") === Compose (Right ["23"])
               ],
@@ -195,7 +195,7 @@ tests = testGroup "Grampa" [
                    simpleParse (string xs) (xs <> ys) == Right [(ys, xs)],
               testProperty "string" $ \(xs::[Word8]) ys-> not (xs `isPrefixOf` ys)
                 ==> simpleParse (string xs) ys
-                    === Left (ParseFailure (fromIntegral $ length ys) [LiteralDescription xs] []),
+                    === Left (ParseFailure (fromIntegral $ length ys) (FailureDescription [] [xs]) []),
               testProperty "eof mempty" $ simpleParse eof "" === Right [("", ())],
               testProperty "eof failure" $ \s->
                    s /= "" ==> simpleParse eof s === Left (expected (fromIntegral $ length s) "end of input")],
@@ -374,7 +374,7 @@ binary :: String
 binary nm op = liftA2 (\(DescribedParser d1 p1) (DescribedParser d2 p2)-> DescribedParser (d1 <> nm <> d2) (op p1 p2))
 
 expected :: Pos -> String -> ParseFailure Pos s
-expected pos msg = ParseFailure pos [StaticDescription msg] []
+expected pos msg = ParseFailure pos (FailureDescription [msg] []) []
 
 --instance {-# OVERLAPS #-} (Ord s, Arbitrary s) => Arbitrary (s -> Bool) where
 --   arbitrary = elements [(<=), const False]

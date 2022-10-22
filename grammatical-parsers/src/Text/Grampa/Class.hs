@@ -40,8 +40,8 @@ type ParseResults s = Either (ParseFailure Pos s)
 -- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset.
 data ParseFailure pos s =
    ParseFailure {failurePosition :: pos,
-                 expectedAlternatives :: [FailureDescription s],  -- ^ expected input alternatives
-                 errorAlternatives ::    [String]                 -- ^ erroneous alternatives
+                 expectedAlternatives :: FailureDescription s,  -- ^ expected input alternatives
+                 errorAlternatives ::    [String]               -- ^ erroneous alternatives
                 }
    deriving (Eq, Functor, Show)
 
@@ -49,16 +49,16 @@ data ParseFailure pos s =
 type Pos = Down Int
 
 -- | An expected or erroneous input can be described using 'String' or using the input type
-data FailureDescription s = StaticDescription String   -- ^ a readable description of the expected input
-                          | LiteralDescription s       -- ^ a literal piece of expected input
+data FailureDescription s = FailureDescription {staticDescriptions  :: [String],
+                                                literalDescriptions :: [s]}
                             deriving (Functor, Eq, Ord, Read, Show)
 
 instance (Ord pos, Ord s) => Semigroup (ParseFailure pos s) where
    f1@(ParseFailure pos1 exp1 err1) <> f2@(ParseFailure pos2 exp2 err2) = ParseFailure pos' exp' err'
       where ParseFailure pos' exp' err'
-              | pos1 > pos2 = f1
-              | pos1 < pos2 = f2
-              | otherwise = ParseFailure pos1 (merge exp1 exp2) (merge err1 err2)
+               | pos1 > pos2 = f1
+               | pos1 < pos2 = f2
+               | otherwise = ParseFailure pos1 (exp1 <> exp2) (merge err1 err2)
             merge [] xs = xs
             merge xs [] = xs
             merge xs@(x:xs') ys@(y:ys')
@@ -66,9 +66,24 @@ instance (Ord pos, Ord s) => Semigroup (ParseFailure pos s) where
                | x > y = y : merge xs ys'
                | otherwise = x : merge xs' ys'
 
+instance Ord s => Semigroup (FailureDescription s) where
+   exp1 <> exp2 =
+      FailureDescription
+         (merge (staticDescriptions exp1) (staticDescriptions exp2))
+         (merge (literalDescriptions exp1) (literalDescriptions exp2))
+      where merge [] xs = xs
+            merge xs [] = xs
+            merge xs@(x:xs') ys@(y:ys')
+               | x < y = x : merge xs' ys
+               | x > y = y : merge xs ys'
+               | otherwise = x : merge xs' ys'
+
 instance Ord s => Monoid (ParseFailure Pos s) where
-   mempty = ParseFailure (Down maxBound) [] []
+   mempty = ParseFailure (Down maxBound) mempty []
    mappend = (<>)
+
+instance Ord s => Monoid (FailureDescription s) where
+   mempty = FailureDescription mempty mempty
 
 -- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of
 -- alternative results.
@@ -107,7 +122,7 @@ completeParser :: MonoidNull s => Compose (ParseResults s) (Compose [] ((,) s)) 
 completeParser (Compose (Left failure)) = Compose (Left failure)
 completeParser (Compose (Right (Compose results))) =
    case filter (Null.null . fst) results
-   of [] -> Compose (Left $ ParseFailure 0 [StaticDescription "a complete parse"] [])
+   of [] -> Compose (Left $ ParseFailure 0 (FailureDescription ["a complete parse"] []) [])
       completeResults -> Compose (Right $ snd <$> completeResults)
 
 -- | Choose one of the instances of this class to parse with.

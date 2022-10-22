@@ -84,11 +84,11 @@ simply parseGrammar p input = Rank2.fromOnly (parseGrammar (Rank2.Only p) input)
 -- | Given the textual parse input, the parse failure on the input, and the number of lines preceding the failure to
 -- show, produce a human-readable failure description.
 failureDescription :: forall s pos. (Ord s, TextualMonoid s, Position pos) => s -> ParseFailure pos s -> Int -> s
-failureDescription input (ParseFailure pos expected erroneous) contextLineCount =
+failureDescription input (ParseFailure pos (FailureDescription expected inputs) erroneous) contextLineCount =
    Position.context input pos contextLineCount
    <> mconcat
       (intersperse ", but " $ filter (not . null)
-       [onNonEmpty ("expected " <>) $ oxfordComma " or " (fromDescription <$> expected),
+       [onNonEmpty ("expected " <>) $ oxfordComma " or " ((fromString <$> expected) <> (fromLiteral <$> inputs)),
         oxfordComma " and " (fromString <$> erroneous)])
    where oxfordComma :: s -> [s] -> s
          oxfordComma _ [] = ""
@@ -99,5 +99,4 @@ failureDescription input (ParseFailure pos expected erroneous) contextLineCount 
          onLast _ [] = []
          onLast f [x] = [f x]
          onLast f (x:xs) = x : onLast f xs
-         fromDescription (StaticDescription s) = fromString s
-         fromDescription (LiteralDescription s) = "string \"" <> s <> "\""
+         fromLiteral s = "string \"" <> s <> "\""

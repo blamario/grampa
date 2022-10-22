@@ -57,20 +57,20 @@ noFailure :: ParseFailure Pos s
 noFailure = emptyFailure (Down maxBound)
 
 emptyFailure :: Pos -> ParseFailure Pos s
-emptyFailure pos = ParseFailure pos [] []
+emptyFailure pos = ParseFailure pos (FailureDescription [] []) []
 
 expected :: Pos -> String -> ParseFailure Pos s
-expected pos msg = ParseFailure pos [StaticDescription msg] []
+expected pos msg = ParseFailure pos (FailureDescription [msg] []) []
 
 expectedInput :: Pos -> s -> ParseFailure Pos s
-expectedInput pos s = ParseFailure pos [LiteralDescription s] []
+expectedInput pos s = ParseFailure pos (FailureDescription [] [s]) []
 
 erroneous :: Pos -> String -> ParseFailure Pos s
-erroneous pos msg = ParseFailure pos [] [msg]
+erroneous pos msg = ParseFailure pos (FailureDescription [] []) [msg]
 
 replaceExpected :: Pos -> String -> ParseFailure Pos s -> ParseFailure Pos s
 replaceExpected pos msg f@(ParseFailure pos' msgs errs) = ParseFailure pos' msgs' errs
-   where msgs' | pos == pos' = [StaticDescription msg]
+   where msgs' | pos == pos' = FailureDescription [msg] []
                | otherwise = msgs
 
 instance (Show s, Show r) => Show (ResultList g s r) where
