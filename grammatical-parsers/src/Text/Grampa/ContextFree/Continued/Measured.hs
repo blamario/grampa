@@ -34,7 +34,7 @@ import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
                           MultiParsing(..), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (expected, erroneous, TraceableParsing(..))
+import Text.Grampa.Internal (erroneous, expected, TraceableParsing(..))
 
 data Result (g :: (Type -> Type) -> Type) s v =
      Parsed{parsedPrefix :: !v,

@@ -276,7 +276,7 @@ instance (MonoidNull s, Ord s) => Parsing (Parser g s) where
             rewind t ResultList{} = ResultList mempty (expected (Down $ length t) "notFollowedBy")
    skipMany p = go
       where go = pure () <|> try p *> go
-   unexpected msg = Parser (\t-> ResultList mempty $ expected (Down $ length t) msg)
+   unexpected msg = Parser (\t-> ResultList mempty $ erroneous (Down $ length t) msg)
    eof = Parser f
       where f rest@((s, _):_)
                | null s = ResultList [ResultsOfLength 0 rest (():|[])] mempty

@@ -38,7 +38,7 @@ import qualified Rank2
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (BinTree(..), expected, noFailure, TraceableParsing(..))
+import Text.Grampa.Internal (BinTree(..), erroneous, expected, noFailure, TraceableParsing(..))
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
 
@@ -114,7 +114,7 @@ instance (Factorial.FactorialMonoid s, Ord s) => Monad (Parser g s) where
 #if MIN_VERSION_base(4,13,0)
 instance (FactorialMonoid s, Ord s) => MonadFail (Parser g s) where
 #endif
-   fail msg = Parser (\s-> ResultList mempty $ ParseFailure (fromEnd $ Factorial.length s) [] [StaticDescription msg])
+   fail msg = Parser (\s-> ResultList mempty $ erroneous (fromEnd $ Factorial.length s) msg)
 
 instance (FactorialMonoid s, Ord s) => MonadPlus (Parser g s) where
    mzero = empty
@@ -230,8 +230,7 @@ instance (FactorialMonoid s, Ord s) => Parsing (Parser g s) where
             rewind t ResultList{} = ResultList mempty (expected (fromEnd $ Factorial.length t) "notFollowedBy")
    skipMany p = go
       where go = pure () <|> try p *> go
-   unexpected msg = Parser (\t-> ResultList mempty
-                                 $ ParseFailure (fromEnd $ Factorial.length t) [] [StaticDescription msg])
+   unexpected msg = Parser (\t-> ResultList mempty $ erroneous (fromEnd $ Factorial.length t) msg)
    eof = Parser f
       where f s | null s = ResultList (Leaf $ ResultInfo s ()) noFailure
                 | otherwise = ResultList mempty (expected (fromEnd $ Factorial.length s) "end of input")

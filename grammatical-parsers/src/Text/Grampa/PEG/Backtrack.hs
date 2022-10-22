@@ -34,7 +34,7 @@ import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (expected, TraceableParsing(..))
+import Text.Grampa.Internal (erroneous, expected, TraceableParsing(..))
 
 data Result (g :: (Type -> Type) -> Type) s v =
      Parsed{parsedPrefix :: !v,
@@ -124,9 +124,8 @@ instance Factorial.FactorialMonoid s => Parsing (Parser g s) where
    eof = Parser p
       where p rest
                | Null.null rest = Parsed () rest
-               | otherwise = NoParse (ParseFailure (fromEnd $ Factorial.length rest)
-                                                   [StaticDescription "end of input"] [])
-   unexpected msg = Parser (\t-> NoParse $ ParseFailure (fromEnd $ Factorial.length t) [] [StaticDescription msg])
+               | otherwise = NoParse (expected (fromEnd $ Factorial.length rest) "end of input")
+   unexpected msg = Parser (\t-> NoParse $ erroneous (fromEnd $ Factorial.length t) msg)
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
       where rewind t Parsed{} = NoParse (expected (fromEnd $ Factorial.length t) "notFollowedBy")
             rewind t NoParse{} = Parsed () t

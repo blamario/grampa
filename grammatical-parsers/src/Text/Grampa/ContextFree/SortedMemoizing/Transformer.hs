@@ -44,7 +44,7 @@ import Text.Grampa.Class (GrammarParsing(..), InputParsing(..), InputCharParsing
                           ConsumedInputParsing(..), CommittedParsing(..), DeterministicParsing(..),
                           AmbiguousParsing(..), Ambiguous(Ambiguous),
                           TailsParsing(..), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (expected, FallibleResults(..), AmbiguousAlternative(..), TraceableParsing(..))
+import Text.Grampa.Internal (erroneous, expected, FallibleResults(..), AmbiguousAlternative(..), TraceableParsing(..))
 import qualified Text.Grampa.PEG.Backtrack.Measured as Backtrack
 
 import Prelude hiding (iterate, null, showList, span, takeWhile)
@@ -319,7 +319,7 @@ instance (Applicative m, MonoidNull s, Ord s) => Parsing (ParserT m g s) where
             rewind t ResultList{} = ResultList mempty (expected (Down $ length t) "notFollowedBy")
    skipMany p = go
       where go = pure () <|> try p *> go
-   unexpected msg = Parser (\t-> ResultList mempty $ expected (Down $ length t) msg)
+   unexpected msg = Parser (\t-> ResultList mempty $ erroneous (Down $ length t) msg)
    eof = Parser f
       where f rest@((s, _):_)
                | null s = singleResult 0 rest ()

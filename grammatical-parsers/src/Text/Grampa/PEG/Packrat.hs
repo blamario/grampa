@@ -35,7 +35,7 @@ import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..),
                           GrammarParsing(..), MultiParsing(..),
                           TailsParsing(parseTails), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (expected, TraceableParsing(..))
+import Text.Grampa.Internal (erroneous, expected, TraceableParsing(..))
 
 data Result g s v = Parsed{parsedPrefix :: !v, 
                            parsedSuffix :: ![(s, g (Result g s))]}
@@ -90,7 +90,7 @@ instance Monad (Parser g s) where
 #if MIN_VERSION_base(4,13,0)
 instance MonadFail (Parser g s) where
 #endif
-   fail msg = Parser (\rest-> NoParse $ ParseFailure (Down $ length rest) [] [StaticDescription msg])
+   fail msg = Parser (\rest-> NoParse $ erroneous (Down $ length rest) msg)
 
 instance MonadPlus (Parser g s) where
    mzero = empty
@@ -117,11 +117,11 @@ instance FactorialMonoid s => Parsing (Parser g s) where
                      replaceFailure parsed = parsed
    eof = Parser p
       where p rest@((s, _) : _)
-               | not (Null.null s) = NoParse (ParseFailure (Down $ length rest) [StaticDescription "end of input"] [])
+               | not (Null.null s) = NoParse (expected (Down $ length rest) "end of input")
             p rest = Parsed () rest
-   unexpected msg = Parser (\t-> NoParse $ ParseFailure (Down $ length t) [] [StaticDescription msg])
+   unexpected msg = Parser (\t-> NoParse $ erroneous (Down $ length t) msg)
    notFollowedBy (Parser p) = Parser (\input-> rewind input (p input))
-      where rewind t Parsed{} = NoParse (ParseFailure (Down $ length t) [StaticDescription "notFollowedBy"] [])
+      where rewind t Parsed{} = NoParse (expected (Down $ length t) "notFollowedBy")
             rewind t NoParse{} = Parsed () t
 
 instance FactorialMonoid s => CommittedParsing (Parser g s) where

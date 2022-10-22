@@ -33,7 +33,7 @@ import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
                           MultiParsing(..), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (TraceableParsing(..), expected)
+import Text.Grampa.Internal (TraceableParsing(..), erroneous, expected)
 import Text.Grampa.PEG.Continued (Result(..))
 
 -- | Parser type for Parsing Expression Grammars that uses a continuation-passing algorithm and keeps track of the
@@ -118,7 +118,7 @@ instance (FactorialMonoid s, Ord s) => Parsing (Parser g s) where
       where p rest success failure
                | Null.null rest = success () 0 rest
                | otherwise = failure (expected (fromEnd $ Factorial.length rest) "end of input")
-   unexpected msg = Parser (\t _ failure -> failure $ expected (fromEnd $ Factorial.length t) msg)
+   unexpected msg = Parser (\t _ failure -> failure $ erroneous (fromEnd $ Factorial.length t) msg)
    notFollowedBy (Parser p) = Parser q
       where q :: forall x. s -> (() -> Int -> s -> x) -> (ParseFailure Pos s -> x) -> x
             q input success failure = p input success' failure'

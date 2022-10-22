@@ -34,7 +34,7 @@ import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), MultiParsing(..),
                           ParseResults, ParseFailure(..), FailureDescription(..), Pos)
-import Text.Grampa.Internal (expected, TraceableParsing(..))
+import Text.Grampa.Internal (erroneous, expected, TraceableParsing(..))
 
 data Result (g :: (Type -> Type) -> Type) s v = Parsed{parsedPrefix :: !v,
                                               parsedSuffix :: !s}
@@ -103,8 +103,7 @@ instance (Factorial.FactorialMonoid s, Ord s) => Monad (Parser g s) where
 #if MIN_VERSION_base(4,13,0)
 instance (FactorialMonoid s, Ord s) => MonadFail (Parser g s) where
 #endif
-   fail msg = Parser (\rest _ failure-> failure $
-                       ParseFailure (fromEnd $ Factorial.length rest) [StaticDescription msg] [])
+   fail msg = Parser (\rest _ failure-> failure $ erroneous (fromEnd $ Factorial.length rest) msg)
 
 instance (FactorialMonoid s, Ord s) => MonadPlus (Parser g s) where
    mzero = empty
@@ -133,10 +132,8 @@ instance (FactorialMonoid s, Ord s) => Parsing (Parser g s) where
    eof = Parser p
       where p rest success failure
                | Null.null rest = success () rest
-               | otherwise = failure (ParseFailure (fromEnd $ Factorial.length rest)
-                                                   [StaticDescription "end of input"] [])
-   unexpected msg = Parser (\t _ failure ->
-                             failure $ ParseFailure (fromEnd $ Factorial.length t) [] [StaticDescription msg])
+               | otherwise = failure (expected (fromEnd $ Factorial.length rest) "end of input")
+   unexpected msg = Parser (\t _ failure -> failure $ erroneous (fromEnd $ Factorial.length t) msg)
    notFollowedBy (Parser p) = Parser q
       where q :: forall x. s -> (() -> s -> x) -> (ParseFailure Pos s -> x) -> x
             q input success failure = p input success' failure'
