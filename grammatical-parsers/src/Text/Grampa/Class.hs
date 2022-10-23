@@ -58,25 +58,21 @@ instance (Ord pos, Ord s) => Semigroup (ParseFailure pos s) where
       where ParseFailure pos' exp' err'
                | pos1 > pos2 = f1
                | pos1 < pos2 = f2
-               | otherwise = ParseFailure pos1 (exp1 <> exp2) (merge err1 err2)
-            merge [] xs = xs
-            merge xs [] = xs
-            merge xs@(x:xs') ys@(y:ys')
-               | x < y = x : merge xs' ys
-               | x > y = y : merge xs ys'
-               | otherwise = x : merge xs' ys'
+               | otherwise = ParseFailure pos1 (exp1 <> exp2) (mergeSorted err1 err2)
 
 instance Ord s => Semigroup (FailureDescription s) where
    exp1 <> exp2 =
       FailureDescription
-         (merge (staticDescriptions exp1) (staticDescriptions exp2))
-         (merge (literalDescriptions exp1) (literalDescriptions exp2))
-      where merge [] xs = xs
-            merge xs [] = xs
-            merge xs@(x:xs') ys@(y:ys')
-               | x < y = x : merge xs' ys
-               | x > y = y : merge xs ys'
-               | otherwise = x : merge xs' ys'
+         (mergeSorted (staticDescriptions exp1) (staticDescriptions exp2))
+         (mergeSorted (literalDescriptions exp1) (literalDescriptions exp2))
+
+mergeSorted :: Ord a => [a] -> [a] -> [a]
+mergeSorted [] xs = xs
+mergeSorted xs [] = xs
+mergeSorted xs@(x:xs') ys@(y:ys')
+   | x < y = x : mergeSorted xs' ys
+   | x > y = y : mergeSorted xs ys'
+   | otherwise = x : mergeSorted xs' ys'
 
 instance Ord s => Monoid (ParseFailure Pos s) where
    mempty = ParseFailure (Down maxBound) mempty []
