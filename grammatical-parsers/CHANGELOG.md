@@ -1,3 +1,21 @@
+Version 0.7
+---------------
+
+* Reorganized the `LeftRecursive` modules and deprecated the old module names
+* Re-exposed the `Text.Grampa.ContextFree.Memoizing` module
+* Floated the `Rank2.Apply` constraint, which now may be necessary in calling contexts
+* Turned `FailureDescription` from sum to product
+* Added the `chainRecursive` & `chainLongestRecursive` methods
+* Added `autochain`
+* Improved performance by making `instance Semigroup ParseFailure` lazier
+* Improved performance by shortcutting non-left-recursive grammars
+* Improved the output of `TraceableParsing` instances
+* Fixed comments
+* Incremented dependency bounds
+* Factored out several internal utility functions
+* Updated code to compile with GHC 9.4.2
+* Updated GitHub actions
+
 Version 0.6
 ---------------
 * Updated code to compile with GHC 9.2.2
