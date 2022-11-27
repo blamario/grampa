@@ -154,7 +154,7 @@ Generic Programing with deep-transformations
 Folding
 -------
 
-Suppose we we want to get a list of all variables used in an expression. To do this we would declare the appropriate
+Suppose we want to get a list of all variables used in an expression. To do this we would declare the appropriate
  [`Transformation`](https://hackage.haskell.org/package/deep-transformations/docs/Transformation.html) instance for an
  arbitrary data type. We'll give this data type an evocative name.
 
