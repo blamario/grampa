@@ -40,7 +40,8 @@ library
                         Transformation.Deep, Transformation.Deep.TH,
                         Transformation.Full, Transformation.Full.TH,
                         Transformation.Rank2,
-                        Transformation.AG, Transformation.AG.Monomorphic, Transformation.AG.Generics
+                        Transformation.AG, Transformation.AG.Generics,
+                        Transformation.AG.Monomorphic, Transformation.AG.Dimorphic
   ghc-options:         -Wall
   build-depends:        base >= 4.11 && < 5, rank2classes >= 1.4.1 && < 1.5,
                         transformers >= 0.5 && < 0.7,
