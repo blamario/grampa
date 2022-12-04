@@ -1,21 +1,28 @@
-{-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
-             ScopedTypeVariables, TypeFamilies, TypeOperators, UndecidableInstances #-}
+{-# Language FlexibleContexts, FlexibleInstances, KindSignatures, MultiParamTypeClasses, PatternSynonyms, RankNTypes,
+             TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | A special case of an attribute grammar where every node has only a single inherited and a single synthesized
 -- attribute of the same monoidal type. The synthesized attributes of child nodes are all 'mconcat`ted together.
 
-module Transformation.AG.Monomorphic where
+module Transformation.AG.Monomorphic (
+  Auto (Auto), Keep (Keep), Atts, pattern Atts, inh, syn,
+  Semantics, PreservingSemantics, Rule, Attribution (attribution), Feeder,
+  Dimorphic.knit, Dimorphic.knitKeeping,
+  applyDefault, applyDefaultWithAttributes,
+  fullMapDefault, Dimorphic.traverseDefaultWithAttributes) where
 
-import Data.Data (Data, Typeable)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Const (Const(..))
 import Data.Kind (Type)
-import Data.Semigroup (Semigroup(..))
 import qualified Rank2
 import Transformation (Transformation, Domain, Codomain, At)
 import qualified Transformation
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
+
+import qualified Transformation.AG.Dimorphic as Dimorphic
+import Transformation.AG.Dimorphic (knit, knitKeeping)
+
 
 -- | Transformation wrapper that allows automatic inference of attribute rules.
 newtype Auto t = Auto t
@@ -24,17 +31,10 @@ newtype Auto t = Auto t
 -- the original nodes.
 newtype Keep t = Keep t
 
-data Atts a = Atts{
-   inh :: a,
-   syn :: a}
-   deriving (Data, Typeable, Show)
+type Atts a = Dimorphic.Atts a a
 
-instance Semigroup a => Semigroup (Atts a) where
-   Atts i1 s1 <> Atts i2 s2 = Atts (i1 <> i2) (s1 <> s2)
-
-instance Monoid a => Monoid (Atts a) where
-   mappend = (<>)
-   mempty = Atts mempty mempty
+pattern Atts :: a -> a -> Atts a
+pattern Atts{inh, syn} = Dimorphic.Atts inh syn
 
 -- | A node's 'Semantics' maps its inherited attribute to its synthesized attribute.
 type Semantics a = Const (a -> a)
@@ -77,25 +77,7 @@ instance (Transformation (Keep t), Domain (Keep t) ~ f, Traversable f, Rank2.Tra
           Codomain (Keep t) ~ PreservingSemantics f a, Deep.Traversable (Feeder a f) g, Full.Functor (Keep t) g,
           Keep t `At` g (PreservingSemantics f a) (PreservingSemantics f a)) =>
          Full.Traversable (Keep t) g where
-   traverse = traverseDefaultWithAttributes
-
--- | The core function to tie the recursive knot, turning a 'Rule' for a node into its 'Semantics'.
-knit :: (Rank2.Foldable (g sem), sem ~ Semantics a, Monoid a)
-     => Rule a -> g sem sem -> sem (g sem sem)
-knit r chSem = Const knitted
-   where knitted inherited = synthesized
-            where Atts{syn= synthesized, inh= chInh} = r Atts{inh= inherited, syn= chSyn}
-                  chSyn = Rank2.foldMap (($ chInh) . getConst) chSem
-
--- | Another way to tie the recursive knot, using a 'Rule' to add attributes to every node througha stateful calculation
-knitKeeping :: forall a f g sem. (Rank2.Foldable (g sem), sem ~ PreservingSemantics f a,
-                              Monoid a, Foldable f, Functor f)
-            => Rule a -> f (g sem sem) -> sem (g sem sem)
-knitKeeping r x = Compose knitted
-   where knitted :: a -> Compose ((,) (Atts a)) f (g sem sem)
-         knitted inherited = Compose (results, x)
-            where results@Atts{inh= chInh} = r Atts{inh= inherited, syn= chSyn}
-                  chSyn = foldMap (Rank2.foldMap (syn . fst . getCompose . ($ chInh) . getCompose)) x
+   traverse = Dimorphic.traverseDefaultWithAttributes
 
 -- | The core type class for defining the attribute grammar. The instances of this class typically have a form like
 --
@@ -129,25 +111,4 @@ applyDefaultWithAttributes :: (p ~ Domain t, q ~ PreservingSemantics p a, x ~ g 
 applyDefaultWithAttributes t x = knitKeeping (attribution t x) x
 {-# INLINE applyDefaultWithAttributes #-}
 
--- | Drop-in implementation of 'Full.traverse' that stores all attributes with every original node
-traverseDefaultWithAttributes :: forall t p q r a g.
-                                 (Transformation t, Domain t ~ p, Codomain t ~ Compose ((->) a) q,
-                                 q ~ Compose ((,) (Atts a)) p, r ~ Compose ((->) a) q,
-                                 Traversable p, Full.Functor t g, Deep.Traversable (Feeder a p) g,
-                                 Transformation.At t (g r r))
-                              => t -> p (g p p) -> a -> q (g q q)
-traverseDefaultWithAttributes t x rootInheritance = Full.traverse Feeder (t Full.<$> x) rootInheritance
-{-# INLINE traverseDefaultWithAttributes #-}
-
-data Feeder a (f :: Type -> Type) = Feeder
-
-instance Transformation (Feeder a f) where
-   type Domain (Feeder a f) = Compose ((->) a) (Compose ((,) (Atts a)) f)
-   type Codomain (Feeder a f) = Compose ((->) a) (Compose ((,) (Atts a)) f)
-
-instance Transformation.At (Feeder a f) g where
-   Feeder $ x = x
-
-instance (Traversable f, Deep.Traversable (Feeder a f) g) => Full.Traversable (Feeder a f) g where
-   traverse t x inheritance = Compose (atts{inh= inheritance}, traverse (Deep.traverse t) y (inh atts))
-      where Compose (atts, y) = getCompose x inheritance
+type Feeder a = Dimorphic.Feeder a a
