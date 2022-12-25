@@ -26,7 +26,7 @@ module Transformation where
 
 import Data.Coerce (coerce)
 import qualified Data.Functor.Compose as Functor
-import qualified Data.Functor.Const as Functor
+import Data.Functor.Const (Const)
 import Data.Functor.Product (Product(Pair))
 import Data.Functor.Sum (Sum(InL, InR))
 import Data.Kind (Type)
@@ -53,8 +53,14 @@ apply = ($)
 -- | Composition of two transformations
 data Compose t u = Compose t u
 
--- | Transformation under a functor
+-- | Transformation under a 'Data.Functor.Functor'
 newtype Mapped (f :: Type -> Type) t = Mapped t
+
+-- | Transformation under a 'Foldable'
+newtype Folded (f :: Type -> Type) t = Folded t
+
+-- | Transformation under a 'Traversable'
+newtype Traversed (f :: Type -> Type) t = Traversed t
 
 instance (Transformation t, Transformation u, Domain t ~ Codomain u) => Transformation (Compose t u) where
    type Domain (Compose t u) = Domain u
@@ -64,11 +70,32 @@ instance Transformation t => Transformation (Mapped f t) where
    type Domain (Mapped f t) = Functor.Compose f (Domain t)
    type Codomain (Mapped f t) = Functor.Compose f (Codomain t)
 
+instance Transformation t => Transformation (Folded f t) where
+   type Domain (Folded f t) = Functor.Compose f (Domain t)
+   type Codomain (Folded f t) = Codomain t
+
+instance (Transformation t, Codomain t ~ Functor.Compose m n) => Transformation (Traversed f t) where
+   type Domain (Traversed f t) = Functor.Compose f (Domain t)
+   type Codomain (Traversed f t) =
+      Functor.Compose (ComposeOuter (Codomain t)) (Functor.Compose f (ComposeInner (Codomain t)))
+
+type family ComposeOuter (c :: Type -> Type) :: Type -> Type where
+   ComposeOuter (Functor.Compose p q) = p
+
+type family ComposeInner (c :: Type -> Type) :: Type -> Type where
+   ComposeInner (Functor.Compose p q) = q
+
 instance (t `At` x, u `At` x, Domain t ~ Codomain u) => Compose t u `At` x where
    Compose t u $ x =  t $ u $ x
 
 instance (t `At` x, Functor f) => Mapped f t `At` x where
    Mapped t $ Functor.Compose x = Functor.Compose ((t $) <$> x)
+
+instance (t `At` x, Foldable f, Codomain t ~ Const m, Monoid m) => Folded f t `At` x where
+   Folded t $ Functor.Compose x = foldMap (t $) x
+
+instance (t `At` x, Traversable f, Codomain t ~ Functor.Compose m n, Applicative m) => Traversed f t `At` x where
+   Traversed t $ Functor.Compose x = Functor.Compose (Functor.Compose <$> traverse (Functor.getCompose . (t $)) x)
 
 instance Transformation (Rank2.Arrow (p :: Type -> Type) q x) where
    type Domain (Rank2.Arrow p q x) = p
