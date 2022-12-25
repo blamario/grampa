@@ -1,4 +1,4 @@
-{-# Language FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables,
+{-# Language DataKinds, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables,
              TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | A /natural transformation/ is a concept from category theory for a mapping between two functors and their objects
@@ -24,9 +24,13 @@
 
 module Transformation where
 
+import Data.Coerce (coerce)
+import qualified Data.Functor.Compose as Functor
+import qualified Data.Functor.Const as Functor
 import Data.Functor.Product (Product(Pair))
 import Data.Functor.Sum (Sum(InL, InR))
 import Data.Kind (Type)
+import GHC.TypeLits (ErrorMessage (Text, ShowType, (:<>:)), TypeError)
 import qualified Rank2
 
 import Prelude hiding (($))
@@ -49,12 +53,22 @@ apply = ($)
 -- | Composition of two transformations
 data Compose t u = Compose t u
 
+-- | Transformation under a functor
+newtype Mapped (f :: Type -> Type) t = Mapped t
+
 instance (Transformation t, Transformation u, Domain t ~ Codomain u) => Transformation (Compose t u) where
    type Domain (Compose t u) = Domain u
    type Codomain (Compose t u) = Codomain t
 
+instance Transformation t => Transformation (Mapped f t) where
+   type Domain (Mapped f t) = Functor.Compose f (Domain t)
+   type Codomain (Mapped f t) = Functor.Compose f (Codomain t)
+
 instance (t `At` x, u `At` x, Domain t ~ Codomain u) => Compose t u `At` x where
-   Compose t u $ x =  t $ (u $ x)
+   Compose t u $ x =  t $ u $ x
+
+instance (t `At` x, Functor f) => Mapped f t `At` x where
+   Mapped t $ Functor.Compose x = Functor.Compose ((t $) <$> x)
 
 instance Transformation (Rank2.Arrow (p :: Type -> Type) q x) where
    type Domain (Rank2.Arrow p q x) = p
