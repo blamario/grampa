@@ -1,5 +1,11 @@
 # Revision history for deep-transformations
 
+## 0.2.1 -- 2023-01-07
+
+* Added AG.Dimorphic
+* Added combinators `Transformation.Mapped`, `Folded`, and `Traversed`
+* Compiling with GHC 9.4
+
 ## 0.2 -- 2022-03-27
 
 * Changes necessary to compile with GHC 9.2.2

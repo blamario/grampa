@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                deep-transformations
-version:             0.2
+version:             0.2.1
 synopsis:            Deep natural and unnatural tree transformations, including attribute grammars
 description:
 
@@ -30,7 +30,7 @@ source-repository head
 custom-setup
  setup-depends:
    base >= 4 && <5,
-   Cabal,
+   Cabal < 4,
    cabal-doctest >= 1 && <1.1
  
 library
