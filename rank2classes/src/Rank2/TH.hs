@@ -9,6 +9,7 @@
 
 {-# Language CPP #-}
 {-# Language TemplateHaskell #-}
+{-# Language TypeOperators #-}
 -- Adapted from https://wiki.haskell.org/A_practical_Template_Haskell_Tutorial
 
 module Rank2.TH (deriveAll, deriveFunctor, deriveApply, unsafeDeriveApply, deriveApplicative,
@@ -20,13 +21,11 @@ import Control.Applicative (liftA2, liftA3)
 import Control.Monad (replicateM)
 import Data.Distributive (cotraverse)
 import Data.Functor.Compose (Compose (Compose))
-import Data.Functor.Contravariant (contramap)
-import Data.Functor.Logistic (deliver)
-import Data.Monoid ((<>))
+import Data.Functor.Contravariant (Contravariant, contramap)
 import qualified Language.Haskell.TH as TH
 import Language.Haskell.TH (Q, TypeQ, Name, TyVarBndr(KindedTV, PlainTV), Clause, Dec(..), Con(..), Type(..), Exp(..),
                             Inline(Inlinable, Inline), RuleMatch(FunLike), Phases(AllPhases),
-                            appE, conE, conP, instanceD, varE, varP, normalB, pragInlD, recConE, recUpdE, wildP)
+                            appE, conE, conP, conT, instanceD, varE, varP, varT, normalB, pragInlD, recConE, wildP)
 import Language.Haskell.TH.Syntax (BangType, VarBangType, Info(TyConI), getQ, putQ, newName)
 
 import qualified Rank2
@@ -102,9 +101,9 @@ deriveDistributiveTraversable ty = do
 deriveLogistic :: Name -> Q [Dec]
 deriveLogistic ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Logistic ty
-   (constraints, dec) <- genDeliver cs
+   (constraints, decs) <- genDeliver ty cs
    sequence [instanceD (TH.cxt $ map pure constraints) instanceType
-             [pure dec, pragInlD 'Rank2.deliver Inline FunLike AllPhases]]
+              (map pure decs <> [pragInlD 'Rank2.deliver Inline FunLike AllPhases])]
 
 reifyConstructors :: Name -> Name -> Q (TypeQ, [Con])
 reifyConstructors cls ty = do
@@ -116,14 +115,14 @@ reifyConstructors cls ty = do
  
 #if MIN_VERSION_template_haskell(2,17,0)
    let (KindedTV tyVar () (AppT (AppT ArrowT _) StarT)) = last tyVars
-       instanceType           = TH.conT cls `TH.appT` foldl apply (TH.conT tyConName) (init tyVars)
-       apply t (PlainTV name _)    = TH.appT t (TH.varT name)
-       apply t (KindedTV name _ _) = TH.appT t (TH.varT name)
+       instanceType           = conT cls `TH.appT` foldl apply (conT tyConName) (init tyVars)
+       apply t (PlainTV name _)    = TH.appT t (varT name)
+       apply t (KindedTV name _ _) = TH.appT t (varT name)
 #else
    let (KindedTV tyVar (AppT (AppT ArrowT _) StarT)) = last tyVars
-       instanceType           = TH.conT cls `TH.appT` foldl apply (TH.conT tyConName) (init tyVars)
-       apply t (PlainTV name)    = TH.appT t (TH.varT name)
-       apply t (KindedTV name _) = TH.appT t (TH.varT name)
+       instanceType           = conT cls `TH.appT` foldl apply (conT tyConName) (init tyVars)
+       apply t (PlainTV name)    = TH.appT t (varT name)
+       apply t (KindedTV name _) = TH.appT t (varT name)
 #endif
  
    putQ (Deriving tyConName tyVar)
@@ -173,9 +172,23 @@ genCotraverseTraversable :: [Con] -> Q ([Type], Dec)
 genCotraverseTraversable [con] = do (constraints, clause) <- genCotraverseTraversableClause con
                                     return (constraints, FunD 'Rank2.cotraverseTraversable [clause])
 
-genDeliver :: [Con] -> Q ([Type], Dec)
-genDeliver [con] = do (constraints, clause) <- genDeliverClause con
-                      return (constraints, FunD 'Rank2.deliver [clause])
+genDeliver :: Name -> [Con] -> Q ([Type], [Dec])
+genDeliver typeName [con] = do
+  signable <- TH.isExtEnabled TH.InstanceSigs
+  scopable <- TH.isExtEnabled TH.ScopedTypeVariables
+  if signable && scopable then do
+     p <- newName "p"
+     q <- newName "q"
+     (constraints, clause) <- genDeliverClause typeName (Just q) con
+     ctx <- [t| Contravariant $(varT p) |]
+     methodType <- [t| $(varT p) ($(conT typeName) $(varT q) -> $(conT typeName) $(varT q)) -> $(conT typeName) (Compose $(varT p) ($(varT q) Rank2.~> $(varT q))) |]
+     return (constraints,
+             [SigD 'Rank2.deliver (ForallT [binder p, binder q] [ctx] methodType),
+              FunD 'Rank2.deliver [clause]])
+  else do
+     (constraints, clause) <- genDeliverClause typeName Nothing con
+     return (constraints, [FunD 'Rank2.deliver [clause]])
+
 
 genFmapClause :: Con -> Q ([Type], Clause)
 genFmapClause (NormalC name fieldTypes) = do
@@ -197,7 +210,7 @@ genFmapClause (RecC name fields) = do
        newNamedField :: VarBangType -> Q ([Type], (Name, Exp))
        newNamedField (fieldName, _, fieldType) =
           ((,) fieldName <$>)
-          <$> genFmapField (varE f) fieldType (appE (varE fieldName) (varE x)) id
+          <$> genFmapField (varE f) fieldType (getFieldOf x fieldName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause [varP f, x `TH.asP` TH.recP name []] body []
 genFmapClause (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
@@ -239,8 +252,8 @@ genLiftA2Clause unsafely (RecC name fields) = do
    let body = normalB $ recConE name $ map newNamedField fields
        newNamedField :: VarBangType -> Q (Name, Exp)
        newNamedField (fieldName, _, fieldType) =
-          TH.fieldExp fieldName (genLiftA2Field unsafely (varE f) fieldType (getFieldOf x) (getFieldOf y) id)
-          where getFieldOf = appE (varE fieldName) . varE
+          TH.fieldExp fieldName $
+             genLiftA2Field unsafely (varE f) fieldType (getFieldOf x fieldName) (getFieldOf y fieldName) id
    TH.clause [varP f, x `TH.asP` TH.recP name [], varP y] body []
 genLiftA2Clause unsafely (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
@@ -288,8 +301,7 @@ genLiftA3Clause unsafely (RecC name fields) = do
        newNamedField :: VarBangType -> Q (Name, Exp)
        newNamedField (fieldName, _, fieldType) =
           TH.fieldExp fieldName
-             (genLiftA3Field unsafely (varE f) fieldType (getFieldOf x) (getFieldOf y) (getFieldOf z) id)
-          where getFieldOf = appE (varE fieldName) . varE
+             (genLiftA3Field unsafely (varE f) fieldType (getFieldOf x fieldName) (getFieldOf y fieldName) (getFieldOf z fieldName) id)
    TH.clause [varP f, x `TH.asP` TH.recP name [], varP y, varP z] body []
 genLiftA3Clause unsafely (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
@@ -337,8 +349,7 @@ genApClause unsafely (RecC name fields) = do
        constraintsAndFields = map newNamedField fields
        newNamedField :: VarBangType -> Q ([Type], (Name, Exp))
        newNamedField (fieldName, _, fieldType) =
-          ((,) fieldName <$>) <$> genApField unsafely fieldType (getFieldOf x) (getFieldOf y) id
-          where getFieldOf = appE (varE fieldName) . varE
+          ((,) fieldName <$>) <$> genApField unsafely fieldType (getFieldOf x fieldName) (getFieldOf y fieldName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause [x `TH.asP` TH.recP name [], varP y] body []
 genApClause unsafely (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
@@ -414,7 +425,7 @@ genFoldMapClause (RecC name fields) = do
        constraintsAndFields = map newField fields
        append a b = [| $(a) <> $(b) |]
        newField :: VarBangType -> Q ([Type], Exp)
-       newField (fieldName, _, fieldType) = genFoldMapField f fieldType (appE (varE fieldName) (varE x)) id
+       newField (fieldName, _, fieldType) = genFoldMapField f fieldType (getFieldOf x fieldName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause [varP f, x `TH.asP` TH.recP name []] (normalB body) []
 genFoldMapClause (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
@@ -463,7 +474,7 @@ genTraverseClause (RecC name fields) = do
        apply (a, False) b = ([| $(a) <$> $(b) |], True)
        apply (a, True) b = ([| $(a) <*> $(b) |], True)
        newField :: VarBangType -> Q ([Type], Exp)
-       newField (fieldName, _, fieldType) = genTraverseField (varE f) fieldType (appE (varE fieldName) (varE x)) id
+       newField (fieldName, _, fieldType) = genTraverseField (varE f) fieldType (getFieldOf x fieldName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause [varP f, x `TH.asP` TH.recP name []] body []
 genTraverseClause (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
@@ -498,7 +509,7 @@ genCotraverseClause (RecC name fields) = do
        newNamedField :: VarBangType -> Q ([Type], (Name, Exp))
        newNamedField (fieldName, _, fieldType) =
           ((,) fieldName <$>) <$> (genCotraverseField ''Rank2.Distributive (varE 'Rank2.cotraverse) (varE withName)
-                                   fieldType [| $(varE fieldName) <$> $(varE argName) |] id)
+                                   fieldType [| $(projectField fieldName) <$> $(varE argName) |] id)
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause [varP withName, varP argName] body []
 
@@ -513,22 +524,23 @@ genCotraverseTraversableClause (RecC name fields) = do
        newNamedField (fieldName, _, fieldType) =
           ((,) fieldName <$>) <$> (genCotraverseField ''Rank2.DistributiveTraversable
                                    (varE 'Rank2.cotraverseTraversable) (varE withName) fieldType
-                                   [| $(varE fieldName) <$> $(varE argName) |] id)
+                                   [| $(projectField fieldName) <$> $(varE argName) |] id)
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause [varP withName, varP argName] body []
 
-genDeliverClause :: Con -> Q ([Type], Clause)
-genDeliverClause (NormalC name []) = genDeliverClause (RecC name [])
-genDeliverClause (RecC name fields) = do
+genDeliverClause :: Name -> Maybe Name -> Con -> Q ([Type], Clause)
+genDeliverClause typeName typeVar (NormalC name []) = genDeliverClause typeName typeVar (RecC name [])
+genDeliverClause recType typeVar (RecC name fields) = do
    argName <- newName "f"
    let constraintsAndFields = map newNamedField fields
        body = normalB $ recConE name $ (snd <$>) <$> constraintsAndFields
+       recExp g = maybe g (\v-> [|($g :: $(conT recType) $(varT v))|]) typeVar
        newNamedField :: VarBangType -> Q ([Type], (Name, Exp))
        newNamedField (fieldName, _, fieldType) =
           ((,) fieldName <$>)
           <$> (genDeliverField ''Rank2.Logistic fieldType
-               (\wrap-> [| \set g-> $(TH.recUpdE [|g|] [(,) fieldName <$> appE (wrap [| Rank2.apply set |]) [| $(varE fieldName) g |]]) |])
-               (\wrap-> [| \set g-> $(TH.recUpdE [|g|] [(,) fieldName <$> appE (wrap [| set |]) [| $(varE fieldName) g |]]) |])
+               (\wrap-> [| \set g-> $(TH.recUpdE (recExp [|g|]) [(,) fieldName <$> appE (wrap [| Rank2.apply set |]) (getFieldOfE [|g|] fieldName)]) |])
+               (\wrap-> [| \set g-> $(TH.recUpdE (recExp [|g|]) [(,) fieldName <$> appE (wrap [| set |]) (getFieldOfE [|g|] fieldName)]) |])
                (varE argName)
                id
                id)
@@ -565,6 +577,31 @@ genDeliverField className fieldType fieldUpdate subRecordUpdate arg outer inner 
      SigT ty _kind -> genDeliverField className ty fieldUpdate subRecordUpdate arg outer inner
      ParensT ty -> genDeliverField className ty fieldUpdate subRecordUpdate arg outer inner
 
+projectField :: Name -> Q Exp
+projectField field = do
+  dotty <- TH.isExtEnabled TH.OverloadedRecordDot
+  if dotty
+     then TH.projectionE (pure $ TH.nameBase field)
+     else varE field
+
+getFieldOf :: Name -> Name -> Q Exp
+getFieldOf = getFieldOfE . varE
+
+getFieldOfE :: Q Exp -> Name -> Q Exp
+getFieldOfE record field = do
+  dotty <- TH.isExtEnabled TH.OverloadedRecordDot
+  if dotty
+     then TH.getFieldE record (TH.nameBase field)
+     else appE (varE field) record
+
 constrain :: Name -> Type -> [Type]
 constrain _ ConT{} = []
 constrain cls t = [ConT cls `AppT` t]
+
+#if MIN_VERSION_template_haskell(2,17,0)
+binder :: Name -> TyVarBndr TH.Specificity
+binder name = TH.PlainTV name TH.SpecifiedSpec
+#else
+binder :: Name -> TyVarBndr
+binder = TH.PlainTV
+#endif
