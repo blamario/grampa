@@ -1,5 +1,5 @@
 name:                rank2classes
-version:             1.4.6
+version:             1.5
 synopsis:            standard type constructor class hierarchy, only with methods of rank 2 types
 description:
   A mirror image of the standard type constructor class hierarchy rooted in 'Functor', except with methods of rank 2
@@ -24,7 +24,7 @@ source-repository head
 custom-setup
  setup-depends:
    base >= 4 && <5,
-   Cabal,
+   Cabal < 4,
    cabal-doctest >= 1 && <1.1
 
 flag use-template-haskell

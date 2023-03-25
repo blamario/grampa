@@ -29,6 +29,7 @@ The `Rank2` import will make available the following type classes:
   * [Rank2.Foldable](http://hackage.haskell.org/package/rank2classes/docs/Rank2.html#t:Foldable)
   * [Rank2.Traversable](http://hackage.haskell.org/package/rank2classes/docs/Rank2.html#t:Traversable)
   * [Rank2.Distributive](http://hackage.haskell.org/package/rank2classes/docs/Rank2.html#t:Distributive)
+  * [Rank2.Logistic](http://hackage.haskell.org/package/rank2classes/docs/Rank2.html#t:Logistic)
 
 The methods of these type classes all have rank-2 types. The class instances are data types of kind `(k -> *) -> *`,
 one example of which would be a database record with different field types but all wrapped by the same type

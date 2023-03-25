@@ -1,3 +1,10 @@
+Version 1.5
+---------------
+* The `Rank2.TH` templates have changed, are now applicable with `DuplicateRecordFields` provided that
+  `OverloadedRecordDot` is enabled.
+* `Rank2.TH.deriveLogistic` also needs `ScopedTypeVariables` and `InstanceSigs` extensions to generate
+  proper record updates.
+
 Version 1.4.6
 ---------------
 * Added the `Logistic` type class, `getters` and `setters`
