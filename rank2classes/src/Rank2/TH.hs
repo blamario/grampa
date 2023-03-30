@@ -579,20 +579,28 @@ genDeliverField className fieldType fieldUpdate subRecordUpdate arg outer inner 
 
 projectField :: Name -> Q Exp
 projectField field = do
+#if MIN_VERSION_template_haskell(2,19,0)
   dotty <- TH.isExtEnabled TH.OverloadedRecordDot
   if dotty
      then TH.projectionE (pure $ TH.nameBase field)
      else varE field
+#else
+  varE field
+#endif
 
 getFieldOf :: Name -> Name -> Q Exp
 getFieldOf = getFieldOfE . varE
 
 getFieldOfE :: Q Exp -> Name -> Q Exp
 getFieldOfE record field = do
+#if MIN_VERSION_template_haskell(2,19,0)
   dotty <- TH.isExtEnabled TH.OverloadedRecordDot
   if dotty
      then TH.getFieldE record (TH.nameBase field)
      else appE (varE field) record
+#else
+  appE (varE field) record
+#endif
 
 constrain :: Name -> Type -> [Type]
 constrain _ ConT{} = []

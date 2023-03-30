@@ -1,3 +1,8 @@
+Version 1.5.1
+---------------
+* Fixed the `Rank2.TH` templates on GHC < 9.2 with no `OverloadedRecordDot` support to revert to their
+  1.4.6 behaviour.
+
 Version 1.5
 ---------------
 * The `Rank2.TH` templates have changed, are now applicable with `DuplicateRecordFields` provided that
