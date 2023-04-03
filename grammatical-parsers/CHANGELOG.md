@@ -1,3 +1,7 @@
+Version 0.7.0.1
+---------------
+* Bumped the upper bound of the `rank2classes` dependency
+
 Version 0.7
 ---------------
 

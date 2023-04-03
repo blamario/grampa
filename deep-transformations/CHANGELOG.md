@@ -1,5 +1,9 @@
 # Revision history for deep-transformations
 
+## 0.2.1.1 -- 2023-04-02
+
+* Bumped the upper bound of the `rank2classes` dependency
+
 ## 0.2.1 -- 2023-01-07
 
 * Added AG.Dimorphic
