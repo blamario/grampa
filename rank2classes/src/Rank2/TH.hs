@@ -19,6 +19,7 @@ where
 
 import Control.Applicative (liftA2, liftA3)
 import Control.Monad (replicateM)
+import Data.Bifunctor (first)
 import Data.Distributive (cotraverse)
 import Data.Functor.Compose (Compose (Compose))
 import Data.Functor.Contravariant (Contravariant, contramap)
@@ -41,14 +42,14 @@ deriveAll ty = foldr f (pure []) [deriveFunctor, deriveApply, deriveApplicative,
 deriveFunctor :: Name -> Q [Dec]
 deriveFunctor ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Functor ty
-   (constraints, dec) <- genFmap cs
+   (constraints, dec) <- genFmap instanceType cs
    sequence [instanceD (TH.cxt $ map pure constraints) instanceType
              [pure dec, pragInlD '(Rank2.<$>) Inline FunLike AllPhases]]
 
 deriveApply :: Name -> Q [Dec]
 deriveApply ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Apply ty
-   (constraints, dec) <- genAp cs
+   (constraints, dec) <- genAp instanceType cs
    sequence [instanceD (TH.cxt $ map pure constraints) instanceType
              [pure dec, genLiftA2 cs, genLiftA3 cs,
               pragInlD '(Rank2.<*>) Inlinable FunLike AllPhases,
@@ -58,7 +59,7 @@ deriveApply ty = do
 unsafeDeriveApply :: Name -> Q [Dec]
 unsafeDeriveApply ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Apply ty
-   (constraints, dec) <- genApUnsafely cs
+   (constraints, dec) <- genApUnsafely instanceType cs
    sequence [instanceD (TH.cxt $ map pure constraints) instanceType
              [pure dec, genLiftA2Unsafely cs, genLiftA3Unsafely cs,
               pragInlD '(Rank2.<*>) Inlinable FunLike AllPhases,
@@ -74,14 +75,14 @@ deriveApplicative ty = do
 deriveFoldable :: Name -> Q [Dec]
 deriveFoldable ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Foldable ty
-   (constraints, dec) <- genFoldMap cs
+   (constraints, dec) <- genFoldMap instanceType cs
    sequence [instanceD (TH.cxt $ map pure constraints) instanceType
              [pure dec, pragInlD 'Rank2.foldMap Inlinable FunLike AllPhases]]
 
 deriveTraversable :: Name -> Q [Dec]
 deriveTraversable ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Traversable ty
-   (constraints, dec) <- genTraverse cs
+   (constraints, dec) <- genTraverse instanceType cs
    sequence [instanceD (TH.cxt $ map pure constraints) instanceType
              [pure dec, pragInlD 'Rank2.traverse Inlinable FunLike AllPhases]]
 
@@ -128,13 +129,17 @@ reifyConstructors cls ty = do
    putQ (Deriving tyConName tyVar)
    return (instanceType, cs)
 
-genFmap :: [Con] -> Q ([Type], Dec)
-genFmap cs = do (constraints, clauses) <- unzip <$> mapM genFmapClause cs
-                return (concat constraints, FunD '(Rank2.<$>) clauses)
+genFmap :: TypeQ -> [Con] -> Q ([Type], Dec)
+genFmap instanceType cs = do
+   it <- instanceType
+   (constraints, clauses) <- unzip <$> mapM (genFmapClause it) cs
+   return (concat constraints, FunD '(Rank2.<$>) clauses)
 
-genAp :: [Con] -> Q ([Type], Dec)
-genAp [con] = do (constraints, clause) <- genApClause False con
-                 return (constraints, FunD '(Rank2.<*>) [clause])
+genAp :: TypeQ -> [Con] -> Q ([Type], Dec)
+genAp instanceType [con] = do
+   it <- instanceType
+   (constraints, clause) <- genApClause False it con
+   return (constraints, FunD '(Rank2.<*>) [clause])
 
 genLiftA2 :: [Con] -> Q Dec
 genLiftA2 [con] = TH.funD 'Rank2.liftA2 [genLiftA2Clause False con]
@@ -142,9 +147,11 @@ genLiftA2 [con] = TH.funD 'Rank2.liftA2 [genLiftA2Clause False con]
 genLiftA3 :: [Con] -> Q Dec
 genLiftA3 [con] = TH.funD 'Rank2.liftA3 [genLiftA3Clause False con]
 
-genApUnsafely :: [Con] -> Q ([Type], Dec)
-genApUnsafely cons = do (constraints, clauses) <- unzip <$> mapM (genApClause True) cons
-                        return (concat constraints, FunD '(Rank2.<*>) clauses)
+genApUnsafely :: TypeQ -> [Con] -> Q ([Type], Dec)
+genApUnsafely instanceType cons = do
+   it <- instanceType
+   (constraints, clauses) <- unzip <$> mapM (genApClause True it) cons
+   return (concat constraints, FunD '(Rank2.<*>) clauses)
 
 genLiftA2Unsafely :: [Con] -> Q Dec
 genLiftA2Unsafely cons = TH.funD 'Rank2.liftA2 (genLiftA2Clause True <$> cons)
@@ -156,13 +163,17 @@ genPure :: [Con] -> Q ([Type], Dec)
 genPure cs = do (constraints, clauses) <- unzip <$> mapM genPureClause cs
                 return (concat constraints, FunD 'Rank2.pure clauses)
 
-genFoldMap :: [Con] -> Q ([Type], Dec)
-genFoldMap cs = do (constraints, clauses) <- unzip <$> mapM genFoldMapClause cs
-                   return (concat constraints, FunD 'Rank2.foldMap clauses)
+genFoldMap :: TypeQ -> [Con] -> Q ([Type], Dec)
+genFoldMap instanceType cs = do
+   it <- instanceType
+   (constraints, clauses) <- unzip <$> mapM (genFoldMapClause it) cs
+   return (concat constraints, FunD 'Rank2.foldMap clauses)
 
-genTraverse :: [Con] -> Q ([Type], Dec)
-genTraverse cs = do (constraints, clauses) <- unzip <$> mapM genTraverseClause cs
-                    return (concat constraints, FunD 'Rank2.traverse clauses)
+genTraverse :: TypeQ -> [Con] -> Q ([Type], Dec)
+genTraverse instanceType cs = do
+   it <- instanceType
+   (constraints, clauses) <- unzip <$> mapM (genTraverseClause it) cs
+   return (concat constraints, FunD 'Rank2.traverse clauses)
 
 genCotraverse :: [Con] -> Q ([Type], Dec)
 genCotraverse [con] = do (constraints, clause) <- genCotraverseClause con
@@ -190,8 +201,8 @@ genDeliver typeName [con] = do
      return (constraints, [FunD 'Rank2.deliver [clause]])
 
 
-genFmapClause :: Con -> Q ([Type], Clause)
-genFmapClause (NormalC name fieldTypes) = do
+genFmapClause :: Type -> Con -> Q ([Type], Clause)
+genFmapClause _ (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
    let pats = [varP f, conP name (map varP fieldNames)]
@@ -202,7 +213,7 @@ genFmapClause (NormalC name fieldTypes) = do
        newField x (_, fieldType) = genFmapField (varE f) fieldType (varE x) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause pats body []
-genFmapClause (RecC name fields) = do
+genFmapClause _ (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
    let body = normalB $ recConE name $ (snd <$>) <$> constraintsAndFields
@@ -213,15 +224,17 @@ genFmapClause (RecC name fields) = do
           <$> genFmapField (varE f) fieldType (getFieldOf x fieldName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause [varP f, x `TH.asP` TH.recP name []] body []
-genFmapClause (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
+genFmapClause instanceType (GadtC [name] fieldTypes _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      genFmapClause (NormalC name fieldTypes)
-genFmapClause (RecGadtC [name] fields _resultType@(AppT _ (VarT tyVar))) =
+      let AppT classType t = instanceType
+      first (renameConstraintVars t initType <$>) <$> genFmapClause instanceType (NormalC name fieldTypes)
+genFmapClause instanceType (RecGadtC [name] fields _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      genFmapClause (RecC name fields)
-genFmapClause (ForallC _vars _cxt con) = genFmapClause con
+      let AppT classType t = instanceType
+      first (renameConstraintVars t initType <$>) <$> genFmapClause instanceType (RecC name fields)
+genFmapClause instanceType (ForallC _vars _cxt con) = genFmapClause instanceType con
 
 genFmapField :: Q Exp -> Type -> Q Exp -> (Q Exp -> Q Exp) -> Q ([Type], Exp)
 genFmapField fun fieldType fieldAccess wrap = do
@@ -329,8 +342,8 @@ genLiftA3Field unsafely fun fieldType field1Access field2Access field3Access wra
      _ | unsafely -> field1Access
        | otherwise -> error ("Cannot apply liftA3 to field of type " <> show fieldType)
 
-genApClause :: Bool -> Con -> Q ([Type], Clause)
-genApClause unsafely (NormalC name fieldTypes) = do
+genApClause :: Bool -> Type -> Con -> Q ([Type], Clause)
+genApClause unsafely _ (NormalC name fieldTypes) = do
    fieldNames1 <- replicateM (length fieldTypes) (newName "x")
    fieldNames2 <- replicateM (length fieldTypes) (newName "y")
    rhsName <- newName "rhs"
@@ -342,7 +355,7 @@ genApClause unsafely (NormalC name fieldTypes) = do
        newField (x, y) (_, fieldType) = genApField unsafely fieldType (varE x) (varE y) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause pats body [TH.valD (conP name $ map varP fieldNames2) (normalB $ varE rhsName) []]
-genApClause unsafely (RecC name fields) = do
+genApClause unsafely _ (RecC name fields) = do
    x <- newName "x"
    y <- newName "y"
    let body = normalB $ recConE name $ (snd <$>) <$> constraintsAndFields
@@ -352,15 +365,17 @@ genApClause unsafely (RecC name fields) = do
           ((,) fieldName <$>) <$> genApField unsafely fieldType (getFieldOf x fieldName) (getFieldOf y fieldName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause [x `TH.asP` TH.recP name [], varP y] body []
-genApClause unsafely (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
+genApClause unsafely instanceType (GadtC [name] fieldTypes _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      genApClause unsafely (NormalC name fieldTypes)
-genApClause unsafely (RecGadtC [name] fields _resultType@(AppT _ (VarT tyVar))) =
+      let AppT classType t = instanceType
+      first (renameConstraintVars t initType <$>) <$> genApClause unsafely instanceType (NormalC name fieldTypes)
+genApClause unsafely instanceType (RecGadtC [name] fields _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      genApClause unsafely (RecC name fields)
-genApClause unsafely (ForallC _vars _cxt con) = genApClause unsafely con
+      let AppT classType t = instanceType
+      first (renameConstraintVars t initType <$>) <$> genApClause unsafely instanceType (RecC name fields)
+genApClause unsafely instanceType (ForallC _vars _cxt con) = genApClause unsafely instanceType con
 
 genApField :: Bool -> Type -> Q Exp -> Q Exp -> (Q Exp -> Q Exp) -> Q ([Type], Exp)
 genApField unsafely fieldType field1Access field2Access wrap = do
@@ -404,8 +419,8 @@ genPureField fieldType pureValue wrap = do
      ParensT ty -> genPureField ty pureValue wrap
      _ -> error ("Cannot create a pure field of type " <> show fieldType)
 
-genFoldMapClause :: Con -> Q ([Type], Clause)
-genFoldMapClause (NormalC name fieldTypes) = do
+genFoldMapClause :: Type -> Con -> Q ([Type], Clause)
+genFoldMapClause _ (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
    let pats = [varP f, conP name (map varP fieldNames)]
@@ -417,7 +432,7 @@ genFoldMapClause (NormalC name fieldTypes) = do
        newField x (_, fieldType) = genFoldMapField f fieldType (varE x) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause pats (normalB body) []
-genFoldMapClause (RecC name fields) = do
+genFoldMapClause _ (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
    let body | null fields = [| mempty |]
@@ -428,15 +443,17 @@ genFoldMapClause (RecC name fields) = do
        newField (fieldName, _, fieldType) = genFoldMapField f fieldType (getFieldOf x fieldName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause [varP f, x `TH.asP` TH.recP name []] (normalB body) []
-genFoldMapClause (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
+genFoldMapClause instanceType (GadtC [name] fieldTypes _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      genFoldMapClause (NormalC name fieldTypes)
-genFoldMapClause (RecGadtC [name] fields _resultType@(AppT _ (VarT tyVar))) =
+      let AppT classType t = instanceType
+      first (renameConstraintVars t initType <$>) <$> genFoldMapClause instanceType (NormalC name fieldTypes)
+genFoldMapClause instanceType (RecGadtC [name] fields _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      genFoldMapClause (RecC name fields)
-genFoldMapClause (ForallC _vars _cxt con) = genFoldMapClause con
+      let AppT classType t = instanceType
+      first (renameConstraintVars t initType <$>) <$> genFoldMapClause instanceType (RecC name fields)
+genFoldMapClause instanceType (ForallC _vars _cxt con) = genFoldMapClause instanceType con
 
 genFoldMapField :: Name -> Type -> Q Exp -> (Q Exp -> Q Exp) -> Q ([Type], Exp)
 genFoldMapField funcName fieldType fieldAccess wrap = do
@@ -450,10 +467,10 @@ genFoldMapField funcName fieldType fieldAccess wrap = do
      ParensT ty -> genFoldMapField funcName ty fieldAccess wrap
      _ -> (,) [] <$> [| mempty |]
 
-genTraverseClause :: Con -> Q ([Type], Clause)
-genTraverseClause (NormalC name []) =
+genTraverseClause :: Type -> Con -> Q ([Type], Clause)
+genTraverseClause _ (NormalC name []) =
    (,) [] <$> TH.clause [wildP, conP name []] (normalB [| pure $(conE name) |]) []
-genTraverseClause (NormalC name fieldTypes) = do
+genTraverseClause _ (NormalC name fieldTypes) = do
    f          <- newName "f"
    fieldNames <- replicateM (length fieldTypes) (newName "x")
    let pats = [varP f, conP name (map varP fieldNames)]
@@ -466,7 +483,7 @@ genTraverseClause (NormalC name fieldTypes) = do
        newField x (_, fieldType) = genTraverseField (varE f) fieldType (varE x) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause pats body []
-genTraverseClause (RecC name fields) = do
+genTraverseClause _ (RecC name fields) = do
    f <- newName "f"
    x <- newName "x"
    let constraintsAndFields = map newField fields
@@ -477,15 +494,17 @@ genTraverseClause (RecC name fields) = do
        newField (fieldName, _, fieldType) = genTraverseField (varE f) fieldType (getFieldOf x fieldName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause [varP f, x `TH.asP` TH.recP name []] body []
-genTraverseClause (GadtC [name] fieldTypes _resultType@(AppT _ (VarT tyVar))) =
+genTraverseClause instanceType (GadtC [name] fieldTypes _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      genTraverseClause (NormalC name fieldTypes)
-genTraverseClause (RecGadtC [name] fields _resultType@(AppT _ (VarT tyVar))) =
+      let AppT classType t = instanceType
+      first (renameConstraintVars t initType <$>) <$> genTraverseClause instanceType (NormalC name fieldTypes)
+genTraverseClause instanceType (RecGadtC [name] fields _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      genTraverseClause (RecC name fields)
-genTraverseClause (ForallC _vars _cxt con) = genTraverseClause con
+      let AppT classType t = instanceType
+      first (renameConstraintVars t initType <$>) <$> genTraverseClause instanceType (RecC name fields)
+genTraverseClause instanceType (ForallC _vars _cxt con) = genTraverseClause instanceType con
 
 genTraverseField :: Q Exp -> Type -> Q Exp -> (Q Exp -> Q Exp) -> Q ([Type], Exp)
 genTraverseField fun fieldType fieldAccess wrap = do
@@ -576,6 +595,25 @@ genDeliverField className fieldType fieldUpdate subRecordUpdate arg outer inner 
                   genDeliverField className t2 fieldUpdate subRecordUpdate arg (outer . appE (varE 'pure)) (inner . appE (varE 'fmap))
      SigT ty _kind -> genDeliverField className ty fieldUpdate subRecordUpdate arg outer inner
      ParensT ty -> genDeliverField className ty fieldUpdate subRecordUpdate arg outer inner
+
+renameConstraintVars :: Type -> Type -> Type -> Type
+renameConstraintVars (AppT instanceType (VarT instanceVar)) (AppT returnType (VarT returnVar)) constrainedType =
+   renameConstraintVars instanceType returnType (renameConstraintVar returnVar instanceVar constrainedType)
+renameConstraintVars (AppT instanceType _) (AppT returnType _) constrainedType =
+   renameConstraintVars instanceType returnType constrainedType
+renameConstraintVars _ _ constrainedType = constrainedType
+
+renameConstraintVar :: Name -> Name -> Type -> Type
+renameConstraintVar from to (VarT name)
+   | name == from = VarT to
+   | otherwise = VarT name
+renameConstraintVar from to (AppT a b) = AppT (renameConstraintVar from to a) (renameConstraintVar from to b)
+renameConstraintVar from to (AppKindT t k) = AppT (renameConstraintVar from to t) (renameConstraintVar from to k)
+renameConstraintVar from to (InfixT a op b) = InfixT (renameConstraintVar from to a) op (renameConstraintVar from to b)
+renameConstraintVar from to (UInfixT a op b) = UInfixT (renameConstraintVar from to a) op (renameConstraintVar from to b)
+renameConstraintVar from to (SigT t k) = SigT (renameConstraintVar from to t) (renameConstraintVar from to k)
+renameConstraintVar from to (ParensT t) = ParensT (renameConstraintVar from to t)
+renameConstraintVar _ _ t = t
 
 projectField :: Name -> Q Exp
 projectField field = do
