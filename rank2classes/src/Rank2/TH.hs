@@ -102,7 +102,7 @@ deriveDistributiveTraversable ty = do
 deriveLogistic :: Name -> Q [Dec]
 deriveLogistic ty = do
    (instanceType, cs) <- reifyConstructors ''Rank2.Logistic ty
-   (constraints, decs) <- genDeliver ty cs
+   (constraints, decs) <- genDeliver instanceType cs
    sequence [instanceD (TH.cxt $ map pure constraints) instanceType
               (map pure decs <> [pragInlD 'Rank2.deliver Inline FunLike AllPhases])]
 
@@ -183,22 +183,25 @@ genCotraverseTraversable :: [Con] -> Q ([Type], Dec)
 genCotraverseTraversable [con] = do (constraints, clause) <- genCotraverseTraversableClause con
                                     return (constraints, FunD 'Rank2.cotraverseTraversable [clause])
 
-genDeliver :: Name -> [Con] -> Q ([Type], [Dec])
-genDeliver typeName [con] = do
-  signable <- TH.isExtEnabled TH.InstanceSigs
-  scopable <- TH.isExtEnabled TH.ScopedTypeVariables
-  if signable && scopable then do
-     p <- newName "p"
-     q <- newName "q"
-     (constraints, clause) <- genDeliverClause typeName (Just q) con
-     ctx <- [t| Contravariant $(varT p) |]
-     methodType <- [t| $(varT p) ($(conT typeName) $(varT q) -> $(conT typeName) $(varT q)) -> $(conT typeName) (Compose $(varT p) ($(varT q) Rank2.~> $(varT q))) |]
-     return (constraints,
-             [SigD 'Rank2.deliver (ForallT [binder p, binder q] [ctx] methodType),
-              FunD 'Rank2.deliver [clause]])
-  else do
-     (constraints, clause) <- genDeliverClause typeName Nothing con
-     return (constraints, [FunD 'Rank2.deliver [clause]])
+genDeliver :: TypeQ -> [Con] -> Q ([Type], [Dec])
+genDeliver instanceType [con] = do
+   it <- instanceType
+   let AppT _classType rt = it
+       recType = pure rt
+   signable <- TH.isExtEnabled TH.InstanceSigs
+   scopable <- TH.isExtEnabled TH.ScopedTypeVariables
+   if signable && scopable then do
+      p <- newName "p"
+      q <- newName "q"
+      (constraints, clause) <- genDeliverClause recType (Just q) con
+      ctx <- [t| Contravariant $(varT p) |]
+      methodType <- [t| $(varT p) ($(recType) $(varT q) -> $(recType) $(varT q)) -> $(recType) (Compose $(varT p) ($(varT q) Rank2.~> $(varT q))) |]
+      return (constraints,
+              [SigD 'Rank2.deliver (ForallT [binder p, binder q] [ctx] methodType),
+               FunD 'Rank2.deliver [clause]])
+   else do
+      (constraints, clause) <- genDeliverClause recType Nothing con
+      return (constraints, [FunD 'Rank2.deliver [clause]])
 
 
 genFmapClause :: Type -> Con -> Q ([Type], Clause)
@@ -547,13 +550,13 @@ genCotraverseTraversableClause (RecC name fields) = do
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> TH.clause [varP withName, varP argName] body []
 
-genDeliverClause :: Name -> Maybe Name -> Con -> Q ([Type], Clause)
-genDeliverClause typeName typeVar (NormalC name []) = genDeliverClause typeName typeVar (RecC name [])
+genDeliverClause :: TypeQ -> Maybe Name -> Con -> Q ([Type], Clause)
+genDeliverClause recType typeVar (NormalC name []) = genDeliverClause recType typeVar (RecC name [])
 genDeliverClause recType typeVar (RecC name fields) = do
    argName <- newName "f"
    let constraintsAndFields = map newNamedField fields
        body = normalB $ recConE name $ (snd <$>) <$> constraintsAndFields
-       recExp g = maybe g (\v-> [|($g :: $(conT recType) $(varT v))|]) typeVar
+       recExp g = maybe g (\v-> [|($g :: $(recType) $(varT v))|]) typeVar
        newNamedField :: VarBangType -> Q ([Type], (Name, Exp))
        newNamedField (fieldName, _, fieldType) =
           ((,) fieldName <$>)
