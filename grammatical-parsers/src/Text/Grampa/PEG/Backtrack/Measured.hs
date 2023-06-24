@@ -8,7 +8,7 @@ import Control.Monad (Monad(..), MonadPlus(..))
 import Control.Monad (MonadFail(fail))
 #endif
 
-import Data.Functor.Classes (Show1(..))
+import Data.Functor.Classes (Show1(..), showsPrec1)
 import Data.Functor.Compose (Compose(..))
 import Data.Kind (Type)
 import Data.Semigroup (Semigroup(..))
@@ -45,6 +45,9 @@ data Result (g :: (Type -> Type) -> Type) s v =
 -- | Parser type for Parsing Expression Grammars that uses a backtracking algorithm, fast for grammars in LL(1) class
 -- but with potentially exponential performance for longer ambiguous prefixes.
 newtype Parser g s r = Parser{applyParser :: s -> Result g s r}
+
+instance (Show s, Show a) => Show (Result g s a) where
+   showsPrec = showsPrec1
 
 instance Show s => Show1 (Result g s) where
    liftShowsPrec showsPrecSub _showList prec Parsed{parsedResult= r} rest = "Parsed " ++ showsPrecSub prec r rest

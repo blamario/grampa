@@ -8,7 +8,7 @@ import Control.Monad (Monad(..), MonadPlus(..))
 import Control.Monad (MonadFail(fail))
 #endif
 
-import Data.Functor.Classes (Show1(..))
+import Data.Functor.Classes (Show1(..), showsPrec1)
 import Data.Functor.Compose (Compose(..))
 import Data.Monoid (Monoid(mappend, mempty))
 import Data.Monoid.Factorial(FactorialMonoid)
@@ -46,6 +46,9 @@ data Result g s v = Parsed{parsedPrefix :: !v,
 -- but with worse constants and more memory consumption than the backtracking 'Text.Grampa.PEG.Backtrack.Parser'. The
 -- 'parse' function returns an input prefix parse paired with the remaining input suffix.
 newtype Parser g s r = Parser{applyParser :: [(s, g (Result g s))] -> Result g s r}
+
+instance (Show s, Show a) => Show (Result g s a) where
+   showsPrec = showsPrec1
 
 instance Show s => Show1 (Result g s) where
    liftShowsPrec showsPrecSub _showList prec Parsed{parsedPrefix= r} rest = "Parsed " ++ showsPrecSub prec r rest

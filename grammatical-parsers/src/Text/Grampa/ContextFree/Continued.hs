@@ -8,7 +8,7 @@ import Control.Monad (Monad(..), MonadPlus(..))
 import Control.Monad (MonadFail(fail))
 #endif
 
-import Data.Functor.Classes (Show1(..))
+import Data.Functor.Classes (Show1(..), showsPrec1)
 import Data.Functor.Compose (Compose(..))
 import Data.Kind (Type)
 import Data.Semigroup (Semigroup(..))
@@ -45,6 +45,9 @@ data Result (g :: (Type -> Type) -> Type) s v =
 -- class but with potentially exponential performance for longer ambiguous prefixes.
 newtype Parser (g :: (Type -> Type) -> Type) s r =
    Parser{applyParser :: forall x. s -> (r -> s -> (ParseFailure Pos s -> x) -> x) -> (ParseFailure Pos s -> x) -> x}
+
+instance (Show s, Show a) => Show (Result g s a) where
+   showsPrec = showsPrec1
 
 instance Show s => Show1 (Result g s) where
    liftShowsPrec showsPrecSub _showList prec Parsed{parsedPrefix= r} rest = "Parsed " ++ showsPrecSub prec r rest
