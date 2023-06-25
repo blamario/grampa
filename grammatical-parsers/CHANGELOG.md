@@ -1,3 +1,9 @@
+Version 0.7.1
+---------------
+* Added a Show instance for every Show1 to satisfy the new class declaration
+* Bumped the upper bound of the `template-haskell` dependency
+* Eliminated a bunch of compiler warnings
+
 Version 0.7.0.1
 ---------------
 * Bumped the upper bound of the `rank2classes` dependency
