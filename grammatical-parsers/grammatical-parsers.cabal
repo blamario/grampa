@@ -50,7 +50,7 @@ library
   ghc-options:         -Wall
   build-depends:       base >=4.9 && <5,
                        containers >= 0.4 && < 0.7,
-                       transformers >= 0.5 && < 0.6,
+                       transformers >= 0.5 && < 0.7,
                        monoid-subclasses >=1.0 && <1.3,
                        parsers < 0.13,
                        input-parsers < 0.4,
