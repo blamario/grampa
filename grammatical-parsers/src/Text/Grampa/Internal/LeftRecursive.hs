@@ -959,12 +959,12 @@ parseSeparated parsers input = foldr parseTail [] (Factorial.tails input)
                            combine (Const False) _ = Const False
                            combine (Const True) results = Const (hasSuccess results)
                            combineFailures _ (Const False) _ = Const False
-                           combineFailures (ParseFailure pos (FailureDescription expected inputs) errors) (Const True) rl =
+                           combineFailures (ParseFailure pos (FailureDescription expected _inputs) errors) (Const True) rl =
                               Const (pos < pos'
                                      || pos == pos' && (any (`notElem` expected) expected'
                                                         || any (`notElem` expected) expected')
                                                         || any (`notElem` errors) errors')
-                              where ParseFailure pos' (FailureDescription expected' inputs') errors' = failureOf rl
+                              where ParseFailure pos' (FailureDescription expected' _inputs) errors' = failureOf rl
                   choiceWhile (Const (Just DynamicDependencies)) t t'
                      | getAny (Rank2.foldMap (Any . hasSuccess) marginal) = t'
                      | hasSuccess t = t

@@ -33,7 +33,7 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), MultiParsing(..),
-                          ParseResults, ParseFailure(..), FailureDescription(..), Pos)
+                          ParseResults, ParseFailure(..), Pos)
 import Text.Grampa.Internal (emptyFailure, erroneous, expected, expectedInput, replaceExpected, TraceableParsing(..))
 
 data Result (g :: (Type -> Type) -> Type) s v =

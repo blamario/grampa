@@ -1,10 +1,11 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, KindSignatures, RecordWildCards, ScopedTypeVariables,
-             TypeFamilies, TemplateHaskell, UndecidableInstances #-}
+             TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances #-}
 module Boolean where
 
 import Control.Applicative
 import qualified Data.Bool
 import Data.Char (isSpace)
+import Data.Kind (Type)
 import Data.Monoid ((<>))
 import Text.Parser.Token (TokenParsing, symbol)
 
@@ -51,7 +52,7 @@ instance (DeterministicParsing (p (Boolean e) String),
 
 $(Rank2.TH.deriveAll ''Boolean)
 
-boolean :: forall e p (g :: (* -> *) -> *).
+boolean :: forall e p (g :: (Type -> Type) -> Type).
            (BooleanDomain e, LexicalParsing (p g String), ParserInput (p g String) ~ String) =>
            p g String e -> Boolean e (p g String) -> Boolean e (p g String)
 boolean p Boolean{..} = Boolean{

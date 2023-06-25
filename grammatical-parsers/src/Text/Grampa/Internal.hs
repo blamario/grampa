@@ -69,7 +69,7 @@ erroneous :: Pos -> String -> ParseFailure Pos s
 erroneous pos msg = ParseFailure pos (FailureDescription [] []) [msg]
 
 replaceExpected :: Pos -> String -> ParseFailure Pos s -> ParseFailure Pos s
-replaceExpected pos msg f@(ParseFailure pos' msgs errs) = ParseFailure pos' msgs' errs
+replaceExpected pos msg (ParseFailure pos' msgs errs) = ParseFailure pos' msgs' errs
    where msgs' | pos == pos' = FailureDescription [msg] []
                | otherwise = msgs
 

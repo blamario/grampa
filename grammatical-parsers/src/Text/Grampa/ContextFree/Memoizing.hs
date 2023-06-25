@@ -383,8 +383,8 @@ fromResultList (ResultList rl _failure) = Right (f <$> toList rl)
 longest :: Parser g s a -> Backtrack.Parser g [(s, g (ResultList g s))] a
 longest p = Backtrack.Parser q where
    q rest = case applyParser p rest
-            of ResultList EmptyTree (ParseFailure pos (FailureDescription expected inputs) errors)
-                  -> Backtrack.NoParse (ParseFailure pos (FailureDescription expected $ map wrap inputs) errors)
+            of ResultList EmptyTree (ParseFailure pos (FailureDescription static inputs) errors)
+                  -> Backtrack.NoParse (ParseFailure pos (FailureDescription static $ map wrap inputs) errors)
                ResultList rs _ -> parsed (maximumBy (compare `on` resultLength) rs)
    resultLength (ResultInfo l _ _) = l
    parsed (ResultInfo l s r) = Backtrack.Parsed l r s
@@ -395,8 +395,8 @@ peg :: Ord s => Backtrack.Parser g [(s, g (ResultList g s))] a -> Parser g s a
 peg p = Parser q where
    q rest = case Backtrack.applyParser p rest
             of Backtrack.Parsed l result suffix -> ResultList (Leaf $ ResultInfo l suffix result) mempty
-               Backtrack.NoParse (ParseFailure pos (FailureDescription expected inputs) errors)
-                  -> ResultList mempty (ParseFailure pos (FailureDescription expected (fst . head <$> inputs)) errors)
+               Backtrack.NoParse (ParseFailure pos (FailureDescription static inputs) errors)
+                  -> ResultList mempty (ParseFailure pos (FailureDescription static (fst . head <$> inputs)) errors)
 
 -- | Turns a backtracking PEG parser into a context-free parser
 terminalPEG :: (Monoid s, Ord s) => Backtrack.Parser g s a -> Parser g s a

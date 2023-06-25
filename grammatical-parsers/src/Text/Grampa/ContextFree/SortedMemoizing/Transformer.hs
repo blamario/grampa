@@ -391,8 +391,8 @@ instance (Applicative m, Eq (m ()), Ord s) => AmbiguousParsing (ParserT m g s) w
 longest :: ParserT Identity g s a -> Backtrack.Parser g [(s, g (ResultListT Identity g s))] a
 longest p = Backtrack.Parser q where
    q rest = case applyParser p rest
-            of ResultList [] (ParseFailure pos (FailureDescription expected inputs) errors)
-                  -> Backtrack.NoParse (ParseFailure pos (FailureDescription expected $ map wrap inputs) errors)
+            of ResultList [] (ParseFailure pos (FailureDescription static inputs) errors)
+                  -> Backtrack.NoParse (ParseFailure pos (FailureDescription static $ map wrap inputs) errors)
                ResultList rs _ -> parsed (last rs)
    parsed (ResultsOfLengthT (ROL l s (Identity r:|_))) = Backtrack.Parsed l r s
    wrap s = [(s, error "longest")]
@@ -402,8 +402,8 @@ peg :: (Applicative m, Ord s) => Backtrack.Parser g [(s, g (ResultListT m g s))]
 peg p = Parser q where
    q rest = case Backtrack.applyParser p rest
             of Backtrack.Parsed l result suffix -> singleResult l suffix result
-               Backtrack.NoParse (ParseFailure pos (FailureDescription expected inputs) errors)
-                  -> ResultList mempty (ParseFailure pos (FailureDescription expected (fst . head <$> inputs)) errors)
+               Backtrack.NoParse (ParseFailure pos (FailureDescription static inputs) errors)
+                  -> ResultList mempty (ParseFailure pos (FailureDescription static (fst . head <$> inputs)) errors)
 
 -- | Turns a backtracking PEG parser into a context-free parser
 terminalPEG :: (Applicative m, Monoid s, Ord s) => Backtrack.Parser g s a -> ParserT m g s a

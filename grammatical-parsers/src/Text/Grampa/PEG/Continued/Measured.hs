@@ -32,7 +32,7 @@ import Text.Parser.LookAhead (LookAheadParsing(..))
 import Text.Parser.Input.Position (fromEnd)
 import Text.Grampa.Class (CommittedParsing(..), DeterministicParsing(..),
                           InputParsing(..), InputCharParsing(..), ConsumedInputParsing(..),
-                          MultiParsing(..), ParseResults, ParseFailure(..), FailureDescription(..), Pos)
+                          MultiParsing(..), ParseResults, ParseFailure(..), Pos)
 import Text.Grampa.Internal (TraceableParsing(..), emptyFailure, erroneous, expected, expectedInput, replaceExpected)
 import Text.Grampa.PEG.Continued (Result(..))
 
