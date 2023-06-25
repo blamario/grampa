@@ -611,7 +611,9 @@ renameConstraintVar from to (VarT name)
    | name == from = VarT to
    | otherwise = VarT name
 renameConstraintVar from to (AppT a b) = AppT (renameConstraintVar from to a) (renameConstraintVar from to b)
+#if MIN_VERSION_template_haskell(2,15,0)
 renameConstraintVar from to (AppKindT t k) = AppT (renameConstraintVar from to t) (renameConstraintVar from to k)
+#endif
 renameConstraintVar from to (InfixT a op b) = InfixT (renameConstraintVar from to a) op (renameConstraintVar from to b)
 renameConstraintVar from to (UInfixT a op b) = UInfixT (renameConstraintVar from to a) op (renameConstraintVar from to b)
 renameConstraintVar from to (SigT t k) = SigT (renameConstraintVar from to t) (renameConstraintVar from to k)
