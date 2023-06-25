@@ -1,5 +1,9 @@
 # Revision history for deep-transformations
 
+## 0.2.1.2 -- 2023-06-25
+
+* Bumped the upper bound of the `template-haskell` dependency
+
 ## 0.2.1.1 -- 2023-04-02
 
 * Bumped the upper bound of the `rank2classes` dependency
