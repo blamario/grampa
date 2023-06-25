@@ -1,3 +1,9 @@
+Version 1.5.2
+---------------
+* Fixed the generated TH instance contexts for GADTs.
+* Fixed the generated signature of the `deliver` instance method in presence of `InstanceSigs`.
+* Bumped the upper bound of the `template-haskell` dependency.
+
 Version 1.5.1
 ---------------
 * Fixed the `Rank2.TH` templates on GHC < 9.2 with no `OverloadedRecordDot` support to revert to their
