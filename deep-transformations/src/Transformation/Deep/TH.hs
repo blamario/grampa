@@ -18,7 +18,7 @@ import Data.Functor.Compose (Compose(getCompose))
 import Data.Functor.Const (Const(getConst))
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
-import Language.Haskell.TH
+import Language.Haskell.TH as TH
 import Language.Haskell.TH.Syntax (BangType, VarBangType, getQ, putQ)
 
 import qualified Transformation
@@ -95,18 +95,30 @@ reifyConstructors ty = do
       NewtypeD _ nm tyVars kind c _ -> return (nm, tyVars, kind, [c])
       _ -> fail "deriveApply: tyCon may not be a type synonym."
 
+   let reifySynonyms (ConT name) = TH.reify name >>= reifySynonymInfo name
+       reifySynonyms (AppT t1 t2) = AppT <$> reifySynonyms t1 <*> reifySynonyms t2
+       reifySynonyms t = pure t
+       reifySynonymInfo _ (TyConI (TySynD _ [] t)) = reifySynonyms t
+       reifySynonymInfo name _ = pure (ConT name)
+#if MIN_VERSION_template_haskell(2,17,0)
+       reifyTVKindSynonyms (KindedTV v s k) = KindedTV v s <$> reifySynonyms k
+#else
+       reifyTVKindSynonyms (KindedTV v k) = KindedTV v <$> reifySynonyms k
+#endif
+       reifyTVKindSynonyms tv = pure tv
+   tyVars' <- traverse reifyTVKindSynonyms tyVars
 #if MIN_VERSION_template_haskell(2,17,0)
    let (KindedTV tyVar _ (AppT (AppT ArrowT StarT) StarT) :
-        KindedTV tyVar' _ (AppT (AppT ArrowT StarT) StarT) : _) = reverse tyVars
+        KindedTV tyVar' _ (AppT (AppT ArrowT StarT) StarT) : _) = reverse tyVars'
        apply t (PlainTV name _)    = appT t (varT name)
        apply t (KindedTV name _ _) = appT t (varT name)
 #else
    let (KindedTV tyVar  (AppT (AppT ArrowT StarT) StarT) :
-        KindedTV tyVar' (AppT (AppT ArrowT StarT) StarT) : _) = reverse tyVars
+        KindedTV tyVar' (AppT (AppT ArrowT StarT) StarT) : _) = reverse tyVars'
        apply t (PlainTV name)    = appT t (varT name)
        apply t (KindedTV name _) = appT t (varT name)
 #endif
-       instanceType           = foldl apply (conT tyConName) (reverse $ drop 2 $ reverse tyVars)
+       instanceType           = foldl apply (conT tyConName) (reverse $ drop 2 $ reverse tyVars')
 
    putQ (Deriving tyConName tyVar' tyVar)
    return (instanceType, cs)

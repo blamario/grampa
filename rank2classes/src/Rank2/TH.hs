@@ -113,19 +113,35 @@ reifyConstructors cls ty = do
       DataD _ nm tyVars kind cs _   -> return (nm, tyVars, kind, cs)
       NewtypeD _ nm tyVars kind c _ -> return (nm, tyVars, kind, [c])
       _ -> fail "deriveApply: tyCon may not be a type synonym."
- 
+
+   let reifySynonyms (ConT name) = TH.reify name >>= reifySynonymInfo name
+       reifySynonyms (AppT t1 t2) = AppT <$> reifySynonyms t1 <*> reifySynonyms t2
+       reifySynonyms t = pure t
+       reifySynonymInfo _ (TyConI (TySynD _ [] t)) = reifySynonyms t
+       reifySynonymInfo name _ = pure (ConT name)
 #if MIN_VERSION_template_haskell(2,17,0)
-   let (KindedTV tyVar () (AppT (AppT ArrowT _) StarT)) = last tyVars
+       reifyTVKindSynonyms (KindedTV v s k) = KindedTV v s <$> reifySynonyms k
+#else
+       reifyTVKindSynonyms (KindedTV v k) = KindedTV v <$> reifySynonyms k
+#endif
+       reifyTVKindSynonyms tv = pure tv
+   lastVar <- reifyTVKindSynonyms (last tyVars)
+
+#if MIN_VERSION_template_haskell(2,17,0)
+   let (KindedTV tyVar () (AppT (AppT ArrowT _) resultKind)) = lastVar
        instanceType           = conT cls `TH.appT` foldl apply (conT tyConName) (init tyVars)
        apply t (PlainTV name _)    = TH.appT t (varT name)
        apply t (KindedTV name _ _) = TH.appT t (varT name)
 #else
-   let (KindedTV tyVar (AppT (AppT ArrowT _) StarT)) = last tyVars
+   let (KindedTV tyVar (AppT (AppT ArrowT _) resultKind)) = lastVar
        instanceType           = conT cls `TH.appT` foldl apply (conT tyConName) (init tyVars)
        apply t (PlainTV name)    = TH.appT t (varT name)
        apply t (KindedTV name _) = TH.appT t (varT name)
 #endif
- 
+
+   case resultKind of
+      StarT -> pure ()
+      _ -> fail ("Unexpected result kind: " <> show resultKind)
    putQ (Deriving tyConName tyVar)
    return (instanceType, cs)
 
