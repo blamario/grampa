@@ -1,11 +1,12 @@
 {-# Language DataKinds, DeriveGeneric, DuplicateRecordFields, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
-             StandaloneDeriving, TemplateHaskell, TypeFamilies, UndecidableInstances #-}
+             StandaloneDeriving, TemplateHaskell, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | The RepMin example with automatic derivation of attributes.
 
 module RepMinAuto where
 
 import Data.Functor.Identity
+import Data.Kind (Type)
 import Data.Semigroup (Min(Min, getMin))
 import GHC.Generics (Generic)
 import qualified Rank2
@@ -22,9 +23,9 @@ import qualified Transformation.Deep.TH
 import qualified Transformation.Shallow.TH
 
 -- | tree data type
-data Tree a (f' :: * -> *) (f :: * -> *) = Fork{left :: f (Tree a f' f'),
-                                                right:: f (Tree a f' f')}
-                                         | Leaf{leafValue :: f a}
+data Tree a (f' :: Type -> Type) (f :: Type -> Type) = Fork{left :: f (Tree a f' f'),
+                                                            right:: f (Tree a f' f')}
+                                                     | Leaf{leafValue :: f a}
 -- | tree root
 data Root a f' f = Root{root :: f (Tree a f' f')}
 

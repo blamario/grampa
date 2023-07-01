@@ -1,10 +1,11 @@
 {-# Language FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, StandaloneDeriving,
-             TypeFamilies, UndecidableInstances #-}
+             TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | The RepMin example - replicate a binary tree with all leaves replaced by the minimal leaf value.
 module RepMin where
 
 import Data.Functor.Identity
+import Data.Kind (Type)
 import qualified Rank2
 import Transformation (Transformation(..))
 import Transformation.AG (Inherited(..), Synthesized(..))
@@ -14,9 +15,9 @@ import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 
 -- | tree data type
-data Tree a (f' :: * -> *) (f :: * -> *) = Fork{left :: f (Tree a f' f'),
-                                                right:: f (Tree a f' f')}
-                                         | Leaf{leafValue :: f a}
+data Tree a (f' :: Type -> Type) (f :: Type -> Type) = Fork{left :: f (Tree a f' f'),
+                                                            right:: f (Tree a f' f')}
+                                                     | Leaf{leafValue :: f a}
 -- | tree root
 data Root a f' f = Root{root :: f (Tree a f' f')}
 
