@@ -246,12 +246,12 @@ genFmapClause _ (RecC name fields) = do
 genFmapClause instanceType (GadtC [name] fieldTypes _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      let AppT classType t = instanceType
+      let AppT _classType t = instanceType
       first (renameConstraintVars t initType <$>) <$> genFmapClause instanceType (NormalC name fieldTypes)
 genFmapClause instanceType (RecGadtC [name] fields _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      let AppT classType t = instanceType
+      let AppT _classType t = instanceType
       first (renameConstraintVars t initType <$>) <$> genFmapClause instanceType (RecC name fields)
 genFmapClause instanceType (ForallC _vars _cxt con) = genFmapClause instanceType con
 
@@ -387,12 +387,12 @@ genApClause unsafely _ (RecC name fields) = do
 genApClause unsafely instanceType (GadtC [name] fieldTypes _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      let AppT classType t = instanceType
+      let AppT _classType t = instanceType
       first (renameConstraintVars t initType <$>) <$> genApClause unsafely instanceType (NormalC name fieldTypes)
 genApClause unsafely instanceType (RecGadtC [name] fields _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      let AppT classType t = instanceType
+      let AppT _classType t = instanceType
       first (renameConstraintVars t initType <$>) <$> genApClause unsafely instanceType (RecC name fields)
 genApClause unsafely instanceType (ForallC _vars _cxt con) = genApClause unsafely instanceType con
 
@@ -465,12 +465,12 @@ genFoldMapClause _ (RecC name fields) = do
 genFoldMapClause instanceType (GadtC [name] fieldTypes _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      let AppT classType t = instanceType
+      let AppT _classType t = instanceType
       first (renameConstraintVars t initType <$>) <$> genFoldMapClause instanceType (NormalC name fieldTypes)
 genFoldMapClause instanceType (RecGadtC [name] fields _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      let AppT classType t = instanceType
+      let AppT _classType t = instanceType
       first (renameConstraintVars t initType <$>) <$> genFoldMapClause instanceType (RecC name fields)
 genFoldMapClause instanceType (ForallC _vars _cxt con) = genFoldMapClause instanceType con
 
@@ -516,12 +516,12 @@ genTraverseClause _ (RecC name fields) = do
 genTraverseClause instanceType (GadtC [name] fieldTypes _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      let AppT classType t = instanceType
+      let AppT _classType t = instanceType
       first (renameConstraintVars t initType <$>) <$> genTraverseClause instanceType (NormalC name fieldTypes)
 genTraverseClause instanceType (RecGadtC [name] fields _resultType@(AppT initType (VarT tyVar))) =
    do Just (Deriving tyConName _tyVar) <- getQ
       putQ (Deriving tyConName tyVar)
-      let AppT classType t = instanceType
+      let AppT _classType t = instanceType
       first (renameConstraintVars t initType <$>) <$> genTraverseClause instanceType (RecC name fields)
 genTraverseClause instanceType (ForallC _vars _cxt con) = genTraverseClause instanceType con
 
