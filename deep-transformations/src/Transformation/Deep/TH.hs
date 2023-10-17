@@ -164,7 +164,7 @@ genDeepmapClause baseConstraint deepConstraint fullConstraint _instanceType (Rec
        newNamedField (fieldName, _, fieldType) =
           ((,) fieldName <$>)
           <$> genDeepmapField (varE t) fieldType baseConstraint deepConstraint fullConstraint
-                              (appE (varE fieldName) (varE x)) id
+                              (getFieldOf x fieldName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP t, x `asP` recP name []] body []
 genDeepmapClause baseConstraint deepConstraint fullConstraint instanceType
@@ -209,8 +209,8 @@ genFoldMapClause baseConstraint deepConstraint fullConstraint _instanceType (Rec
        constraintsAndFields = map newField fields
        append a b = [| $(a) <> $(b) |]
        newField :: VarBangType -> Q ([Type], Exp)
-       newField (fieldName, _, fieldType) = genFoldMapField (varE t) fieldType baseConstraint deepConstraint
-                                                            fullConstraint (appE (varE fieldName) (varE x)) id
+       newField (fieldName, _, fieldType) =
+          genFoldMapField (varE t) fieldType baseConstraint deepConstraint fullConstraint (getFieldOf x fieldName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP t, x `asP` recP name []] (normalB body) []
 genFoldMapClause baseConstraint deepConstraint fullConstraint instanceType
@@ -265,8 +265,7 @@ genTraverseClause genField baseConstraint deepConstraint fullConstraint _instanc
        newNamedField :: VarBangType -> Q ([Type], (Name, Exp))
        newNamedField (fieldName, _, fieldType) =
           ((,) fieldName <$>)
-          <$> genField (varE f) fieldType baseConstraint deepConstraint fullConstraint
-                               (appE (varE fieldName) (varE x)) id
+          <$> genField (varE f) fieldType baseConstraint deepConstraint fullConstraint (getFieldOf x fieldName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP f, x `asP` recP name []] (normalB body) []
 genTraverseClause genField baseConstraint deepConstraint fullConstraint instanceType
@@ -352,3 +351,17 @@ genTraverseField trans fieldType baseConstraint deepConstraint fullConstraint fi
      SigT ty _kind -> genTraverseField trans ty baseConstraint deepConstraint fullConstraint fieldAccess wrap
      ParensT ty -> genTraverseField trans ty baseConstraint deepConstraint fullConstraint fieldAccess wrap
      _ -> (,) [] <$> [| pure $fieldAccess |]
+
+getFieldOf :: Name -> Name -> Q Exp
+getFieldOf = getFieldOfE . varE
+
+getFieldOfE :: Q Exp -> Name -> Q Exp
+getFieldOfE record field = do
+#if MIN_VERSION_template_haskell(2,19,0)
+  dotty <- TH.isExtEnabled TH.OverloadedRecordDot
+  if dotty
+     then TH.getFieldE record (TH.nameBase field)
+     else appE (varE field) record
+#else
+  appE (varE field) record
+#endif

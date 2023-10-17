@@ -155,7 +155,7 @@ genShallowmapClause shallowConstraint baseConstraint _instanceType (RecC name fi
        newNamedField :: VarBangType -> Q ([Type], (Name, Exp))
        newNamedField (fieldName, _, fieldType) =
           ((,) fieldName <$>)
-          <$> genShallowmapField (varE t) fieldType shallowConstraint baseConstraint (appE (varE fieldName) (varE x)) id
+          <$> genShallowmapField (varE t) fieldType shallowConstraint baseConstraint (getFieldOf x fieldName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP t, x `asP` recP name []] body []
 genShallowmapClause shallowConstraint baseConstraint instanceType
@@ -197,7 +197,7 @@ genFoldMapClause shallowConstraint baseConstraint _instanceType (RecC name field
        append a b = [| $(a) <> $(b) |]
        newField :: VarBangType -> Q ([Type], Exp)
        newField (fieldName, _, fieldType) =
-          genFoldMapField (varE t) fieldType shallowConstraint baseConstraint (appE (varE fieldName) (varE x)) id
+          genFoldMapField (varE t) fieldType shallowConstraint baseConstraint (getFieldOf x fieldName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP t, x `asP` recP name []] (normalB body) []
 genFoldMapClause shallowConstraint baseConstraint instanceType
@@ -247,7 +247,7 @@ genTraverseClause genField shallowConstraint baseConstraint _instanceType (RecC 
        newNamedField :: VarBangType -> Q ([Type], (Name, Exp))
        newNamedField (fieldName, _, fieldType) =
           ((,) fieldName <$>)
-          <$> genField (varE f) fieldType shallowConstraint baseConstraint (appE (varE fieldName) (varE x)) id
+          <$> genField (varE f) fieldType shallowConstraint baseConstraint (getFieldOf x fieldName) id
    constraints <- (concat . (fst <$>)) <$> sequence constraintsAndFields
    (,) constraints <$> clause [varP f, x `asP` recP name []] (normalB body) []
 genTraverseClause genField shallowConstraint baseConstraint instanceType
@@ -317,3 +317,17 @@ genTraverseField trans fieldType shallowConstraint baseConstraint fieldAccess wr
      SigT ty _kind -> genTraverseField trans ty shallowConstraint baseConstraint fieldAccess wrap
      ParensT ty -> genTraverseField trans ty shallowConstraint baseConstraint fieldAccess wrap
      _ -> (,) [] <$> [| pure $fieldAccess |]
+
+getFieldOf :: Name -> Name -> Q Exp
+getFieldOf = getFieldOfE . varE
+
+getFieldOfE :: Q Exp -> Name -> Q Exp
+getFieldOfE record field = do
+#if MIN_VERSION_template_haskell(2,19,0)
+  dotty <- TH.isExtEnabled TH.OverloadedRecordDot
+  if dotty
+     then TH.getFieldE record (TH.nameBase field)
+     else appE (varE field) record
+#else
+  appE (varE field) record
+#endif
