@@ -212,9 +212,9 @@ Here is an example GHCi session:
 
 This package is one of several implementations of a pattern that is often called *Higher-Kinded Data*. Other examples
 include [hkd-lens](https://hackage.haskell.org/package/hkd-lens),
-[barbies](https://hackage.haskell.org/package/barbies), and [hiddledy](https://hackage.haskell.org/package/higgledy).
+[barbies](https://hackage.haskell.org/package/barbies), and [higgledy](https://hackage.haskell.org/package/higgledy).
 
-Grammars are another use case that is almost, but not quite, completely unlike database records. See
+Grammars are another use case that is almost, but not quite, entirely unlike database records. See
 [grammatical-parsers](https://github.com/blamario/grampa/tree/master/grammatical-parsers) or
 [construct](https://hackage.haskell.org/package/construct) for examples.
 
