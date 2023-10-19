@@ -128,7 +128,7 @@ reifyConstructors cls ty = do
    lastVar <- reifyTVKindSynonyms (last tyVars)
 
 #if MIN_VERSION_template_haskell(2,17,0)
-   let (KindedTV tyVar () (AppT (AppT ArrowT _) resultKind)) = lastVar
+   let (KindedTV tyVar _ (AppT (AppT ArrowT _) resultKind)) = lastVar
        instanceType           = conT cls `TH.appT` foldl apply (conT tyConName) (init tyVars)
        apply t (PlainTV name _)    = TH.appT t (varT name)
        apply t (KindedTV name _ _) = TH.appT t (varT name)
