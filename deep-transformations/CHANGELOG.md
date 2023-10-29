@@ -1,5 +1,11 @@
 # Revision history for deep-transformations
 
+## 0.2.2 -- 2023-06-25
+
+* Updated for GHC 9.8.1 and TH 2.22
+* Updated TH code to use `DuplicateRecordFields` and `OverloadedRecordDot` when enabled
+* Fixed warnings in tests
+
 ## 0.2.1.2 -- 2023-06-25
 
 * Bumped the upper bound of the `template-haskell` dependency
