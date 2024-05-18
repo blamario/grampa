@@ -1,3 +1,7 @@
+Version 1.5.3.1
+---------------
+* Bumped the upper bound of the `template-haskell` dependency.
+
 Version 1.5.3
 ---------------
 * Fixed compilation with GHC 9.8.1 and `template-haskell` 2.22
