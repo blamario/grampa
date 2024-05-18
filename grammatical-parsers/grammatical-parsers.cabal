@@ -55,7 +55,7 @@ library
                        parsers < 0.13,
                        input-parsers < 0.4,
                        attoparsec >= 0.13 && < 0.15,
-                       witherable == 0.4.*,
+                       witherable >= 0.4 && < 0.6,
                        rank2classes >= 1.4.6 && < 1.6
 
 executable             arithmetic
@@ -84,7 +84,7 @@ test-suite           quicktests
   x-uses-tf:         true
   build-depends:     base >=4.9 && < 5, containers >= 0.5.7.0 && < 0.8,
                      monoid-subclasses, parsers < 0.13,
-                     witherable == 0.4.*,
+                     witherable >= 0.4 && < 0.6,
                      rank2classes >= 1.0.2 && < 1.6, grammatical-parsers,
                      QuickCheck >= 2 && < 3, checkers >= 0.4.6 && < 0.6,
                      tasty >= 0.7, tasty-quickcheck >= 0.7
