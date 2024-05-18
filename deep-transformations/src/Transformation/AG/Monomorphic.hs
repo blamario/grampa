@@ -63,12 +63,12 @@ instance {-# overlappable #-} (Transformation (Keep t), p ~ Domain (Keep t), q ~
    {-# INLINE ($) #-}
 
 instance (Transformation (Auto t), Domain (Auto t) ~ f, Functor f, Codomain (Auto t) ~ Semantics a,
-          Deep.Functor (Auto t) g, Auto t `At` g (Semantics a) (Semantics a)) =>
+          Rank2.Functor (g f), Deep.Functor (Auto t) g, Auto t `At` g (Semantics a) (Semantics a)) =>
          Full.Functor (Auto t) g where
    (<$>) = Full.mapUpDefault
 
 instance (Transformation (Keep t), Domain (Keep t) ~ f, Functor f, Codomain (Keep t) ~ PreservingSemantics f a,
-          Functor f, Deep.Functor (Keep t) g,
+          Functor f, Rank2.Functor (g f), Deep.Functor (Keep t) g,
           Keep t `At` g (PreservingSemantics f a) (PreservingSemantics f a)) =>
          Full.Functor (Keep t) g where
    (<$>) = Full.mapUpDefault

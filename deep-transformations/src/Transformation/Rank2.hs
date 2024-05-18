@@ -7,6 +7,7 @@ module Transformation.Rank2 where
 
 import Data.Functor.Compose (Compose(Compose))
 import Data.Functor.Const (Const(Const))
+import qualified Rank2
 import           Transformation (Transformation, Domain, Codomain)
 import qualified Transformation
 import qualified Transformation.Deep as Deep
@@ -52,5 +53,5 @@ instance Transformation.At (Fold p m) x where
 instance Transformation.At (Traversal p q m) x where
    ($) (Traversal f) = Compose . f
 
-instance (Deep.Functor (Map p q) g, Functor p) => Full.Functor (Map p q) g where
+instance (Rank2.Functor (g p), Deep.Functor (Map p q) g, Functor p) => Full.Functor (Map p q) g where
   (<$>) = Full.mapUpDefault

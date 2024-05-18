@@ -26,7 +26,6 @@ import Data.Functor.Const (Const(..))
 import Data.Kind (Type)
 import Data.Generics.Product.Subtype (Subtype(upcast))
 import Data.Proxy (Proxy(..))
-import Data.Semigroup (Semigroup(..))
 import GHC.Generics
 import GHC.Records
 import GHC.TypeLits (Symbol, ErrorMessage (Text), TypeError)
@@ -72,12 +71,12 @@ instance {-# overlappable #-}
    {-# INLINE ($) #-}
 
 instance (Transformation (Auto t), Domain (Auto t) ~ f, Functor f, Codomain (Auto t) ~ Semantics (Auto t),
-          Deep.Functor (Auto t) g, Auto t `At` g (Semantics (Auto t)) (Semantics (Auto t))) =>
+          Rank2.Functor (g f), Deep.Functor (Auto t) g, Auto t `At` g (Semantics (Auto t)) (Semantics (Auto t))) =>
          Full.Functor (Auto t) g where
    (<$>) = Full.mapUpDefault
 
 instance (Transformation (Keep t), Domain (Keep t) ~ f, Functor f, Codomain (Keep t) ~ PreservingSemantics (Keep t) f,
-          Functor f, Deep.Functor (Keep t) g,
+          Functor f, Rank2.Functor (g f), Deep.Functor (Keep t) g,
           Keep t `At` g (PreservingSemantics (Keep t) f) (PreservingSemantics (Keep t) f)) =>
          Full.Functor (Keep t) g where
    (<$>) = Full.mapUpDefault

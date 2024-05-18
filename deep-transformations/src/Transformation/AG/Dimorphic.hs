@@ -63,12 +63,12 @@ instance {-# overlappable #-} (Transformation (Keep t), p ~ Domain (Keep t), q ~
    {-# INLINE ($) #-}
 
 instance (Transformation (Auto t), Domain (Auto t) ~ f, Functor f, Codomain (Auto t) ~ Semantics a b,
-          Deep.Functor (Auto t) g, Auto t `At` g (Semantics a b) (Semantics a b)) =>
+          Rank2.Functor (g f), Deep.Functor (Auto t) g, Auto t `At` g (Semantics a b) (Semantics a b)) =>
          Full.Functor (Auto t) g where
    (<$>) = Full.mapUpDefault
 
 instance (Transformation (Keep t), Domain (Keep t) ~ f, Functor f, Codomain (Keep t) ~ PreservingSemantics f a b,
-          Functor f, Deep.Functor (Keep t) g,
+          Rank2.Functor (g f), Deep.Functor (Keep t) g,
           Keep t `At` g (PreservingSemantics f a b) (PreservingSemantics f a b)) =>
          Full.Functor (Keep t) g where
    (<$>) = Full.mapUpDefault
@@ -142,13 +142,16 @@ traverseDefaultWithAttributes t x rootInheritance = Full.traverse Feeder (t Full
 
 data Feeder a b (f :: Type -> Type) = Feeder
 
+type FeederDomain a b f = Compose ((->) a) (Compose ((,) (Atts a b)) f)
+
 instance Transformation (Feeder a b f) where
-   type Domain (Feeder a b f) = Compose ((->) a) (Compose ((,) (Atts a b)) f)
-   type Codomain (Feeder a b f) = Compose ((->) a) (Compose ((,) (Atts a b)) f)
+   type Domain (Feeder a b f) = FeederDomain a b f
+   type Codomain (Feeder a b f) = FeederDomain a b f
 
 instance Transformation.At (Feeder a b f) g where
    Feeder $ x = x
 
-instance (Traversable f, Deep.Traversable (Feeder a b f) g) => Full.Traversable (Feeder a b f) g where
+instance (Traversable f, Rank2.Traversable (g (FeederDomain a b f)), Deep.Traversable (Feeder a b f) g) =>
+         Full.Traversable (Feeder a b f) g where
    traverse t x inheritance = Compose (atts{inh= inheritance}, traverse (Deep.traverse t) y (inh atts))
       where Compose (atts, y) = getCompose x inheritance
