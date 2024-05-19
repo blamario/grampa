@@ -1,5 +1,11 @@
 # Revision history for deep-transformations
 
+## 0.2.3 -- 2024-05-18
+
+* Bumped the upper bound of the template-haskell dependency
+* Generalized the TH generation code
+* Fixed the loopy superclass constraints in instance declarations
+
 ## 0.2.2 -- 2023-06-25
 
 * Updated for GHC 9.8.1 and TH 2.22
