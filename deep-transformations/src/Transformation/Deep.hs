@@ -10,13 +10,16 @@ module Transformation.Deep where
 
 import Control.Applicative (Applicative, liftA2)
 import Data.Data (Data, Typeable)
-import Data.Functor.Compose (Compose)
+import Data.Functor.Compose (Compose, getCompose)
 import Data.Functor.Const (Const)
+import qualified Control.Applicative as Rank1
+import qualified Data.Foldable as Rank1
 import qualified Data.Functor as Rank1
+import qualified Data.Traversable as Rank1
 import qualified Data.Functor
 import Data.Kind (Type)
 import qualified Rank2
-import           Transformation (Transformation, Domain, Codomain)
+import           Transformation (Transformation, At, Domain, Codomain, ($))
 import qualified Transformation.Full as Full
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
@@ -34,6 +37,14 @@ class (Transformation t, Rank2.Foldable (g (Domain t))) => Foldable t g where
 class (Transformation t, Rank2.Traversable (g (Domain t))) => Traversable t g where
    traverse :: Codomain t ~ Compose m f => t -> g (Domain t) (Domain t) -> m (g f f)
 
+-- | A tuple of only one element
+newtype Only a (d :: Type -> Type) (s :: Type -> Type) =
+   Only {fromOnly :: s a} deriving (Eq, Ord, Show, Data, Typeable)
+
+-- | A nested parametric type represented as a rank-2 type
+newtype Flip f g (d :: Type -> Type) (s :: Type -> Type) =
+   Flip {unFlip :: f (s (g d d))}
+
 -- | Like 'Data.Functor.Product.Product' for data types with two type constructor parameters
 data Product g h (d :: Type -> Type) (s :: Type -> Type) =
    Pair{fst :: s (g d d),
@@ -43,6 +54,66 @@ data Product g h (d :: Type -> Type) (s :: Type -> Type) =
 data Sum g h (d :: Type -> Type) (s :: Type -> Type) =
    InL (s (g d d))
    | InR (s (h d d))
+
+-- Instances
+
+instance Rank2.Functor (Only a d) where
+   f <$> Only x = Only (f x)
+
+instance Rank2.Foldable (Only a d) where
+   foldMap f (Only x) = f x
+
+instance Rank2.Traversable (Only a d) where
+   traverse f (Only x) = Only Rank1.<$> f x
+
+instance Rank2.Apply (Only a d) where
+   Only f <*> Only x = Only (Rank2.apply f x)
+   liftA2 f (Only x) (Only y) = Only (f x y)
+
+instance Rank2.Applicative (Only a d) where
+   pure f = Only f
+
+instance Rank2.DistributiveTraversable (Only a d)
+
+instance Rank2.Distributive (Only a d) where
+   cotraverse w f = Only (w (Rank1.fmap fromOnly f))
+
+instance t `At` a => Functor t (Only a) where
+   t <$> Only x = Only (t Transformation.$ x)
+
+instance t `At` a => Foldable t (Only a) where
+   foldMap t (Only x) = Rank1.getConst (t Transformation.$ x)
+
+instance (t `At` a, Codomain t ~ Compose m f, Rank1.Functor m) => Traversable t (Only a) where
+   traverse t (Only x) = Only Rank1.<$> getCompose (t Transformation.$ x)
+
+instance Rank1.Functor f => Rank2.Functor (Flip f g d) where
+   f <$> Flip x = Flip (f Rank1.<$> x)
+
+instance Rank1.Applicative f => Rank2.Apply (Flip f g d) where
+   Flip x <*> Flip y = Flip (Rank1.liftA2 Rank2.apply x y)
+
+instance Rank1.Applicative f => Rank2.Applicative (Flip f g d) where
+   pure f = Flip (Rank1.pure f)
+
+instance Rank1.Foldable f => Rank2.Foldable (Flip f g d) where
+   foldMap f (Flip x) = Rank1.foldMap f x
+
+instance Rank1.Traversable f => Rank2.Traversable (Flip f g d) where
+   traverse f (Flip x) = Flip Rank1.<$> Rank1.traverse f x
+
+instance (Rank1.Functor f, Full.Functor t g) => Functor t (Flip f g) where
+   t <$> Flip x = Flip ((t Full.<$>) Rank1.<$> x)
+
+instance (Rank1.Traversable f, Full.Traversable t g, Codomain t ~ Compose m f, Applicative m) =>
+         Traversable t (Flip f g) where
+   traverse t (Flip x) = Flip Rank1.<$> Rank1.traverse (Full.traverse t) x
+
+deriving instance (Typeable s, Typeable d, Typeable f, Typeable g,
+                   Data (f (s (g d d)))) => Data (Flip f g d s)
+deriving instance Eq (f (s (g d d))) => Eq (Flip f g d s)
+deriving instance Ord (f (s (g d d))) => Ord (Flip f g d s)
+deriving instance Show (f (s (g d d))) => Show (Flip f g d s)
 
 instance Rank2.Functor (Product g h p) where
    f <$> ~(Pair left right) = Pair (f left) (f right)
@@ -76,6 +147,8 @@ instance (Full.Traversable t g, Full.Traversable t h, Codomain t ~ Compose m f, 
 deriving instance (Typeable p, Typeable q, Typeable g1, Typeable g2,
                    Data (q (g1 p p)), Data (q (g2 p p))) => Data (Product g1 g2 p q)
 deriving instance (Show (q (g1 p p)), Show (q (g2 p p))) => Show (Product g1 g2 p q)
+deriving instance (Eq (s (g d d)), Eq (s (h d d))) => Eq (Product g h d s)
+deriving instance (Ord (s (g d d)), Ord (s (h d d))) => Ord (Product g h d s)
 
 instance Rank2.Functor (Sum g h p) where
    f <$> InL left = InL (f left)
@@ -105,6 +178,8 @@ instance (Full.Traversable t g, Full.Traversable t h, Codomain t ~ Compose m f, 
 deriving instance (Typeable p, Typeable q, Typeable g1, Typeable g2,
                    Data (q (g1 p p)), Data (q (g2 p p))) => Data (Sum g1 g2 p q)
 deriving instance (Show (q (g1 p p)), Show (q (g2 p p))) => Show (Sum g1 g2 p q)
+deriving instance (Eq (s (g d d)), Eq (s (h d d))) => Eq (Sum g h d s)
+deriving instance (Ord (s (g d d)), Ord (s (h d d))) => Ord (Sum g h d s)
 
 -- | Alphabetical synonym for '<$>'
 fmap :: Functor t g => t -> g (Domain t) (Domain t) -> g (Codomain t) (Codomain t)

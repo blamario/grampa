@@ -9,7 +9,7 @@
 {-# Language CPP, TemplateHaskell #-}
 -- Adapted from https://wiki.haskell.org/A_practical_Template_Haskell_Tutorial
 
-module Transformation.Deep.TH (deriveAll, deriveFunctor, deriveTraversable)
+module Transformation.Deep.TH (deriveAll, deriveFunctor, deriveFoldable, deriveTraversable)
 where
 
 import Control.Applicative (liftA2)
