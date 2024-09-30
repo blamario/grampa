@@ -7,6 +7,7 @@
 -- the less standard classes 'Apply', 'Distributive', and 'Logistic'.
 {-# LANGUAGE DefaultSignatures, InstanceSigs, KindSignatures, PolyKinds, Rank2Types #-}
 {-# LANGUAGE ScopedTypeVariables, StandaloneDeriving, TypeOperators, UndecidableInstances #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE TypeApplications #-}
 module Rank2 (
@@ -31,6 +32,7 @@ import qualified Data.Functor.Contravariant as Rank1
 import qualified Data.Functor.Logistic as Rank1
 import qualified Data.Distributive as Rank1
 import Data.Coerce (coerce)
+import Data.Data (Data, Typeable)
 import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(..))
 import Data.Functor.Const (Const(..))
@@ -75,7 +77,7 @@ class (Functor g, Foldable g) => Traversable g where
    traverse f = sequence . fmap (Rank1.Compose . f)
    sequence = traverse Rank1.getCompose
 -- | Wrapper for functions that map the argument constructor type
-newtype Arrow p q a = Arrow{apply :: p a -> q a}
+newtype Arrow p q a = Arrow{apply :: p a -> q a} deriving Typeable
 
 type (~>) = Arrow
 ($) :: Arrow p q a -> p a -> q a
@@ -189,23 +191,25 @@ distributeWithTraversable :: (DistributiveTraversable g, Rank1.Traversable m) =>
 distributeWithTraversable = cotraverseTraversable
 
 -- | A rank-2 equivalent of @()@, a zero-element tuple
-data Empty f = Empty deriving (Eq, Ord, Show)
+data Empty f = Empty deriving (Eq, Ord, Show, Data, Typeable)
 
 -- | A rank-2 tuple of only one element
-newtype Only a f = Only {fromOnly :: f a} deriving (Eq, Ord, Show)
+newtype Only a f = Only {fromOnly :: f a} deriving (Eq, Ord, Show, Data, Typeable)
 
 -- | Equivalent of 'Data.Functor.Identity' for rank 2 data types
-newtype Identity g f = Identity {runIdentity :: g f} deriving (Eq, Ord, Show)
+newtype Identity g f = Identity {runIdentity :: g f} deriving (Eq, Ord, Show, Data, Typeable)
 
 -- | Equivalent of 'Data.Functor.Compose' for rank 2 data types
-newtype Compose g p q = Compose {getCompose :: g (Rank1.Compose p q)}
+newtype Compose g p q = Compose {getCompose :: g (Rank1.Compose p q)} deriving Typeable
 
 deriving instance Eq (g (Rank1.Compose p q)) => Eq (Compose g p q)
 deriving instance Ord (g (Rank1.Compose p q)) => Ord (Compose g p q)
 deriving instance Show (g (Rank1.Compose p q)) => Show (Compose g p q)
+deriving instance (Typeable k1, Typeable k, Typeable g, Typeable (p :: k -> Type), Typeable (q :: k1 -> k),
+                   Data (g (Rank1.Compose p q))) => Data (Compose g p q)
 
 -- | A nested parametric type represented as a rank-2 type
-newtype Flip g a f = Flip {unFlip :: g (f a)} deriving (Eq, Ord, Show)
+newtype Flip g a f = Flip {unFlip :: g (f a)} deriving (Eq, Ord, Show, Data, Typeable)
 
 instance Semigroup (g (f a)) => Semigroup (Flip g a f) where
    Flip x <> Flip y = Flip (x <> y)
@@ -218,7 +222,7 @@ instance Rank1.Functor g => Rank2.Functor (Flip g a) where
    f <$> Flip g = Flip (f Rank1.<$> g)
 
 instance Rank1.Applicative g => Rank2.Apply (Flip g a) where
-   Flip g <*> Flip h = Flip (apply Rank1.<$> g Rank1.<*> h)
+   Flip g <*> Flip h = Flip (Rank1.liftA2 apply g h)
 
 instance Rank1.Applicative g => Rank2.Applicative (Flip g a) where
    pure f = Flip (Rank1.pure f)
