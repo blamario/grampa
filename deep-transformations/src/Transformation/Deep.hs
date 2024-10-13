@@ -39,9 +39,9 @@ class (Transformation t, Rank2.Traversable (g (Domain t))) => Traversable t g wh
 newtype Only g (d :: Type -> Type) (s :: Type -> Type) =
    Only {fromOnly :: s (g d d)}
 
--- | Like 'Only' but with additional nesting inside f
-newtype Flip f g (d :: Type -> Type) (s :: Type -> Type) =
-   Flip {unFlip :: f (s (g d d))}
+-- | Compose a regular type constructor with a data type with two type constructor parameters
+newtype Nest f g (d :: Type -> Type) (s :: Type -> Type) =
+   Nest {unNest :: f (g d s)}
 
 -- | Like 'Data.Functor.Product.Product' for data types with two type constructor parameters
 data Product g h (d :: Type -> Type) (s :: Type -> Type) =
@@ -90,36 +90,36 @@ deriving instance Eq (s (g d d)) => Eq (Only g d s)
 deriving instance Ord (s (g d d)) => Ord (Only g d s)
 deriving instance Show (s (g d d)) => Show (Only g d s)
 
-instance Rank1.Functor f => Rank2.Functor (Flip f g d) where
-   f <$> Flip x = Flip (f Rank1.<$> x)
+instance (Rank1.Functor f, Rank2.Functor (g d)) => Rank2.Functor (Nest f g d) where
+   f <$> Nest x = Nest ((f Rank2.<$>) Rank1.<$> x)
 
-instance Rank1.Applicative f => Rank2.Apply (Flip f g d) where
-   Flip x <*> Flip y = Flip (Rank1.liftA2 Rank2.apply x y)
+instance (Rank1.Applicative f, Rank2.Apply (g d)) => Rank2.Apply (Nest f g d) where
+   Nest x <*> Nest y = Nest (Rank1.liftA2 (Rank2.<*>) x y)
 
-instance Rank1.Applicative f => Rank2.Applicative (Flip f g d) where
-   pure f = Flip (Rank1.pure f)
+instance (Rank1.Applicative f, Rank2.Applicative (g d)) => Rank2.Applicative (Nest f g d) where
+   pure f = Nest (Rank1.pure (Rank2.pure f))
 
-instance Rank1.Foldable f => Rank2.Foldable (Flip f g d) where
-   foldMap f (Flip x) = Rank1.foldMap f x
+instance (Rank1.Foldable f, Rank2.Foldable (g d)) => Rank2.Foldable (Nest f g d) where
+   foldMap f (Nest x) = Rank1.foldMap (Rank2.foldMap f) x
 
-instance Rank1.Traversable f => Rank2.Traversable (Flip f g d) where
-   traverse f (Flip x) = Flip Rank1.<$> Rank1.traverse f x
+instance (Rank1.Traversable f, Rank2.Traversable (g d)) => Rank2.Traversable (Nest f g d) where
+   traverse f (Nest x) = Nest Rank1.<$> Rank1.traverse (Rank2.traverse f) x
 
-instance (Rank1.Functor f, Full.Functor t g) => Functor t (Flip f g) where
-   t <$> Flip x = Flip ((t Full.<$>) Rank1.<$> x)
+instance (Rank1.Functor f, Functor t g) => Functor t (Nest f g) where
+   t <$> Nest x = Nest ((t <$>) Rank1.<$> x)
 
-instance (Rank1.Foldable f, Full.Foldable t g) => Foldable t (Flip f g) where
-   foldMap t (Flip x) = Rank1.foldMap (Full.foldMap t) x
+instance (Rank1.Foldable f, Foldable t g) => Foldable t (Nest f g) where
+   foldMap t (Nest x) = Rank1.foldMap (foldMap t) x
 
-instance (Rank1.Traversable f, Full.Traversable t g, Codomain t ~ Compose m f, Rank1.Applicative m) =>
-         Traversable t (Flip f g) where
-   traverse t (Flip x) = Flip Rank1.<$> Rank1.traverse (Full.traverse t) x
+instance (Rank1.Traversable f, Traversable t g, Codomain t ~ Compose m f, Rank1.Applicative m) =>
+         Traversable t (Nest f g) where
+   traverse t (Nest x) = Nest Rank1.<$> Rank1.traverse (traverse t) x
 
 deriving instance (Typeable s, Typeable d, Typeable f, Typeable g,
-                   Data (f (s (g d d)))) => Data (Flip f g d s)
-deriving instance Eq (f (s (g d d))) => Eq (Flip f g d s)
-deriving instance Ord (f (s (g d d))) => Ord (Flip f g d s)
-deriving instance Show (f (s (g d d))) => Show (Flip f g d s)
+                   Data (f (g d s))) => Data (Nest f g d s)
+deriving instance Eq (f (g d s)) => Eq (Nest f g d s)
+deriving instance Ord (f (g d s)) => Ord (Nest f g d s)
+deriving instance Show (f (g d s)) => Show (Nest f g d s)
 
 instance (Rank2.Functor (g d), Rank2.Functor (h d)) => Rank2.Functor (Product g h d) where
    f <$> (Pair left right) = Pair (f Rank2.<$> left) (f Rank2.<$> right)
