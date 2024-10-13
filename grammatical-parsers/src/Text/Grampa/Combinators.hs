@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeFamilies, TypeOperators #-}
 -- | A collection of useful parsing combinators not found in dependent libraries.
-module Text.Grampa.Combinators (moptional, concatMany, concatSome, someNonEmpty,
+module Text.Grampa.Combinators (moptional, concatMany, concatSome, someNonEmpty, takeSomeNonEmpty,
                                 flag, count, upto,
                                 delimiter, operator, keyword) where
 
@@ -11,7 +11,8 @@ import Data.Monoid.Factorial (FactorialMonoid)
 import Data.Semigroup (Semigroup(sconcat))
 import Data.Semigroup.Cancellative (LeftReductive)
 
-import Text.Grampa.Class (InputParsing(ParserInput, string), LexicalParsing(lexicalToken, keyword))
+import Text.Grampa.Class (InputParsing(ParserInput, string), LexicalParsing(lexicalToken, keyword),
+                          DeterministicParsing(takeMany))
 import Text.Parser.Combinators (Parsing((<?>)), count)
 
 -- | Attempts to parse a monoidal value, if the argument parser fails returns 'mempty'.
@@ -29,6 +30,10 @@ concatSome p = sconcat <$> someNonEmpty p
 -- | One or more argument occurrences like 'some', returned in a 'NonEmpty' list.
 someNonEmpty :: Alternative p => p a -> p (NonEmpty a)
 someNonEmpty p = (:|) <$> p <*> many p
+
+-- | The longest sequence of One or more argument occurrences like 'takeSome', returned in a 'NonEmpty' list.
+takeSomeNonEmpty :: DeterministicParsing p => p a -> p (NonEmpty a)
+takeSomeNonEmpty p = (:|) <$> p <*> takeMany p
 
 -- | Returns 'True' if the argument parser succeeds and 'False' otherwise.
 flag :: Alternative p => p a -> p Bool
