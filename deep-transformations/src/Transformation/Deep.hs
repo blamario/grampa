@@ -1,4 +1,4 @@
-{-# Language DeriveDataTypeable, FlexibleInstances, KindSignatures, MultiParamTypeClasses, RankNTypes,
+{-# Language Haskell2010, DeriveDataTypeable, FlexibleInstances, KindSignatures, MultiParamTypeClasses, RankNTypes,
              StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | Type classes 'Functor', 'Foldable', and 'Traversable' that correspond to the standard type classes of the same
@@ -40,7 +40,7 @@ newtype Only g (d :: Type -> Type) (s :: Type -> Type) =
    Only {fromOnly :: s (g d d)}
 
 -- | Compose a regular type constructor with a data type with two type constructor parameters
-newtype Nest f g (d :: Type -> Type) (s :: Type -> Type) =
+newtype Nest (f :: Type -> Type) g (d :: Type -> Type) (s :: Type -> Type) =
    Nest {unNest :: f (g d s)}
 
 -- | Like 'Data.Functor.Product.Product' for data types with two type constructor parameters

@@ -1,4 +1,4 @@
-{-# Language DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
+{-# Language Haskell2010, DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
              ScopedTypeVariables, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | A special case of an attribute grammar where every node has only a single inherited and a single synthesized
@@ -140,9 +140,9 @@ traverseDefaultWithAttributes :: forall t p q r a b g.
 traverseDefaultWithAttributes t x rootInheritance = Full.traverse Feeder (t Full.<$> x) rootInheritance
 {-# INLINE traverseDefaultWithAttributes #-}
 
-data Feeder a b (f :: Type -> Type) = Feeder
+data Feeder (a :: Type) (b :: Type) (f :: Type -> Type) = Feeder
 
-type FeederDomain a b f = Compose ((->) a) (Compose ((,) (Atts a b)) f)
+type FeederDomain (a :: Type) (b :: Type) f = Compose ((->) a) (Compose ((,) (Atts a b)) f)
 
 instance Transformation (Feeder a b f) where
    type Domain (Feeder a b f) = FeederDomain a b f

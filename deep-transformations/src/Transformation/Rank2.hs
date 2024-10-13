@@ -7,6 +7,7 @@ module Transformation.Rank2 where
 
 import Data.Functor.Compose (Compose(Compose))
 import Data.Functor.Const (Const(Const))
+import Data.Kind (Type)
 import qualified Rank2
 import           Transformation (Transformation, Domain, Codomain)
 import qualified Transformation
@@ -26,11 +27,11 @@ foldMap f = Deep.foldMap (Fold f)
 traverse :: Deep.Traversable (Traversal p q m) g => (forall a. p a -> m (q a)) -> g p p -> m (g q q)
 traverse f = Deep.traverse (Traversal f)
 
-newtype Map p q = Map (forall x. p x -> q x)
+newtype Map (p :: Type -> Type) (q :: Type -> Type) = Map (forall x. p x -> q x)
 
-newtype Fold p m = Fold (forall x. p x -> m)
+newtype Fold (p :: Type -> Type) m = Fold (forall x. p x -> m)
 
-newtype Traversal p q m = Traversal (forall x. p x -> m (q x))
+newtype Traversal (p :: Type -> Type) (q :: Type -> Type) m = Traversal (forall x. p x -> m (q x))
 
 instance Transformation (Map p q) where
    type Domain (Map p q) = p
