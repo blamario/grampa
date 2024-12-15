@@ -35,6 +35,7 @@ import qualified Rank2
 
 import Prelude hiding (takeWhile)
 
+-- | A parse results in either a 'ParseFailure' or the result of the appropriate type.
 type ParseResults s = Either (ParseFailure Pos s)
 
 -- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset.

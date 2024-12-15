@@ -18,6 +18,8 @@ import qualified Comparisons
 import qualified Conditionals
 import qualified Lambda
 
+-- | Grammar that combines arithmetic, boolean, comparison, conditional, and lambda expression grammars. The first
+-- three productions are used to bind them all together, see 'expression' below.
 data Expression f =
    Expression{
       expr :: f Domain,
@@ -29,6 +31,7 @@ data Expression f =
       conditionalGrammar :: Conditionals.Conditionals Domain Domain f,
       lambdaGrammar :: Lambda.Lambda Domain f}
 
+-- | The combined domain result type tags different component results with their type.
 data Tagged = IntExpression {intFromExpression :: Int}
             | BoolExpression {boolFromExpression :: Bool}
             | FunctionExpression {functionFromExpression :: Tagged -> Tagged}
@@ -37,6 +40,7 @@ data Tagged = IntExpression {intFromExpression :: Int}
 
 type Env = Map String Tagged
 
+-- | The semantic domain of the parsed expression
 type Domain = Env -> Tagged
 
 instance Eq (Tagged -> Tagged) where
@@ -125,7 +129,8 @@ $(Rank2.TH.deriveAll ''Expression)
 instance TokenParsing (Parser Expression String)
 instance LexicalParsing (Parser Expression String)
 
-{-
+{- The Rank.TH.deriveAll splice above inserts the following declarations:
+
 instance Rank2.Functor Expression where
    f <$> g = g{expr= f (expr g),
                term= f (term g),
@@ -206,12 +211,16 @@ expression Expression{..} =
    in Expression{expr= combinedExpr,
                  term= combinedTerm,
                  primary= combinedPrimary,
-                 arithmeticGrammar= Arithmetic.arithmetic arithmeticGrammar{Arithmetic.expr= expr,
-                                                                            Arithmetic.primary= primary},
+                 arithmeticGrammar= Arithmetic.arithmetic arithmeticGrammar{
+                    Arithmetic.expr= expr,
+                    Arithmetic.primary= primary},
                  booleanGrammar= Boolean.boolean (Comparisons.test comparisonGrammar) booleanGrammar,
-                 comparisonGrammar= Comparisons.comparisons comparisonGrammar{Comparisons.term= Arithmetic.expr arithmeticGrammar},
-                 conditionalGrammar= Conditionals.conditionals conditionalGrammar{Conditionals.test= Boolean.expr booleanGrammar,
-                                                                                  Conditionals.term= expr},
-                 lambdaGrammar= Lambda.lambdaCalculus lambdaGrammar{Lambda.expr= expr,
-                                                                    Lambda.application= term,
-                                                                    Lambda.primary= primary}}
+                 comparisonGrammar= Comparisons.comparisons comparisonGrammar{
+                    Comparisons.term= Arithmetic.expr arithmeticGrammar},
+                 conditionalGrammar= Conditionals.conditionals conditionalGrammar{
+                    Conditionals.test= Boolean.expr booleanGrammar,
+                    Conditionals.term= expr},
+                 lambdaGrammar= Lambda.lambdaCalculus lambdaGrammar{
+                    Lambda.expr= expr,
+                    Lambda.application= term,
+                    Lambda.primary= primary}}

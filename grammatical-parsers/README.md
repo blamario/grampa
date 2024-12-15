@@ -22,9 +22,9 @@ import qualified Rank2
 import qualified Rank2.TH
 ~~~
 
-What puts this library apart from most is that these parsers are *grammatical*, just as the library name says. Instead
-of writing the parser definitions as top-level bindings, you can and should group them into a grammar record definition,
-like this:
+What puts this library apart from most is that the parsers it allows you to construct are *grammatical*, just as the
+library name says. Instead of writing the parser definitions as top-level bindings, you can and should group them into
+a grammar record definition, like this:
 
 ~~~ {.haskell}
 arithmetic :: Rank2.Apply g => GrammarBuilder Arithmetic g Parser String
@@ -41,9 +41,9 @@ arithmetic Arithmetic{..} = Arithmetic{
    number= takeCharsWhile1 isDigit <?> "number"}
 ~~~
 
-What on Earth for? One good reason is that these parser definitions can then be left-recursive, which is normally a
-death knell for parser libraries. There are other benefits like memoization and grammar composability, and the main
-downside is the obligation to declare the grammar record:
+What on Earth for? One good reason is that these parser definitions can then be left-recursive, which is usually
+deadly for parser combinator libraries. There are other benefits like memoization and grammar composability, and the
+main downside is the obligation to declare the grammar record:
 
 ~~~ {.haskell}
 data Arithmetic f = Arithmetic{sum     :: f Int,

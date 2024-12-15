@@ -181,8 +181,11 @@ instance FallibleResults (ResultList g) where
    failureOf (ResultList _ failure) = failure
    failWith = ResultList []
 
+-- | The class of parsers whose execution can be traced for debugging purposes
 class InputParsing m => TraceableParsing m where
+   -- | Modify the argument parser to log its input whenever invoked.
    traceInput :: (ParserInput m -> String) -> m a -> m a
+   -- | Modify the argument parser to log the given description and its input whenever invoked.
    traceAs :: Show (ParserInput m) => String -> m a -> m a
    traceAs description = traceInput (\input-> description <> " @ " <> show input)
 

@@ -50,12 +50,14 @@ import Text.Grampa.Internal (TraceableParsing(..))
 
 import Prelude hiding (drop, null)
 
--- | Fixed grammar record type @g@ with a given parser type @p@ on input streams of type @s@
+-- | A grammar is a record type @g@ whose fields are parsers of type @p@ on input streams of type @s@. A value of a
+-- @Grammar@ type is typically produced by applying 'fixGrammar' or 'overlay' to a 'GrammarBuilder'.
 type Grammar (g  :: (Type -> Type) -> Type) p s = g (p g s)
 
--- | A @GrammarBuilder g g' p s@ is an endomorphic function on a grammar @g@, whose parsers of type @p@ build grammars
--- of type @g'@, parsing input streams of type @s@. The first grammar @g@ may be a building block for the final
--- grammar @g'@.
+-- | A @GrammarBuilder g g' p s@ is an endomorphic function on a grammar @g@, whose parsers of type @p@ build on
+-- grammars of type @g'@ and parse an input stream of type @s@. Grammar parameters @g@ and @g'@ are typically
+-- identical in simple monolithic grammars, but when composing complex grammars the first grammar parameter @g@ would
+-- be just a building block for the final grammar @g'@.
 type GrammarBuilder (g  :: (Type -> Type) -> Type)
                     (g' :: (Type -> Type) -> Type)
                     (p  :: ((Type -> Type) -> Type) -> Type -> Type -> Type)
