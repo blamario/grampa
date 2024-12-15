@@ -1,3 +1,10 @@
+Version 0.7.2
+---------------
+* Added `Combinators.takeSomeNonEmpty`
+* Updated CI configuration
+* Bumped the upper bounds of the `witherable` and `containers` dependencies
+* Slightly improved documentation
+
 Version 0.7.1
 ---------------
 * Added a Show instance for every Show1 to satisfy the new class declaration
