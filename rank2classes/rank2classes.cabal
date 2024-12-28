@@ -44,7 +44,7 @@ library
                        data-functor-logistic < 0.1
 
   if flag(use-template-haskell)
-    build-depends: template-haskell >= 2.11 && < 2.23
+    build-depends: template-haskell >= 2.11 && < 2.24
     exposed-modules: Rank2.TH
 
 test-suite doctests

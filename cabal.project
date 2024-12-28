@@ -2,6 +2,5 @@ packages:
    rank2classes/
    grammatical-parsers/
    deep-transformations/
-   ../input-parsers/
 
-allow-newer: data-functor-logistic:base
+allow-newer: data-functor-logistic:base, indexed-traversable:base, indexed-traversable-instances:base
