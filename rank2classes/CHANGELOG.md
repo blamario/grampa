@@ -1,3 +1,8 @@
+Version 1.5.4
+---------------
+* Deriving `Data` and `Typeable` for all declared data types.
+* Bumped the upper bound of the `template-haskell` dependency.
+
 Version 1.5.3.1
 ---------------
 * Bumped the upper bound of the `template-haskell` dependency.
