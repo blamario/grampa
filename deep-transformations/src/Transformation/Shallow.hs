@@ -13,6 +13,8 @@ import qualified Data.Foldable as Rank1 (Foldable, foldMap)
 import qualified Data.Traversable as Rank1 (Traversable, traverse)
 import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Functor.Const (Const(Const, getConst))
+import Data.Functor.Product (Product(Pair))
+import Data.Functor.Sum (Sum(InL, InR))
 import Data.Kind (Type)
 import Data.Proxy (Proxy(Proxy))
 import qualified Rank2
@@ -81,6 +83,13 @@ instance (Transformation t, Functor (FunctorCompose p t) g, Rank1.Functor p) => 
 instance (Transformation t, t `At` a, Rank1.Functor g) => Functor t (Rank2.Flip g a) where
    t <$> Rank2.Flip g = Rank2.Flip ((t Transformation.$) Rank1.<$> g)
 
+instance (Functor t g, Functor t h) => Functor t (Product g h) where
+   t <$> Pair left right = Pair (t <$> left) (t <$> right)
+
+instance (Functor t g, Functor t h) => Functor t (Sum g h) where
+   t <$> InL g = InL (t <$> g)
+   t <$> InR h = InR (t <$> h)
+
 instance Transformation t => Foldable t Rank2.Empty where
    foldMap _ _ = mempty
 
@@ -101,6 +110,13 @@ instance (Transformation t, Foldable (FoldableCompose p t) g, Rank1.Foldable p) 
 
 instance (Transformation t, t `At` a, Codomain t ~ Const m, Rank1.Foldable g) => Foldable t (Rank2.Flip g a) where
    foldMap t (Rank2.Flip g) = Rank1.foldMap (getConst . (t Transformation.$)) g
+
+instance (Foldable t g, Foldable t h, Codomain t ~ Const m, Monoid m) => Foldable t (Product g h) where
+   foldMap t (Pair left right) = foldMap t left `mappend` foldMap t right
+
+instance (Foldable t g, Foldable t h) => Foldable t (Sum g h) where
+   foldMap t (InL g) = foldMap t g
+   foldMap t (InR h) = foldMap t h
 
 instance (Transformation t, Codomain t ~ Compose m f, Applicative m) => Traversable t Rank2.Empty where
    traverse _ _ = pure Rank2.Empty
@@ -125,14 +141,12 @@ instance (Transformation t, t `At` a,
           Codomain t ~ Compose m f, Applicative m, Rank1.Traversable g) => Traversable t (Rank2.Flip g a) where
    traverse t (Rank2.Flip g) = Rank2.Flip Rank1.<$> Rank1.traverse (getCompose . (t Transformation.$)) g
 
-instance (Functor t g, Functor t h) => Functor t (Rank2.Product g h) where
-   t <$> Rank2.Pair left right = Rank2.Pair (t <$> left) (t <$> right)
+instance (Traversable t g, Traversable t h, Codomain t ~ Compose m f, Applicative m) => Traversable t (Product g h) where
+   traverse t (Pair left right) = liftA2 Pair (traverse t left) (traverse t right)
 
-instance (Foldable t g, Foldable t h, Codomain t ~ Const m, Monoid m) => Foldable t (Rank2.Product g h) where
-   foldMap t (Rank2.Pair left right) = foldMap t left `mappend` foldMap t right
-
-instance (Traversable t g, Traversable t h, Codomain t ~ Compose m f, Applicative m) => Traversable t (Rank2.Product g h) where
-   traverse t (Rank2.Pair left right) = liftA2 Rank2.Pair (traverse t left) (traverse t right)
+instance (Traversable t g, Traversable t h, Codomain t ~ Compose m f, Rank1.Functor m) => Traversable t (Sum g h) where
+   traverse t (InL g) = InL Rank1.<$> traverse t g
+   traverse t (InR h) = InR Rank1.<$> traverse t h
 
 -- | Alphabetical synonym for '<$>'
 fmap :: Functor t g => t -> g (Domain t) -> g (Codomain t)
