@@ -78,6 +78,9 @@ instance Functor t g => Functor t (Rank2.Identity g) where
 instance (Transformation t, Functor (FunctorCompose p t) g, Rank1.Functor p) => Functor t (Rank2.Compose g p) where
    t <$> Rank2.Compose g = Rank2.Compose (FunctorCompose t <$> g)
 
+instance (Transformation t, t `At` a, Rank1.Functor g) => Functor t (Rank2.Flip g a) where
+   t <$> Rank2.Flip g = Rank2.Flip ((t Transformation.$) Rank1.<$> g)
+
 instance Transformation t => Foldable t Rank2.Empty where
    foldMap _ _ = mempty
 
@@ -95,6 +98,9 @@ instance Foldable t g => Foldable t (Rank2.Identity g) where
 
 instance (Transformation t, Foldable (FoldableCompose p t) g, Rank1.Foldable p) => Foldable t (Rank2.Compose g p) where
    foldMap t (Rank2.Compose g) = foldMap (FoldableCompose t) g
+
+instance (Transformation t, t `At` a, Codomain t ~ Const m, Rank1.Foldable g) => Foldable t (Rank2.Flip g a) where
+   foldMap t (Rank2.Flip g) = Rank1.foldMap (getConst . (t Transformation.$)) g
 
 instance (Transformation t, Codomain t ~ Compose m f, Applicative m) => Traversable t Rank2.Empty where
    traverse _ _ = pure Rank2.Empty
@@ -114,6 +120,10 @@ instance (Traversable t g, Codomain t ~ Compose m f, Rank1.Functor m) => Travers
 instance (Transformation t, Traversable (TraversableCompose p t) g,
           Rank1.Traversable p, Codomain t ~ Compose q r, Rank1.Functor q) => Traversable t (Rank2.Compose g p) where
    traverse t (Rank2.Compose g) = Rank2.Compose Rank1.<$> traverse (TraversableCompose t) g
+
+instance (Transformation t, t `At` a,
+          Codomain t ~ Compose m f, Applicative m, Rank1.Traversable g) => Traversable t (Rank2.Flip g a) where
+   traverse t (Rank2.Flip g) = Rank2.Flip Rank1.<$> Rank1.traverse (getCompose . (t Transformation.$)) g
 
 instance (Functor t g, Functor t h) => Functor t (Rank2.Product g h) where
    t <$> Rank2.Pair left right = Rank2.Pair (t <$> left) (t <$> right)
