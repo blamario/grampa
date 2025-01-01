@@ -1,5 +1,14 @@
 # Revision history for deep-transformations
 
+## 0.3 -- 2025-01-01
+
+* **BREAKING**: Changed the definitions of `Deep.Product` and `Deep.Sum`
+* Added `Shallow` class instances for all data types declared in the `Rank2` module
+* Added `Shallow` class instances for `Proxy`, `Const`, `Product`, and `Sum`
+* Bumped the upper bound of the template-haskell dependency to compile with GHC 9.12.1
+* Fixed the PolyKinds-related test errors
+* Added `Deep.Only` and `Deep.Flip` data types to mirror `Rank2.Only` and `Rank2.Flip`
+
 ## 0.2.3 -- 2024-05-18
 
 * Bumped the upper bound of the template-haskell dependency
