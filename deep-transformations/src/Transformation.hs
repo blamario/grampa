@@ -20,27 +20,59 @@
 -- * while the actual mapping of values is performed by an arbitrary number of instances of the method '$', a bit like
 --   multiple equation clauses that make up a single function definition.
 --
--- The module is meant to be imported qualified.
+-- The module is meant to be imported qualified, and the importing module will require at least the
+-- @FlexibleInstances@, @MultiParamTypeClasses@, and @TypeFamilies@ language extensions to declare the appropriate
+-- instances.
 
 module Transformation where
 
-import Data.Coerce (coerce)
 import qualified Data.Functor.Compose as Functor
 import Data.Functor.Const (Const)
 import Data.Functor.Product (Product(Pair))
 import Data.Functor.Sum (Sum(InL, InR))
 import Data.Kind (Type)
-import GHC.TypeLits (ErrorMessage (Text, ShowType, (:<>:)), TypeError)
 import qualified Rank2
 
 import Prelude hiding (($))
 
+-- $setup
+-- >>> {-# Language FlexibleInstances, MultiParamTypeClasses, TypeFamilies, TypeOperators #-}
+-- >>> import Transformation (Transformation)
+-- >>> import qualified Transformation
+
 -- | A 'Transformation', natural or not, maps one functor to another.
+-- For example, here's the declaration for a transformation that maps `Maybe` to `[]`:
+--
+-- >>> :{
+-- data MaybeToList = MaybeToList
+-- instance Transformation MaybeToList where
+--    type Domain MaybeToList = Maybe
+--    type Codomain MaybeToList = []
+-- :}
 class Transformation t where
    type Domain t :: Type -> Type
    type Codomain t :: Type -> Type
 
--- | An unnatural 'Transformation' can behave differently at different points.
+-- | Before we can apply a 'Transformation', we also need to declare 'At' which base types it is applicable and how
+-- it works. If the transformation is natural, we'll need only one instance declaration.
+--
+-- >>> :{
+-- instance MaybeToList `Transformation.At` a where
+--    MaybeToList $ Just x = [x]
+--    MaybeToList $ Nothing = []
+-- :}
+--
+-- >>> MaybeToList Transformation.$ (Just True)
+-- [True]
+--
+-- An unnatural 'Transformation' can behave differently depending on the base type and even on its value.
+--
+-- >>> :{
+-- instance {-# OVERLAPS #-} MaybeToList `At` Char where
+--    MaybeToList $ Just '\0' = []
+--    MaybeToList $ Just c = [c]
+--    MaybeToList $ Nothing = []
+-- :}
 class Transformation t => At t x where
    -- | Apply the transformation @t@ at type @x@ to map 'Domain' to the 'Codomain' functor.
    ($) :: t -> Domain t x -> Codomain t x

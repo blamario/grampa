@@ -32,7 +32,7 @@ custom-setup
    base >= 4 && <5,
    Cabal < 4,
    cabal-doctest >= 1 && <1.1
- 
+
 library
   hs-source-dirs:       src
   exposed-modules:      Transformation,
@@ -57,3 +57,4 @@ test-suite doctests
   ghc-options:         -threaded -pgmL markdown-unlit
   build-depends:       base, rank2classes, deep-transformations, doctest >= 0.8
   build-tool-depends:  markdown-unlit:markdown-unlit >= 0.5 && < 0.6
+  x-doctest-options:   --fast
