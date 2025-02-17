@@ -56,5 +56,5 @@ test-suite doctests
   other-modules:       README, RepMin, RepMinAuto
   ghc-options:         -threaded -pgmL markdown-unlit
   build-depends:       base, rank2classes, deep-transformations, doctest >= 0.8
-  build-tool-depends:  markdown-unlit:markdown-unlit >= 0.5 && < 0.6
+  build-tool-depends:  markdown-unlit:markdown-unlit
   x-doctest-options:   --fast

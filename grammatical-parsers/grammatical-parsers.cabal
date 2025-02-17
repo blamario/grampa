@@ -101,7 +101,7 @@ test-suite            doctests
   other-modules:      README
   ghc-options:        -threaded -pgmL markdown-unlit
   build-depends:      base, rank2classes, grammatical-parsers, doctest >= 0.8
-  build-tool-depends: markdown-unlit:markdown-unlit >= 0.5 && < 0.6
+  build-tool-depends: markdown-unlit:markdown-unlit
 
 benchmark            benchmarks
   type:              exitcode-stdio-1.0

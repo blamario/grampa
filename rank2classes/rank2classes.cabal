@@ -55,7 +55,7 @@ test-suite doctests
   other-modules:       MyModule
   ghc-options:         -threaded -pgmL markdown-unlit
   build-depends:       base, rank2classes, doctest >= 0.8
-  build-tool-depends:  markdown-unlit:markdown-unlit >= 0.5 && < 0.6
+  build-tool-depends:  markdown-unlit:markdown-unlit
 
 test-suite TH
   if !flag(use-template-haskell)
@@ -69,4 +69,4 @@ test-suite TH
   build-depends:       base, rank2classes, distributive < 0.7,
                        tasty < 2, tasty-hunit < 1,
                        data-functor-logistic < 0.1
-  build-tool-depends:  markdown-unlit:markdown-unlit >= 0.5 && < 0.6
+  build-tool-depends:  markdown-unlit:markdown-unlit
