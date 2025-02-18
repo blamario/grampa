@@ -17,8 +17,9 @@ import Control.Monad (replicateM)
 import Data.Functor.Compose (Compose(getCompose))
 import Data.Functor.Const (Const(getConst))
 import Data.Maybe (fromMaybe)
+import Data.Monoid (Monoid, (<>))
 import Language.Haskell.TH as TH
-import Language.Haskell.TH.Syntax (getQ, putQ)
+import Language.Haskell.TH.Syntax (BangType, VarBangType, getQ, putQ)
 
 import qualified Transformation
 import qualified Transformation.Shallow
