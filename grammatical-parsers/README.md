@@ -107,4 +107,6 @@ smaller grammars and combines them all together in the
 [Combined](https://github.com/blamario/grampa/blob/master/grammatical-parsers/examples/Combined.hs) module.
 
 For more conventional tastes there are monolithic examples of
-[Lua](https://github.com/blamario/language-lua2/blob/master/src/Language/Lua/Grammar.hs) and [Oberon](http://hackage.haskell.org/package/language-oberon) grammars as well.
+[Lua](https://github.com/blamario/language-lua2/blob/master/src/Language/Lua/Grammar.hs),
+[Modula-2](https://hackage.haskell.org/package/language-Modula2), and
+[Oberon](http://hackage.haskell.org/package/language-oberon) grammars as well.

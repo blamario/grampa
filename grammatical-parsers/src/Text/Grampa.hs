@@ -1,5 +1,31 @@
--- | A collection of parsing algorithms with a common interface, operating on grammars represented as records with
--- rank-2 field types.
+-- | This library consists of a collection of parsing algorithms and a common interface for representing grammars as
+-- records with rank-2 field types.
+--
+-- To implement a grammar, first determine if it is a context-free grammar or perhaps a parsing expression grammar. In
+-- the latter case, you should import your parser type from either "Text.Grampa.PEG.Backtrack" or the
+-- "Text.Grampa.PEG.Packrat" module. The former is faster on simple grammars but may require exponential time on more
+-- complex cases. The Packrat parser on the other hand guarantees linear time complexity but has more overhead and
+-- consumes more memory.
+--
+-- If your grammar is context-free, there are more possibilities to choose from:
+--
+-- * If the grammar is neither left-recursive nor ambiguous, you can import your parser type from
+--   "Text.Grampa.ContextFree.Continued".
+-- * If the grammar is ambiguous and you need to see all the results, there's "Text.Grampa.ContextFree.Parallel".
+-- * For a complex but non-left-recursive grammar, you can use "Text.Grampa.ContextFree.SortedMemoizing".
+-- * If you need to carry a monadic computation, there's "Text.Grampa.ContextFree.SortedMemoizing.Transformer".
+-- * If the grammar is left-recursive, "Text.Grampa.ContextFree.SortedMemoizing.LeftRecursive" is the ticket.
+-- * If the grammar is left-recursive /and/ you require monadic context, the final option is
+--   "Text.Grampa.ContextFree.SortedMemoizing.Transformer.LeftRecursive".
+--
+-- Regardless of the chosen parer type, you'll construct your grammar the same way. A grammar is a set of productions
+-- using the same parser type, collected and abstracted inside a rank-2 record type. Each production is built using
+-- the standard parser combinators from the usual 'Applicative' and 'Alternative' classes, plus some additional
+-- [classes](#g:classes) provided by this library. The 'Monad' operations are available as well, but should not be
+-- used in left-recursive positions.
+--
+-- Once the grammar is complete, you can use 'parseComplete' or 'parsePrefix' to apply it to your input.
+
 {-# LANGUAGE FlexibleContexts, KindSignatures, OverloadedStrings, RankNTypes, ScopedTypeVariables,
              TypeFamilies, TypeOperators #-}
 module Text.Grampa (
@@ -7,7 +33,7 @@ module Text.Grampa (
    failureDescription, simply,
    -- * Types
    Grammar, GrammarBuilder, GrammarOverlay, ParseResults, ParseFailure(..), FailureDescription(..), Ambiguous(..), Pos,
-   -- * Classes
+   -- * Classes #classes#
    -- ** Parsing
    DeterministicParsing(..), AmbiguousParsing(..), CommittedParsing(..), TraceableParsing(..),
    LexicalParsing(..),
@@ -83,8 +109,8 @@ overlay base layers = appEndo (foldMap (Endo . ($ self)) layers) (base self)
 simply :: (Rank2.Only r (p (Rank2.Only r) s) -> s -> Rank2.Only r f) -> p (Rank2.Only r) s r -> s -> f r
 simply parseGrammar p input = Rank2.fromOnly (parseGrammar (Rank2.Only p) input)
 
--- | Given the textual parse input, the parse failure on the input, and the number of lines preceding the failure to
--- show, produce a human-readable failure description.
+-- | Given the textual parse input, the parse failure on the input, and the number of preceding lines of context you
+-- want to show, produce a human-readable failure description.
 failureDescription :: forall s pos. (Ord s, TextualMonoid s, Position pos) => s -> ParseFailure pos s -> Int -> s
 failureDescription input (ParseFailure pos (FailureDescription expected inputs) erroneous) contextLineCount =
    Position.context input pos contextLineCount
