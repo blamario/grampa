@@ -1,3 +1,9 @@
+Version 0.7.2.1
+---------------
+* Updated CI configuration
+* Improved Haddock documentation
+* Removed the unused containers dependency from library and bumped it in tests and executables
+
 Version 0.7.2
 ---------------
 * Added `Combinators.takeSomeNonEmpty`
