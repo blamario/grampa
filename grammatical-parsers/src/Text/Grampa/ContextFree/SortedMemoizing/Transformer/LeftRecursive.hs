@@ -1,4 +1,3 @@
-{-# Language GADTs #-}
 -- | A context-free parser that can handle ambiguous left-recursive grammars and carry a monadic computation with each
 -- parsing result.
 module Text.Grampa.ContextFree.SortedMemoizing.Transformer.LeftRecursive (

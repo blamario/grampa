@@ -607,6 +607,26 @@ instance (Rank2.Apply g, InputParsing (Fixed p g s), DeterministicParsing (p g s
       where d0 = () <$ direct0 p <<|> notFollowedBy (void $ direct p)
             d1 = direct1 p *> mcp
             mcp = skipAll (complete p)
+   concatAll (PositiveDirectParser p) = DirectParser{
+      complete = concatAll p,
+      direct0= mempty <$ notFollowedBy (void p),
+      direct1= liftA2 (<>) p (concatAll p)}
+   concatAll p@DirectParser{} = DirectParser{
+      complete = concatAll (complete p),
+      direct0= direct0 p <<|> mempty <$ notFollowedBy (void $ complete p),
+      direct1= liftA2 (<>) (direct1 p) (concatAll (complete p))}
+   concatAll p@Parser{} = asLeaf Parser{
+      complete= mcp,
+      direct= d1 <<|> d0,
+      direct0= d0,
+      direct1= d1,
+      indirect= liftA2 (<>) (indirect p) mcp,
+      choices= undefined,
+      isAmbiguous= Nothing,
+      cyclicDescendants= \deps-> (cyclicDescendants p deps){nullable= True}}
+      where d0 = direct0 p <<|> mempty <$ notFollowedBy (void $ direct p)
+            d1 = liftA2 (<>) (direct1 p) mcp
+            mcp = concatAll (complete p)
 
 instance (Rank2.Apply g, CommittedParsing (p g s), CommittedResults (p g s) ~ ParseResults s) =>
          CommittedParsing (Fixed p g s) where
