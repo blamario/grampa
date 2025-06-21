@@ -1,5 +1,5 @@
--- | This library consists of a collection of parsing algorithms and a common interface for representing grammars as
--- records with rank-2 field types.
+-- | This library provides a collection of parsing algorithms with a common interface. The interface represents
+-- grammars as records with rank-2 field types.
 --
 -- To implement a grammar, first determine if it is a context-free grammar or perhaps a parsing expression grammar. In
 -- the latter case, you should import your parser type from either "Text.Grampa.PEG.Backtrack" or the
@@ -15,14 +15,14 @@
 -- * For a complex but non-left-recursive grammar, you can use "Text.Grampa.ContextFree.SortedMemoizing".
 -- * If you need to carry a monadic computation, there's "Text.Grampa.ContextFree.SortedMemoizing.Transformer".
 -- * If the grammar is left-recursive, "Text.Grampa.ContextFree.SortedMemoizing.LeftRecursive" is the ticket.
--- * If the grammar is left-recursive /and/ you require monadic context, the final option is
+-- * If the grammar is left-recursive /and/ you require monadic context, the final and most elaborate option is
 --   "Text.Grampa.ContextFree.SortedMemoizing.Transformer.LeftRecursive".
 --
 -- Regardless of the chosen parer type, you'll construct your grammar the same way. A grammar is a set of productions
 -- using the same parser type, collected and abstracted inside a rank-2 record type. Each production is built using
--- the standard parser combinators from the usual 'Applicative' and 'Alternative' classes, plus some additional
--- [classes](#g:classes) provided by this library. The 'Monad' operations are available as well, but should not be
--- used in left-recursive positions.
+-- the standard parser combinators from the usual 'Applicative' and 'Control.Applicative.Alternative' classes, plus
+-- some additional [classes](#g:classes) provided by this library. The 'Monad' operations are available as well, but
+-- should not be used in left-recursive positions.
 --
 -- Once the grammar is complete, you can use 'parseComplete' or 'parsePrefix' to apply it to your input.
 

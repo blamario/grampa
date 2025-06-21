@@ -38,18 +38,20 @@ import Prelude hiding (takeWhile)
 -- | A parse results in either a 'ParseFailure' or the result of the appropriate type.
 type ParseResults s = Either (ParseFailure Pos s)
 
--- | A 'ParseFailure' contains the offset of the parse failure and the list of things expected at that offset.
+-- | A 'ParseFailure' contains the offset of the parse failure, the list of things expected at that offset, and the
+-- list of unexpected things encountered there. Use 'Text.Grampa.failureDescription' to produce human-friendly
+-- output.
 data ParseFailure pos s =
    ParseFailure {failurePosition :: pos,
                  expectedAlternatives :: FailureDescription s,  -- ^ expected input alternatives
-                 errorAlternatives ::    [String]               -- ^ erroneous alternatives
+                 errorAlternatives ::    [String]               -- ^ unexpected inputs
                 }
    deriving (Eq, Functor, Show)
 
 -- | A position in the input is represented as the length of its remainder.
 type Pos = Down Int
 
--- | An expected or erroneous input can be described using 'String' or using the input type
+-- | An expected input can be described using 'String' or using the input type
 data FailureDescription s = FailureDescription {staticDescriptions  :: [String],
                                                 literalDescriptions :: [s]}
                             deriving (Functor, Eq, Ord, Read, Show)
@@ -83,7 +85,7 @@ instance Ord s => Monoid (FailureDescription s) where
    mempty = FailureDescription mempty mempty
 
 -- | An 'Ambiguous' parse result, produced by the 'ambiguous' combinator, contains a 'NonEmpty' list of
--- alternative results.
+-- alternative results parsed over the same range of input.
 newtype Ambiguous a = Ambiguous{getAmbiguous :: NonEmpty a} deriving (Data, Eq, Ord, Show, Typeable)
 
 instance Show1 Ambiguous where
@@ -122,16 +124,21 @@ completeParser (Compose (Right (Compose results))) =
    of [] -> Compose (Left $ ParseFailure 0 (FailureDescription ["a complete parse"] []) [])
       completeResults -> Compose (Right $ snd <$> completeResults)
 
--- | Choose one of the instances of this class to parse with.
+-- | Instances of this class are parser types that can return the parse results for the given input. Choose one
+-- instance to parse with.
 class InputParsing m => MultiParsing m where
-   -- | Some parser types produce a single result, others a list of results.
+   -- | Some parser types produce a single result, others a list of results. The parser's 'ResultFunctor' determines
+   -- the shape of the result.
    type ResultFunctor m :: Type -> Type
+   -- | A grammar (/i.e./ a rank-2 record of parsers) must allow the parser to parse all its productions (/i.e./
+   -- fields), so it must be at least a 'Rank2.Functor'. Some parsers require stronger constraints.
    type GrammarConstraint m (g :: (Type -> Type) -> Type) :: Constraint
    type GrammarConstraint m g = Rank2.Functor g
-   -- | Given a rank-2 record of parsers and input, produce a record of parses of the complete input.
+   -- | Given a grammar and input, produce a record of parses of the complete
+   -- input.
    parseComplete :: (ParserInput m ~ s, GrammarConstraint m g, Eq s, FactorialMonoid s) =>
                     g m -> s -> g (ResultFunctor m)
-   -- | Given a rank-2 record of parsers and input, produce a record of prefix parses paired with the remaining input
+   -- | Given a grammar and input, produce a record of prefix parses paired with the remaining input
    -- suffix.
    parsePrefix :: (ParserInput m ~ s, GrammarConstraint m g, Eq s, FactorialMonoid s) =>
                   g m -> s -> g (Compose (ResultFunctor m) ((,) s))
@@ -140,7 +147,7 @@ class InputParsing m => MultiParsing m where
 class MultiParsing m => GrammarParsing m where
    -- | The record of grammar productions associated with the parser
    type ParserGrammar m :: (Type -> Type) -> Type
-   -- | For internal use by 'notTerminal'
+   -- | For internal use by 'nonTerminal'
    type GrammarFunctor m :: Type -> Type
    -- | Converts the intermediate to final parsing result.
    parsingResult :: ParserInput m -> GrammarFunctor m a -> ResultFunctor m (ParserInput m, a)
