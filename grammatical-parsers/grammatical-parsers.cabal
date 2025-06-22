@@ -14,18 +14,13 @@ author:              Mario Blažević
 maintainer:          Mario Blažević <blamario@protonmail.com>
 copyright:           (c) 2017 Mario Blažević
 category:            Text, Parsing
-build-type:          Custom
-cabal-version:       >=1.10
-tested-with:         GHC==9.12.1, GHC==9.10.1, GHC==9.8.2, GHC==9.6.4, GHC==9.4.8, GHC==9.2.8, GHC==9.0.2, GHC==8.10.7
+Build-Type:          Simple
+cabal-version:       2.0
+tested-with:         GHC==9.12.2, GHC==9.10.2, GHC==9.8.4, GHC==9.6.7, GHC==9.4.8, GHC==9.2.8, GHC==9.0.2, GHC==8.10.7
 extra-source-files:  README.md, CHANGELOG.md
 source-repository head
   type:              git
   location:          https://github.com/blamario/grampa
-custom-setup
- setup-depends:
-   base >= 4 && <5,
-   Cabal < 4,
-   cabal-doctest >= 1 && <1.1
  
 library
   hs-source-dirs:      src
@@ -92,15 +87,13 @@ test-suite           quicktests
                      Arithmetic, Boolean, Combined, Comparisons, Conditionals, Lambda, Utilities
   default-language:  Haskell2010
 
-test-suite            doctests
-  type:               exitcode-stdio-1.0
+library               doctests
   hs-source-dirs:     test
   default-language:   Haskell2010
-  main-is:            Doctest.hs
   other-modules:      README
   ghc-options:        -threaded -pgmL markdown-unlit
-  build-depends:      base, rank2classes, grammatical-parsers, doctest >= 0.8
-  build-tool-depends: markdown-unlit:markdown-unlit >= 0.5 && < 0.6
+  build-depends:      base, rank2classes, grammatical-parsers
+  build-tool-depends: markdown-unlit:markdown-unlit >= 0.5 && < 0.6, doctest:doctest >= 0.8 && < 1
 
 benchmark            benchmarks
   type:              exitcode-stdio-1.0

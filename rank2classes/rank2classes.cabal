@@ -14,18 +14,13 @@ author:              Mario Blažević
 maintainer:          Mario Blažević <blamario@protonmail.com>
 copyright:           (c) 2017 Mario Blažević
 category:            Control, Data, Generics
-build-type:          Custom
-cabal-version:       >=1.10
-tested-with:         GHC==9.12.1, GHC==9.10.1, GHC==9.8.2, GHC==9.6.4, GHC==9.4.8, GHC==9.2.8, GHC==9.0.2, GHC==8.10.7
+build-type:          Simple
+cabal-version:       2.0
+tested-with:         GHC==9.12.2, GHC==9.10.2, GHC==9.8.4, GHC==9.6.7, GHC==9.4.8, GHC==9.2.8, GHC==9.0.2, GHC==8.10.7
 extra-source-files:  README.md, CHANGELOG.md, test/MyModule.lhs
 source-repository head
   type:              git
   location:          https://github.com/blamario/grampa
-custom-setup
- setup-depends:
-   base >= 4 && <5,
-   Cabal < 4,
-   cabal-doctest >= 1 && <1.1
 
 flag use-template-haskell
   description: Enable the compilation of the Rank2.TH module
@@ -47,14 +42,12 @@ library
     build-depends: template-haskell >= 2.11 && < 2.24
     exposed-modules: Rank2.TH
 
-test-suite doctests
-  type:                exitcode-stdio-1.0
+library doctests
   hs-source-dirs:      test
   default-language:    Haskell2010
-  main-is:             Doctest.hs
   other-modules:       MyModule
   ghc-options:         -threaded -pgmL markdown-unlit
-  build-depends:       base, rank2classes, doctest >= 0.8
+  build-depends:       base, rank2classes
   build-tool-depends:  markdown-unlit:markdown-unlit >= 0.5 && < 0.6
 
 test-suite TH
@@ -69,4 +62,4 @@ test-suite TH
   build-depends:       base, rank2classes, distributive < 0.7,
                        tasty < 2, tasty-hunit < 1,
                        data-functor-logistic < 0.1
-  build-tool-depends:  markdown-unlit:markdown-unlit >= 0.5 && < 0.6
+  build-tool-depends:  markdown-unlit:markdown-unlit >= 0.5 && < 0.6, doctest:doctest >= 0.8 && < 1
