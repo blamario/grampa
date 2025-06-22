@@ -36,15 +36,11 @@ import qualified Rank2
 import Prelude hiding (($))
 
 -- $setup
--- >>> {-# Language FlexibleInstances, MultiParamTypeClasses, TypeFamilies, TypeOperators #-}
+-- >>> :seti -XFlexibleInstances -XMultiParamTypeClasses -XTypeFamilies -XTypeOperators
 -- >>> import Transformation (Transformation)
 -- >>> import qualified Transformation
--- >>> :{
--- data MaybeToList = MaybeToList
--- instance Transformation MaybeToList where
---    type Domain MaybeToList = Maybe
---    type Codomain MaybeToList = []
--- :}
+-- >>> data MaybeToList = MaybeToList
+-- >>> instance Transformation MaybeToList where {type Domain MaybeToList = Maybe; type Codomain MaybeToList = []}
 
 -- | A 'Transformation', natural or not, maps one functor to another.
 -- For example, here's the declaration for a transformation that maps `Maybe` to `[]`:

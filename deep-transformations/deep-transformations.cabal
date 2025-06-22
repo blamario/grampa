@@ -46,6 +46,7 @@ library
 library doctests
   hs-source-dirs:      test
   default-language:    Haskell2010
+  default-extensions:  FlexibleInstances, MultiParamTypeClasses, TypeFamilies, TypeOperators
   other-modules:       README, RepMin, RepMinAuto
   ghc-options:         -threaded -pgmL markdown-unlit
   build-depends:       base, rank2classes, deep-transformations
