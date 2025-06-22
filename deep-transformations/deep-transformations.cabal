@@ -50,4 +50,3 @@ library doctests
   ghc-options:         -threaded -pgmL markdown-unlit
   build-depends:       base, rank2classes, deep-transformations
   build-tool-depends:  markdown-unlit:markdown-unlit >= 0.5 && < 0.6, doctest:doctest >= 0.8 && < 1
-  x-doctest-options:   --fast

@@ -39,16 +39,20 @@ import Prelude hiding (($))
 -- >>> {-# Language FlexibleInstances, MultiParamTypeClasses, TypeFamilies, TypeOperators #-}
 -- >>> import Transformation (Transformation)
 -- >>> import qualified Transformation
-
--- | A 'Transformation', natural or not, maps one functor to another.
--- For example, here's the declaration for a transformation that maps `Maybe` to `[]`:
---
 -- >>> :{
 -- data MaybeToList = MaybeToList
 -- instance Transformation MaybeToList where
 --    type Domain MaybeToList = Maybe
 --    type Codomain MaybeToList = []
 -- :}
+
+-- | A 'Transformation', natural or not, maps one functor to another.
+-- For example, here's the declaration for a transformation that maps `Maybe` to `[]`:
+--
+-- data MaybeToList = MaybeToList
+-- instance Transformation MaybeToList where
+--    type Domain MaybeToList = Maybe
+--    type Codomain MaybeToList = []
 class Transformation t where
    type Domain t :: Type -> Type
    type Codomain t :: Type -> Type
