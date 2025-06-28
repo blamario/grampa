@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, InstanceSigs, MultiParamTypeClasses,
              RankNTypes, ScopedTypeVariables, TypeFamilies, TypeOperators, UndecidableInstances #-}
 -- | A context-free parser with packrat-like memoization of parse results.
-module Text.Grampa.ContextFree.Memoizing
+module Text.Grampa.ContextFree.Memoizing {-# DEPRECATED "Use SortedMemoizing instead" #-}
        (ResultList(..), Parser(..), BinTree(..), reparseTails, longest, peg, terminalPEG)
 where
 

@@ -2,7 +2,7 @@
              RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeApplications, TypeFamilies, TypeOperators,
              UndecidableInstances #-}
 -- | A context-free memoizing parser that can handle left-recursive grammars.
-module Text.Grampa.ContextFree.Memoizing.LeftRecursive (
+module Text.Grampa.ContextFree.Memoizing.LeftRecursive {-# DEPRECATED "Use SortedMemoizing.LeftRecursive instead" #-} (
    Fixed, Parser, SeparatedParser(..),
    autochain, liftPositive, liftPure, mapPrimitive,
    longest, peg, terminalPEG,
