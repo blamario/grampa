@@ -90,8 +90,11 @@ type GrammarBuilder (g  :: (Type -> Type) -> Type)
                     (s  :: Type)
    = g (p g' s) -> g (p g' s)
 
--- | A grammar overlay is a function that takes a final grammar @self@ and the parent grammar @super@ and builds a new
--- grammar from them. Use 'overlay' to apply a colection of overlays on top of a base grammar.
+-- | A grammar overlay is a function that takes a final grammar @self@ and the parent grammar @super@ and builds a
+-- new grammar from them. Use 'overlay' to apply a colection of overlays on top of a base grammar.
+--
+-- See https://www.haskellforall.com/2022/01/nixpkgs-overlays-are-monoids.html for a more general explanation of
+-- overlays.
 type GrammarOverlay (g  :: (Type -> Type) -> Type)
                     (m  :: Type -> Type)
    = g m -> g m -> g m
