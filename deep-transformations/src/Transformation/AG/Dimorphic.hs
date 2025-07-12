@@ -24,8 +24,11 @@ newtype Auto t = Auto t
 -- the original nodes.
 newtype Keep t = Keep t
 
+-- | Node attributes
 data Atts a b = Atts{
+   -- | inherited
    inh :: a,
+   -- | synthesized
    syn :: b}
    deriving (Data, Typeable, Show)
 
@@ -39,10 +42,11 @@ instance (Monoid a, Monoid b) => Monoid (Atts a b) where
 -- | A node's 'Semantics' maps its inherited attribute to its synthesized attribute.
 type Semantics a b = Const (a -> b)
 
--- | A node's 'PreservingSemantics' maps its inherited attribute to its synthesized attribute.
+-- | A node's 'PreservingSemantics' maps its inherited attribute to its synthesized attribute and stores all
+-- attributes in 'Atts' together with the node.
 type PreservingSemantics f a b = Compose ((->) a) (Compose ((,) (Atts a b)) f)
 
--- | An attribution rule maps a node's inherited attribute and its child nodes' synthesized attribute to the node's
+-- | An attribution rule maps a node's inherited attribute and its child nodes' synthesized attributes to the node's
 -- synthesized attribute and the children nodes' inherited attributes.
 type Rule a b = Atts a b -> Atts a b
 
@@ -140,6 +144,7 @@ traverseDefaultWithAttributes :: forall t p q r a b g.
 traverseDefaultWithAttributes t x rootInheritance = Full.traverse Feeder (t Full.<$> x) rootInheritance
 {-# INLINE traverseDefaultWithAttributes #-}
 
+-- | Identity transformation whose only purpose is to help implement 'traverseDefaultWithAttributes'.
 data Feeder (a :: Type) (b :: Type) (f :: Type -> Type) = Feeder
 
 type FeederDomain (a :: Type) (b :: Type) f = Compose ((->) a) (Compose ((,) (Atts a b)) f)
