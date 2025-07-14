@@ -46,19 +46,19 @@ type PreservingSemantics f a = Compose ((->) a) (Compose ((,) (Atts a)) f)
 -- synthesized attribute and the children nodes' inherited attributes.
 type Rule a = Atts a -> Atts a
 
-instance {-# overlappable #-} AttributeTransformation t => Attribution t g deep shallow where
+instance {-# overlappable #-} AttributeTransformation t => Attribution t g where
    attribution = const (const id)
 
 instance {-# overlappable #-} (Transformation (Auto t), p ~ Domain (Auto t), q ~ Codomain (Auto t), q ~ Semantics a,
                                a ~ Attributes (Auto t),
-                               Rank2.Foldable (g q), Monoid a, Foldable p, Attribution (Auto t) g q p) =>
+                               Rank2.Foldable (g q), Monoid a, Foldable p, Attribution (Auto t) g) =>
                               (Auto t) `At` g (Semantics a) (Semantics a) where
    ($) = applyDefault (foldr const $ error "Missing node")
    {-# INLINE ($) #-}
 
 instance {-# overlappable #-} (AttributeTransformation (Keep t), p ~ Domain (Keep t), q ~ Codomain (Keep t),
                                a ~ Attributes (Keep t), q ~ PreservingSemantics p a, Rank2.Foldable (g q), Monoid a,
-                               Foldable p, Functor p, Attribution (Keep t) g q p) =>
+                               Foldable p, Functor p, Attribution (Keep t) g) =>
                               (Keep t) `At` g (PreservingSemantics p a) (PreservingSemantics p a) where
    ($) = applyDefaultWithAttributes
    {-# INLINE ($) #-}
@@ -92,27 +92,28 @@ class Transformation t => AttributeTransformation t where
 -- >                    syn= fromChildren}
 -- >             = Atts{syn= toParent,
 -- >                    inh= toChildren}
-class AttributeTransformation t => Attribution t g (deep :: Type -> Type) shallow where
+class AttributeTransformation t => Attribution t g where
    -- | The attribution rule for a given transformation and node.
-   attribution :: t -> shallow (g deep deep) -> Rule (Attributes t)
+   attribution :: t -> Domain t (g (Codomain t) (Codomain t)) -> Rule (Attributes t)
 
 -- | Drop-in implementation of 'Transformation.$'
-applyDefault :: (p ~ Domain t, a ~ Attributes t, q ~ Semantics a, x ~ g q q, Rank2.Foldable (g q), Attribution t g q p,
+applyDefault :: (a ~ Attributes t, q ~ Codomain t, q ~ Semantics a, x ~ g q q, Rank2.Foldable (g q), Attribution t g,
                  Monoid a)
-             => (forall y. p y -> y) -> t -> p x -> q x
+             => (forall y. Domain t y -> y) -> t -> Domain t x -> q x
 applyDefault extract t x = knit (attribution t x) (extract x)
 {-# INLINE applyDefault #-}
 
 -- | Drop-in implementation of 'Full.<$>'
 fullMapDefault :: (p ~ Domain t, q ~ Semantics a, a ~ Attributes t, q ~ Codomain t, x ~ g q q, Rank2.Foldable (g q),
-                   Deep.Functor t g, Attribution t g p p, Monoid a)
+                   Functor p, Deep.Functor t g, Attribution t g, Monoid a)
                => (forall y. p y -> y) -> t -> p (g p p) -> q (g q q)
-fullMapDefault extract t local = knit (attribution t local) (t Deep.<$> extract local)
+fullMapDefault extract t x = knit (attribution t (y <$ x)) y
+   where y = t Deep.<$> extract x
 {-# INLINE fullMapDefault #-}
 
 -- | Drop-in implementation of 'Transformation.$' that stores all attributes with every original node
-applyDefaultWithAttributes :: (p ~ Domain t, q ~ PreservingSemantics p a, a ~ Attributes t, x ~ g q q,
-                               Attribution t g q p, Rank2.Foldable (g q), Monoid a, Foldable p, Functor p)
+applyDefaultWithAttributes :: (p ~ Domain t, q ~ Codomain t, q ~ PreservingSemantics p a, a ~ Attributes t, x ~ g q q,
+                               Attribution t g, Rank2.Foldable (g q), Monoid a, Foldable p, Functor p)
                            => t -> p x -> q x
 applyDefaultWithAttributes t x = knitKeeping (attribution t x) x
 {-# INLINE applyDefaultWithAttributes #-}
