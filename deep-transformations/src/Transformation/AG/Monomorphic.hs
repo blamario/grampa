@@ -115,7 +115,7 @@ fullMapDefault extract t x = knit (attribution t (y <$ x)) y
 applyDefaultWithAttributes :: (p ~ Domain t, q ~ Codomain t, q ~ PreservingSemantics p a, a ~ Attributes t, x ~ g q q,
                                Attribution t g, Rank2.Foldable (g q), Monoid a, Foldable p, Functor p)
                            => t -> p x -> q x
-applyDefaultWithAttributes t x = knitKeeping (attribution t x) x
+applyDefaultWithAttributes t x = knitKeeping (\a-> Compose . (,) a) (syn . fst . getCompose) (attribution t x) x
 {-# INLINE applyDefaultWithAttributes #-}
 
 type Feeder a = Dimorphic.Feeder a a

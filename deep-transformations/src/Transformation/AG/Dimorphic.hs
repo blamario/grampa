@@ -1,4 +1,5 @@
-{-# Language Haskell2010, DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
+{-# Language Haskell2010, DefaultSignatures, DeriveDataTypeable,
+             FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
              ScopedTypeVariables, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | A special case of an attribute grammar where every node has only a single inherited and a single synthesized
@@ -93,20 +94,35 @@ knit r chSem = Const knitted
             where Atts{syn= synthesized, inh= chInh} = r Atts{inh= inherited, syn= chSyn}
                   chSyn = Rank2.foldMap (($ chInh) . getConst) chSem
 
--- | Another way to tie the recursive knot, using a 'Rule' to add attributes to every node througha stateful calculation
-knitKeeping :: forall a b f g sem. (Rank2.Foldable (g sem), sem ~ PreservingSemantics f a b,
-                                    Monoid a, Monoid b, Foldable f, Functor f)
-            => Rule a b -> f (g sem sem) -> sem (g sem sem)
-knitKeeping r x = Compose knitted
-   where knitted :: a -> Compose ((,) (Atts a b)) f (g sem sem)
-         knitted inherited = Compose (results, x)
+-- | Another way to tie the recursive knot, using a 'Rule' to add attributes to every node through a stateful
+-- calculation
+knitKeeping :: forall a b s f g sem. (Rank2.Foldable (g sem), sem ~ Compose ((->) a) (Compose ((,) s) f),
+                                      Monoid a, Monoid b, Foldable f, Functor f)
+            => (forall x. Atts a b -> f x -> Compose ((,) s) f x)
+            -> (forall x. Compose ((,) s) f x -> b)
+            -> Rule a b -> f (g sem sem) -> sem (g sem sem)
+knitKeeping store load r x = Compose knitted
+   where knitted :: a -> Compose ((,) s) f (g sem sem)
+         knitted inherited = store results x
             where results@Atts{inh= chInh} = r Atts{inh= inherited, syn= chSyn}
-                  chSyn = foldMap (Rank2.foldMap (syn . fst . getCompose . ($ chInh) . getCompose)) x
+                  chSyn = foldMap (Rank2.foldMap (load . ($ chInh) . getCompose)) x
 
 -- | Class of transformations that assign the same type of inherited and synthesized attributes to every node.
 class Transformation t => AttributeTransformation t where
    type Inherited t :: Type
    type Synthesized t :: Type
+   storeAttributes :: Codomain t ~ Compose ((->) (Inherited t)) s
+                   => t -> Atts (Inherited t) (Synthesized t) -> Domain t x -> s x
+   loadSynthesized :: Codomain t ~ Compose ((->) (Inherited t)) s
+                   => t -> s x -> Synthesized t
+   default storeAttributes :: (Codomain t ~ Compose ((->) (Inherited t)) s,
+                               s ~ Compose ((,) (Atts (Inherited t) (Synthesized t))) (Domain t))
+                           => t -> Atts (Inherited t) (Synthesized t) -> Domain t x -> s x
+   default loadSynthesized :: (Codomain t ~ Compose ((->) (Inherited t)) s,
+                               s ~ Compose ((,) (Atts (Inherited t) (Synthesized t))) (Domain t))
+                           => t -> s x -> Synthesized t
+   storeAttributes _t atts = Compose . (,) atts
+   loadSynthesized _t = syn . fst . getCompose
 
 -- | The core type class for defining the attribute grammar. The instances of this class typically have a form like
 --
@@ -136,11 +152,11 @@ fullMapDefault extract t x = knit (attribution t (y <$ x)) y
 {-# INLINE fullMapDefault #-}
 
 -- | Drop-in implementation of 'Transformation.$' that stores all attributes with every original node
-applyDefaultWithAttributes :: (p ~ Domain t, a ~ Inherited t, b ~ Synthesized t, q ~ PreservingSemantics p a b,
+applyDefaultWithAttributes :: forall t p q g a b x. (p ~ Domain t, a ~ Inherited t, b ~ Synthesized t, q ~ PreservingSemantics p a b, AttributeTransformation t,
                                q ~ Codomain t, x ~ g q q,
                                Attribution t g, Rank2.Foldable (g q), Monoid a, Monoid b, Foldable p, Functor p)
                            => t -> p x -> q x
-applyDefaultWithAttributes t x = knitKeeping (attribution t x) x
+applyDefaultWithAttributes t x = knitKeeping (storeAttributes t) (loadSynthesized t) (attribution t x) x
 {-# INLINE applyDefaultWithAttributes #-}
 
 -- | Drop-in implementation of 'Full.traverse' that stores all attributes with every original node
