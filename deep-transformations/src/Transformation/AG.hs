@@ -1,6 +1,6 @@
 {-# Language FlexibleContexts, FlexibleInstances,
              MultiParamTypeClasses, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
-             TypeFamilies, TypeOperators, UndecidableInstances #-}
+             TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | An attribute grammar is a particular kind of 'Transformation' that assigns attributes to nodes in a
 -- tree. Different node types may have different types of attributes, so the transformation is not natural. All
@@ -42,6 +42,28 @@ data AllAtts t a = AllAtts{allInh :: Atts (Inherited t) a,
 type Rule t g =  forall sem . sem ~ Semantics t
               => (Inherited   t (g sem (Semantics t)), g sem (Synthesized t))
               -> (Synthesized t (g sem (Semantics t)), g sem (Inherited t))
+
+type instance Atts (Inherited (Keep t)) a = Atts (Inherited t) a
+type instance Atts (Synthesized (Keep t)) a = (AllAtts t a, a)
+
+class Extractable f where
+   extract :: f x -> x
+
+instance (deep ~ Semantics (Keep t), Extractable shallow, Rank2.Functor (g (Semantics (Keep t))),
+          Attribution t g (Semantics t) shallow) =>
+         Attribution (Keep t) g deep shallow where
+   attribution (Keep t) x (inheritance, childSynthesis) = (Synthesized synthesis', unsafeCoerce childInheritance) where
+      (synthesis, childInheritance) =
+         attribution t
+            (unsafeCoerce x :: shallow (g (Semantics t) (Semantics t)))
+            (unsafeCoerce inheritance :: Inherited t (g (Semantics t) (Semantics t)),
+             unsafeCoerce (resynthesize Rank2.<$> childSynthesis) :: g (Semantics t) (Synthesized t))
+      resynthesize :: Synthesized (Keep t) a -> Synthesized t a
+      resynthesize = Synthesized . allSyn @t . fst . syn
+      synthesis' :: Atts (Synthesized (Keep t)) (g deep deep)
+      synthesis' = (AllAtts (unsafeCoerce (inh inheritance) :: Atts (Inherited t) (g deep deep)) (unsafeCoerce (syn synthesis) :: Atts (Synthesized t) (g deep deep)), extract x)
+
+newtype Keep t = Keep t
 
 -- | The core function to tie the recursive knot, turning a 'Rule' for a node into its 'Semantics'.
 knit :: (Rank2.Apply (g sem), sem ~ Semantics t) => Rule t g -> g sem sem -> sem (g sem sem)
