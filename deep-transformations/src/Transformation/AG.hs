@@ -1,4 +1,4 @@
-{-# Language FlexibleContexts, FlexibleInstances,
+{-# Language FlexibleContexts, FlexibleInstances, GADTs, ImpredicativeTypes,
              MultiParamTypeClasses, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
              TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
@@ -15,15 +15,18 @@ import qualified Rank2
 import qualified Transformation
 
 -- | Type family that maps a node type to the type of its attributes, indexed per type constructor.
-type family Atts (f :: Type -> Type) a
+type family Atts (f :: Type -> Type) (g :: (Type -> Type) -> (Type -> Type) -> Type)
+
+type family NodeConstructor (a :: Type) :: (Type -> Type) -> (Type -> Type) -> Type where
+   NodeConstructor (g p q) = g
 
 -- | Type constructor wrapping the inherited attributes for the given transformation.
-newtype Inherited t a = Inherited{inh :: Atts (Inherited t) a}
+newtype Inherited t a = Inherited{inh :: Atts (Inherited t) (NodeConstructor a)}
 -- | Type constructor wrapping the synthesized attributes for the given transformation.
-newtype Synthesized t a = Synthesized{syn :: Atts (Synthesized t) a}
+newtype Synthesized t a = Synthesized{syn :: Atts (Synthesized t) (NodeConstructor a)}
 
-deriving instance (Show (Atts (Inherited t) a)) => Show (Inherited t a)
-deriving instance (Show (Atts (Synthesized t) a)) => Show (Synthesized t a)
+--deriving instance (Show (Atts (Inherited t) a)) => Show (Inherited t a)
+--deriving instance (Show (Atts (Synthesized t) a)) => Show (Synthesized t a)
 
 -- | A node's 'Semantics' is a natural tranformation from the node's inherited attributes to its synthesized
 -- attributes.
@@ -31,11 +34,12 @@ type Semantics t = Inherited t Rank2.~> Synthesized t
 
 -- | A node's 'PreservingSemantics' is a natural tranformation from the node's inherited attributes to all its
 -- attributes paired with the preserved node.
-type PreservingSemantics t f = Rank2.Arrow (Inherited t) (Rank2.Product (AllAtts t) f)
+-- type PreservingSemantics t f = Rank2.Arrow (Inherited t) (Rank2.Product (AllAtts t) f)
 
 -- | All inherited and synthesized attributes
-data AllAtts t a = AllAtts{allInh :: Atts (Inherited t) a,
-                           allSyn :: Atts (Synthesized t) a}
+data AllAtts t a where
+   AllAtts :: a ~ g f f => {allInh :: Atts (Inherited t) g,
+                            allSyn :: Atts (Synthesized t) g} -> AllAtts t a
 
 -- | An attribution rule maps a node's inherited attributes and its child nodes' synthesized attributes to the node's
 -- synthesized attributes and the children nodes' inherited attributes.
@@ -43,27 +47,22 @@ type Rule t g =  forall sem . sem ~ Semantics t
               => (Inherited   t (g sem (Semantics t)), g sem (Synthesized t))
               -> (Synthesized t (g sem (Semantics t)), g sem (Inherited t))
 
-type instance Atts (Inherited (Keep t)) a = Atts (Inherited t) a
-type instance Atts (Synthesized (Keep t)) a = (AllAtts t a, a)
+newtype Keep t (f :: Type -> Type) = Keep t
+type instance Atts (Inherited (Keep t f)) g = Atts (Inherited t) g
+type instance Atts (Synthesized (Keep t f)) g = (Atts (Inherited t) g, Atts (Synthesized t) g, f (g f f))
 
-class Extractable f where
-   extract :: f x -> x
-
-instance (deep ~ Semantics (Keep t), Extractable shallow, Rank2.Functor (g (Semantics (Keep t))),
-          Attribution t g (Semantics t) shallow) =>
-         Attribution (Keep t) g deep shallow where
-   attribution (Keep t) x (inheritance, childSynthesis) = (Synthesized synthesis', unsafeCoerce childInheritance) where
-      (synthesis, childInheritance) =
-         attribution t
-            (unsafeCoerce x :: shallow (g (Semantics t) (Semantics t)))
-            (unsafeCoerce inheritance :: Inherited t (g (Semantics t) (Semantics t)),
-             unsafeCoerce (resynthesize Rank2.<$> childSynthesis) :: g (Semantics t) (Synthesized t))
-      resynthesize :: Synthesized (Keep t) a -> Synthesized t a
-      resynthesize = Synthesized . allSyn @t . fst . syn
-      synthesis' :: Atts (Synthesized (Keep t)) (g deep deep)
-      synthesis' = (AllAtts (unsafeCoerce (inh inheritance) :: Atts (Inherited t) (g deep deep)) (unsafeCoerce (syn synthesis) :: Atts (Synthesized t) (g deep deep)), extract x)
-
-newtype Keep t = Keep t
+instance (Rank2.Functor (g (Semantics (Keep t s))), Functor s, Attribution t g s) => Attribution (Keep t s) g s where
+   attribution (Keep t) x (Inherited i, childSynthesis) = (Synthesized synthesis', childInheritance') where
+      (Synthesized s, childInheritance) = attribution t x (Inherited i :: Inherited t (g (Semantics t) (Semantics t)),
+                                                           unsafeCoerce $ resynthesize Rank2.<$> childSynthesis)
+      resynthesize :: forall a. Synthesized (Keep t s) a -> Synthesized t a
+      resynthesize (Synthesized (_inherited, synthesized, _node)) = Synthesized synthesized
+      synthesis' :: Atts (Synthesized (Keep t s)) g
+      synthesis' = (i, s, (unsafeCoerce (localChild Rank2.<$> childSynthesis) :: g s s) <$ x)
+      childInheritance' :: g (Semantics (Keep t s)) (Inherited (Keep t s))
+      childInheritance' = unsafeCoerce childInheritance
+      localChild :: Synthesized (Keep t s) a -> s a
+      localChild (Synthesized (_, _, a)) = unsafeCoerce a
 
 -- | The core function to tie the recursive knot, turning a 'Rule' for a node into its 'Semantics'.
 knit :: (Rank2.Apply (g sem), sem ~ Semantics t) => Rule t g -> g sem sem -> sem (g sem sem)
@@ -71,10 +70,10 @@ knit r chSem = Rank2.Arrow knit'
    where knit' inherited = synthesized
             where (synthesized, chInh) = r (inherited, chSyn)
                   chSyn = chSem Rank2.<*> chInh
-
+{-
 -- | Another way to tie the recursive knot, using a 'Rule' to add 'AllAtts' information to every node
 knitKeeping :: forall t f g sem. (sem ~ PreservingSemantics t f, Rank2.Apply (g sem),
-                              Atts (Inherited t) (g sem sem) ~ Atts (Inherited t) (g (Semantics t) (Semantics t)),
+--                              Atts (Inherited t) (g sem sem) ~ Atts (Inherited t) (g (Semantics t) (Semantics t)),
                               Atts (Synthesized t) (g sem sem) ~ Atts (Synthesized t) (g (Semantics t) (Semantics t)),
                               g sem (Synthesized t) ~ g (Semantics t) (Synthesized t),
                               g sem (Inherited t) ~ g (Semantics t) (Inherited t))
@@ -93,10 +92,11 @@ knitKeeping extract rule x = Rank2.Arrow knitted
                   chSyn = Synthesized . allSyn . Rank2.fst Rank2.<$> chKept
                   chKept = chSem Rank2.<*> chInh
          chSem = extract x
+-}
 
 -- | The core type class for defining the attribute grammar. The instances of this class typically have a form like
 --
--- > instance Attribution MyAttGrammar MyNode (Semantics MyAttGrammar) Identity where
+-- > instance Attribution MyAttGrammar MyNode Identity where
 -- >   attribution MyAttGrammar{} (Identity MyNode{})
 -- >               (Inherited   fromParent,
 -- >                Synthesized MyNode{firstChild= fromFirstChild, ...})
@@ -107,24 +107,12 @@ knitKeeping extract rule x = Rank2.Arrow knitted
 -- instances of the 'Transformation.AG.Generics.Bequether' and 'Transformation.AG.Generics.Synthesizer' classes
 -- instead. If you derive 'GHC.Generics.Generic' instances for your attributes, you can even define each synthesized
 -- attribute individually with a 'Transformation.AG.Generics.SynthesizedField' instance.
-class Attribution t g deep shallow where
+class Attribution t g shallow where
    -- | The attribution rule for a given transformation and node.
-   attribution :: t -> shallow (g deep deep) -> Rule t g
+   attribution :: forall deep. t -> shallow (g deep deep) -> Rule t g
 
 -- | Drop-in implementation of 'Transformation.$'
-applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g q p)
+applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g p)
              => (forall a. p a -> a) -> t -> p x -> q x
 applyDefault extract t x = knit (attribution t x) (extract x)
 {-# INLINE applyDefault #-}
-
--- | Drop-in implementation of 'Transformation.$' that preserves all attributes with every original node
-applyDefaultWithAttributes :: (p ~ Transformation.Domain t, q ~ PreservingSemantics t p, x ~ g q q, Rank2.Apply (g q),
-                               Atts (Inherited t) (g q q) ~ Atts (Inherited t) (g (Semantics t) (Semantics t)),
-                               Atts (Synthesized t) (g q q) ~ Atts (Synthesized t) (g (Semantics t) (Semantics t)),
-                               g q (Synthesized t) ~ g (Semantics t) (Synthesized t),
-                               g q (Inherited t) ~ g (Semantics t) (Inherited t),
-                               Attribution t g (PreservingSemantics t p) p)
-                           => (forall a. p a -> a) -> t -> p (g (PreservingSemantics t p) (PreservingSemantics t p))
-                           -> PreservingSemantics t p (g (PreservingSemantics t p) (PreservingSemantics t p))
-applyDefaultWithAttributes extract t x = knitKeeping extract (attribution t x) x
-{-# INLINE applyDefaultWithAttributes #-}
