@@ -91,7 +91,7 @@ class SynthesizedField (name :: Symbol) result t g shallow where
                      -> g sem (Synthesized t)           -- ^ synthesized attributes
                      -> result
 
-instance {-# overlappable #-} (sem ~ Semantics t, Domain t ~ shallow, Revelation t, a ~ Atts (Inherited t) g,
+instance {-# overlappable #-} (Domain t ~ shallow, Revelation t, a ~ Atts (Inherited t) g,
                                forall deep. Shallow.Functor (PassDown t deep a) (g deep)) =>
                               Bequether t g shallow where
    bequest     :: forall sem deep. sem ~ Semantics t =>
@@ -111,13 +111,8 @@ instance {-# overlappable #-} (Atts (Synthesized t) g ~ result, Generic result, 
 newtype Folded a = Folded{getFolded :: a} deriving (Eq, Ord, Show, Semigroup, Monoid)
 -- | Wrapper for a field that should be automatically synthesized by replacing every child node by its synthesized
 -- attribute of the same name.
-newtype Mapped f g = Mapped{getMapped :: f (g f f)}
-                   --deriving (Eq, Ord, Show, Semigroup, Monoid, Functor, Applicative, Monad, Foldable)
-deriving instance Eq (f (g f f)) => Eq (Mapped f g)
-deriving instance Ord (f (g f f)) => Ord (Mapped f g)
-deriving instance Show (f (g f f)) => Show (Mapped f g)
-deriving instance Semigroup (f (g f f)) => Semigroup (Mapped f g)
-deriving instance Monoid (f (g f f)) => Monoid (Mapped f g)
+newtype Mapped f a = Mapped{getMapped :: f a}
+                   deriving (Eq, Ord, Show, Semigroup, Monoid, Functor, Applicative, Monad, Foldable)
 
 -- | Wrapper for a field that should be automatically synthesized by traversing over all child nodes and applying each
 -- node's synthesized attribute of the same name.
@@ -150,14 +145,15 @@ instance Transformation (Traverser t m f name) where
   type Domain (Traverser t m f name) = Synthesized t
   type Codomain (Traverser t m f name) = Compose m f
 
-instance Subtype (Atts (Inherited t) g) b => Transformation.At (PassDown t f b) (g f f) where
+instance Subtype (Atts (Inherited t) (NodeConstructor a)) b => Transformation.At (PassDown t f b) a where
    ($) (PassDown i) _ = Inherited (upcast i)
 
-instance (Monoid a, x ~ g f f, r ~ Atts (Synthesized t) g, Generic r, MayHaveMonoidalField name (Folded a) (Rep r)) =>
+instance (Monoid a, r ~ Atts (Synthesized t) (NodeConstructor x), Generic r,
+          MayHaveMonoidalField name (Folded a) (Rep r)) =>
          Transformation.At (Accumulator t name a) x where
    _ $ Synthesized r = Const (getMonoidalField (Proxy :: Proxy name) $ from r)
 
-instance (HasField name (Atts (Synthesized t) g) (Mapped f g)) => Transformation.At (Replicator t f name) (g f f) where
+instance (HasField name (Atts (Synthesized t) (NodeConstructor a)) (Mapped f a)) => Transformation.At (Replicator t f name) a where
    _ $ Synthesized r = getMapped (getField @name r)
 
 instance (HasField name (Atts (Synthesized t) g) (Traversed m f g)) =>
@@ -240,7 +236,7 @@ instance  {-# overlappable #-} (Monoid a, Shallow.Foldable (Accumulator t name a
    synthesizedField name t _ _ s = foldedField name t s
 
 instance  {-# overlappable #-} (Functor f, Shallow.Functor (Replicator t f name) (g f)) =>
-                               SynthesizedField name (Mapped f g) t g f where
+                               SynthesizedField name (Mapped f (g f f)) t g f where
    synthesizedField name t local _ s = Mapped (mappedField name t s <$ local)
 
 instance  {-# overlappable #-} (Traversable f, Applicative m, Shallow.Traversable (Traverser t m f name) (g f)) =>
