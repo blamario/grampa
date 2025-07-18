@@ -250,12 +250,12 @@ bequestDefault :: forall t g deep shallow sem.
                    Shallow.Functor (PassDown t deep (Atts (Inherited t) g)) (g deep))
                => t -> shallow (g deep deep) -> Atts (Inherited t) g -> g sem (Synthesized t)
                -> g sem (Inherited t)
-bequestDefault t local inheritance _synthesized = unsafeCoerce $ passDown @t inheritance (reveal t local :: g deep deep)
+bequestDefault t local inheritance _synthesized = passDown @t inheritance (reveal t local :: g deep deep)
 
 -- | Pass down the given record of inherited fields to child nodes.
-passDown :: forall t g shallow deep atts. (Shallow.Functor (PassDown t shallow atts) (g deep)) =>
-            atts -> g deep shallow -> g deep (Inherited t)
-passDown inheritance local = PassDown inheritance Shallow.<$> local
+passDown :: forall t g shallow deep1 deep2 atts. (Shallow.Functor (PassDown t shallow atts) (g deep1)) =>
+            atts -> g deep1 shallow -> g deep2 (Inherited t)
+passDown inheritance local = unsafeCoerce (PassDown @t inheritance Shallow.<$> local)
 
 -- | The default 'synthesizedField' method definition for 'Folded' fields.
 foldedField :: forall name t g a sem. (Monoid a, Shallow.Foldable (Accumulator t name a) (g sem)) =>
