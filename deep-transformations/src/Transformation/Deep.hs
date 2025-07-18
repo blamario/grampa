@@ -1,5 +1,5 @@
 {-# Language Haskell2010, DeriveDataTypeable, FlexibleInstances, KindSignatures, MultiParamTypeClasses, RankNTypes,
-             StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
+             GeneralizedNewtypeDeriving, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | Type classes 'Functor', 'Foldable', and 'Traversable' that correspond to the standard type classes of the same
 -- name, but applying the given transformation to every descendant of the given tree node. The corresponding classes
@@ -16,6 +16,7 @@ import qualified Data.Foldable as Rank1
 import qualified Data.Functor as Rank1
 import qualified Data.Traversable as Rank1
 import Data.Kind (Type)
+import Data.String (IsString)
 import qualified Rank2
 import           Transformation (Transformation, Domain, Codomain)
 import qualified Transformation.Full as Full
@@ -34,6 +35,10 @@ class (Transformation t, Rank2.Foldable (g (Domain t))) => Foldable t g where
 -- | Like "Transformation.Shallow".'Transformation.Shallow.Traversable' except it folds all descendants and not only immediate children
 class (Transformation t, Rank2.Traversable (g (Domain t))) => Traversable t g where
    traverse :: Codomain t ~ Compose m f => t -> g (Domain t) (Domain t) -> m (g f f)
+
+-- | Ground type ignoring the wrappers
+newtype Const2 (a :: Type) (deep :: Type -> Type) (shallow :: Type -> Type) = Const2{getConst2 :: a}
+   deriving (Eq, Ord, Show, IsString, Num)
 
 -- | A tuple of only one element
 newtype Only g (d :: Type -> Type) (s :: Type -> Type) =

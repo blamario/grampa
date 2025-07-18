@@ -1,5 +1,6 @@
 {-# Language DataKinds, DefaultSignatures, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving,
-             InstanceSigs, MultiParamTypeClasses, PolyKinds, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
+             InstanceSigs, MultiParamTypeClasses, PolyKinds, QuantifiedConstraints,
+             RankNTypes, ScopedTypeVariables, StandaloneDeriving,
              TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | This module can be used to scrap the boilerplate attribute declarations. In particular:
@@ -90,8 +91,8 @@ class SynthesizedField (name :: Symbol) result t g shallow where
                      -> g sem (Synthesized t)           -- ^ synthesized attributes
                      -> result
 
-instance {-# overlappable #-} (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
-                               Shallow.Functor (PassDown t sem (Atts (Inherited t) g)) (g sem)) =>
+instance {-# overlappable #-} (sem ~ Semantics t, Domain t ~ shallow, Revelation t, a ~ Atts (Inherited t) g,
+                               forall deep. Shallow.Functor (PassDown t deep a) (g deep)) =>
                               Bequether t g shallow where
    bequest     :: forall sem deep. sem ~ Semantics t =>
                   t                                -- ^ transformation        
@@ -112,6 +113,12 @@ newtype Folded a = Folded{getFolded :: a} deriving (Eq, Ord, Show, Semigroup, Mo
 -- attribute of the same name.
 newtype Mapped f g = Mapped{getMapped :: f (g f f)}
                    --deriving (Eq, Ord, Show, Semigroup, Monoid, Functor, Applicative, Monad, Foldable)
+deriving instance Eq (f (g f f)) => Eq (Mapped f g)
+deriving instance Ord (f (g f f)) => Ord (Mapped f g)
+deriving instance Show (f (g f f)) => Show (Mapped f g)
+deriving instance Semigroup (f (g f f)) => Semigroup (Mapped f g)
+deriving instance Monoid (f (g f f)) => Monoid (Mapped f g)
+
 -- | Wrapper for a field that should be automatically synthesized by traversing over all child nodes and applying each
 -- node's synthesized attribute of the same name.
 newtype Traversed m f g = Traversed{getTraversed :: m (f (g f f))} --deriving (Eq, Ord, Show, Semigroup, Monoid)

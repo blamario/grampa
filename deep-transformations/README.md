@@ -318,14 +318,14 @@ Every type of node can have different inherited and synthesized attributes, so w
 
 ~~~ {.haskell}
 type Env = Var -> Maybe (Expr Identity Identity)
-type instance AG.Atts (AG.Inherited DeadCodeEliminator) (Expr _ _) = Env
+type instance AG.Atts (AG.Inherited DeadCodeEliminator) Expr = Env
 ~~~
 
 A declaration will also need to inherit the environment, if only to pass it on to the nested expressions. Because we
  want to discard useless assignments, it will also need to know the list of all referenced variables.
 
 ~~~ {.haskell}
-type instance AG.Atts (AG.Inherited DeadCodeEliminator) (Decl _ _) = (Env, [Var])
+type instance AG.Atts (AG.Inherited DeadCodeEliminator) Decl = (Env, [Var])
 ~~~
 
 A `Decl` needs to synthesize the environment of constant bindings it generates itself, as well as a modified
@@ -333,7 +333,7 @@ A `Decl` needs to synthesize the environment of constant bindings it generates i
  need to wrap it in a `Maybe`.
 
 ~~~ {.haskell}
-type instance AG.Atts (AG.Synthesized DeadCodeEliminator) (Decl _ _) = (Env, Maybe (Decl Identity Identity))
+type instance AG.Atts (AG.Synthesized DeadCodeEliminator) Decl = (Env, Maybe (Decl Identity Identity))
 ~~~
 
 All declarations inside an `Expr` need to be trimmed, so the `Expr` itself may be simplified but never completely
@@ -342,7 +342,7 @@ All declarations inside an `Expr` need to be trimmed, so the `Expr` itself may b
  easier to reuse the existing `GetVariables` transformation.
 
 ~~~ {.haskell}
-type instance AG.Atts (AG.Synthesized DeadCodeEliminator) (Expr _ _) = Expr Identity Identity
+type instance AG.Atts (AG.Synthesized DeadCodeEliminator) Expr = Expr Identity Identity
 ~~~
 
 Now we need to describe how to calculate the attributes, by declaring `Attribution` instances of the node types. The
@@ -366,7 +366,7 @@ Let's see a few simple `attribution` rules first. The rules for leaf nodes can i
 because they don't have any children.
 
 ~~~ {.haskell}
-instance AG.Attribution DeadCodeEliminator Expr Sem Identity where
+instance AG.Attribution DeadCodeEliminator Expr Identity where
   attribution DeadCodeEliminator (Identity (EVar v)) (AG.Inherited env, _) =
     (AG.Synthesized (maybe (EVar v) id $ env v), EVar v)
   attribution DeadCodeEliminator (Identity (Con n)) (AG.Inherited env, _) =
@@ -403,7 +403,7 @@ The only non-trivial rule is for the `Let` node. It needs to pass the list of va
 The rules for `Decl` are a bit more involved.
 
 ~~~ {.haskell}
-instance AG.Attribution DeadCodeEliminator Decl Sem Identity where
+instance AG.Attribution DeadCodeEliminator Decl Identity where
 ~~~
 
 A single variable binding can be in three distinct situations. If the variable is not referenced at all, we can just

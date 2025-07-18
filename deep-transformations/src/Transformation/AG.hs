@@ -13,20 +13,22 @@ import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Rank2
 import qualified Transformation
+import Transformation.Deep (Const2)
 
 -- | Type family that maps a node type to the type of its attributes, indexed per type constructor.
 type family Atts (f :: Type -> Type) (g :: (Type -> Type) -> (Type -> Type) -> Type)
 
 type family NodeConstructor (a :: Type) :: (Type -> Type) -> (Type -> Type) -> Type where
    NodeConstructor (g p q) = g
+   NodeConstructor t = Const2 t
 
 -- | Type constructor wrapping the inherited attributes for the given transformation.
 newtype Inherited t a = Inherited{inh :: Atts (Inherited t) (NodeConstructor a)}
 -- | Type constructor wrapping the synthesized attributes for the given transformation.
 newtype Synthesized t a = Synthesized{syn :: Atts (Synthesized t) (NodeConstructor a)}
 
---deriving instance (Show (Atts (Inherited t) a)) => Show (Inherited t a)
---deriving instance (Show (Atts (Synthesized t) a)) => Show (Synthesized t a)
+deriving instance (Show (Atts (Inherited t) (NodeConstructor a))) => Show (Inherited t a)
+deriving instance (Show (Atts (Synthesized t) (NodeConstructor a))) => Show (Synthesized t a)
 
 -- | A node's 'Semantics' is a natural tranformation from the node's inherited attributes to its synthesized
 -- attributes.
