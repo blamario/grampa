@@ -89,7 +89,7 @@ knit r chSem = Rank2.Arrow knit'
 -- attribute individually with a 'Transformation.AG.Generics.SynthesizedField' instance.
 class Attribution t g shallow where
    -- | The attribution rule for a given transformation and node.
-   attribution :: forall deep. t -> shallow (g deep deep) -> Rule t g
+   attribution :: forall f. Rank2.Functor (g f) => t -> shallow (g f f) -> Rule t g
 
 -- | Drop-in implementation of 'Transformation.$'
 applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g p)
