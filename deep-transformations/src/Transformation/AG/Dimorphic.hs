@@ -8,7 +8,6 @@
 module Transformation.AG.Dimorphic where
 
 import Data.Data (Data, Typeable)
-import Data.Functor.Compose (Compose(..))
 import Data.Functor.Const (Const(..))
 import Data.Kind (Type)
 import Data.Semigroup (Semigroup(..))
@@ -20,10 +19,6 @@ import qualified Transformation.Full as Full
 
 -- | Transformation wrapper that allows automatic inference of attribute rules.
 newtype Auto t = Auto t
-
--- | Transformation wrapper that allows automatic inference of attribute rules and preservation of the attribute with
--- the original nodes.
-newtype Keep t = Keep t
 
 -- | Node attributes
 data Atts a b = Atts{
@@ -43,10 +38,6 @@ instance (Monoid a, Monoid b) => Monoid (Atts a b) where
 -- | A node's 'Semantics' maps its inherited attribute to its synthesized attribute.
 type Semantics a b = Const (a -> b)
 
--- | A node's 'PreservingSemantics' maps its inherited attribute to its synthesized attribute and stores all
--- attributes in 'Atts' together with the node.
-type PreservingSemantics f a b = Compose ((->) a) (Compose ((,) (Atts a b)) f)
-
 -- | An attribution rule maps a node's inherited attribute and its child nodes' synthesized attributes to the node's
 -- synthesized attribute and the children nodes' inherited attributes.
 type Rule a b = Atts a b -> Atts a b
@@ -61,30 +52,10 @@ instance {-# overlappable #-} (Transformation (Auto t), p ~ Domain (Auto t), q ~
    ($) = applyDefault (foldr const $ error "Missing node")
    {-# INLINE ($) #-}
 
-instance {-# overlappable #-} (Transformation (Keep t), p ~ Domain (Keep t), q ~ Codomain (Keep t),
-                               a ~ Inherited (Keep t), b ~ Synthesized (Keep  t),
-                               q ~ PreservingSemantics p a b, Rank2.Foldable (g q), Monoid a, Monoid b,
-                               Foldable p, Functor p, Attribution (Keep t) g) =>
-                              (Keep t) `At` g (PreservingSemantics p a b) (PreservingSemantics p a b) where
-   ($) = applyDefaultWithAttributes
-   {-# INLINE ($) #-}
-
 instance (Transformation (Auto t), Domain (Auto t) ~ f, Functor f, Codomain (Auto t) ~ Semantics a b,
           Rank2.Functor (g f), Deep.Functor (Auto t) g, Auto t `At` g (Semantics a b) (Semantics a b)) =>
          Full.Functor (Auto t) g where
    (<$>) = Full.mapUpDefault
-
-instance (Transformation (Keep t), Domain (Keep t) ~ f, Functor f, Codomain (Keep t) ~ PreservingSemantics f a b,
-          Rank2.Functor (g f), Deep.Functor (Keep t) g,
-          Keep t `At` g (PreservingSemantics f a b) (PreservingSemantics f a b)) =>
-         Full.Functor (Keep t) g where
-   (<$>) = Full.mapUpDefault
-
-instance (Transformation (Keep t), Domain (Keep t) ~ f, Traversable f, Rank2.Traversable (g f),
-          Codomain (Keep t) ~ PreservingSemantics f a b, Deep.Traversable (Feeder a b f) g, Full.Functor (Keep t) g,
-          Keep t `At` g (PreservingSemantics f a b) (PreservingSemantics f a b)) =>
-         Full.Traversable (Keep t) g where
-   traverse = traverseDefaultWithAttributes
 
 -- | The core function to tie the recursive knot, turning a 'Rule' for a node into its 'Semantics'.
 knit :: (Rank2.Foldable (g sem), sem ~ Semantics a b, Monoid a, Monoid b)
@@ -94,35 +65,10 @@ knit r chSem = Const knitted
             where Atts{syn= synthesized, inh= chInh} = r Atts{inh= inherited, syn= chSyn}
                   chSyn = Rank2.foldMap (($ chInh) . getConst) chSem
 
--- | Another way to tie the recursive knot, using a 'Rule' to add attributes to every node through a stateful
--- calculation
-knitKeeping :: forall a b s f g sem. (Rank2.Foldable (g sem), sem ~ Compose ((->) a) (Compose ((,) s) f),
-                                      Monoid a, Monoid b, Foldable f, Functor f)
-            => (forall x. Atts a b -> f x -> Compose ((,) s) f x)
-            -> (forall x. Compose ((,) s) f x -> b)
-            -> Rule a b -> f (g sem sem) -> sem (g sem sem)
-knitKeeping store load r x = Compose knitted
-   where knitted :: a -> Compose ((,) s) f (g sem sem)
-         knitted inherited = store results x
-            where results@Atts{inh= chInh} = r Atts{inh= inherited, syn= chSyn}
-                  chSyn = foldMap (Rank2.foldMap (load . ($ chInh) . getCompose)) x
-
 -- | Class of transformations that assign the same type of inherited and synthesized attributes to every node.
 class Transformation t => AttributeTransformation t where
    type Inherited t :: Type
    type Synthesized t :: Type
-   storeAttributes :: Codomain t ~ Compose ((->) (Inherited t)) s
-                   => t -> Atts (Inherited t) (Synthesized t) -> Domain t x -> s x
-   loadSynthesized :: Codomain t ~ Compose ((->) (Inherited t)) s
-                   => t -> s x -> Synthesized t
-   default storeAttributes :: (Codomain t ~ Compose ((->) (Inherited t)) s,
-                               s ~ Compose ((,) (Atts (Inherited t) (Synthesized t))) (Domain t))
-                           => t -> Atts (Inherited t) (Synthesized t) -> Domain t x -> s x
-   default loadSynthesized :: (Codomain t ~ Compose ((->) (Inherited t)) s,
-                               s ~ Compose ((,) (Atts (Inherited t) (Synthesized t))) (Domain t))
-                           => t -> s x -> Synthesized t
-   storeAttributes _t atts = Compose . (,) atts
-   loadSynthesized _t = syn . fst . getCompose
 
 -- | The core type class for defining the attribute grammar. The instances of this class typically have a form like
 --
@@ -150,38 +96,3 @@ fullMapDefault :: (p ~ Domain t, a ~ Inherited t, b ~ Synthesized t, q ~ Semanti
 fullMapDefault extract t x = knit (attribution t (y <$ x)) y
    where y = t Deep.<$> extract x
 {-# INLINE fullMapDefault #-}
-
--- | Drop-in implementation of 'Transformation.$' that stores all attributes with every original node
-applyDefaultWithAttributes :: forall t p q g a b x. (p ~ Domain t, a ~ Inherited t, b ~ Synthesized t, q ~ PreservingSemantics p a b, AttributeTransformation t,
-                               q ~ Codomain t, x ~ g q q,
-                               Attribution t g, Rank2.Foldable (g q), Monoid a, Monoid b, Foldable p, Functor p)
-                           => t -> p x -> q x
-applyDefaultWithAttributes t x = knitKeeping (storeAttributes t) (loadSynthesized t) (attribution t x) x
-{-# INLINE applyDefaultWithAttributes #-}
-
--- | Drop-in implementation of 'Full.traverse' that stores all attributes with every original node
-traverseDefaultWithAttributes :: forall t p q r a b g.
-                                 (Transformation t, Domain t ~ p, Codomain t ~ Compose ((->) a) q,
-                                 q ~ Compose ((,) (Atts a b)) p, r ~ Compose ((->) a) q,
-                                 Traversable p, Full.Functor t g, Deep.Traversable (Feeder a b p) g,
-                                 Transformation.At t (g r r))
-                              => t -> p (g p p) -> a -> q (g q q)
-traverseDefaultWithAttributes t x rootInheritance = Full.traverse Feeder (t Full.<$> x) rootInheritance
-{-# INLINE traverseDefaultWithAttributes #-}
-
--- | Identity transformation whose only purpose is to help implement 'traverseDefaultWithAttributes'.
-data Feeder (a :: Type) (b :: Type) (f :: Type -> Type) = Feeder
-
-type FeederDomain (a :: Type) (b :: Type) f = Compose ((->) a) (Compose ((,) (Atts a b)) f)
-
-instance Transformation (Feeder a b f) where
-   type Domain (Feeder a b f) = FeederDomain a b f
-   type Codomain (Feeder a b f) = FeederDomain a b f
-
-instance Transformation.At (Feeder a b f) g where
-   Feeder $ x = x
-
-instance (Traversable f, Rank2.Traversable (g (FeederDomain a b f)), Deep.Traversable (Feeder a b f) g) =>
-         Full.Traversable (Feeder a b f) g where
-   traverse t x inheritance = Compose (atts{inh= inheritance}, traverse (Deep.traverse t) y (inh atts))
-      where Compose (atts, y) = getCompose x inheritance

@@ -49,6 +49,7 @@ type Rule t g =  forall sem . sem ~ Semantics t
               => (Inherited   t (g sem (Semantics t)), g sem (Synthesized t))
               -> (Synthesized t (g sem (Semantics t)), g sem (Inherited t))
 
+-- | Transformation wrapper that keeps all the original tree nodes alongside their attributes
 newtype Keep t (f :: Type -> Type) = Keep t
 type instance Atts (Inherited (Keep t f)) g = Atts (Inherited t) g
 type instance Atts (Synthesized (Keep t f)) g = (Atts (Inherited t) g, Atts (Synthesized t) g, f (g f f))
@@ -72,29 +73,6 @@ knit r chSem = Rank2.Arrow knit'
    where knit' inherited = synthesized
             where (synthesized, chInh) = r (inherited, chSyn)
                   chSyn = chSem Rank2.<*> chInh
-{-
--- | Another way to tie the recursive knot, using a 'Rule' to add 'AllAtts' information to every node
-knitKeeping :: forall t f g sem. (sem ~ PreservingSemantics t f, Rank2.Apply (g sem),
---                              Atts (Inherited t) (g sem sem) ~ Atts (Inherited t) (g (Semantics t) (Semantics t)),
-                              Atts (Synthesized t) (g sem sem) ~ Atts (Synthesized t) (g (Semantics t) (Semantics t)),
-                              g sem (Synthesized t) ~ g (Semantics t) (Synthesized t),
-                              g sem (Inherited t) ~ g (Semantics t) (Inherited t))
-            => (forall a. f a -> a) -> Rule t g -> f (g (PreservingSemantics t f) (PreservingSemantics t f))
-            -> PreservingSemantics t f (g (PreservingSemantics t f) (PreservingSemantics t f))
-knitKeeping extract rule x = Rank2.Arrow knitted
-   where knitted :: Inherited t (g (PreservingSemantics t f) (PreservingSemantics t f))
-                 -> Rank2.Product (AllAtts t) f (g (PreservingSemantics t f) (PreservingSemantics t f))
-         chSem :: g (PreservingSemantics t f) (PreservingSemantics t f)
-         knitted inherited = Rank2.Pair AllAtts{allInh= inh inherited, allSyn= syn synthesized} x
-            where chInh :: g (PreservingSemantics t f) (Inherited t)
-                  chSyn :: g (PreservingSemantics t f) (Synthesized t)
-                  chKept :: g (PreservingSemantics t f) (Rank2.Product (AllAtts t) f)
-                  synthesized :: Synthesized t (g (PreservingSemantics t f) (PreservingSemantics t f))
-                  (synthesized, chInh) = unsafeCoerce (rule (unsafeCoerce inherited, unsafeCoerce chSyn))
-                  chSyn = Synthesized . allSyn . Rank2.fst Rank2.<$> chKept
-                  chKept = chSem Rank2.<*> chInh
-         chSem = extract x
--}
 
 -- | The core type class for defining the attribute grammar. The instances of this class typically have a form like
 --
