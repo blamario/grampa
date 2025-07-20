@@ -88,12 +88,12 @@ instance Full.Functor RepMin (Root Int) where
 instance Transformation.At RepMin Int where
    RepMin $ Identity n = Rank2.Arrow (const $ Synthesized n)
 
-instance AG.Attribution RepMin (Root Int) Identity where
+instance AG.Attribution RepMin (Root Int) where
    attribution RepMin self (inherited, Root root) = (Synthesized SynRepMin{local= local (syn root),
                                                                            tree= tree (syn root)},
                                                      Root{root= Inherited InhRepMin{global= local (syn root)}})
 
-instance AG.Attribution RepMin (Tree Int) Identity where
+instance AG.Attribution RepMin (Tree Int) where
    attribution _ _ (inherited, Fork left right) = (Synthesized SynRepMin{local= local (syn left)
                                                                                 `min` local (syn right),
                                                                          tree= tree (syn left) `fork` tree (syn right)},

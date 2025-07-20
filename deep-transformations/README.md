@@ -366,7 +366,7 @@ Let's see a few simple `attribution` rules first. The rules for leaf nodes can i
 because they don't have any children.
 
 ~~~ {.haskell}
-instance AG.Attribution DeadCodeEliminator Expr Identity where
+instance AG.Attribution DeadCodeEliminator Expr where
   attribution DeadCodeEliminator (Identity (EVar v)) (AG.Inherited env, _) =
     (AG.Synthesized (maybe (EVar v) id $ env v), EVar v)
   attribution DeadCodeEliminator (Identity (Con n)) (AG.Inherited env, _) =
@@ -403,7 +403,7 @@ The only non-trivial rule is for the `Let` node. It needs to pass the list of va
 The rules for `Decl` are a bit more involved.
 
 ~~~ {.haskell}
-instance AG.Attribution DeadCodeEliminator Decl Identity where
+instance AG.Attribution DeadCodeEliminator Decl where
 ~~~
 
 A single variable binding can be in three distinct situations. If the variable is not referenced at all, we can just

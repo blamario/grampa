@@ -87,7 +87,7 @@ instance Transformation.At (Auto RepMin) Int where
 
 -- | The only required attribute rule is the only non-trivial one, where we set the 'global' inherited attribute to
 -- | the 'local' minimum synthesized attribute at the tree root.
-instance AG.Bequether (Auto RepMin) (Root Int) Identity where
+instance AG.Bequether (Auto RepMin) (Root Int) where
    bequest (Auto RepMin) self inherited (Root (Synthesized SynRepMin{local= rootLocal})) =
       Root{root= Inherited InhRepMin{global= getMin (AG.getFolded rootLocal)}}
 

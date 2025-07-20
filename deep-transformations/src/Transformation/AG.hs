@@ -13,6 +13,7 @@ import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Rank2
 import qualified Transformation
+import Transformation (Transformation, Domain, Codomain)
 import Transformation.Deep (Const2)
 
 -- | Type family that maps a node type to the type of its attributes, indexed per type constructor.
@@ -50,21 +51,29 @@ type Rule t g =  forall sem . sem ~ Semantics t
               -> (Synthesized t (g sem (Semantics t)), g sem (Inherited t))
 
 -- | Transformation wrapper that keeps all the original tree nodes alongside their attributes
-newtype Keep t (f :: Type -> Type) = Keep t
-type instance Atts (Inherited (Keep t f)) g = Atts (Inherited t) g
-type instance Atts (Synthesized (Keep t f)) g = (Atts (Inherited t) g, Atts (Synthesized t) g, f (g f f))
+newtype Keep t = Keep t
 
-instance (Rank2.Functor (g (Semantics (Keep t s))), Functor s, Attribution t g s) => Attribution (Keep t s) g s where
+type instance Atts (Inherited (Keep t)) g = Atts (Inherited t) g
+type instance Atts (Synthesized (Keep t)) g = (Atts (Inherited t) g,
+                                               Atts (Synthesized t) g,
+                                               Domain t (g (Domain t) (Domain t)))
+
+instance (Transformation t, Codomain t ~ Semantics t) => Transformation (Keep t) where
+   type Domain (Keep t) = Domain t
+   type Codomain (Keep t) = Semantics (Keep t)
+
+instance (Domain t ~ s, Codomain t ~ Semantics t, Rank2.Functor (g (Semantics (Keep t))), Functor s, Attribution t g) =>
+         Attribution (Keep t) g where
    attribution (Keep t) x (Inherited i, childSynthesis) = (Synthesized synthesis', childInheritance') where
       (Synthesized s, childInheritance) = attribution t x (Inherited i :: Inherited t (g (Semantics t) (Semantics t)),
                                                            unsafeCoerce $ resynthesize Rank2.<$> childSynthesis)
-      resynthesize :: forall a. Synthesized (Keep t s) a -> Synthesized t a
+      resynthesize :: forall a. Synthesized (Keep t) a -> Synthesized t a
       resynthesize (Synthesized (_inherited, synthesized, _node)) = Synthesized synthesized
-      synthesis' :: Atts (Synthesized (Keep t s)) g
+      synthesis' :: Atts (Synthesized (Keep t)) g
       synthesis' = (i, s, (unsafeCoerce (localChild Rank2.<$> childSynthesis) :: g s s) <$ x)
-      childInheritance' :: g (Semantics (Keep t s)) (Inherited (Keep t s))
+      childInheritance' :: g (Semantics (Keep t)) (Inherited (Keep t))
       childInheritance' = unsafeCoerce childInheritance
-      localChild :: Synthesized (Keep t s) a -> s a
+      localChild :: Synthesized (Keep t) a -> s a
       localChild (Synthesized (_, _, a)) = unsafeCoerce a
 
 -- | The core function to tie the recursive knot, turning a 'Rule' for a node into its 'Semantics'.
@@ -87,12 +96,12 @@ knit r chSem = Rank2.Arrow knit'
 -- instances of the 'Transformation.AG.Generics.Bequether' and 'Transformation.AG.Generics.Synthesizer' classes
 -- instead. If you derive 'GHC.Generics.Generic' instances for your attributes, you can even define each synthesized
 -- attribute individually with a 'Transformation.AG.Generics.SynthesizedField' instance.
-class Attribution t g shallow where
+class Transformation t => Attribution t g where
    -- | The attribution rule for a given transformation and node.
-   attribution :: forall f. Rank2.Functor (g f) => t -> shallow (g f f) -> Rule t g
+   attribution :: forall f. Rank2.Functor (g f) => t -> Domain t (g f f) -> Rule t g
 
 -- | Drop-in implementation of 'Transformation.$'
-applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g p)
-             => (forall a. p a -> a) -> t -> p x -> q x
+applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g)
+             => (forall a. Domain t a -> a) -> t -> Domain t x -> q x
 applyDefault extract t x = knit (attribution t x) (extract x)
 {-# INLINE applyDefault #-}
