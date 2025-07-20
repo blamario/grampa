@@ -255,6 +255,7 @@ bequestDefault t local inheritance _synthesized = passDown @t inheritance (revea
 -- | Pass down the given record of inherited fields to child nodes.
 passDown :: forall t g shallow deep1 deep2 atts. (Shallow.Functor (PassDown t shallow atts) (g deep1)) =>
             atts -> g deep1 shallow -> g deep2 (Inherited t)
+-- unsafeCoerce is safe here because Inherited doesn't refer to deep functor so the latter is a phantom
 passDown inheritance local = unsafeCoerce (PassDown @t inheritance Shallow.<$> local)
 
 -- | The default 'synthesizedField' method definition for 'Folded' fields.
@@ -266,10 +267,12 @@ foldedField _name _t s = Shallow.foldMap (Accumulator :: Accumulator t name a) s
 mappedField :: forall name t g f sem.
                   (Shallow.Functor (Replicator t f name) (g f)) =>
                   Proxy name -> t -> g sem (Synthesized t) -> g f f
+-- unsafeCoerce is safe here because Synthesized doesn't refer to deep functor so the latter is a phantom
 mappedField _name _t s = (Replicator :: Replicator t f name) Shallow.<$> (unsafeCoerce s :: g f (Synthesized t))
 
 -- | The default 'synthesizedField' method definition for 'Traversed' fields.
 traversedField :: forall name t g m f sem.
                      (Shallow.Traversable (Traverser t m f name) (g f)) =>
                      Proxy name -> t -> g sem (Synthesized t) -> m (g f f)
+-- unsafeCoerce is safe here because Synthesized doesn't refer to deep functor so the latter is a phantom
 traversedField _name _t s = Shallow.traverse (Traverser :: Traverser t m f name) (unsafeCoerce s :: g f (Synthesized t))

@@ -23,8 +23,10 @@ import qualified Transformation.Full as Full
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
--- | Like "Transformation.Shallow".'Transformation.Shallow.Functor' except it maps all descendants and not only immediate children
+-- | Like "Transformation.Shallow".'Transformation.Shallow.Functor' except it maps all descendants and not only
+-- immediate children
 class (Transformation t, Rank2.Functor (g (Domain t))) => Functor t g where
+   -- | Apply the transformation to all descendants
    (<$>) :: t -> g (Domain t) (Domain t) -> g (Codomain t) (Codomain t)
    infixl 4 <$>
 
