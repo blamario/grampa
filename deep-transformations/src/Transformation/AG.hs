@@ -1,4 +1,4 @@
-{-# Language FlexibleContexts, FlexibleInstances, GADTs, ImpredicativeTypes,
+{-# Language FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, ImpredicativeTypes,
              MultiParamTypeClasses, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
              TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
@@ -30,6 +30,18 @@ newtype Synthesized t a = Synthesized{syn :: Atts (Synthesized t) (NodeConstruct
 
 deriving instance (Show (Atts (Inherited t) (NodeConstructor a))) => Show (Inherited t a)
 deriving instance (Show (Atts (Synthesized t) (NodeConstructor a))) => Show (Synthesized t a)
+deriving instance (Semigroup (Atts (Inherited t) (NodeConstructor a))) => Semigroup (Inherited t a)
+deriving instance (Semigroup (Atts (Synthesized t) (NodeConstructor a))) => Semigroup (Synthesized t a)
+deriving instance (Monoid (Atts (Inherited t) (NodeConstructor a))) => Monoid (Inherited t a)
+deriving instance (Monoid (Atts (Synthesized t) (NodeConstructor a))) => Monoid (Synthesized t a)
+
+mapInherited :: (Atts (Inherited t) (NodeConstructor a) -> Atts (Inherited t) (NodeConstructor b))
+             -> Inherited t a -> Inherited t b
+mapInherited f (Inherited a) = Inherited (f a)
+
+mapSynthesized :: (Atts (Synthesized t) (NodeConstructor a) -> Atts (Synthesized t) (NodeConstructor b))
+               -> Synthesized t a -> Synthesized t b
+mapSynthesized f (Synthesized a) = Synthesized (f a)
 
 -- | A node's 'Semantics' is a natural tranformation from the node's inherited attributes to its synthesized
 -- attributes.
@@ -62,7 +74,7 @@ instance (Transformation t, Codomain t ~ Semantics t) => Transformation (Keep t)
    type Domain (Keep t) = Domain t
    type Codomain (Keep t) = Semantics (Keep t)
 
-instance (Domain t ~ s, Codomain t ~ Semantics t, Rank2.Functor (g (Semantics (Keep t))), Functor s, Attribution t g) =>
+instance (Domain t ~ f, Codomain t ~ Semantics t, Rank2.Functor (g (Semantics (Keep t))), Functor f, Attribution t g) =>
          Attribution (Keep t) g where
    attribution (Keep t) x (Inherited i, childSynthesis) = (Synthesized synthesis', childInheritance') where
       (Synthesized s, childInheritance) = attribution t x (Inherited i :: Inherited t (g (Semantics t) (Semantics t)),
@@ -70,7 +82,7 @@ instance (Domain t ~ s, Codomain t ~ Semantics t, Rank2.Functor (g (Semantics (K
       resynthesize :: forall a. Synthesized (Keep t) a -> Synthesized t a
       resynthesize (Synthesized (_inherited, synthesized, _node)) = Synthesized synthesized
       synthesis' :: Atts (Synthesized (Keep t)) g
-      synthesis' = (i, s, (unsafeCoerce (localChild Rank2.<$> childSynthesis) :: g s s) <$ x)
+      synthesis' = (i, s, (unsafeCoerce (localChild Rank2.<$> childSynthesis) :: g f f) <$ x)
       childInheritance' :: g (Semantics (Keep t)) (Inherited (Keep t))
       childInheritance' = unsafeCoerce childInheritance
       localChild :: Synthesized (Keep t) a -> s a
