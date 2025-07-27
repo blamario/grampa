@@ -1,5 +1,5 @@
 {-# Language FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, ImpredicativeTypes,
-             MultiParamTypeClasses, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
+             MultiParamTypeClasses, NamedFieldPuns, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
              TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | An attribute grammar is a particular kind of 'Transformation' that assigns attributes to nodes in a
@@ -65,10 +65,12 @@ type Rule t g =  forall sem . sem ~ Semantics t
 -- | Transformation wrapper that keeps all the original tree nodes alongside their attributes
 newtype Keep t = Keep t
 
+data Kept t g a = Kept{inherited :: Atts (Inherited t) g,
+                       synthesized :: Atts (Synthesized t) g,
+                       original :: Domain t a}
+
 type instance Atts (Inherited (Keep t)) g = Atts (Inherited t) g
-type instance Atts (Synthesized (Keep t)) g = (Atts (Inherited t) g,
-                                               Atts (Synthesized t) g,
-                                               Domain t (g (Domain t) (Domain t)))
+type instance Atts (Synthesized (Keep t)) g = Kept t g (g (Kept t g) (Kept t g))
 
 instance (Transformation t, Codomain t ~ Semantics t) => Transformation (Keep t) where
    type Domain (Keep t) = Domain t
@@ -80,13 +82,13 @@ instance (Domain t ~ f, Codomain t ~ Semantics t, Rank2.Functor (g (Semantics (K
       (Synthesized s, childInheritance) = attribution t x (Inherited i :: Inherited t (g (Semantics t) (Semantics t)),
                                                            unsafeCoerce $ resynthesize Rank2.<$> childSynthesis)
       resynthesize :: forall a. Synthesized (Keep t) a -> Synthesized t a
-      resynthesize (Synthesized (_inherited, synthesized, _node)) = Synthesized synthesized
+      resynthesize (Synthesized Kept{synthesized}) = Synthesized synthesized
       synthesis' :: Atts (Synthesized (Keep t)) g
-      synthesis' = (i, s, (unsafeCoerce (localChild Rank2.<$> childSynthesis) :: g f f) <$ x)
+      synthesis' = Kept i s ((unsafeCoerce (localChild Rank2.<$> childSynthesis) :: g (Kept t g) (Kept t g)) <$ x)
       childInheritance' :: g (Semantics (Keep t)) (Inherited (Keep t))
       childInheritance' = unsafeCoerce childInheritance
-      localChild :: Synthesized (Keep t) a -> s a
-      localChild (Synthesized (_, _, a)) = unsafeCoerce a
+      localChild :: Synthesized (Keep t) a -> f a
+      localChild (Synthesized Kept{original}) = unsafeCoerce original
 
 -- | The core function to tie the recursive knot, turning a 'Rule' for a node into its 'Semantics'.
 knit :: (Rank2.Apply (g sem), sem ~ Semantics t) => Rule t g -> g sem sem -> sem (g sem sem)
