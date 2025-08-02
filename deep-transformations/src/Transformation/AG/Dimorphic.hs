@@ -19,7 +19,10 @@ import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.AG as AG
 
--- | Transformation wrapper that allows automatic inference of attribute rules.
+-- | Wrapper that provides a 'Transformation' instance for any 'AttributeTransformation'
+newtype T t = T t
+
+-- | Wrapper that provides a default 'AG.Attribution' and 'Transformation' instance for any 'AttributeTransformation'
 newtype Auto t = Auto t
 
 -- | Node attributes
@@ -68,13 +71,13 @@ instance {-# overlappable #-} AttributeTransformation t => Attribution t g where
 instance {-# overlappable #-} (AttributeTransformation t, p ~ Origin t, a ~ Inherited t, b ~ Synthesized t,
                                q ~ Semantics a b, Rank2.Foldable (g q), Rank2.Functor (g q),
                                Monoid a, Monoid b, Foldable p, Attribution t g) =>
-                              Auto t `At` g (Semantics a b) (Semantics a b) where
+                              T t `At` g (Semantics a b) (Semantics a b) where
    ($) = applyDefault (foldr const $ error "Missing node")
    {-# INLINE ($) #-}
 
 instance (AttributeTransformation t, f ~ Origin t, a ~ Inherited t, b ~ Synthesized t, Functor f,
-          Rank2.Functor (g f), Deep.Functor (Auto t) g, Auto t `At` g (Semantics a b) (Semantics a b)) =>
-         Full.Functor (Auto t) g where
+          Rank2.Functor (g f), Deep.Functor (T t) g, T t `At` g (Semantics a b) (Semantics a b)) =>
+         Full.Functor (T t) g where
    (<$>) = Full.mapUpDefault
 
 -- | The core function to tie the recursive knot, turning a 'Rule' for a node into its 'Semantics'.
@@ -85,9 +88,13 @@ knit r chSem = Const knitted
             where Atts{syn= synthesized, inh= chInh} = r Atts{inh= inherited, syn= chSyn}
                   chSyn = Rank2.foldMap (($ chInh) . getConst) chSem
 
+instance AttributeTransformation t => Transformation (T t) where
+   type Domain (T t) = Origin t
+   type Codomain (T t) = Semantics (Inherited t) (Synthesized t)
+
 instance AttributeTransformation t => Transformation (Auto t) where
    type Domain (Auto t) = Origin t
-   type Codomain (Auto t) = Semantics (Inherited t) (Synthesized t)
+   type Codomain (Auto t) = AG.Semantics (Auto t)
 
 type instance AG.Atts (AG.Inherited (Auto t)) g = Inherited t
 type instance AG.Atts (AG.Synthesized (Auto t)) g = Synthesized t
@@ -104,15 +111,15 @@ instance (AttributeTransformation t, f ~ Origin t, Foldable f, Attribution t g,
 -- | Drop-in implementation of 'Transformation.$'
 applyDefault :: (p ~ Origin t, a ~ Inherited t, b ~ Synthesized t, q ~ Semantics a b, x ~ g q q,
                  Rank2.Foldable (g q), Rank2.Functor (g q), Attribution t g, Monoid a, Monoid b)
-             => (forall y. p y -> y) -> Auto t -> p x -> q x
-applyDefault extract (Auto t) x = knit (attribution t x) (extract x)
+             => (forall y. p y -> y) -> T t -> p x -> q x
+applyDefault extract (T t) x = knit (attribution t x) (extract x)
 {-# INLINE applyDefault #-}
 
 -- | Drop-in implementation of 'Full.<$>'
 fullMapDefault :: (AttributeTransformation t, p ~ Origin t, a ~ Inherited t, b ~ Synthesized t, Monoid a, Monoid b,
                    q ~ Semantics a b, x ~ g q q, Functor p, Rank2.Functor (g q), Rank2.Foldable (g q),
-                   Deep.Functor (Auto t) g, Attribution t g)
-               => (forall y. p y -> y) -> Auto t -> p (g p p) -> q (g q q)
-fullMapDefault extract (Auto t) x = knit (attribution t (y <$ x)) y
-   where y = Auto t Deep.<$> extract x
+                   Deep.Functor (T t) g, Attribution t g)
+               => (forall y. p y -> y) -> T t -> p (g p p) -> q (g q q)
+fullMapDefault extract (T t) x = knit (attribution t (y <$ x)) y
+   where y = T t Deep.<$> extract x
 {-# INLINE fullMapDefault #-}
