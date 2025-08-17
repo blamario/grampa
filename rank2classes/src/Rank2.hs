@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables, StandaloneDeriving, TypeOperators, UndecidableInstances #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE TypeApplications #-}
 module Rank2 (
 -- * Rank 2 classes
@@ -31,7 +32,7 @@ import qualified Data.Functor.Compose as Rank1
 import qualified Data.Functor.Contravariant as Rank1
 import qualified Data.Functor.Logistic as Rank1
 import qualified Data.Distributive as Rank1
-import Data.Coerce (coerce)
+import qualified Data.Coerce as Coerce
 import Data.Data (Data, Typeable)
 import Data.Semigroup (Semigroup(..))
 import Data.Monoid (Monoid(..))
@@ -41,6 +42,7 @@ import Data.Functor.Sum (Sum(InL, InR))
 import Data.Kind (Type)
 import Data.Proxy (Proxy(..))
 import qualified GHC.Generics as Generics
+import Unsafe.Coerce (unsafeCoerce)
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), ($), (<$>), fst, snd)
 
@@ -58,6 +60,9 @@ snd (Pair _ y) = y
 -- > (p . q) <$> g == p <$> (q <$> g)
 class Functor g where
    (<$>) :: (forall a. p a -> q a) -> g p -> g q
+   -- | Equivalent to @(Data.Coerce.coerce <$>)@ but faster
+   coerce :: (forall a. Coerce.Coercible (p a) (q a)) => g p -> g q
+   coerce = unsafeCoerce
 infixl 4 <$>
 
 -- | Alphabetical synonym for '<$>'
@@ -262,13 +267,13 @@ instance (Functor g, Functor h) => Functor (Sum g h) where
    f <$> InR h = InR (f <$> h)
 
 instance Functor Generics.V1 where
-   (<$>) _ = coerce
+   (<$>) _ = Coerce.coerce
    
 instance Functor Generics.U1 where
-   (<$>) _ = coerce
+   (<$>) _ = Coerce.coerce
 
 instance Functor (Generics.K1 i c) where
-   (<$>) _ = coerce
+   (<$>) _ = Coerce.coerce
 
 instance Functor f => Functor (Generics.M1 i c f) where
    f <$> Generics.M1 x = Generics.M1 (f <$> x)
@@ -362,13 +367,13 @@ instance (Traversable g, Traversable h) => Traversable (Sum g h) where
    traverse f (InR h) = InR Rank1.<$> traverse f h
 
 instance Traversable Generics.V1 where
-   traverse _ = Rank1.pure . coerce
+   traverse _ = Rank1.pure . Coerce.coerce
    
 instance Traversable Generics.U1 where
-   traverse _ = Rank1.pure . coerce
+   traverse _ = Rank1.pure . Coerce.coerce
 
 instance Traversable (Generics.K1 i c) where
-   traverse _ = Rank1.pure . coerce
+   traverse _ = Rank1.pure . Coerce.coerce
 
 instance Traversable f => Traversable (Generics.M1 i c f) where
    traverse f (Generics.M1 x) = Rank1.fmap Generics.M1 (traverse f x)
@@ -419,10 +424,10 @@ instance (Apply g, Apply h) => Apply (Product g h) where
    liftA3 f (Pair g1 h1) ~(Pair g2 h2) ~(Pair g3 h3) = Pair (liftA3 f g1 g2 g3) (liftA3 f h1 h2 h3)
 
 instance Apply Generics.V1 where
-   (<*>) _ = coerce
+   (<*>) _ = Coerce.coerce
    
 instance Apply Generics.U1 where
-   (<*>) _ = coerce
+   (<*>) _ = Coerce.coerce
 
 instance Semigroup c => Apply (Generics.K1 i c) where
    Generics.K1 x <*> Generics.K1 y = Generics.K1 (x <> y)
@@ -496,7 +501,7 @@ instance Distributive Proxy where
    cotraverse _ _ = Proxy
 
 instance Monoid x => DistributiveTraversable (Const x) where
-   cotraverseTraversable _ f = coerce (Rank1.fold f)
+   cotraverseTraversable _ f = Coerce.coerce (Rank1.fold f)
 
 instance Distributive (Only x) where
    cotraverse w f = Only (w (Rank1.fmap fromOnly f))
@@ -512,7 +517,7 @@ instance (Distributive g, Distributive h) => Distributive (Product g h) where
    cotraverse w f = Pair (cotraverse w (Rank1.fmap fst f)) (cotraverse w (Rank1.fmap snd f))
 
 instance Monoid c => DistributiveTraversable (Generics.K1 i c) where
-   cotraverseTraversable _ f = coerce (Rank1.foldMap Generics.unK1 f)
+   cotraverseTraversable _ f = Coerce.coerce (Rank1.foldMap Generics.unK1 f)
 
 instance Distributive f => Distributive (Generics.M1 i c f) where
    cotraverse w f = Generics.M1 (cotraverse w (Rank1.fmap Generics.unM1 f))
@@ -528,10 +533,10 @@ instance Logistic Proxy where
    deliver _ = Proxy
 
 instance Logistic (Only x) where
-   deliver f = Only (Rank1.Compose (Rank1.contramap coerce f))
+   deliver f = Only (Rank1.Compose (Rank1.contramap Coerce.coerce f))
 
 instance Logistic g => Logistic (Identity g) where
-   deliver f = Identity (deliver (Rank1.contramap coerce f))
+   deliver f = Identity (deliver (Rank1.contramap Coerce.coerce f))
 
 instance (Logistic g, Rank1.Logistic p) => Logistic (Compose g p) where
    deliver = Compose

@@ -43,6 +43,8 @@ main = defaultMain $ testGroup "Template tests"
                              wrapSingle= pure (pure ["a", "b", "ab"]),
                              wrapWhole= pure (pure Test0)}
             id Rank2.<$> test @?= test
+            Rank2.coerce test @?= test
+            Rank2.coerce (Compose . Identity Rank2.<$> test) @?= test
             Rank2.pure (Rank2.Arrow id) Rank2.<*> test @?= test
             Rank2.liftA2 (++) test test @?= Test1{single= [3, 4, 5, 3, 4, 5],
                                                   whole= Test0,
