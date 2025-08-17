@@ -26,6 +26,7 @@
 
 module Transformation where
 
+import Data.Coerce (Coercible, coerce)
 import qualified Data.Functor.Compose as Functor
 import Data.Functor.Const (Const)
 import Data.Functor.Product (Product(Pair))
@@ -82,6 +83,9 @@ class Transformation t => At t x where
 apply :: t `At` x => t -> Domain t x -> Codomain t x
 apply = ($)
 
+-- | Transformation that coerces a @p x@ to @q x@
+data Coercion (p :: Type -> Type) (q :: Type -> Type) = Coercion
+
 -- | Composition of two transformations
 data Compose t u = Compose t u
 
@@ -93,6 +97,10 @@ newtype Folded (f :: Type -> Type) t = Folded t
 
 -- | Transformation under a 'Traversable'
 newtype Traversed (f :: Type -> Type) t = Traversed t
+
+instance Transformation (Coercion p q) where
+   type Domain (Coercion p q) = p
+   type Codomain (Coercion p q) = q
 
 instance (Transformation t, Transformation u, Domain t ~ Codomain u) => Transformation (Compose t u) where
    type Domain (Compose t u) = Domain u
@@ -110,6 +118,9 @@ instance (Transformation t, Codomain t ~ Functor.Compose m n) => Transformation 
    type Domain (Traversed f t) = Functor.Compose f (Domain t)
    type Codomain (Traversed f t) =
       Functor.Compose (ComposeOuter (Codomain t)) (Functor.Compose f (ComposeInner (Codomain t)))
+
+instance Coercible (p x) (q x) => Coercion p q `At` x where
+   Coercion $ x = coerce x
 
 type family ComposeOuter (c :: Type -> Type) :: Type -> Type where
    ComposeOuter (Functor.Compose p q) = p

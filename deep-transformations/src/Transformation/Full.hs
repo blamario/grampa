@@ -1,4 +1,5 @@
-{-# Language FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, TypeFamilies, TypeOperators #-}
+{-# Language FlexibleContexts, FlexibleInstances, MultiParamTypeClasses #-}
+{-# Language QuantifiedConstraints, RankNTypes, TypeFamilies, TypeOperators #-}
 
 -- | Type classes 'Functor', 'Foldable', and 'Traversable' that correspond to the standard type classes of the same
 -- name, but applying the given transformation to the given tree node and all its descendants. The corresponding classes
@@ -7,6 +8,7 @@
 
 module Transformation.Full where
 
+import Data.Coerce (Coercible)
 import qualified Data.Functor
 import           Data.Functor.Compose (Compose(getCompose))
 import           Data.Functor.Const (Const(getConst))
@@ -16,12 +18,16 @@ import qualified Rank2
 import qualified Transformation
 import           Transformation (Transformation, Domain, Codomain)
 import {-# SOURCE #-} qualified Transformation.Deep as Deep
+import Unsafe.Coerce (unsafeCoerce)
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
 -- | Like "Transformation.Deep".'Deep.Functor' except it maps an additional wrapper around the entire tree
 class (Transformation t, Rank2.Functor (g (Domain t))) => Functor t g where
    (<$>) :: t -> Domain t (g (Domain t) (Domain t)) -> Codomain t (g (Codomain t) (Codomain t))
+   -- | Equivalent to @(Transformation.Coercion <$>)@ but faster
+   coerce :: (t ~ Transformation.Coercion p q, forall g. Coercible (p (g p p)) (q (g q q))) => p (g p p) -> q (g q q)
+   coerce = unsafeCoerce
    infixl 4 <$>
 
 -- | Like "Transformation.Deep".'Deep.Foldable' except the entire tree is also wrapped
