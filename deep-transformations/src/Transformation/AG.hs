@@ -15,6 +15,7 @@ import qualified Rank2
 import qualified Transformation
 import Transformation (Transformation, Domain, Codomain)
 import Transformation.Deep (Const2)
+import qualified Transformation.Deep as Deep
 
 -- | Type family that maps a node type to the type of its attributes, indexed per type constructor.
 type family Atts (f :: Type -> Type) (g :: (Type -> Type) -> (Type -> Type) -> Type)
@@ -119,3 +120,11 @@ applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g)
              => (forall a. Domain t a -> a) -> t -> Domain t x -> q x
 applyDefault extract t x = knit (attribution t x) (extract x)
 {-# INLINE applyDefault #-}
+
+-- | Drop-in implementation of 'Full.<$>'
+fullMapDefault :: (Transformation t, f ~ Domain t, sem ~ Codomain t, sem ~ Semantics t, Deep.Functor t g,
+                   Rank2.Apply (g sem), Attribution t g, Functor f)
+               => (f a -> g f f) -> t -> f a -> sem (g sem sem)
+fullMapDefault extract t x = knit (attribution t (y <$ x)) y
+   where y = t Deep.<$> extract x
+{-# INLINE fullMapDefault #-}
