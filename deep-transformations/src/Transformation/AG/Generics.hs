@@ -46,7 +46,8 @@ type instance Atts (Inherited (Auto t)) x = Atts (Inherited t) x
 type instance Atts (Synthesized (Auto t)) x = Atts (Synthesized t) x
 
 instance {-# overlappable #-} (Revelation (Auto t), Domain (Auto t) ~ f, Codomain (Auto t) ~ Semantics (Auto t),
-                               Rank2.Apply (g (Semantics (Auto t))), Attribution (Auto t) g) =>
+                               Rank2.Apply (g (Semantics (Auto t))), Rank2.Foldable (g (Semantics (Auto t))),
+                               Attribution (Auto t) g) =>
                               Auto t `At` g (Semantics (Auto t)) (Semantics (Auto t)) where
    t $ x = applyDefault (reveal t) t x
    {-# INLINE ($) #-}
@@ -66,7 +67,7 @@ class Transformation t => Revelation t where
 
 -- | A half of the 'Attribution' class used to specify all inherited attributes.
 class Bequether t g where
-   bequest     :: forall sem deep. sem ~ Semantics t =>
+   bequest     :: forall sem deep.
                   t                                -- ^ transformation        
                -> Domain t (g deep deep)            -- ^ tree node
                -> Atts (Inherited t) g             -- ^ inherited attributes
@@ -75,7 +76,7 @@ class Bequether t g where
 
 -- | A half of the 'Attribution' class used to specify all synthesized attributes.
 class Synthesizer t g where
-   synthesis   :: forall sem deep. sem ~ Semantics t =>
+   synthesis   :: forall sem deep.
                   t                                -- ^ transformation        
                -> Domain t (g deep deep)            -- ^ tree node
                -> Atts (Inherited t) g             -- ^ inherited attributes
@@ -84,7 +85,7 @@ class Synthesizer t g where
 
 -- | Class for specifying a single named attribute
 class Transformation t => SynthesizedField (name :: Symbol) result t g where
-   synthesizedField  :: forall sem deep. sem ~ Semantics t =>
+   synthesizedField  :: forall sem deep.
                         Proxy name                      -- ^ attribute name
                      -> t                               -- ^ transformation
                      -> Domain t (g deep deep)           -- ^ tree node
@@ -95,7 +96,7 @@ class Transformation t => SynthesizedField (name :: Symbol) result t g where
 instance {-# overlappable #-} (Transformation t, Revelation t, a ~ Atts (Inherited t) g,
                                forall deep. Shallow.Functor (PassDown t deep a) (g deep)) =>
                               Bequether t g where
-   bequest     :: forall sem deep. sem ~ Semantics t =>
+   bequest     :: forall sem deep.
                   t                                -- ^ transformation        
                -> Domain t (g deep deep)           -- ^ tree node
                -> Atts (Inherited t) g             -- ^ inherited attributes
@@ -103,7 +104,7 @@ instance {-# overlappable #-} (Transformation t, Revelation t, a ~ Atts (Inherit
                -> g sem (Inherited t)
    bequest = bequestDefault
 
-instance {-# overlappable #-} (Atts (Synthesized t) g ~ result, Generic result, sem ~ Semantics t,
+instance {-# overlappable #-} (Atts (Synthesized t) g ~ result, Generic result,
                                GenericSynthesizer t g (Rep result)) => Synthesizer t g where
    synthesis t node i s = to (genericSynthesis t node i s)
 
@@ -165,7 +166,7 @@ instance (HasField name (Atts (Synthesized t) g) (Traversed m f g)) =>
 
 -- | The 'Generic' mirror of 'Synthesizer'
 class GenericSynthesizer t g result where
-   genericSynthesis  :: forall a sem deep. sem ~ Semantics t =>
+   genericSynthesis  :: forall a sem deep.
                         t
                      -> Domain t (g deep deep)
                      -> Atts (Inherited t) g
@@ -174,7 +175,7 @@ class GenericSynthesizer t g result where
 
 -- | The 'Generic' mirror of 'SynthesizedField'
 class Transformation t => GenericSynthesizedField (name :: Symbol) result t g where
-   genericSynthesizedField  :: forall a sem deep. sem ~ Semantics t =>
+   genericSynthesizedField  :: forall a sem deep.
                                Proxy name
                             -> t
                             -> Domain t (g deep deep)
@@ -232,7 +233,7 @@ instance SynthesizedField name a t g => GenericSynthesizedField name (K1 i a) t 
    genericSynthesizedField name t node i s = K1 (synthesizedField name t node i s)
 
 instance  {-# overlappable #-} (Transformation t, Monoid a,
-                                Shallow.Foldable (Accumulator t name a) (g (Semantics t))) =>
+                                forall sem. Shallow.Foldable (Accumulator t name a) (g sem)) =>
                                SynthesizedField name (Folded a) t g where
    synthesizedField name t _ _ s = foldedField name t s
 
@@ -249,7 +250,7 @@ instance  {-# overlappable #-} (Transformation t, Domain t ~ f, Traversable f, A
 -- | The default 'bequest' method definition relies on generics to automatically pass down all same-named inherited
 -- attributes.
 bequestDefault :: forall t g deep shallow sem.
-                  (sem ~ Semantics t, Domain t ~ shallow, Revelation t,
+                  (Domain t ~ shallow, Revelation t,
                    Shallow.Functor (PassDown t deep (Atts (Inherited t) g)) (g deep))
                => t -> shallow (g deep deep) -> Atts (Inherited t) g -> g sem (Synthesized t)
                -> g sem (Inherited t)

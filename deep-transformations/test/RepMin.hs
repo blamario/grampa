@@ -31,6 +31,13 @@ instance Rank2.Functor (Tree a f') where
 instance Rank2.Functor (Root a f') where
    f <$> Root x = Root (f x)
 
+instance Rank2.Foldable (Tree a f') where
+   f `foldMap` Fork l r = f l <> f r
+   f `foldMap` Leaf x = f x
+
+instance Rank2.Foldable (Root a f') where
+   f `foldMap` Root x = f x
+
 instance Rank2.Apply (Tree a f') where
    Fork fl fr <*> ~(Fork l r) = Fork (Rank2.apply fl l) (Rank2.apply fr r)
    Leaf f <*> ~(Leaf x) = Leaf (Rank2.apply f x)

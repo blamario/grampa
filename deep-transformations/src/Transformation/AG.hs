@@ -113,17 +113,20 @@ knit r chSem = Rank2.Arrow knit'
 -- attribute individually with a 'Transformation.AG.Generics.SynthesizedField' instance.
 class Transformation t => Attribution t g where
    -- | The attribution rule for a given transformation and node.
-   attribution :: forall f. Rank2.Functor (g f) => t -> Domain t (g f f) -> Rule t g
+   attribution :: forall f sem. (Rank2.Functor (g f), Rank2.Foldable (g sem))
+               => t -> Domain t (g f f)
+               -> (Inherited   t (g sem sem), g sem (Synthesized t))
+               -> (Synthesized t (g sem sem), g sem (Inherited t))
 
 -- | Drop-in implementation of 'Transformation.$'
-applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Attribution t g)
+applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Rank2.Foldable (g (Semantics t)), Attribution t g)
              => (forall a. Domain t a -> a) -> t -> Domain t x -> q x
 applyDefault extract t x = knit (attribution t x) (extract x)
 {-# INLINE applyDefault #-}
 
 -- | Drop-in implementation of 'Full.<$>'
 fullMapDefault :: (Transformation t, f ~ Domain t, sem ~ Codomain t, sem ~ Semantics t, Deep.Functor t g,
-                   Rank2.Apply (g sem), Attribution t g, Functor f)
+                   Rank2.Apply (g sem), Rank2.Foldable (g sem), Attribution t g, Functor f)
                => (f a -> g f f) -> t -> f a -> sem (g sem sem)
 fullMapDefault extract t x = knit (attribution t (y <$ x)) y
    where y = t Deep.<$> extract x
