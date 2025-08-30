@@ -46,7 +46,7 @@ type instance Atts (Inherited (Auto t)) x = Atts (Inherited t) x
 type instance Atts (Synthesized (Auto t)) x = Atts (Synthesized t) x
 
 instance {-# overlappable #-} (Revelation (Auto t), Domain (Auto t) ~ f, Codomain (Auto t) ~ Semantics (Auto t),
-                               Rank2.Apply (g (Semantics (Auto t))), Rank2.Foldable (g (Semantics (Auto t))),
+                               Rank2.Apply (g (Semantics (Auto t))), Rank2.Traversable (g (Semantics (Auto t))),
                                Attribution (Auto t) g) =>
                               Auto t `At` g (Semantics (Auto t)) (Semantics (Auto t)) where
    t $ x = applyDefault (reveal t) t x

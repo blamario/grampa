@@ -29,6 +29,7 @@ It will also require several imports.
 ~~~ {.haskell}
 import Control.Applicative
 import Data.Coerce (coerce)
+import Data.Functor.Compose
 import Data.Functor.Const
 import Data.Functor.Identity
 import Data.Monoid
@@ -111,6 +112,17 @@ instance Rank2.Foldable (Expr f') where
   f `foldMap` Mul x y = f x <> f y
   f `foldMap` Let d e = f d <> f e
   f `foldMap` EVar v  = mempty
+
+instance Rank2.Traversable (Decl f') where
+  f `traverse` (v := e) = (v :=) <$> f e
+  f `traverse` Seq x y  = Seq <$> f x <*> f y
+
+instance Rank2.Traversable (Expr f') where
+  f `traverse` Con n   = pure (Con n)
+  f `traverse` Add x y = Add <$> f x <*> f y
+  f `traverse` Mul x y = Mul <$> f x <*> f y
+  f `traverse` Let d e = Let <$> f d <*> f e
+  f `traverse` EVar v  = pure (EVar v)
 ~~~
 
 While the methods declared above can be handy, they are limited in requiring that the function argument `f` must be
@@ -144,6 +156,19 @@ instance (Transformation t, Full.Foldable t Decl, Full.Foldable t Expr) => Deep.
   t `foldMap` Mul x y = t `Full.foldMap` x <> t `Full.foldMap` y
   t `foldMap` Let d e = t `Full.foldMap` d <> t `Full.foldMap` e
   t `foldMap` EVar v  = mempty
+
+instance (Transformation t, Transformation.Codomain t ~ Compose m f, Applicative m,
+          Full.Traversable t Decl, Full.Traversable t Expr) => Deep.Traversable t Decl where
+  t `traverse` (v := e) = (v :=) <$> t `Full.traverse` e
+  t `traverse` Seq x y  = Seq <$> t `Full.traverse` x <*> t `Full.traverse` y
+
+instance (Transformation t, Transformation.Codomain t ~ Compose m f, Applicative m,
+          Full.Traversable t Decl, Full.Traversable t Expr) => Deep.Traversable t Expr where
+  t `traverse` Con n   = pure (Con n)
+  t `traverse` Add x y = Add <$> t `Full.traverse` x <*> t `Full.traverse` y
+  t `traverse` Mul x y = Mul <$> t `Full.traverse` x <*> t `Full.traverse` y
+  t `traverse` Let d e = Let <$> t `Full.traverse` d <*> t `Full.traverse` e
+  t `traverse` EVar v  = pure (EVar v)
 ~~~
 
 Once the above boilerplate code is written or generated, no further boilerplate need be written.

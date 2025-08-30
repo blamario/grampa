@@ -12,7 +12,6 @@ import Data.Kind (Type)
 import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Rank2
-import qualified Transformation
 import Transformation (Transformation, Domain, Codomain)
 import Transformation.Deep (Const2)
 import qualified Transformation.Deep as Deep
@@ -68,7 +67,7 @@ newtype Keep t = Keep t
 
 data Kept t g a = Kept{inherited :: Atts (Inherited t) g,
                        synthesized :: Atts (Synthesized t) g,
-                       original :: Domain t a}
+                       original :: Domain t (NodeConstructor a (Kept t (NodeConstructor a)) (Kept t (NodeConstructor a)))}
 
 type instance Atts (Inherited (Keep t)) g = Atts (Inherited t) g
 type instance Atts (Synthesized (Keep t)) g = Kept t g (g (Kept t g) (Kept t g))
@@ -80,14 +79,14 @@ instance (Transformation t, Codomain t ~ Semantics t) => Transformation (Keep t)
 instance (Domain t ~ f, Codomain t ~ Semantics t, Rank2.Functor (g (Semantics (Keep t))), Functor f, Attribution t g) =>
          Attribution (Keep t) g where
    attribution (Keep t) x (Inherited i, childSynthesis) = (Synthesized synthesis', childInheritance') where
-      (Synthesized s, childInheritance) = attribution t x (Inherited i :: Inherited t (g (Semantics t) (Semantics t)),
-                                                           unsafeCoerce $ resynthesize Rank2.<$> childSynthesis)
+      (Synthesized s, childInheritance) = attribution t x (Inherited i :: Inherited t (g sem sem),
+                                                           resynthesize Rank2.<$> childSynthesis)
       resynthesize :: forall a. Synthesized (Keep t) a -> Synthesized t a
       resynthesize (Synthesized Kept{synthesized}) = Synthesized synthesized
       synthesis' :: Atts (Synthesized (Keep t)) g
       synthesis' = Kept i s ((unsafeCoerce (localChild Rank2.<$> childSynthesis) :: g (Kept t g) (Kept t g)) <$ x)
-      childInheritance' :: g (Semantics (Keep t)) (Inherited (Keep t))
-      childInheritance' = unsafeCoerce childInheritance
+      childInheritance' :: g sem (Inherited (Keep t))
+      childInheritance' = unsafeCoerce @(g _ (Inherited t)) childInheritance
       localChild :: Synthesized (Keep t) a -> f a
       localChild (Synthesized Kept{original}) = unsafeCoerce original
 
@@ -113,20 +112,20 @@ knit r chSem = Rank2.Arrow knit'
 -- attribute individually with a 'Transformation.AG.Generics.SynthesizedField' instance.
 class Transformation t => Attribution t g where
    -- | The attribution rule for a given transformation and node.
-   attribution :: forall f sem. (Rank2.Functor (g f), Rank2.Foldable (g sem))
+   attribution :: forall f sem. (Rank2.Functor (g f), Rank2.Traversable (g sem))
                => t -> Domain t (g f f)
                -> (Inherited   t (g sem sem), g sem (Synthesized t))
                -> (Synthesized t (g sem sem), g sem (Inherited t))
 
 -- | Drop-in implementation of 'Transformation.$'
-applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Rank2.Foldable (g (Semantics t)), Attribution t g)
+applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Rank2.Traversable (g (Semantics t)), Attribution t g)
              => (forall a. Domain t a -> a) -> t -> Domain t x -> q x
 applyDefault extract t x = knit (attribution t x) (extract x)
 {-# INLINE applyDefault #-}
 
 -- | Drop-in implementation of 'Full.<$>'
 fullMapDefault :: (Transformation t, f ~ Domain t, sem ~ Codomain t, sem ~ Semantics t, Deep.Functor t g,
-                   Rank2.Apply (g sem), Rank2.Foldable (g sem), Attribution t g, Functor f)
+                   Rank2.Apply (g sem), Rank2.Traversable (g sem), Attribution t g, Functor f)
                => (f a -> g f f) -> t -> f a -> sem (g sem sem)
 fullMapDefault extract t x = knit (attribution t (y <$ x)) y
    where y = t Deep.<$> extract x

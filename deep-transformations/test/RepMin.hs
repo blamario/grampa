@@ -35,6 +35,13 @@ instance Rank2.Foldable (Tree a f') where
    f `foldMap` Fork l r = f l <> f r
    f `foldMap` Leaf x = f x
 
+instance Rank2.Traversable (Root a f') where
+   f `traverse` Root x = Root <$> f x
+
+instance Rank2.Traversable (Tree a f') where
+   f `traverse` Fork l r = Fork <$> f l <*> f r
+   f `traverse` Leaf x = Leaf <$> f x
+
 instance Rank2.Foldable (Root a f') where
    f `foldMap` Root x = f x
 
