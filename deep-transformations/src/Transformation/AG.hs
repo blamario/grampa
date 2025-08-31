@@ -69,6 +69,10 @@ data Kept t a = Kept{inherited   :: Atts (Inherited t) (NodeConstructor a),
                      synthesized :: Atts (Synthesized t) (NodeConstructor a),
                      original    :: Domain t a}
 
+deriving instance (Show (Atts (Inherited t) (NodeConstructor a)),
+                   Show (Atts (Synthesized t) (NodeConstructor a)),
+                   Show (Domain t a)) => Show (Kept t a)
+
 type instance Atts (Inherited (Keep t)) g = Atts (Inherited t) g
 type instance Atts (Synthesized (Keep t)) g = Kept t (g (Kept t) (Kept t))
 
