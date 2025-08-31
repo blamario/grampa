@@ -65,12 +65,12 @@ type Rule t g =  forall sem . sem ~ Semantics t
 -- | Transformation wrapper that keeps all the original tree nodes alongside their attributes
 newtype Keep t = Keep t
 
-data Kept t g a = Kept{inherited :: Atts (Inherited t) g,
-                       synthesized :: Atts (Synthesized t) g,
-                       original :: Domain t (NodeConstructor a (Kept t (NodeConstructor a)) (Kept t (NodeConstructor a)))}
+data Kept t a = Kept{inherited   :: Atts (Inherited t) (NodeConstructor a),
+                     synthesized :: Atts (Synthesized t) (NodeConstructor a),
+                     original    :: Domain t a}
 
 type instance Atts (Inherited (Keep t)) g = Atts (Inherited t) g
-type instance Atts (Synthesized (Keep t)) g = Kept t g (g (Kept t g) (Kept t g))
+type instance Atts (Synthesized (Keep t)) g = Kept t (g (Kept t) (Kept t))
 
 instance (Transformation t, Codomain t ~ Semantics t) => Transformation (Keep t) where
    type Domain (Keep t) = Domain t
@@ -84,11 +84,11 @@ instance (Domain t ~ f, Codomain t ~ Semantics t, Rank2.Functor (g (Semantics (K
       resynthesize :: forall a. Synthesized (Keep t) a -> Synthesized t a
       resynthesize (Synthesized Kept{synthesized}) = Synthesized synthesized
       synthesis' :: Atts (Synthesized (Keep t)) g
-      synthesis' = Kept i s ((unsafeCoerce (localChild Rank2.<$> childSynthesis) :: g (Kept t g) (Kept t g)) <$ x)
+      synthesis' = Kept i s ((unsafeCoerce (localChild Rank2.<$> childSynthesis) :: g (Kept t) (Kept t)) <$ x)
       childInheritance' :: g sem (Inherited (Keep t))
       childInheritance' = unsafeCoerce @(g _ (Inherited t)) childInheritance
-      localChild :: Synthesized (Keep t) a -> f a
-      localChild (Synthesized Kept{original}) = unsafeCoerce original
+      localChild :: forall a. Synthesized (Keep t) a -> f a
+      localChild (Synthesized Kept{original}) = unsafeCoerce @(f (NodeConstructor a (Kept t) (Kept t))) original
 
 -- | The core function to tie the recursive knot, turning a 'Rule' for a node into its 'Semantics'.
 knit :: (Rank2.Apply (g sem), sem ~ Semantics t) => Rule t g -> g sem sem -> sem (g sem sem)
