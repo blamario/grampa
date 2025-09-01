@@ -2,7 +2,7 @@
              TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | The RepMin example using 'AG.Keep' to replicate the tree structure.
-module RepMinKeep where
+module RepMinKeepAG where
 
 import Data.Functor.Identity
 import Data.Kind (Type)
@@ -65,11 +65,11 @@ instance (Transformation t, Full.Functor t (Tree a)) => Deep.Functor t (Root a) 
 -- | The transformation type
 data RepMin = RepMin
 
-type Sem = AG.PreservingSemantics RepMin
+type Sem = AG.Semantics (AG.Keep RepMin)
 
 instance Transformation RepMin where
    type Domain RepMin = Identity
-   type Codomain RepMin = Sem
+   type Codomain RepMin = AG.Semantics RepMin
 
 -- | Inherited attributes' type
 data InhRepMin = InhRepMin{global :: Int} deriving Show
@@ -85,19 +85,19 @@ type instance AG.Atts (Synthesized RepMin) (Root Int) = SynRepMin
 type instance AG.Atts (Inherited RepMin) (Deep.Const2 Int) = InhRepMin
 type instance AG.Atts (Synthesized RepMin) (Deep.Const2 Int) = Int
 
-instance Transformation.At RepMin (Tree Int Sem Sem) where
-  ($) = AG.applyDefaultWithAttributes runIdentity
-instance Transformation.At RepMin (Root Int Sem Sem) where
-  RepMin $ root = AG.applyDefaultWithAttributes runIdentity RepMin root
+instance Transformation.At (AG.Keep RepMin) (Tree Int Sem Sem) where
+  ($) = AG.applyDefault runIdentity
+instance Transformation.At (AG.Keep RepMin) (Root Int Sem Sem) where
+  ($) = AG.applyDefault runIdentity
 
-instance Full.Functor RepMin (Tree Int) where
+instance Full.Functor (AG.Keep RepMin) (Tree Int) where
   (<$>) = Full.mapUpDefault
-instance Full.Functor RepMin (Root Int) where
+instance Full.Functor (AG.Keep RepMin) (Root Int) where
   (<$>) = Full.mapUpDefault
 
 -- | The semantics of the primitive 'Int' type must be defined manually.
-instance Transformation.At RepMin Int where
-   RepMin $ Identity n = Rank2.Arrow (\(Inherited i)-> AG.Kept i n (Identity $ Deep.Const2 n))
+instance Transformation.At (AG.Keep RepMin) Int where
+   _ $ Identity n = Rank2.Arrow (\(Inherited i)-> Synthesized $ AG.Kept i n (Identity $ Deep.Const2 n))
 
 instance AG.Attribution RepMin (Root Int) where
    attribution RepMin self (inherited, Root root) = (Synthesized SynRepMin{local= local (syn root)},
@@ -138,5 +138,5 @@ exampleTree :: Root Int Identity Identity
 exampleTree = Root (Identity $ leaf 7 `fork` (leaf 4 `fork` leaf 1) `fork` leaf 3)
 
 -- |
--- >>> Deep.fmap Extractor $ runIdentity $ AG.original $ Rank2.apply (Full.fmap RepMin $ Identity exampleTree) (Inherited ())
+-- >>> Deep.fmap Extractor $ runIdentity $ AG.original $ AG.syn $ Rank2.apply (Full.fmap (AG.Keep RepMin) $ Identity exampleTree) (Inherited ())
 -- Root {root = Identity (Fork {left = Identity (Fork {left = Identity (Leaf {leafValue = Identity 1}), right = Identity (Fork {left = Identity (Leaf {leafValue = Identity 1}), right = Identity (Leaf {leafValue = Identity 1})})}), right = Identity (Leaf {leafValue = Identity 1})})}
