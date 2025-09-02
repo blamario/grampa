@@ -67,11 +67,11 @@ newtype Keep t = Keep t
 
 data Kept t a = Kept{inherited   :: Atts (Inherited t) (NodeConstructor a),
                      synthesized :: Atts (Synthesized t) (NodeConstructor a),
-                     original    :: Domain t (NodeConstructor a (Kept t) (Kept t))}
+                     original    :: Domain t a}
 
 deriving instance (Show (Atts (Inherited t) (NodeConstructor a)),
                    Show (Atts (Synthesized t) (NodeConstructor a)),
-                   Show (Domain t (NodeConstructor a (Kept t) (Kept t)))) => Show (Kept t a)
+                   Show (Domain t a)) => Show (Kept t a)
 
 type instance Atts (Inherited (Keep t)) g = Atts (Inherited t) g
 type instance Atts (Synthesized (Keep t)) g = Kept t (g (Kept t) (Kept t))
@@ -99,27 +99,6 @@ knit r chSem = Rank2.Arrow knit'
             where (synthesized, chInh) = r (inherited, chSyn)
                   chSyn = chSem Rank2.<*> chInh
 
--- | Another way to tie the recursive knot, using a 'Rule' to add 'AllAtts' information to every node
-knitKeeping :: forall t f g sem. (Domain t ~ f, sem ~ PreservingSemantics t, Rank2.Apply (g sem), Functor f)
-            => (forall a. f a -> a)
-            -> ((Inherited      t (g sem sem), g sem (Synthesized t))
-                -> (Synthesized t (g sem sem), g sem (Inherited t)))
-            -> f (g sem sem)
-            -> sem (g sem sem)
-knitKeeping extract rule x = Rank2.Arrow knitted
-   where knitted :: Inherited t (g (PreservingSemantics t) (PreservingSemantics t))
-                 -> Kept t (g (PreservingSemantics t) (PreservingSemantics t))
-         chSem :: g (PreservingSemantics t) (PreservingSemantics t)
-         knitted i = Kept{inherited = inh i, synthesized = syn s, original = unsafeCoerce chKept <$ x}
-            where chInh :: g (PreservingSemantics t) (Inherited t)
-                  chSyn :: g (PreservingSemantics t) (Synthesized t)
-                  chKept :: g (PreservingSemantics t) (Kept t)
-                  s :: Synthesized t (g (PreservingSemantics t) (PreservingSemantics t))
-                  (s, chInh) = unsafeCoerce (rule (unsafeCoerce i, unsafeCoerce chSyn))
-                  chSyn = Synthesized . synthesized Rank2.<$> chKept
-                  chKept = chSem Rank2.<*> chInh
-         chSem = extract x
-
 -- | The core type class for defining the attribute grammar. The instances of this class typically have a form like
 --
 -- > instance Attribution MyAttGrammar MyNode Identity where
@@ -145,15 +124,6 @@ applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Rank2.Traversabl
              => (forall a. Domain t a -> a) -> t -> Domain t x -> q x
 applyDefault extract t x = knit (attribution t x) (extract x)
 {-# INLINE applyDefault #-}
-
--- | Drop-in implementation of 'Transformation.$' that preserves all attributes with every original node
-applyDefaultWithAttributes :: (p ~ Domain t, q ~ PreservingSemantics t, x ~ g q q, Rank2.Apply (g q), Functor p,
-                               Rank2.Traversable (g (PreservingSemantics t)),
-                               Attribution t g)
-                           => (forall a. p a -> a) -> t -> p (g (PreservingSemantics t) (PreservingSemantics t))
-                           -> PreservingSemantics t (g (PreservingSemantics t) (PreservingSemantics t))
-applyDefaultWithAttributes extract t x = knitKeeping extract (attribution t x) x
-{-# INLINE applyDefaultWithAttributes #-}
 
 -- | Drop-in implementation of 'Full.<$>'
 fullMapDefault :: (Transformation t, f ~ Domain t, sem ~ Codomain t, sem ~ Semantics t, Deep.Functor t g,
