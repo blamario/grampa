@@ -114,8 +114,8 @@ knit r chSem = Rank2.Arrow knit'
 -- attribute individually with a 'Transformation.AG.Generics.SynthesizedField' instance.
 class Transformation t => Attribution t g where
    -- | The attribution rule for a given transformation and node.
-   attribution :: forall f sem. (Rank2.Functor (g f), Rank2.Traversable (g sem))
-               => t -> Domain t (g f f)
+   attribution :: forall sem. Rank2.Traversable (g sem)
+               => t -> Domain t (g sem sem)
                -> (Inherited   t (g sem sem), g sem (Synthesized t))
                -> (Synthesized t (g sem sem), g sem (Inherited t))
 
