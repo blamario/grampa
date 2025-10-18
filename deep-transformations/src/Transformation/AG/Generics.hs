@@ -68,8 +68,8 @@ class Transformation t => Revelation t where
 -- | A half of the 'Attribution' class used to specify all inherited attributes.
 class Bequether t g where
    bequest     :: forall sem deep.
-                  t                                -- ^ transformation        
-               -> Domain t (g deep deep)            -- ^ tree node
+                  t                                -- ^ transformation
+               -> Domain t (g deep deep)           -- ^ tree node
                -> Atts (Inherited t) g             -- ^ inherited attributes
                -> g sem (Synthesized t)            -- ^ synthesized attributes
                -> g sem (Inherited t)
@@ -77,8 +77,8 @@ class Bequether t g where
 -- | A half of the 'Attribution' class used to specify all synthesized attributes.
 class Synthesizer t g where
    synthesis   :: forall sem deep.
-                  t                                -- ^ transformation        
-               -> Domain t (g deep deep)            -- ^ tree node
+                  t                                -- ^ transformation
+               -> Domain t (g deep deep)           -- ^ tree node
                -> Atts (Inherited t) g             -- ^ inherited attributes
                -> g sem (Synthesized t)            -- ^ synthesized attributes
                -> Atts (Synthesized t) g
@@ -88,24 +88,18 @@ class Transformation t => SynthesizedField (name :: Symbol) result t g where
    synthesizedField  :: forall sem deep.
                         Proxy name                      -- ^ attribute name
                      -> t                               -- ^ transformation
-                     -> Domain t (g deep deep)           -- ^ tree node
+                     -> Domain t (g deep deep)          -- ^ tree node
                      -> Atts (Inherited t) g            -- ^ inherited attributes
                      -> g sem (Synthesized t)           -- ^ synthesized attributes
                      -> result
 
-instance {-# overlappable #-} (Transformation t, Revelation t, a ~ Atts (Inherited t) g,
-                               forall deep. Shallow.Functor (PassDown t deep a) (g deep)) =>
-                              Bequether t g where
-   bequest     :: forall sem deep.
-                  t                                -- ^ transformation        
-               -> Domain t (g deep deep)           -- ^ tree node
-               -> Atts (Inherited t) g             -- ^ inherited attributes
-               -> g sem (Synthesized t)            -- ^ synthesized attributes
-               -> g sem (Inherited t)
+instance {-# overlappable #-} (Transformation (Auto t), Revelation (Auto t), a ~ Atts (Inherited (Auto t)) g,
+                               forall deep. Shallow.Functor (PassDown (Auto t) deep a) (g deep)) =>
+                              Bequether (Auto t) g where
    bequest = bequestDefault
 
-instance {-# overlappable #-} (Atts (Synthesized t) g ~ result, Generic result,
-                               GenericSynthesizer t g (Rep result)) => Synthesizer t g where
+instance {-# overlappable #-} (Atts (Synthesized (Auto t)) g ~ result, Generic result,
+                               GenericSynthesizer (Auto t) g (Rep result)) => Synthesizer (Auto t) g where
    synthesis t node i s = to (genericSynthesis t node i s)
 
 -- | Wrapper for a field that should be automatically synthesized by folding together all child nodes' synthesized
