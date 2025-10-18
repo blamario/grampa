@@ -29,6 +29,7 @@ It will also require several imports.
 ~~~ {.haskell}
 import Control.Applicative
 import Data.Coerce (coerce)
+import Data.Functor.Compose
 import Data.Functor.Const
 import Data.Functor.Identity
 import Data.Monoid
@@ -111,6 +112,17 @@ instance Rank2.Foldable (Expr f') where
   f `foldMap` Mul x y = f x <> f y
   f `foldMap` Let d e = f d <> f e
   f `foldMap` EVar v  = mempty
+
+instance Rank2.Traversable (Decl f') where
+  f `traverse` (v := e) = (v :=) <$> f e
+  f `traverse` Seq x y  = Seq <$> f x <*> f y
+
+instance Rank2.Traversable (Expr f') where
+  f `traverse` Con n   = pure (Con n)
+  f `traverse` Add x y = Add <$> f x <*> f y
+  f `traverse` Mul x y = Mul <$> f x <*> f y
+  f `traverse` Let d e = Let <$> f d <*> f e
+  f `traverse` EVar v  = pure (EVar v)
 ~~~
 
 While the methods declared above can be handy, they are limited in requiring that the function argument `f` must be
@@ -144,6 +156,19 @@ instance (Transformation t, Full.Foldable t Decl, Full.Foldable t Expr) => Deep.
   t `foldMap` Mul x y = t `Full.foldMap` x <> t `Full.foldMap` y
   t `foldMap` Let d e = t `Full.foldMap` d <> t `Full.foldMap` e
   t `foldMap` EVar v  = mempty
+
+instance (Transformation t, Transformation.Codomain t ~ Compose m f, Applicative m,
+          Full.Traversable t Decl, Full.Traversable t Expr) => Deep.Traversable t Decl where
+  t `traverse` (v := e) = (v :=) <$> t `Full.traverse` e
+  t `traverse` Seq x y  = Seq <$> t `Full.traverse` x <*> t `Full.traverse` y
+
+instance (Transformation t, Transformation.Codomain t ~ Compose m f, Applicative m,
+          Full.Traversable t Decl, Full.Traversable t Expr) => Deep.Traversable t Expr where
+  t `traverse` Con n   = pure (Con n)
+  t `traverse` Add x y = Add <$> t `Full.traverse` x <*> t `Full.traverse` y
+  t `traverse` Mul x y = Mul <$> t `Full.traverse` x <*> t `Full.traverse` y
+  t `traverse` Let d e = Let <$> t `Full.traverse` d <*> t `Full.traverse` e
+  t `traverse` EVar v  = pure (EVar v)
 ~~~
 
 Once the above boilerplate code is written or generated, no further boilerplate need be written.
@@ -318,14 +343,14 @@ Every type of node can have different inherited and synthesized attributes, so w
 
 ~~~ {.haskell}
 type Env = Var -> Maybe (Expr Identity Identity)
-type instance AG.Atts (AG.Inherited DeadCodeEliminator) (Expr _ _) = Env
+type instance AG.Atts (AG.Inherited DeadCodeEliminator) Expr = Env
 ~~~
 
 A declaration will also need to inherit the environment, if only to pass it on to the nested expressions. Because we
  want to discard useless assignments, it will also need to know the list of all referenced variables.
 
 ~~~ {.haskell}
-type instance AG.Atts (AG.Inherited DeadCodeEliminator) (Decl _ _) = (Env, [Var])
+type instance AG.Atts (AG.Inherited DeadCodeEliminator) Decl = (Env, [Var])
 ~~~
 
 A `Decl` needs to synthesize the environment of constant bindings it generates itself, as well as a modified
@@ -333,7 +358,7 @@ A `Decl` needs to synthesize the environment of constant bindings it generates i
  need to wrap it in a `Maybe`.
 
 ~~~ {.haskell}
-type instance AG.Atts (AG.Synthesized DeadCodeEliminator) (Decl _ _) = (Env, Maybe (Decl Identity Identity))
+type instance AG.Atts (AG.Synthesized DeadCodeEliminator) Decl = (Env, Maybe (Decl Identity Identity))
 ~~~
 
 All declarations inside an `Expr` need to be trimmed, so the `Expr` itself may be simplified but never completely
@@ -342,7 +367,7 @@ All declarations inside an `Expr` need to be trimmed, so the `Expr` itself may b
  easier to reuse the existing `GetVariables` transformation.
 
 ~~~ {.haskell}
-type instance AG.Atts (AG.Synthesized DeadCodeEliminator) (Expr _ _) = Expr Identity Identity
+type instance AG.Atts (AG.Synthesized DeadCodeEliminator) Expr = Expr Identity Identity
 ~~~
 
 Now we need to describe how to calculate the attributes, by declaring `Attribution` instances of the node types. The
@@ -366,7 +391,7 @@ Let's see a few simple `attribution` rules first. The rules for leaf nodes can i
 because they don't have any children.
 
 ~~~ {.haskell}
-instance AG.Attribution DeadCodeEliminator Expr Sem Identity where
+instance AG.Attribution DeadCodeEliminator Expr where
   attribution DeadCodeEliminator (Identity (EVar v)) (AG.Inherited env, _) =
     (AG.Synthesized (maybe (EVar v) id $ env v), EVar v)
   attribution DeadCodeEliminator (Identity (Con n)) (AG.Inherited env, _) =
@@ -403,7 +428,7 @@ The only non-trivial rule is for the `Let` node. It needs to pass the list of va
 The rules for `Decl` are a bit more involved.
 
 ~~~ {.haskell}
-instance AG.Attribution DeadCodeEliminator Decl Sem Identity where
+instance AG.Attribution DeadCodeEliminator Decl where
 ~~~
 
 A single variable binding can be in three distinct situations. If the variable is not referenced at all, we can just

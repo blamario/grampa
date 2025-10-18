@@ -53,6 +53,3 @@ instance Transformation.At (Fold p m) x where
 
 instance Transformation.At (Traversal p q m) x where
    ($) (Traversal f) = Compose . f
-
-instance (Rank2.Functor (g p), Deep.Functor (Map p q) g, Functor p) => Full.Functor (Map p q) g where
-  (<$>) = Full.mapUpDefault

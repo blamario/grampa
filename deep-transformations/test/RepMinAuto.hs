@@ -22,6 +22,10 @@ import qualified Transformation.Full as Full
 import qualified Transformation.Deep.TH
 import qualified Transformation.Shallow.TH
 
+import qualified Data.Functor.Compose
+import qualified Data.Functor.Const
+import qualified Transformation.Shallow
+
 -- | tree data type
 data Tree a (f' :: Type -> Type) (f :: Type -> Type) = Fork{left :: f (Tree a f' f'),
                                                             right:: f (Tree a f' f')}
@@ -66,13 +70,13 @@ data SynRepLeaf = SynRepLeaf{local :: AG.Folded (Min Int),
                              tree :: AG.Mapped Identity Int}
                   deriving (Generic, Show)
 
-type instance AG.Atts (Inherited RepMin) (Tree Int f' f) = InhRepMin
-type instance AG.Atts (Synthesized RepMin) (Tree Int f' f) = SynRepMin Tree
-type instance AG.Atts (Inherited RepMin) (Root Int f' f) = ()
-type instance AG.Atts (Synthesized RepMin) (Root Int f' f) = SynRepMin Root
+type instance AG.Atts (Inherited RepMin) (Tree Int) = InhRepMin
+type instance AG.Atts (Synthesized RepMin) (Tree Int) = SynRepMin Tree
+type instance AG.Atts (Inherited RepMin) (Root Int) = ()
+type instance AG.Atts (Synthesized RepMin) (Root Int) = SynRepMin Root
 
-type instance AG.Atts (Inherited RepMin) Int = InhRepMin
-type instance AG.Atts (Synthesized RepMin) Int = SynRepLeaf
+type instance AG.Atts (Inherited RepMin) (Deep.Const2 Int) = InhRepMin
+type instance AG.Atts (Synthesized RepMin) (Deep.Const2 Int) = SynRepLeaf
 
 -- | The semantics of the primitive 'Int' type must be defined manually.
 instance Transformation.At (Auto RepMin) Int where
@@ -83,7 +87,7 @@ instance Transformation.At (Auto RepMin) Int where
 
 -- | The only required attribute rule is the only non-trivial one, where we set the 'global' inherited attribute to
 -- | the 'local' minimum synthesized attribute at the tree root.
-instance AG.Bequether (Auto RepMin) (Root Int) Sem Identity where
+instance AG.Bequether (Auto RepMin) (Root Int) where
    bequest (Auto RepMin) self inherited (Root (Synthesized SynRepMin{local= rootLocal})) =
       Root{root= Inherited InhRepMin{global= getMin (AG.getFolded rootLocal)}}
 
