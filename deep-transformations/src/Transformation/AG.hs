@@ -19,6 +19,7 @@ import qualified Transformation.Deep as Deep
 -- | Type family that maps a node type to the type of its attributes, indexed per type constructor.
 type family Atts (f :: Type -> Type) (g :: (Type -> Type) -> (Type -> Type) -> Type)
 
+-- | Type family that lops off the two type parameters
 type family NodeConstructor (a :: Type) :: (Type -> Type) -> (Type -> Type) -> Type where
    NodeConstructor (g p q) = g
    NodeConstructor t = Const2 t
@@ -47,20 +48,25 @@ mapSynthesized f (Synthesized a) = Synthesized (f a)
 -- attributes.
 type Semantics t = Inherited t Rank2.~> Synthesized t
 
--- | A node's 'PreservingSemantics' is a natural tranformation from the node's inherited attributes to all its
--- attributes paired with the preserved node.
-type PreservingSemantics t = Inherited t Rank2.~> Kept t
-
--- | All inherited and synthesized attributes
-data AllAtts t a where
-   AllAtts :: a ~ g f f => {allInh :: Atts (Inherited t) g,
-                            allSyn :: Atts (Synthesized t) g} -> AllAtts t a
-
--- | An attribution rule maps a node's inherited attributes and its child nodes' synthesized attributes to the node's
--- synthesized attributes and the children nodes' inherited attributes.
-type Rule t g =  forall sem . sem ~ Semantics t
-              => (Inherited   t (g sem (Semantics t)), g sem (Synthesized t))
-              -> (Synthesized t (g sem (Semantics t)), g sem (Inherited t))
+-- | The core type class for defining the attribute grammar. The instances of this class typically have a form like
+--
+-- > instance Attribution MyAttGrammar MyNode Identity where
+-- >   attribution MyAttGrammar{} (Identity MyNode{})
+-- >               (Inherited   fromParent,
+-- >                Synthesized MyNode{firstChild= fromFirstChild, ...})
+-- >             = (Synthesized _forMyself,
+-- >                Inherited   MyNode{firstChild= _forFirstChild, ...})
+--
+-- If you prefer to separate the calculation of different attributes, you can split the above instance into two
+-- instances of the 'Transformation.AG.Generics.Bequether' and 'Transformation.AG.Generics.Synthesizer' classes
+-- instead. If you derive 'GHC.Generics.Generic' instances for your attributes, you can even define each synthesized
+-- attribute individually with a 'Transformation.AG.Generics.SynthesizedField' instance.
+class Transformation t => Attribution t g where
+   -- | The attribution rule for a given transformation and node.
+   attribution :: forall sem. Rank2.Traversable (g sem)
+               => t -> Domain t (g sem sem)
+               -> (Inherited   t (g sem sem), g sem (Synthesized t))
+               -> (Synthesized t (g sem sem), g sem (Inherited t))
 
 -- | Transformation wrapper that keeps all the original tree nodes alongside their attributes
 newtype Keep t = Keep t
@@ -92,32 +98,18 @@ instance (Domain t ~ f, Codomain t ~ Semantics t, Rank2.Functor (g (Semantics (K
       childInheritance' :: g sem (Inherited (Keep t))
       childInheritance' = unsafeCoerce @(g _ (Inherited t)) childInheritance
 
+-- | An attribution rule maps a node's inherited attributes and its child nodes' synthesized attributes to the node's
+-- synthesized attributes and the children nodes' inherited attributes.
+type Rule t g =  forall sem . sem ~ Semantics t
+              => (Inherited   t (g sem (Semantics t)), g sem (Synthesized t))
+              -> (Synthesized t (g sem (Semantics t)), g sem (Inherited t))
+
 -- | The core function to tie the recursive knot, turning a 'Rule' for a node into its 'Semantics'.
 knit :: (Rank2.Apply (g sem), sem ~ Semantics t) => Rule t g -> g sem sem -> sem (g sem sem)
 knit r chSem = Rank2.Arrow knit'
    where knit' inherited = synthesized
             where (synthesized, chInh) = r (inherited, chSyn)
                   chSyn = chSem Rank2.<*> chInh
-
--- | The core type class for defining the attribute grammar. The instances of this class typically have a form like
---
--- > instance Attribution MyAttGrammar MyNode Identity where
--- >   attribution MyAttGrammar{} (Identity MyNode{})
--- >               (Inherited   fromParent,
--- >                Synthesized MyNode{firstChild= fromFirstChild, ...})
--- >             = (Synthesized _forMyself,
--- >                Inherited   MyNode{firstChild= _forFirstChild, ...})
---
--- If you prefer to separate the calculation of different attributes, you can split the above instance into two
--- instances of the 'Transformation.AG.Generics.Bequether' and 'Transformation.AG.Generics.Synthesizer' classes
--- instead. If you derive 'GHC.Generics.Generic' instances for your attributes, you can even define each synthesized
--- attribute individually with a 'Transformation.AG.Generics.SynthesizedField' instance.
-class Transformation t => Attribution t g where
-   -- | The attribution rule for a given transformation and node.
-   attribution :: forall sem. Rank2.Traversable (g sem)
-               => t -> Domain t (g sem sem)
-               -> (Inherited   t (g sem sem), g sem (Synthesized t))
-               -> (Synthesized t (g sem sem), g sem (Inherited t))
 
 -- | Drop-in implementation of 'Transformation.$'
 applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Rank2.Traversable (g (Semantics t)), Attribution t g)
