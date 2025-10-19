@@ -301,21 +301,9 @@ data DeadCodeEliminator = DeadCodeEliminator
 
 type Sem = AG.Semantics DeadCodeEliminator
 
-instance Transformation DeadCodeEliminator where
-   type Domain DeadCodeEliminator = Identity
-   type Codomain DeadCodeEliminator = AG.Semantics DeadCodeEliminator
-
-instance DeadCodeEliminator `Transformation.At` Decl Sem Sem where
-  ($) = AG.applyDefault runIdentity
-
-instance DeadCodeEliminator `Transformation.At` Expr Sem Sem where
-  ($) = AG.applyDefault runIdentity
-
-instance Full.Functor DeadCodeEliminator Decl where
-  (<$>) = Full.mapUpDefault
-
-instance Full.Functor DeadCodeEliminator Expr where
-  (<$>) = Full.mapUpDefault
+instance AG.Attribution DeadCodeEliminator where
+   type Origin DeadCodeEliminator = Identity
+   unwrap DeadCodeEliminator = runIdentity
 ~~~
 
 We also need another bit of a boilerplate instance that can be automatically generated with Template Haskell functions
@@ -391,7 +379,7 @@ Let's see a few simple `attribution` rules first. The rules for leaf nodes can i
 because they don't have any children.
 
 ~~~ {.haskell}
-instance AG.Attribution DeadCodeEliminator Expr where
+instance DeadCodeEliminator `AG.At` Expr where
   attribution DeadCodeEliminator (Identity (EVar v)) (AG.Inherited env, _) =
     (AG.Synthesized (maybe (EVar v) id $ env v), EVar v)
   attribution DeadCodeEliminator (Identity (Con n)) (AG.Inherited env, _) =
@@ -428,7 +416,7 @@ The only non-trivial rule is for the `Let` node. It needs to pass the list of va
 The rules for `Decl` are a bit more involved.
 
 ~~~ {.haskell}
-instance AG.Attribution DeadCodeEliminator Decl where
+instance DeadCodeEliminator `AG.At` Decl where
 ~~~
 
 A single variable binding can be in three distinct situations. If the variable is not referenced at all, we can just
@@ -463,7 +451,7 @@ Here is the attribute grammar finally in action:
 
 ~~~ {.haskell}
 -- |
--- >>> let s = Full.fmap DeadCodeEliminator (Identity $ bin Let d1 e1) `Rank2.apply` AG.Inherited (const Nothing)
+-- >>> let s = Full.fmap (AG.Knit DeadCodeEliminator) (Identity $ bin Let d1 e1) `Rank2.apply` AG.Inherited (const Nothing)
 -- >>> s
 -- Synthesized {syn = Add (Identity (Con 42)) (Identity (Add (Identity (Mul (Identity (Con 42)) (Identity (Con 68)))) (Identity (Con 7))))}
 -- >>> Full.fmap ConstantFold $ Identity $ AG.syn s

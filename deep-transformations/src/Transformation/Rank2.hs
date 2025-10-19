@@ -12,7 +12,6 @@ import qualified Rank2
 import           Transformation (Transformation, Domain, Codomain)
 import qualified Transformation
 import qualified Transformation.Deep as Deep
-import qualified Transformation.Full as Full
 
 -- | Transform (naturally) the containing functor of every node in the given tree.
 (<$>) :: Deep.Functor (Map p q) g => (forall a. p a -> q a) -> g p p -> g q q

@@ -12,7 +12,7 @@ import GHC.Generics (Generic)
 import qualified Rank2
 import qualified Rank2.TH
 import Transformation (Transformation(..))
-import Transformation.AG (Inherited(..), Synthesized(..))
+import Transformation.AG (Attribution, Inherited(..), Synthesized(..))
 import qualified Transformation
 import qualified Transformation.AG as AG
 import qualified Transformation.AG.Generics as AG
@@ -44,15 +44,9 @@ $(concat <$>
 -- | The transformation type. It will always appear wrapped in 'Auto' to enable automatic attribute derivation.
 data RepMin = RepMin
 
--- | The semantics type synonym for convenience
-type Sem = AG.Semantics (Auto RepMin)
-
-instance Transformation (Auto RepMin) where
-   type Domain (Auto RepMin) = Identity
-   type Codomain (Auto RepMin) = Sem
-
-instance AG.Revelation (Auto RepMin) where
-   reveal (Auto RepMin) = runIdentity
+instance Attribution RepMin where
+   type Origin RepMin = Identity
+   unwrap RepMin = runIdentity
    
 -- | Inherited attributes' type
 data InhRepMin = InhRepMin{global :: Int}
@@ -79,8 +73,8 @@ type instance AG.Atts (Inherited RepMin) (Deep.Const2 Int) = InhRepMin
 type instance AG.Atts (Synthesized RepMin) (Deep.Const2 Int) = SynRepLeaf
 
 -- | The semantics of the primitive 'Int' type must be defined manually.
-instance Transformation.At (Auto RepMin) Int where
-   Auto RepMin $ Identity n = Rank2.Arrow f
+instance Transformation.At (AG.Knit (Auto RepMin)) Int where
+   _ $ Identity n = Rank2.Arrow f
       where f (Inherited InhRepMin{global= n'}) =
                Synthesized SynRepLeaf{local= AG.Folded (Min n),
                                       tree= AG.Mapped (Identity n')}
@@ -100,5 +94,5 @@ exampleTree :: Root Int Identity Identity
 exampleTree = Root (Identity $ leaf 7 `fork` (leaf 4 `fork` leaf 1) `fork` leaf 3)
 
 -- |
--- >>> syn $ Rank2.apply (Auto RepMin Transformation.$ Identity (Auto RepMin Deep.<$> exampleTree)) (Inherited ())
+-- >>> syn $ Rank2.apply (AG.Knit (Auto RepMin) Full.<$> Identity exampleTree) (Inherited ())
 -- SynRepMin {local = Folded {getFolded = Min {getMin = 1}}, tree = Mapped {getMapped = Identity (Root {root = Identity (Fork {left = Identity (Fork {left = Identity (Leaf {leafValue = Identity 1}), right = Identity (Fork {left = Identity (Leaf {leafValue = Identity 1}), right = Identity (Leaf {leafValue = Identity 1})})}), right = Identity (Leaf {leafValue = Identity 1})})})}}

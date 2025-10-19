@@ -12,9 +12,11 @@ import Data.Kind (Type)
 import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Rank2
-import Transformation (Transformation, Domain, Codomain)
+import Transformation (Transformation, Codomain)
 import Transformation.Deep (Const2)
+import qualified Transformation
 import qualified Transformation.Deep as Deep
+import qualified Transformation.Full as Full
 
 -- | Type family that maps a node type to the type of its attributes, indexed per type constructor.
 type family Atts (f :: Type -> Type) (g :: (Type -> Type) -> (Type -> Type) -> Type)
@@ -61,33 +63,48 @@ type Semantics t = Inherited t Rank2.~> Synthesized t
 -- instances of the 'Transformation.AG.Generics.Bequether' and 'Transformation.AG.Generics.Synthesizer' classes
 -- instead. If you derive 'GHC.Generics.Generic' instances for your attributes, you can even define each synthesized
 -- attribute individually with a 'Transformation.AG.Generics.SynthesizedField' instance.
-class Transformation t => Attribution t g where
+class Attribution t where
+   type Origin t :: Type -> Type
+   -- | Unwrap the value from the original attribution domain
+   unwrap :: t -> Origin t x -> x
+
+class Attribution t => At t g where
    -- | The attribution rule for a given transformation and node.
    attribution :: forall sem. Rank2.Traversable (g sem)
-               => t -> Domain t (g sem sem)
+               => t -> Origin t (g sem sem)
                -> (Inherited   t (g sem sem), g sem (Synthesized t))
                -> (Synthesized t (g sem sem), g sem (Inherited t))
 
+newtype Knit t = Knit t
+
+instance Attribution t => Transformation (Knit t) where
+   type Domain (Knit t) = Origin t
+   type Codomain (Knit t) = Semantics t
+
+instance (t `At` g, Rank2.Apply (g sem), Rank2.Traversable (g sem), sem ~ Semantics t) =>
+         Knit t `Transformation.At` g sem sem where
+   Knit t $ x = knit (attribution t x) (unwrap t x)
+
+instance (t `At` g, Rank2.Apply (g (Semantics t)), Rank2.Traversable (g (Semantics t)),
+          Functor (Origin t), Rank2.Functor (g (Origin t)), Deep.Functor (Knit t) g) =>
+         Full.Functor (Knit t) g where
+   (<$>) = Full.mapUpDefault
+
 -- | Transformation wrapper that keeps all the original tree nodes alongside their attributes
-newtype Keep t = Keep t
+newtype Keep t = Keep t deriving (Attribution)
 
 data Kept t a = Kept{inherited   :: Atts (Inherited t) (NodeConstructor a),
                      synthesized :: Atts (Synthesized t) (NodeConstructor a),
-                     original    :: Domain t a}
+                     original    :: Origin t a}
 
 deriving instance (Show (Atts (Inherited t) (NodeConstructor a)),
                    Show (Atts (Synthesized t) (NodeConstructor a)),
-                   Show (Domain t a)) => Show (Kept t a)
+                   Show (Origin t a)) => Show (Kept t a)
 
 type instance Atts (Inherited (Keep t)) g = Atts (Inherited t) g
 type instance Atts (Synthesized (Keep t)) g = Kept t (g (Kept t) (Kept t))
 
-instance (Transformation t, Codomain t ~ Semantics t) => Transformation (Keep t) where
-   type Domain (Keep t) = Domain t
-   type Codomain (Keep t) = Semantics (Keep t)
-
-instance (Domain t ~ f, Codomain t ~ Semantics t, Rank2.Functor (g (Semantics (Keep t))), Functor f, Attribution t g) =>
-         Attribution (Keep t) g where
+instance (Rank2.Functor (g (Semantics (Keep t))), Functor (Origin t), t `At` g) => Keep t `At` g where
    attribution (Keep t) x (Inherited i, childSynthesis) = (Synthesized synthesis', childInheritance') where
       (Synthesized s, childInheritance) = attribution t x (Inherited i :: Inherited t (g sem sem),
                                                            resynthesize Rank2.<$> childSynthesis)
@@ -110,17 +127,3 @@ knit r chSem = Rank2.Arrow knit'
    where knit' inherited = synthesized
             where (synthesized, chInh) = r (inherited, chSyn)
                   chSyn = chSem Rank2.<*> chInh
-
--- | Drop-in implementation of 'Transformation.$'
-applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Rank2.Traversable (g (Semantics t)), Attribution t g)
-             => (forall a. Domain t a -> a) -> t -> Domain t x -> q x
-applyDefault extract t x = knit (attribution t x) (extract x)
-{-# INLINE applyDefault #-}
-
--- | Drop-in implementation of 'Full.<$>'
-fullMapDefault :: (Transformation t, f ~ Domain t, sem ~ Codomain t, sem ~ Semantics t, Deep.Functor t g,
-                   Rank2.Apply (g sem), Rank2.Traversable (g sem), Attribution t g, Functor f)
-               => (f a -> g f f) -> t -> f a -> sem (g sem sem)
-fullMapDefault extract t x = knit (attribution t (y <$ x)) y
-   where y = t Deep.<$> extract x
-{-# INLINE fullMapDefault #-}

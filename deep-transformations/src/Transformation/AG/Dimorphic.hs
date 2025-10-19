@@ -92,16 +92,16 @@ instance AttributeTransformation t => Transformation (T t) where
    type Domain (T t) = Origin t
    type Codomain (T t) = Semantics (Inherited t) (Synthesized t)
 
-instance AttributeTransformation t => Transformation (Auto t) where
-   type Domain (Auto t) = Origin t
-   type Codomain (Auto t) = AG.Semantics (Auto t)
+instance (AttributeTransformation t, Foldable (Origin t)) => AG.Attribution (Auto t) where
+   type Origin (Auto t) = Origin t
+   unwrap _ = foldr1 const
 
 type instance AG.Atts (AG.Inherited (Auto t)) g = Inherited t
 type instance AG.Atts (AG.Synthesized (Auto t)) g = Synthesized t
 
 instance (AttributeTransformation t, f ~ Origin t, Foldable f, Attribution t g,
           Rank2.Foldable (g (AG.Semantics (Auto t))), Rank2.Functor (g (AG.Semantics (Auto t))),
-          Monoid (Synthesized t)) => AG.Attribution (Auto t) g where
+          Monoid (Synthesized t)) => Auto t `AG.At` g where
    attribution (Auto t) x (inherited, chSyn) = (AG.Synthesized $ unsafeCoerce $ syn result, unsafeCoerce chInh)
       where result = attribution t x Atts{inh=AG.inh inherited, syn=Rank2.foldMap AG.syn chSyn}
             chInh = uniformInheritance Rank2.<$> foldr const (error "Missing node") x
