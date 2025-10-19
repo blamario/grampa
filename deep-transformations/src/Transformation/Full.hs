@@ -26,7 +26,7 @@ import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(.
 class (Transformation t, Rank2.Functor (g (Domain t))) => Functor t g where
    (<$>) :: t -> Domain t (g (Domain t) (Domain t)) -> Codomain t (g (Codomain t) (Codomain t))
    -- | Equivalent to @(Transformation.Coercion <$>)@ but faster
-   coerce :: (t ~ Transformation.Coercion p q, forall g. Coercible (p (g p p)) (q (g q q))) => p (g p p) -> q (g q q)
+   coerce :: (t ~ Transformation.Coercion p q, forall h. Coercible (p (h p p)) (q (h q q))) => p (g p p) -> q (g q q)
    coerce = unsafeCoerce
    infixl 4 <$>
 

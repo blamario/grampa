@@ -67,28 +67,28 @@ class Transformation t => Revelation t where
 
 -- | A half of the 'Attribution' class used to specify all inherited attributes.
 class Bequether t g where
-   bequest     :: forall sem deep.
+   bequest     :: forall sem.
                   t                                -- ^ transformation
-               -> Domain t (g deep deep)           -- ^ tree node
+               -> Domain t (g sem sem)             -- ^ tree node
                -> Atts (Inherited t) g             -- ^ inherited attributes
                -> g sem (Synthesized t)            -- ^ synthesized attributes
                -> g sem (Inherited t)
 
 -- | A half of the 'Attribution' class used to specify all synthesized attributes.
 class Synthesizer t g where
-   synthesis   :: forall sem deep.
+   synthesis   :: forall sem.
                   t                                -- ^ transformation
-               -> Domain t (g deep deep)           -- ^ tree node
+               -> Domain t (g sem sem)             -- ^ tree node
                -> Atts (Inherited t) g             -- ^ inherited attributes
                -> g sem (Synthesized t)            -- ^ synthesized attributes
                -> Atts (Synthesized t) g
 
 -- | Class for specifying a single named attribute
 class Transformation t => SynthesizedField (name :: Symbol) result t g where
-   synthesizedField  :: forall sem deep.
+   synthesizedField  :: forall sem.
                         Proxy name                      -- ^ attribute name
                      -> t                               -- ^ transformation
-                     -> Domain t (g deep deep)          -- ^ tree node
+                     -> Domain t (g sem sem)            -- ^ tree node
                      -> Atts (Inherited t) g            -- ^ inherited attributes
                      -> g sem (Synthesized t)           -- ^ synthesized attributes
                      -> result
@@ -160,19 +160,19 @@ instance (HasField name (Atts (Synthesized t) g) (Traversed m f g)) =>
 
 -- | The 'Generic' mirror of 'Synthesizer'
 class GenericSynthesizer t g result where
-   genericSynthesis  :: forall a sem deep.
+   genericSynthesis  :: forall a sem.
                         t
-                     -> Domain t (g deep deep)
+                     -> Domain t (g sem sem)
                      -> Atts (Inherited t) g
                      -> g sem (Synthesized t)
                      -> result a
 
 -- | The 'Generic' mirror of 'SynthesizedField'
 class Transformation t => GenericSynthesizedField (name :: Symbol) result t g where
-   genericSynthesizedField  :: forall a sem deep.
+   genericSynthesizedField  :: forall a sem.
                                Proxy name
                             -> t
-                            -> Domain t (g deep deep)
+                            -> Domain t (g sem sem)
                             -> Atts (Inherited t) g
                             -> g sem (Synthesized t)
                             -> result a
@@ -243,18 +243,18 @@ instance  {-# overlappable #-} (Transformation t, Domain t ~ f, Traversable f, A
 
 -- | The default 'bequest' method definition relies on generics to automatically pass down all same-named inherited
 -- attributes.
-bequestDefault :: forall t g deep shallow sem.
+bequestDefault :: forall t g shallow sem.
                   (Domain t ~ shallow, Revelation t,
-                   Shallow.Functor (PassDown t deep (Atts (Inherited t) g)) (g deep))
-               => t -> shallow (g deep deep) -> Atts (Inherited t) g -> g sem (Synthesized t)
+                   Shallow.Functor (PassDown t sem (Atts (Inherited t) g)) (g sem))
+               => t -> shallow (g sem sem) -> Atts (Inherited t) g -> g sem (Synthesized t)
                -> g sem (Inherited t)
-bequestDefault t local inheritance _synthesized = passDown @t inheritance (reveal t local :: g deep deep)
+bequestDefault t local inheritance _synthesized = passDown @t inheritance (reveal t local :: g sem sem)
 
 -- | Pass down the given record of inherited fields to child nodes.
-passDown :: forall t g shallow deep1 deep2 atts. (Shallow.Functor (PassDown t shallow atts) (g deep1)) =>
-            atts -> g deep1 shallow -> g deep2 (Inherited t)
+passDown :: forall t g shallow deep atts. (Shallow.Functor (PassDown t shallow atts) (g deep)) =>
+            atts -> g deep shallow -> g deep (Inherited t)
 -- unsafeCoerce is safe here because Inherited doesn't refer to deep functor so the latter is a phantom
-passDown inheritance local = unsafeCoerce (PassDown @t inheritance Shallow.<$> local)
+passDown inheritance local = Rank2.coerce (PassDown @t inheritance Shallow.<$> local)
 
 -- | The default 'synthesizedField' method definition for 'Folded' fields.
 foldedField :: forall name t g a sem. (Monoid a, Shallow.Foldable (Accumulator t name a) (g sem)) =>
