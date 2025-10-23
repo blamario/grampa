@@ -2,8 +2,8 @@
              FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes,
              ScopedTypeVariables, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
--- | A special case of an attribute grammar where every node has only a single inherited and a single synthesized
--- attribute of the same monoidal type. The synthesized attributes of child nodes are all 'mconcat`ted together.
+-- | A special case of an attribute grammar where every node has the same inherited attribute type and the same
+-- synthesized attribute monoidal type. The synthesized attributes of child nodes are all 'mconcat`ted together.
 
 module Transformation.AG.Dimorphic where
 

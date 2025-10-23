@@ -16,9 +16,12 @@ import Transformation (Transformation, Domain, Codomain)
 import Transformation.Deep (Const2)
 import qualified Transformation.Deep as Deep
 
--- | Type family that maps a node type to the type of its attributes, indexed per type constructor.
+-- | Type family that maps a node type to the type of its attributes, indexed per type constructor. The first
+-- parameter is typically either @Inherited T@ or @Synthesized T@, where @T@ is an instance of 'Attribution'.
+-- The second argument is usually a node constructor.
 type family Atts (f :: Type -> Type) (g :: (Type -> Type) -> (Type -> Type) -> Type)
 
+-- | A helper type family to extract the node type constructor with two parameters from a fully applied node type
 type family NodeConstructor (a :: Type) :: (Type -> Type) -> (Type -> Type) -> Type where
    NodeConstructor (g p q) = g
    NodeConstructor t = Const2 t
@@ -35,10 +38,12 @@ deriving instance (Semigroup (Atts (Synthesized t) (NodeConstructor a))) => Semi
 deriving instance (Monoid (Atts (Inherited t) (NodeConstructor a))) => Monoid (Inherited t a)
 deriving instance (Monoid (Atts (Synthesized t) (NodeConstructor a))) => Monoid (Synthesized t a)
 
+-- | A helper function to map the 'Inherited' attributes
 mapInherited :: (Atts (Inherited t) (NodeConstructor a) -> Atts (Inherited t) (NodeConstructor b))
              -> Inherited t a -> Inherited t b
 mapInherited f (Inherited a) = Inherited (f a)
 
+-- | A helper function to map the 'Synthesized' attributes
 mapSynthesized :: (Atts (Synthesized t) (NodeConstructor a) -> Atts (Synthesized t) (NodeConstructor b))
                -> Synthesized t a -> Synthesized t b
 mapSynthesized f (Synthesized a) = Synthesized (f a)
@@ -47,24 +52,19 @@ mapSynthesized f (Synthesized a) = Synthesized (f a)
 -- attributes.
 type Semantics t = Inherited t Rank2.~> Synthesized t
 
--- | A node's 'PreservingSemantics' is a natural tranformation from the node's inherited attributes to all its
--- attributes paired with the preserved node.
-type PreservingSemantics t = Inherited t Rank2.~> Kept t
-
--- | All inherited and synthesized attributes
-data AllAtts t a where
-   AllAtts :: a ~ g f f => {allInh :: Atts (Inherited t) g,
-                            allSyn :: Atts (Synthesized t) g} -> AllAtts t a
-
--- | An attribution rule maps a node's inherited attributes and its child nodes' synthesized attributes to the node's
--- synthesized attributes and the children nodes' inherited attributes.
+-- | An attribution rule maps a node's inherited attributes and its child nodes' synthesized attributes to the
+-- node's synthesized attributes and the children nodes' inherited attributes.
 type Rule t g =  forall sem . sem ~ Semantics t
               => (Inherited   t (g sem (Semantics t)), g sem (Synthesized t))
+              -- ^ inherited attributes and children's synthesized attributes
               -> (Synthesized t (g sem (Semantics t)), g sem (Inherited t))
+              -- ^ synthesized attributes and children's inherited attributes
 
--- | Transformation wrapper that keeps all the original tree nodes alongside their attributes
+-- | Transformation wrapper that keeps all the original tree nodes alongside their attributes inside a 'Kept'
+-- node wrapper
 newtype Keep t = Keep t
 
+-- | The single synthesized attribute for any 'Keep'-wrapped transformation
 data Kept t a = Kept{inherited   :: Atts (Inherited t) (NodeConstructor a),
                      synthesized :: Atts (Synthesized t) (NodeConstructor a),
                      original    :: Domain t a}
@@ -116,8 +116,11 @@ class Transformation t => Attribution t g where
    -- | The attribution rule for a given transformation and node.
    attribution :: forall sem. Rank2.Traversable (g sem)
                => t -> Domain t (g sem sem)
+               -- ^ wrapped node
                -> (Inherited   t (g sem sem), g sem (Synthesized t))
+               -- ^ inherited attributes and children's synthesized attributes
                -> (Synthesized t (g sem sem), g sem (Inherited t))
+               -- ^ synthesized attributes and children's inherited attributes
 
 -- | Drop-in implementation of 'Transformation.$'
 applyDefault :: (q ~ Semantics t, x ~ g q q, Rank2.Apply (g q), Rank2.Traversable (g (Semantics t)), Attribution t g)

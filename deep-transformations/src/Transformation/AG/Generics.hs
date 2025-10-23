@@ -71,8 +71,8 @@ class Bequether t g where
                   t                                -- ^ transformation
                -> Domain t (g deep deep)           -- ^ tree node
                -> Atts (Inherited t) g             -- ^ inherited attributes
-               -> g sem (Synthesized t)            -- ^ synthesized attributes
-               -> g sem (Inherited t)
+               -> g sem (Synthesized t)            -- ^ childrens' synthesized attributes
+               -> g sem (Inherited t)              -- ^ childrens' inherited attributes
 
 -- | A half of the 'Attribution' class used to specify all synthesized attributes.
 class Synthesizer t g where
@@ -80,8 +80,8 @@ class Synthesizer t g where
                   t                                -- ^ transformation
                -> Domain t (g deep deep)           -- ^ tree node
                -> Atts (Inherited t) g             -- ^ inherited attributes
-               -> g sem (Synthesized t)            -- ^ synthesized attributes
-               -> Atts (Synthesized t) g
+               -> g sem (Synthesized t)            -- ^ childrens' synthesized attributes
+               -> Atts (Synthesized t) g           -- ^ synthesized attributes
 
 -- | Class for specifying a single named attribute
 class Transformation t => SynthesizedField (name :: Symbol) result t g where
