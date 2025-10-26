@@ -125,9 +125,9 @@ instance Rank2.Traversable (Expr f') where
   f `traverse` EVar v  = pure (EVar v)
 ~~~
 
-While the methods declared above can be handy, they are limited in requiring that the function argument `f` must be
- polymorphic in the wrapped field type. In other words, it cannot behave one way for an `Expr` and another for a
- `Decl`. That can be a severe handicap.
+While the methods declared above can be handy, they are limited because they require that the function argument `f`
+ must be polymorphic in the wrapped field type. In other words, it cannot behave one way for an `Expr` and another
+ for a `Decl`. That can be a severe handicap.
 
 The class methods exported by `deep-transformations` therefore work not with polymorphic functions but with
 *transformations*. The instances of these classes are similar to the 'Rank2' instances above. Also as above, they can
@@ -293,13 +293,25 @@ When it comes to complex transformations like this, the best tool in compiler wr
  grammar. We can build one with the tools from
  [`Transformation.AG`](https://hackage.haskell.org/package/deep-transformations/docs/Transformation-AG.html).
 
-First we declare another transformation, just like before. Its `Codomain` will now be something called the attribute
- grammar semantics, and it performs bottom-up.
+Instead of declaring another transformation like before, this time we'll use a predefined transformation called
+ `Knit`. Its `Codomain` will now be something called the attribute grammar semantics. It requires a parameter data
+ type, an instance of `Attribution`. The associated type `Origin` of the parameter is also the `Domain` of the
+ `Knit` transformation.
+
+~~~ {.haskell.ignore}
+newtype Knit t = Knit t
+
+instance AG.Attribution t => Transformation (Knit t) where
+   type Domain (Knit t) = AG.Origin t
+   type Codomain (Knit t) = Semantics t
+
+type Semantics t = Inherited t Rank2.~> Synthesized t
+~~~
+
+As noted above, we need a new data type to make an `Attribution` instance. Let's call it `DeadCodeEliminator`.
 
 ~~~ {.haskell}
 data DeadCodeEliminator = DeadCodeEliminator
-
-type Sem = AG.Semantics DeadCodeEliminator
 
 instance AG.Attribution DeadCodeEliminator where
    type Origin DeadCodeEliminator = Identity
@@ -321,6 +333,9 @@ instance Rank2.Apply (Expr f') where
   Add x1 y1 <*> ~(Add x2 y2) = Add (Rank2.apply x1 x2) (Rank2.apply y1 y2)
   Mul x1 y1 <*> ~(Mul x2 y2) = Mul (Rank2.apply x1 x2) (Rank2.apply y1 y2)
 ~~~
+
+That's all the setup, the rest of the implementation consists of the actual attribute definitions specific to our
+needs.
 
 ### Attributes
 
@@ -358,16 +373,16 @@ All declarations inside an `Expr` need to be trimmed, so the `Expr` itself may b
 type instance AG.Atts (AG.Synthesized DeadCodeEliminator) Expr = Expr Identity Identity
 ~~~
 
-Now we need to describe how to calculate the attributes, by declaring `Attribution` instances of the node types. The
- method `attribution` takes as arguments: the transformation - in this case `DeadCodeEliminator`, the node, the node's
- inherited attributes, and the synthesized attributes of all the node's children grouped under the node
- constructor. The last two inputs are grouped in a pair for symmetry with the function result, which is a pair of the
- node's synthesized attributes and the inherited attributes for all the node's children grouped under the node
+Now we need to describe how to calculate the attributes, by declaring the `At` instances of the node
+ types. The method `attribution` takes as arguments: the transformation - in this case `DeadCodeEliminator`, the
+ node, the node's inherited attributes, and the synthesized attributes of all the node's children grouped under the
+ node constructor. The last two inputs are grouped in a pair for symmetry with the function result, which is a pair
+ of the node's synthesized attributes and the inherited attributes for all the node's children grouped under the node
  constructor. Perhaps this can be more succintly illustrated by the method's type signature:
 
 ~~~ {.haskell.ignore}
-class Attribution t g deep shallow where
-   attribution :: sem ~ (Inherited t Rank2.~> Synthesized t)
+class AG.At t g deep shallow where
+   attribution :: forall sem. Rank2.Traversable (g sem)
                => t -> shallow (g deep deep)
                -> (Inherited   t (g sem sem), g sem (Synthesized t))
                -> (Synthesized t (g sem sem), g sem (Inherited t))
