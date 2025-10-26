@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                deep-transformations
-version:             0.3
+version:             0.4
 synopsis:            Deep natural and unnatural tree transformations, including attribute grammars
 description:
 
@@ -38,9 +38,9 @@ library
                         Transformation.AG, Transformation.AG.Generics,
                         Transformation.AG.Monomorphic, Transformation.AG.Dimorphic
   ghc-options:         -Wall
-  build-depends:        base >= 4.11 && < 5, rank2classes >= 1.4.1 && < 1.6,
+  build-depends:        base >= 4.11 && < 5, rank2classes >= 1.5.5 && < 1.6,
                         transformers >= 0.5 && < 0.7,
-                        template-haskell >= 2.11 && < 2.24, generic-lens >= 1.2 && < 2.3
+                        template-haskell >= 2.11 && < 2.24, generic-lens >= 1.2 && < 2.4
   default-language:     Haskell2010
 
 library doctests

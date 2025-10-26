@@ -381,9 +381,9 @@ Now we need to describe how to calculate the attributes, by declaring the `At` i
  constructor. Perhaps this can be more succintly illustrated by the method's type signature:
 
 ~~~ {.haskell.ignore}
-class AG.At t g deep shallow where
+class Attribution t => At t g where
    attribution :: forall sem. Rank2.Traversable (g sem)
-               => t -> shallow (g deep deep)
+               => t -> Origin t (g sem sem)
                -> (Inherited   t (g sem sem), g sem (Synthesized t))
                -> (Synthesized t (g sem sem), g sem (Inherited t))
 ~~~

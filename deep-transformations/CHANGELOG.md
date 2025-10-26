@@ -1,5 +1,53 @@
 # Revision history for deep-transformations
 
+## 0.4 -- 2025-10-26
+
+### **BREAKING**
+
+Major type changes:
+
+* Moved the `attribution` method from the `AG.Attribution` class to the new `AG.At` class
+* Changed the kind of the second parameter of the `AG.Atts` type family from `Type` to `(Type -> Type) -> (Type ->
+  Type) -> Type`
+* As a consequence, removed the two deep&shallow type parameters of the `AG.Attribution` and `AG.At` classes
+* Adopted the same naming scheme in `AG.Dimorphic` and `AG.Monomorphic`
+* Dropped functions `applyDefault`, and `applyDefaultWithAttributes` from `Transformation.AG`
+
+Major reorganization of the data types around the `Keep` semantics:
+
+* Dropped `PreservingSemantics` from `AG`, `Monomorphic`, and `Dimorphic` modules
+* Dropped `AG.knitKeeping`, making `AG.Keep` an attribution wrapper instead
+* Dropped `Keep` from `Mono`/`Dimorphic` modules
+* Replaced `AG.AllAtts` with the `AG.Kept` data type
+* Introduced the `AG.Kept` attribute synthesized by the `AG.Keep` transformation wrapper
+
+Breaking instance changes:
+
+* Strengthened the `Foldable` constraint on the `attribution` method to `Traversable`
+* Made the default `Bequether` & `Synthesizer` instances specific to `Auto`
+* Dropped the fixed instance `Full.Functor (Transformation.Rank2.Map p q)`
+
+### Additions
+
+* the `AG.Knit` transformation
+* `Transformation.Coercion` and `Full.coerce`
+* the wrapper `Dimorphic.T` separate from `Dimorphic.Auto`
+* the `Origin` associated type
+* `mapInherited` and `mapSynthesized`
+* `Semigroup` and `Monoid` instances for `Inherited` and `Synthesized`
+* `Deep.Const2`
+* `instance Attribution (Keep t)`
+
+### Other improvements
+
+* Added `test/RepMinKeep ` and `test/RepMinKeepAG`
+* Bumped the lower bound of the `rank2classes` dependency to require the new `Rank2.coerce` method
+* Bumped the upper bound of the `generic-lens` dependency
+* Expanded documentation
+* Fixed the Transformation doctests for docspec
+* Turned `doctests` from a testsuite into a named library, dropped `cabal-doctest`
+* Updated GitHub CI action
+
 ## 0.3 -- 2025-01-01
 
 * **BREAKING**: Changed the definitions of `Deep.Product` and `Deep.Sum`
