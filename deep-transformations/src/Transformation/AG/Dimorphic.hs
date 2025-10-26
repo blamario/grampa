@@ -13,16 +13,16 @@ import Data.Kind (Type)
 import Data.Semigroup (Semigroup(..))
 import Unsafe.Coerce (unsafeCoerce)
 import qualified Rank2
-import Transformation (Transformation, Domain, Codomain, At)
+import Transformation (Transformation, Domain, Codomain)
 import qualified Transformation
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
 import qualified Transformation.AG as AG
 
--- | Wrapper that provides a 'Transformation' instance for any 'AttributeTransformation'
+-- | Wrapper that provides a 'Transformation' instance for any 'Attribution'
 newtype T t = T t
 
--- | Wrapper that provides a default 'AG.Attribution' and 'Transformation' instance for any 'AttributeTransformation'
+-- | Wrapper that provides a default 'AG.Attribution' and (via AG.Knit) 'Transformation' instance for any 'Attribution'
 newtype Auto t = Auto t
 
 -- | Node attributes
@@ -48,35 +48,38 @@ type Semantics a b = Const (a -> b)
 type Rule a b = Atts a b -> Atts a b
 
 -- | Class of transformations that assign the same type of inherited and synthesized attributes to every node.
-class AttributeTransformation t where
+class Attribution t where
    type Origin t :: Type -> Type
    type Inherited t :: Type
    type Synthesized t :: Type
+   -- | Unwrap the value from the original attribution domain
+   unwrap :: t -> Origin t x -> x
 
 -- | The core type class for defining the attribute grammar. The instances of this class typically have a form like
 --
--- > instance Attribution MyAttGrammar MyMonoid MyNode (Semantics MyAttGrammar) Identity where
+-- > instance MyAttGrammar `At` MyNode where
 -- >   attribution MyAttGrammar{} (Identity MyNode{})
 -- >               Atts{inh= fromParent,
 -- >                    syn= fromChildren}
 -- >             = Atts{syn= toParent,
 -- >                    inh= toChildren}
-class AttributeTransformation t => Attribution t (g :: (Type -> Type) -> (Type -> Type) -> Type) where
+class Attribution t => At t (g :: (Type -> Type) -> (Type -> Type) -> Type) where
    -- | The attribution rule for a given transformation and node.
    attribution :: forall f. Rank2.Functor (g f) => t -> Origin t (g f f) -> Rule (Inherited t) (Synthesized t)
 
-instance {-# overlappable #-} AttributeTransformation t => Attribution t g where
+instance {-# overlappable #-} Attribution t => At t g where
    attribution = const (const id)
 
-instance {-# overlappable #-} (AttributeTransformation t, p ~ Origin t, a ~ Inherited t, b ~ Synthesized t,
+instance {-# overlappable #-} (Attribution t, p ~ Origin t, a ~ Inherited t, b ~ Synthesized t,
                                q ~ Semantics a b, Rank2.Foldable (g q), Rank2.Functor (g q),
-                               Monoid a, Monoid b, Foldable p, Attribution t g) =>
-                              T t `At` g (Semantics a b) (Semantics a b) where
-   ($) = applyDefault (foldr const $ error "Missing node")
+                               Monoid a, Monoid b, Foldable p, At t g) =>
+                              T t `Transformation.At` g (Semantics a b) (Semantics a b) where
+   T t $ x = knit (attribution t x) (unwrap t x)
    {-# INLINE ($) #-}
 
-instance (AttributeTransformation t, f ~ Origin t, a ~ Inherited t, b ~ Synthesized t, Functor f,
-          Rank2.Functor (g f), Deep.Functor (T t) g, T t `At` g (Semantics a b) (Semantics a b)) =>
+instance (Attribution t, At t g, p ~ Origin t, a ~ Inherited t, b ~ Synthesized t, q ~ Semantics a b,
+          Monoid a, Monoid b, Foldable p, Functor p,
+          Rank2.Foldable (g q), Rank2.Functor (g p), Rank2.Functor (g q), Deep.Functor (T t) g) =>
          Full.Functor (T t) g where
    (<$>) = Full.mapUpDefault
 
@@ -88,18 +91,18 @@ knit r chSem = Const knitted
             where Atts{syn= synthesized, inh= chInh} = r Atts{inh= inherited, syn= chSyn}
                   chSyn = Rank2.foldMap (($ chInh) . getConst) chSem
 
-instance AttributeTransformation t => Transformation (T t) where
+instance Attribution t => Transformation (T t) where
    type Domain (T t) = Origin t
    type Codomain (T t) = Semantics (Inherited t) (Synthesized t)
 
-instance (AttributeTransformation t, Foldable (Origin t)) => AG.Attribution (Auto t) where
+instance (Attribution t, Foldable (Origin t)) => AG.Attribution (Auto t) where
    type Origin (Auto t) = Origin t
    unwrap _ = foldr1 const
 
 type instance AG.Atts (AG.Inherited (Auto t)) g = Inherited t
 type instance AG.Atts (AG.Synthesized (Auto t)) g = Synthesized t
 
-instance (AttributeTransformation t, f ~ Origin t, Foldable f, Attribution t g,
+instance (Attribution t, f ~ Origin t, Foldable f, At t g,
           Rank2.Foldable (g (AG.Semantics (Auto t))), Rank2.Functor (g (AG.Semantics (Auto t))),
           Monoid (Synthesized t)) => Auto t `AG.At` g where
    attribution (Auto t) x (inherited, chSyn) = (AG.Synthesized $ unsafeCoerce $ syn result, unsafeCoerce chInh)
@@ -107,19 +110,3 @@ instance (AttributeTransformation t, f ~ Origin t, Foldable f, Attribution t g,
             chInh = uniformInheritance Rank2.<$> foldr const (error "Missing node") x
             uniformInheritance :: forall p a. p a -> AG.Inherited (Auto t) a
             uniformInheritance = const $ AG.Inherited (AG.inh inherited)
-
--- | Drop-in implementation of 'Transformation.$'
-applyDefault :: (p ~ Origin t, a ~ Inherited t, b ~ Synthesized t, q ~ Semantics a b, x ~ g q q,
-                 Rank2.Foldable (g q), Rank2.Functor (g q), Attribution t g, Monoid a, Monoid b)
-             => (forall y. p y -> y) -> T t -> p x -> q x
-applyDefault extract (T t) x = knit (attribution t x) (extract x)
-{-# INLINE applyDefault #-}
-
--- | Drop-in implementation of 'Full.<$>'
-fullMapDefault :: (AttributeTransformation t, p ~ Origin t, a ~ Inherited t, b ~ Synthesized t, Monoid a, Monoid b,
-                   q ~ Semantics a b, x ~ g q q, Functor p, Rank2.Functor (g q), Rank2.Foldable (g q),
-                   Deep.Functor (T t) g, Attribution t g)
-               => (forall y. p y -> y) -> T t -> p (g p p) -> q (g q q)
-fullMapDefault extract (T t) x = knit (attribution t (y <$ x)) y
-   where y = T t Deep.<$> extract x
-{-# INLINE fullMapDefault #-}
