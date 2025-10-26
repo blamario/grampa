@@ -1,3 +1,10 @@
+Version 1.5.5
+---------------
+* Added `Rank2.coerce`
+* Allow `markdown-unlit` 0.6, thanks to Felix Yan
+* Turned doctests from a testsuite into a named library, dropped cabal-doctest
+* Updated GitHub CI action
+
 Version 1.5.4
 ---------------
 * Deriving `Data` and `Typeable` for all declared data types.
