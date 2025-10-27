@@ -21,7 +21,6 @@ This is not the only solution by far. The venerable [`multiplate`](http://hackag
 ~~~ {.haskell}
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,
              StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
-module README where
 ~~~
 
 It will also require several imports.
@@ -472,3 +471,11 @@ Here is the attribute grammar finally in action:
 -- >>> Full.fmap ConstantFold $ Identity $ AG.syn s
 -- Identity (Con 2905)
 ~~~
+
+<!-- This block should be executable but not part of documentation
+
+~~~ {.haskell}
+main = putStrLn "To test, run: cabal repl --with-ghc=doctest deep-transformations:doctests"
+~~~
+
+-->
