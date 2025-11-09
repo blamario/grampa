@@ -1,5 +1,10 @@
 # Revision history for deep-transformations
 
+## 0.4.0.1 -- 2025-11-09
+
+* Presenting the `doctests` component as a testsuite to Cabal instead of a sublibrary because of issues with Haddock
+* Removed `doctest` from dependencies
+
 ## 0.4 -- 2025-10-26
 
 ### **BREAKING**
