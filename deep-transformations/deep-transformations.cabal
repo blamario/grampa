@@ -40,7 +40,7 @@ library
   ghc-options:         -Wall
   build-depends:        base >= 4.11 && < 5, rank2classes >= 1.5.5 && < 1.6,
                         transformers >= 0.5 && < 0.7,
-                        template-haskell >= 2.11 && < 2.24, generic-lens >= 1.2 && < 2.4
+                        template-haskell >= 2.11 && < 2.25, generic-lens >= 1.2 && < 2.4
   default-language:     Haskell2010
 
 test-suite doctests
