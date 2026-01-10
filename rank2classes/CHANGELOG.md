@@ -1,3 +1,7 @@
+Version 1.5.5.1
+---------------
+* Bumped the upper bound of the `template-haskell` dependency.
+
 Version 1.5.5
 ---------------
 * Added `Rank2.coerce`
