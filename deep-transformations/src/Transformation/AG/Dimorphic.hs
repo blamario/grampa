@@ -7,7 +7,7 @@
 
 module Transformation.AG.Dimorphic where
 
-import Data.Data (Data, Typeable)
+import Data.Data (Data)
 import Data.Functor.Const (Const(..))
 import Data.Kind (Type)
 import Data.Semigroup (Semigroup(..))
@@ -31,7 +31,7 @@ data Atts a b = Atts{
    inh :: a,
    -- | synthesized
    syn :: b}
-   deriving (Data, Typeable, Show)
+   deriving (Data, Show)
 
 instance (Semigroup a, Semigroup b) => Semigroup (Atts a b) where
    Atts i1 s1 <> Atts i2 s2 = Atts (i1 <> i2) (s1 <> s2)

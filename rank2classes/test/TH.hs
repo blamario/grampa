@@ -2,6 +2,7 @@
 
 import Control.Applicative (liftA2)
 import Data.Foldable (fold, foldMap)
+import Data.Kind (Type)
 import Data.Traversable (traverse)
 import Data.Distributive (cotraverse)
 import Data.Monoid (Dual, Sum(Sum), getDual)
@@ -14,7 +15,7 @@ import qualified Rank2.TH
 import Test.Tasty
 import Test.Tasty.HUnit
 
-data Test0 (p :: * -> *) = Test0{} deriving (Eq, Show)
+data Test0 (p :: Type -> Type) = Test0{} deriving (Eq, Show)
 
 data Test1 p = Test1{single     :: p Int,
                      whole      :: Test0 p,
