@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, UndecidableInstances #-}
-{-# LANGUAGE KindSignatures, StandaloneDeriving, TypeOperators #-}
+{-# LANGUAGE KindSignatures, PolyKinds, StandaloneDeriving, TypeOperators #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 --module Issue32 where
@@ -16,7 +16,7 @@ import qualified Transformation.Rank2
 import Test.Tasty (TestTree, defaultMain)
 import Test.Tasty.HUnit (testCase, assertEqual)
 
-data Param (d :: Type -> Type) s = Param
+data Param d s = Param
   { key :: s String,
     val :: s String
   }
