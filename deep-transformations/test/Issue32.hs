@@ -1,5 +1,6 @@
+{-# LANGUAGE Haskell2010 #-}
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, UndecidableInstances #-}
-{-# LANGUAGE KindSignatures, PolyKinds, StandaloneDeriving, TypeOperators #-}
+{-# LANGUAGE KindSignatures, PolyKinds, StandaloneDeriving, TypeFamilies, TypeOperators #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 --module Issue32 where
