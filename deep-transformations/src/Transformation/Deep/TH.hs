@@ -109,12 +109,12 @@ reifyConstructors ty = do
    tyVars' <- traverse reifyTVKindSynonyms tyVars
 #if MIN_VERSION_template_haskell(2,17,0)
    let (KindedTV tyVar _ (AppT (AppT ArrowT StarT) StarT) :
-        KindedTV tyVar' _ (AppT (AppT ArrowT StarT) StarT) : _) = reverse tyVars'
+        KindedTV tyVar' _ _ : _) = reverse tyVars'
        apply t (PlainTV name _)    = appT t (varT name)
        apply t (KindedTV name _ _) = appT t (varT name)
 #else
    let (KindedTV tyVar  (AppT (AppT ArrowT StarT) StarT) :
-        KindedTV tyVar' (AppT (AppT ArrowT StarT) StarT) : _) = reverse tyVars'
+        KindedTV tyVar' _ : _) = reverse tyVars'
        apply t (PlainTV name)    = appT t (varT name)
        apply t (KindedTV name _) = appT t (varT name)
 #endif
