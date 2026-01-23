@@ -1,5 +1,11 @@
 # Revision history for deep-transformations
 
+## 0.4.1 -- 2026-01-??
+
+* Fixed issue #32, Template Haskell error for data types not using the deep functor
+* Added `Full.Inward`/`Outward` newtype `Transformation` modifiers
+* Added `foldMapInward`, `foldMapOutward`, `traverseInward`,  and `traverseOutward`
+
 ## 0.4.0.1 -- 2025-11-09
 
 * Presenting the `doctests` component as a testsuite to Cabal instead of a sublibrary because of issues with Haddock
