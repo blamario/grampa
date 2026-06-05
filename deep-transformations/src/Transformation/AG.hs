@@ -1,5 +1,6 @@
 {-# Language FlexibleContexts, FlexibleInstances, GADTs, GeneralizedNewtypeDeriving, ImpredicativeTypes,
-             MultiParamTypeClasses, NamedFieldPuns, RankNTypes, ScopedTypeVariables, StandaloneDeriving,
+             MultiParamTypeClasses, NamedFieldPuns, QuantifiedConstraints,
+             RankNTypes, ScopedTypeVariables, StandaloneDeriving,
              TypeApplications, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | An attribute grammar is a particular kind of 'Transformation' that assigns attributes to nodes in a
@@ -89,6 +90,18 @@ instance (t `At` g, Rank2.Apply (g (Semantics t)), Rank2.Traversable (g (Semanti
           Foldable1 (Origin t), Functor (Origin t), Rank2.Functor (g (Origin t)), Deep.Functor (Knit t) g) =>
          Full.Functor (Knit t) g where
    (<$>) = Full.mapUpDefault
+
+instance (Attribution t1, Attribution t2, Origin t1 ~ Origin t2) => Attribution (t1, t2) where
+  type Origin (t1, t2) = Origin t1
+
+type instance Atts (Inherited (t1, t2)) g = (Atts (Inherited t1) g, Atts (Inherited t2) g)
+type instance Atts (Synthesized (t1, t2)) g = (Atts (Synthesized t1) g, Atts (Synthesized t2) g)
+
+instance (t1 `At` g, t2 `At` g, Origin t1 ~ Origin t2, forall sem. Rank2.Apply (g sem)) => (t1, t2) `At` g where
+  attribution (t1, t2) x (Inherited (i1, i2), s) = (Synthesized (s1, s2), Rank2.liftA2 pairInh i1' i2')
+    where (Synthesized s1, i1') = attribution t1 x (Inherited i1, Synthesized . fst . syn Rank2.<$> s)
+          (Synthesized s2, i2') = attribution t2 x (Inherited i2, Synthesized . snd . syn Rank2.<$> s)
+          pairInh (Inherited i1') (Inherited i2') = Inherited (i1', i2')
 
 -- | Attribution wrapper that keeps all the original tree nodes alongside their attributes in a `Kept` node
 newtype Keep t = Keep t deriving (Attribution)
