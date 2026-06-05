@@ -8,6 +8,7 @@
 
 module Transformation.AG where
 
+import Data.Foldable1 as Foldable1
 import Data.Kind (Type)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -65,8 +66,6 @@ type Semantics t = Inherited t Rank2.~> Synthesized t
 -- attribute individually with a 'Transformation.AG.Generics.SynthesizedField' instance.
 class Attribution t where
    type Origin t :: Type -> Type
-   -- | Unwrap the value from the original attribution domain
-   unwrap :: t -> Origin t x -> x
 
 class Attribution t => At t g where
    -- | The attribution rule for a given transformation and node.
@@ -82,12 +81,12 @@ instance Attribution t => Transformation (Knit t) where
    type Domain (Knit t) = Origin t
    type Codomain (Knit t) = Semantics t
 
-instance (t `At` g, Rank2.Apply (g sem), Rank2.Traversable (g sem), sem ~ Semantics t) =>
+instance (t `At` g, Rank2.Apply (g sem), Rank2.Traversable (g sem), sem ~ Semantics t, Foldable1 (Origin t)) =>
          Knit t `Transformation.At` g sem sem where
-   Knit t $ x = knit (attribution t x) (unwrap t x)
+   Knit t $ x = knit (attribution t x) (Foldable1.head x)
 
 instance (t `At` g, Rank2.Apply (g (Semantics t)), Rank2.Traversable (g (Semantics t)),
-          Functor (Origin t), Rank2.Functor (g (Origin t)), Deep.Functor (Knit t) g) =>
+          Foldable1 (Origin t), Functor (Origin t), Rank2.Functor (g (Origin t)), Deep.Functor (Knit t) g) =>
          Full.Functor (Knit t) g where
    (<$>) = Full.mapUpDefault
 

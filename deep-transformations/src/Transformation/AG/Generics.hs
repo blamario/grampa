@@ -22,6 +22,7 @@ module Transformation.AG.Generics (-- * Type wrappers for automatic attribute in
                                    foldedField, mappedField, passDown, bequestDefault)
 where
 
+import Data.Foldable1 as Foldable1
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Const (Const(..))
 import Data.Kind (Type)
@@ -45,7 +46,6 @@ type instance Atts (Synthesized (Auto t)) x = Atts (Synthesized t) x
 
 instance Attribution t => Attribution (Auto t) where
    type Origin (Auto t) = Origin t
-   unwrap (Auto t) = unwrap t
 
 instance {-# overlappable #-} (Attribution t, Bequether (Auto t) g, Synthesizer (Auto t) g) =>
                               Auto t `At` g where
@@ -79,7 +79,7 @@ class Attribution t => SynthesizedField (name :: Symbol) result t g where
                      -> g sem (Synthesized t)           -- ^ synthesized attributes
                      -> result
 
-instance {-# overlappable #-} (Attribution t, a ~ Atts (Inherited (Auto t)) g,
+instance {-# overlappable #-} (Attribution t, Foldable1 (Origin t), a ~ Atts (Inherited (Auto t)) g,
                                forall deep. Shallow.Functor (PassDown (Auto t) deep a) (g deep)) =>
                               Bequether (Auto t) g where
    bequest = bequestDefault
@@ -230,10 +230,10 @@ instance  {-# overlappable #-} (Attribution t, Origin t ~ f, Traversable f, Appl
 -- | The default 'bequest' method definition relies on generics to automatically pass down all same-named inherited
 -- attributes.
 bequestDefault :: forall t g sem.
-                  (Attribution t, Shallow.Functor (PassDown t sem (Atts (Inherited t) g)) (g sem))
+                  (Attribution t, Foldable1 (Origin t), Shallow.Functor (PassDown t sem (Atts (Inherited t) g)) (g sem))
                => t -> Origin t (g sem sem) -> Atts (Inherited t) g -> g sem (Synthesized t)
                -> g sem (Inherited t)
-bequestDefault t local inheritance _synthesized = passDown @t inheritance (unwrap t local :: g sem sem)
+bequestDefault t local inheritance _synthesized = passDown @t inheritance (Foldable1.head local :: g sem sem)
 
 -- | Pass down the given record of inherited fields to child nodes.
 passDown :: forall t g shallow deep atts. (Shallow.Functor (PassDown t shallow atts) (g deep)) =>

@@ -314,7 +314,6 @@ data DeadCodeEliminator = DeadCodeEliminator
 
 instance AG.Attribution DeadCodeEliminator where
    type Origin DeadCodeEliminator = Identity
-   unwrap DeadCodeEliminator = runIdentity
 ~~~
 
 We also need another bit of a boilerplate instance that can be automatically generated with Template Haskell functions

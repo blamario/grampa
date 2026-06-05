@@ -67,7 +67,6 @@ data RepMin = RepMin
 
 instance AG.Attribution RepMin where
    type Origin RepMin = Identity
-   unwrap RepMin = runIdentity
 
 -- | Inherited attributes' type
 data InhRepMin = InhRepMin{global :: Int} deriving Show

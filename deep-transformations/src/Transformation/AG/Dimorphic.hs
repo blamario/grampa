@@ -8,6 +8,7 @@
 module Transformation.AG.Dimorphic where
 
 import Data.Data (Data)
+import Data.Foldable1 as Foldable1
 import Data.Functor.Const (Const(..))
 import Data.Kind (Type)
 import Data.Semigroup (Semigroup(..))
@@ -52,8 +53,6 @@ class Attribution t where
    type Origin t :: Type -> Type
    type Inherited t :: Type
    type Synthesized t :: Type
-   -- | Unwrap the value from the original attribution domain
-   unwrap :: t -> Origin t x -> x
 
 -- | The core type class for defining the attribute grammar. The instances of this class typically have a form like
 --
@@ -72,13 +71,13 @@ instance {-# overlappable #-} Attribution t => At t g where
 
 instance {-# overlappable #-} (Attribution t, p ~ Origin t, a ~ Inherited t, b ~ Synthesized t,
                                q ~ Semantics a b, Rank2.Foldable (g q), Rank2.Functor (g q),
-                               Monoid a, Monoid b, Foldable p, At t g) =>
+                               Monoid a, Monoid b, Foldable1 p, At t g) =>
                               T t `Transformation.At` g (Semantics a b) (Semantics a b) where
-   T t $ x = knit (attribution t x) (unwrap t x)
+   T t $ x = knit (attribution t x) (Foldable1.head x)
    {-# INLINE ($) #-}
 
 instance (Attribution t, At t g, p ~ Origin t, a ~ Inherited t, b ~ Synthesized t, q ~ Semantics a b,
-          Monoid a, Monoid b, Foldable p, Functor p,
+          Monoid a, Monoid b, Foldable1 p, Functor p,
           Rank2.Foldable (g q), Rank2.Functor (g p), Rank2.Functor (g q), Deep.Functor (T t) g) =>
          Full.Functor (T t) g where
    (<$>) = Full.mapUpDefault
@@ -97,7 +96,6 @@ instance Attribution t => Transformation (T t) where
 
 instance (Attribution t, Foldable (Origin t)) => AG.Attribution (Auto t) where
    type Origin (Auto t) = Origin t
-   unwrap _ = foldr1 const
 
 type instance AG.Atts (AG.Inherited (Auto t)) g = Inherited t
 type instance AG.Atts (AG.Synthesized (Auto t)) g = Synthesized t
