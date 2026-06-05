@@ -75,6 +75,7 @@ class Attribution t => At t g where
                -> (Inherited   t (g sem sem), g sem (Synthesized t))
                -> (Synthesized t (g sem sem), g sem (Inherited t))
 
+-- | Turns an `Attribution` into a `Transformation`
 newtype Knit t = Knit t
 
 instance Attribution t => Transformation (Knit t) where
@@ -90,9 +91,10 @@ instance (t `At` g, Rank2.Apply (g (Semantics t)), Rank2.Traversable (g (Semanti
          Full.Functor (Knit t) g where
    (<$>) = Full.mapUpDefault
 
--- | Transformation wrapper that keeps all the original tree nodes alongside their attributes
+-- | Attribution wrapper that keeps all the original tree nodes alongside their attributes in a `Kept` node
 newtype Keep t = Keep t deriving (Attribution)
 
+-- | The synthesized attributes of a `Keep`-wrapped attribution
 data Kept t a = Kept{inherited   :: Atts (Inherited t) (NodeConstructor a),
                      synthesized :: Atts (Synthesized t) (NodeConstructor a),
                      original    :: Origin t a}
