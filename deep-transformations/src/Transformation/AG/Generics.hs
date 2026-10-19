@@ -233,7 +233,7 @@ bequestDefault :: forall t g sem.
                   (Attribution t, Foldable1 (Origin t), Shallow.Functor (PassDown t sem (Atts (Inherited t) g)) (g sem))
                => t -> Origin t (g sem sem) -> Atts (Inherited t) g -> g sem (Synthesized t)
                -> g sem (Inherited t)
-bequestDefault t local inheritance _synthesized = passDown @t inheritance (Foldable1.head local :: g sem sem)
+bequestDefault _t local inheritance _synthesized = passDown @t inheritance (Foldable1.head local :: g sem sem)
 
 -- | Pass down the given record of inherited fields to child nodes.
 passDown :: forall t g shallow deep atts. (Shallow.Functor (PassDown t shallow atts) (g deep)) =>

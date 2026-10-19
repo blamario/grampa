@@ -1,5 +1,6 @@
-{-# Language Haskell2010, DeriveDataTypeable, FlexibleInstances, KindSignatures, MultiParamTypeClasses, RankNTypes,
-             GeneralizedNewtypeDeriving, StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
+{-# Language Haskell2010, DeriveDataTypeable, FlexibleContexts, FlexibleInstances,
+             GeneralizedNewtypeDeriving, KindSignatures, MultiParamTypeClasses, RankNTypes,
+             StandaloneDeriving, TypeFamilies, TypeOperators, UndecidableInstances #-}
 
 -- | Type classes 'Functor', 'Foldable', and 'Traversable' that correspond to the standard type classes of the same
 -- name, but applying the given transformation to every descendant of the given tree node. The corresponding classes
@@ -9,7 +10,7 @@
 module Transformation.Deep where
 
 import Data.Data (Data, Typeable)
-import Data.Functor.Compose (Compose)
+import Data.Functor.Compose (Compose(getCompose))
 import Data.Functor.Const (Const)
 import qualified Control.Applicative as Rank1
 import qualified Data.Foldable as Rank1
@@ -18,8 +19,10 @@ import qualified Data.Traversable as Rank1
 import Data.Kind (Type)
 import Data.String (IsString)
 import qualified Rank2
-import           Transformation (Transformation, Domain, Codomain)
+import           Transformation (Transformation, At, Domain, Codomain)
+import qualified Transformation
 import qualified Transformation.Full as Full
+import qualified Transformation.Shallow as Shallow
 
 import Prelude hiding (Foldable(..), Traversable(..), Functor(..), Applicative(..), (<$>), fst, snd)
 
@@ -62,6 +65,39 @@ data Sum g h (d :: Type -> Type) (s :: Type -> Type) =
 
 -- Instances
 
+instance Rank2.Functor (Const2 a d) where
+   _ <$> Const2 x = Const2 x
+
+instance Rank2.Foldable (Const2 a d) where
+   foldMap _ _ = mempty
+
+instance Rank2.Traversable (Const2 a d) where
+   traverse _ (Const2 x) = Rank1.pure (Const2 x)
+
+instance Semigroup a => Rank2.Apply (Const2 a d) where
+   Const2 x <*> Const2 y = Const2 (x <> y)
+
+instance Monoid a => Rank2.Applicative (Const2 a d) where
+   pure _ = Const2 mempty
+
+instance Transformation t => Shallow.Functor t (Const2 a d) where
+   _ <$> Const2 x = Const2 x
+
+instance Transformation t => Shallow.Foldable t (Const2 a d) where
+   foldMap _ _ = mempty
+
+instance (Transformation t, Codomain t ~ Compose m f, Rank1.Applicative m) => Shallow.Traversable t (Const2 a d) where
+   traverse _ (Const2 x) = Rank1.pure (Const2 x)
+
+instance Transformation t => Functor t (Const2 a) where
+   _ <$> Const2 x = Const2 x
+
+instance Transformation t => Foldable t (Const2 a) where
+   foldMap _ _ = mempty
+
+instance (Transformation t, Codomain t ~ Compose m f, Rank1.Applicative m) => Traversable t (Const2 a) where
+   traverse _ (Const2 x) = Rank1.pure (Const2 x)
+
 instance Rank2.Functor (Only g d) where
    f <$> Only x = Only (f x)
 
@@ -82,6 +118,16 @@ instance Rank2.DistributiveTraversable (Only g d)
 
 instance Rank2.Distributive (Only g d) where
    cotraverse w f = Only (w (Rank1.fmap fromOnly f))
+
+instance (Transformation t, t `At` g d d) => Shallow.Functor t (Only g d) where
+   t <$> Only x = Only (t Transformation.$ x)
+
+instance (Transformation t, Codomain t ~ Rank1.Const m, t `At` g d d) => Shallow.Foldable t (Only g d) where
+   foldMap t (Only x) = Rank1.getConst $ t Transformation.$ x
+
+instance (Transformation t, Codomain t ~ Compose m f, Rank1.Functor m, t `At` g d d) =>
+   Shallow.Traversable t (Only g d) where
+   traverse t (Only x) = Only Rank1.<$> getCompose (t Transformation.$ x)
 
 instance Full.Functor t g => Functor t (Only g) where
    t <$> Only x = Only (t Full.<$> x)
@@ -178,6 +224,19 @@ instance (Rank2.Foldable (g d), Rank2.Foldable (h d)) => Rank2.Foldable (Sum g h
 instance (Rank2.Traversable (g d), Rank2.Traversable (h d)) => Rank2.Traversable (Sum g h d) where
    traverse f (InL left) = InL Rank1.<$> Rank2.traverse f left
    traverse f (InR right) = InR Rank1.<$> Rank2.traverse f right
+
+instance (Shallow.Functor t (g d), Shallow.Functor t (h d)) => Shallow.Functor t (Sum g h d) where
+   t <$> InL left = InL (t Shallow.<$> left)
+   t <$> InR right = InR (t Shallow.<$> right)
+
+instance (Shallow.Foldable t (g d), Shallow.Foldable t (h d)) => Shallow.Foldable t (Sum g h d) where
+   foldMap t (InL left) = Shallow.foldMap t left
+   foldMap t (InR right) = Shallow.foldMap t right
+
+instance (Shallow.Traversable t (g d), Shallow.Traversable t (h d),
+          Codomain t ~ Compose m f, Rank1.Functor m) => Shallow.Traversable t (Sum g h d) where
+   traverse t (InL left) = InL Rank1.<$> Shallow.traverse t left
+   traverse t (InR right) = InR Rank1.<$> Shallow.traverse t right
 
 instance (Functor t g, Functor t h) => Functor t (Sum g h) where
    t <$> InL left = InL (t <$> left)
