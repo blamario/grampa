@@ -15,7 +15,7 @@ import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Rank2
 import Transformation (Transformation, Codomain)
-import Transformation.Deep (Const2)
+import Transformation.Deep (Const2(Const2))
 import qualified Transformation
 import qualified Transformation.Deep as Deep
 import qualified Transformation.Full as Full
@@ -82,9 +82,17 @@ instance Attribution t => Transformation (Knit t) where
    type Domain (Knit t) = Origin t
    type Codomain (Knit t) = Semantics t
 
-instance (t `At` g, Rank2.Apply (g sem), Rank2.Traversable (g sem), sem ~ Semantics t, Foldable1 (Origin t)) =>
+instance {-# OVERLAPS #-}
+         (t `At` g, Rank2.Apply (g sem), Rank2.Traversable (g sem), sem ~ Semantics t, Foldable1 (Origin t)) =>
          Knit t `Transformation.At` g sem sem where
    Knit t $ x = knit (attribution t x) (Foldable1.head x)
+
+-- | A leaf node, /i.e./ a node whose type is not of the @g deep shallow@ shape, carries no children and therefore
+-- needs no knot tying. Its attribution is given by the @t `At` Const2 a@ instance.
+instance {-# OVERLAPPABLE #-} (t `At` Const2 a, NodeConstructor a ~ Const2 a,
+                               Functor (Origin t), Foldable1 (Origin t)) =>
+         Knit t `Transformation.At` a where
+   Knit t $ x = knitLeaf t x
 
 instance (t `At` g, Rank2.Apply (g (Semantics t)), Rank2.Traversable (g (Semantics t)),
           Foldable1 (Origin t), Functor (Origin t), Rank2.Functor (g (Origin t)), Deep.Functor (Knit t) g) =>
@@ -103,6 +111,14 @@ instance {-# OVERLAPPABLE #-} (t1 `At` g, t2 `At` g, Origin t1 ~ Origin t2, fora
     where (Synthesized s1, i1') = attribution t1 x (Inherited i1, Synthesized . fst . syn Rank2.<$> s)
           (Synthesized s2, i2') = attribution t2 x (Inherited i2, Synthesized . snd . syn Rank2.<$> s)
           pairInh (Inherited inh1) (Inherited inh2) = Inherited (inh1, inh2)
+
+-- | A 'Const2' leaf node has no children to bequeath the inherited attributes to, so the pair of attributions needs
+-- no 'Rank2.Apply' instance and in turn no @Semigroup a@ constraint.
+instance {-# OVERLAPS #-} (t1 `At` Const2 a, t2 `At` Const2 a, Origin t1 ~ Origin t2) =>
+  (t1, t2) `At` Const2 a where
+  attribution (t1, t2) x (Inherited (i1, i2), Const2 leaf) = (Synthesized (s1, s2), Const2 leaf)
+    where Synthesized s1 = fst (attribution t1 x (Inherited i1, Const2 leaf))
+          Synthesized s2 = fst (attribution t2 x (Inherited i2, Const2 leaf))
 
 -- | Attribution wrapper that keeps all the original tree nodes alongside their attributes in a `Kept` node
 newtype Keep t = Keep t deriving (Attribution)
@@ -142,3 +158,13 @@ knit r chSem = Rank2.Arrow knit'
    where knit' inherited = synthesized
             where (synthesized, chInh) = r (inherited, chSyn)
                   chSyn = chSem Rank2.<*> chInh
+
+-- | The counterpart of 'knit' for a /leaf node/, a node whose type @a@ is not of the @g deep shallow@ shape. Such a
+-- node is wrapped in 'Const2' to be given its attributes, and as it has no children there is no knot to tie.
+knitLeaf :: forall t a sem. (t `At` Const2 a, NodeConstructor a ~ Const2 a, sem ~ Semantics t,
+                             Functor (Origin t), Foldable1 (Origin t))
+         => t -> Origin t a -> sem a
+knitLeaf t x = Rank2.Arrow knitLeaf'
+   where knitLeaf' (Inherited inherited) = Synthesized (syn synthesized)
+            where synthesized :: Synthesized t (Const2 a sem sem)
+                  synthesized = fst $ attribution t (Const2 <$> x) (Inherited inherited, Const2 $ Foldable1.head x)

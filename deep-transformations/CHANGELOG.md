@@ -5,6 +5,8 @@
 * Fixed issue #32, Template Haskell error for data types not using the deep functor
 * Added `Full.Inward`/`Outward` newtype `Transformation` modifiers
 * Added `foldMapInward`, `foldMapOutward`, `traverseInward`,  and `traverseOutward`
+* Added `AG.knitLeaf` and the overlappable `AG.Knit t \`Transformation.At\`` instance
+* Added `instance (t1, t2) \`AG.At\` Deep.Const2 a`
 
 ## 0.4.0.1 -- 2025-11-09
 
