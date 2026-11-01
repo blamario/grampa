@@ -85,9 +85,9 @@ type instance AG.Atts (Synthesized RepMin) (Root Int) = SynRepMin
 type instance AG.Atts (Inherited RepMin) (Deep.Const2 Int) = ()
 type instance AG.Atts (Synthesized RepMin) (Deep.Const2 Int) = Int
 
--- | The semantics of the primitive 'Int' type must be defined manually.
-instance Transformation.At (AG.Knit RepMin) Int where
-   _ $ Identity n = Rank2.Arrow (const $ Synthesized n)
+-- | The synthesized attributes of the leaf 'Int' are the number itself, and there are no inherited attributes.
+instance AG.At RepMin (Deep.Const2 Int) where
+   attribution RepMin self (inherited, Deep.Const2 n) = (Synthesized n, Deep.Const2 n)
 
 instance AG.At RepMin (Root Int) where
    attribution RepMin self (inherited, Root root) = (Synthesized SynRepMin{local= local (syn root),
