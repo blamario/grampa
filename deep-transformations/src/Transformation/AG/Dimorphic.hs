@@ -107,4 +107,4 @@ instance (Attribution t, f ~ Origin t, Foldable f, At t g,
       where result = attribution t x Atts{inh=AG.inh inherited, syn=Rank2.foldMap AG.syn chSyn}
             chInh = uniformInheritance Rank2.<$> foldr const (error "Missing node") x
             uniformInheritance :: forall p a. p a -> AG.Inherited (Auto t) a
-            uniformInheritance = const $ AG.Inherited (AG.inh inherited)
+            uniformInheritance = const $ AG.Inherited (inh result)
