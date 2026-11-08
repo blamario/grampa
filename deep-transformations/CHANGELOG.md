@@ -1,6 +1,6 @@
 # Revision history for deep-transformations
 
-## 0.4.1 -- 2026-01-??
+## 0.4.1 -- 2026-11-08
 
 * Fixed issue #32, Template Haskell error for data types not using the deep functor
 * Added `Full.Inward`/`Outward` newtype `Transformation` modifiers
